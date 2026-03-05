@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -41,17 +40,17 @@ public class UtilsTest {
 
     @Test
     public void testRawTimestampedValue() {
-        long timestamp = 123456789L;
+        final long timestamp = 123456789L;
 
-        Headers headers = new RecordHeaders().add("key1", "value1".getBytes(StandardCharsets.UTF_8));
-        ValueTimestampHeaders<String> input = ValueTimestampHeaders.make(VALUE, timestamp, headers);
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes(StandardCharsets.UTF_8));
+        final ValueTimestampHeaders<String> input = ValueTimestampHeaders.make(VALUE, timestamp, headers);
         try (
-                ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
-                ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String())
+                final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+                final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String())
             ) {
-            byte[] inputBytes = serializer.serialize(TOPIC, input);
-            byte[] outputBytes = rawTimestampedValue(inputBytes);
-            ValueAndTimestamp<String> output = stringSerde.deserializer().deserialize(TOPIC, outputBytes);
+            final byte[] inputBytes = serializer.serialize(TOPIC, input);
+            final byte[] outputBytes = rawTimestampedValue(inputBytes);
+            final ValueAndTimestamp<String> output = stringSerde.deserializer().deserialize(TOPIC, outputBytes);
 
             assertEquals(timestamp, output.timestamp());
             assertEquals(VALUE, output.value());
@@ -60,8 +59,8 @@ public class UtilsTest {
 
     @Test
     public void testReadBytes() {
-        byte[] valueBytes = VALUE.getBytes(StandardCharsets.UTF_8);
-        ByteBuffer buf = ByteBuffer.wrap(valueBytes);
+        final byte[] valueBytes = VALUE.getBytes(StandardCharsets.UTF_8);
+        final ByteBuffer buf = ByteBuffer.wrap(valueBytes);
 
         assertThrows(SerializationException.class, () -> readBytes(buf, -1));
         assertThrows(SerializationException.class, () -> readBytes(buf, valueBytes.length + 1));
@@ -69,21 +68,15 @@ public class UtilsTest {
         assertEquals('t', readBytes(buf, 1)[0]);
         assertEquals('e', readBytes(buf, 1)[0]);
 
-        byte[] nextTwo = readBytes(buf, 2);
+        final byte[] nextTwo = readBytes(buf, 2);
         assertEquals(2, nextTwo.length);
         assertEquals('s', nextTwo[0]);
         assertEquals('t', nextTwo[1]);
 
-        byte[] tail = readBytes(buf, buf.remaining());
+        final byte[] tail = readBytes(buf, buf.remaining());
         assertEquals(6, tail.length);
         assertArrayEquals("-value".getBytes(StandardCharsets.UTF_8), tail);
 
         assertThrows(SerializationException.class, () -> readBytes(buf, 1));
-    }
-
-    @Test
-    public void testKeyBytes() {
-        StateSerdes<String, String> serdes = StateSerdes.withBuiltinTypes(TOPIC, String.class, String.class);
-        
     }
 }
