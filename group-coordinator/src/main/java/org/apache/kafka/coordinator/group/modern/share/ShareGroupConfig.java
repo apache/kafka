@@ -185,19 +185,4 @@ public class ShareGroupConfig {
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG));
     }
-
-    /**
-     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
-     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
-     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
-     * (Ex. group.share.session.timeout.ms).
-     */
-    public Map<String, Integer> extractShareGroupConfigMap(GroupCoordinatorConfig groupCoordinatorConfig) {
-        return Map.of(
-            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
-            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.shareGroupHeartbeatIntervalMs(),
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs(),
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit()
-        );
-    }
 }

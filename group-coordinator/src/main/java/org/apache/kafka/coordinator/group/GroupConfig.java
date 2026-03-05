@@ -318,8 +318,12 @@ public final class GroupConfig extends AbstractConfig {
      * parsed and are valid.
      */
     public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
-        validateNames(props);
-        Map<?, ?> valueMaps = CONFIG.parse(props);
+        Properties combinedConfigs = new Properties();
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
+        combinedConfigs.putAll(props);
+
+        validateNames(combinedConfigs);
+        Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
         validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
     }
 
