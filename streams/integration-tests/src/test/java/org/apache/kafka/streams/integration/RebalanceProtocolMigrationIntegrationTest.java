@@ -19,10 +19,17 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -61,7 +68,11 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
     public static final String INPUT_TOPIC = "migration-input";
     public static final String OUTPUT_TOPIC = "migration-output";
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    private static final Properties BROKER_PROPS = new Properties();
+    static {
+        BROKER_PROPS.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, 1000L);
+    }
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, BROKER_PROPS);
 
     private String inputTopic;
     private String outputTopic;
@@ -132,6 +143,125 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         processExactlyOneRecord(streamsBuilder, props, "3", "C");
+    }
+
+    @Test
+    public void shouldMigrateFromClassicToStreamsAfterBrokerRestart() throws Exception {
+        // This test reproduces KAFKA-20254: after log compaction removes the
+        // GroupMetadata tombstone from __consumer_offsets, offset commit records
+        // (which precede the streams group records in the log) create a simple
+        // classic group during replay, and then the streams group records must
+        // handle this existing simple classic group.
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        final KStream<String, String> input = streamsBuilder.stream(
+            inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
+        input.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+        final Properties props = props();
+        final String appId = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
+
+        // Step 1: Run with the classic protocol and process a record.
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        processExactlyOneRecord(streamsBuilder, props, "1", "A");
+
+        // Wait for session to time out so the group becomes empty.
+        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
+            waitForEmptyConsumerGroup(adminClient, appId, 1000);
+        }
+
+        // Step 2: Commit an offset for an "orphan" topic using the same group ID.
+        // This offset commit record will precede the streams group records in the
+        // log and will survive compaction because the streams group never commits
+        // for this topic-partition.
+        final String orphanTopic = "orphan-" + safeTestName;
+        CLUSTER.createTopic(orphanTopic);
+        commitOrphanOffset(appId, orphanTopic);
+
+        // Step 3: Migrate to the streams protocol and process a record. This
+        // writes a GroupMetadata tombstone for the classic group followed by
+        // streams group records.
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        processExactlyOneRecord(streamsBuilder, props, "2", "B");
+
+        // Step 4: Configure aggressive compaction so that the GroupMetadata
+        // tombstone is removed, leaving only the orphan offset commit record
+        // before the streams group records.
+        configureAggressiveCompaction();
+
+        // Step 5: Flood __consumer_offsets with offset commits to trigger segment
+        // rotation and compaction.
+        floodConsumerOffsetsForCompaction();
+
+        // Wait for compaction to clean up the GroupMetadata tombstone.
+        Thread.sleep(5000);
+
+        // Step 6: Restart the broker to force replay of __consumer_offsets.
+        CLUSTER.shutdownBroker(0);
+        CLUSTER.startBroker(0);
+
+        // Step 7: Verify the broker can still serve the streams group after replay.
+        processExactlyOneRecord(streamsBuilder, props, "3", "C");
+    }
+
+    private void commitOrphanOffset(final String groupId, final String topic) {
+        final Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        try (final org.apache.kafka.clients.consumer.KafkaConsumer<String, String> consumer =
+                 new org.apache.kafka.clients.consumer.KafkaConsumer<>(consumerProps)) {
+            final TopicPartition tp = new TopicPartition(topic, 0);
+            consumer.assign(List.of(tp));
+            consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0)));
+        }
+    }
+
+    private void configureAggressiveCompaction() throws Exception {
+        try (final Admin adminClient = Admin.create(
+            Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
+            final ConfigResource resource = new ConfigResource(
+                ConfigResource.Type.TOPIC, "__consumer_offsets");
+            adminClient.incrementalAlterConfigs(Map.of(resource, List.of(
+                new AlterConfigOp(new ConfigEntry(
+                    TopicConfig.SEGMENT_BYTES_CONFIG, "1048576"), AlterConfigOp.OpType.SET),
+                new AlterConfigOp(new ConfigEntry(
+                    TopicConfig.DELETE_RETENTION_MS_CONFIG, "1"), AlterConfigOp.OpType.SET),
+                new AlterConfigOp(new ConfigEntry(
+                    TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "0"), AlterConfigOp.OpType.SET),
+                new AlterConfigOp(new ConfigEntry(
+                    TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.01"), AlterConfigOp.OpType.SET)
+            ))).all().get();
+        }
+    }
+
+    private void floodConsumerOffsetsForCompaction() {
+        final Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        // Commit offsets for many different groups to fill up __consumer_offsets
+        // segments and trigger log compaction across all partitions. Use metadata
+        // strings close to the maximum allowed size (4096 bytes) to fill 1MB
+        // segments faster. With 200 groups, 13 rounds, and ~4KB per record,
+        // each of the 5 __consumer_offsets partitions receives ~2MB of data,
+        // filling at least 2 segments.
+        final String metadata = "x".repeat(4000);
+        for (int i = 0; i < 200; i++) {
+            consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "compaction-trigger-" + i);
+            try (final org.apache.kafka.clients.consumer.KafkaConsumer<String, String> consumer =
+                     new org.apache.kafka.clients.consumer.KafkaConsumer<>(consumerProps)) {
+                final TopicPartition tp = new TopicPartition(inputTopic, 0);
+                consumer.assign(List.of(tp));
+                for (int round = 0; round < 13; round++) {
+                    consumer.commitSync(Map.of(tp, new OffsetAndMetadata(round, metadata)));
+                }
+            }
+        }
     }
 
     @Test

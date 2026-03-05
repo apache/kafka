@@ -212,6 +212,22 @@ public class EmbeddedKafkaCluster {
         }
     }
 
+    /**
+     * Shutdown a single broker by its ID, without destroying the cluster.
+     * Use {@link #startBroker(int)} to restart it.
+     */
+    public void shutdownBroker(final int brokerId) {
+        cluster.brokers().get(brokerId).shutdown();
+    }
+
+    /**
+     * Start a previously shutdown broker by its ID and wait for it to be ready.
+     */
+    public void startBroker(final int brokerId) throws ExecutionException, InterruptedException {
+        cluster.brokers().get(brokerId).startup();
+        cluster.waitForReadyBrokers();
+    }
+
     public String bootstrapServers() {
         return cluster.bootstrapServers();
     }
