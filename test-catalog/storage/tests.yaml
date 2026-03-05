@@ -658,5 +658,6 @@ org.apache.kafka.tiered.storage.integration.TransactionsWithTieredStoreTest:
 - testMultipleMarkersOneLeader
 - testOffsetMetadataInSendOffsetsToTransaction
 - testReadCommittedConsumerShouldNotSeeUndecidedData
+- testRecoveryFromEpochOverflow
 - testSendOffsetsToTransactionTimeout
 - testSendOffsetsWithGroupMetadata

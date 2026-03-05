@@ -603,6 +603,7 @@ kafka.api.TransactionsTest:
 - testMultipleMarkersOneLeader
 - testOffsetMetadataInSendOffsetsToTransaction
 - testReadCommittedConsumerShouldNotSeeUndecidedData
+- testRecoveryFromEpochOverflow
 - testSendOffsetsToTransactionTimeout
 - testSendOffsetsWithGroupMetadata
 kafka.api.UserClientIdQuotaTest:
