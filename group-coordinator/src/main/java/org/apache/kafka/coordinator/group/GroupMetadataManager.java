@@ -3812,6 +3812,7 @@ public class GroupMetadataManager {
         try {
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionType(subscriptionType)
@@ -3881,6 +3882,7 @@ public class GroupMetadataManager {
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
+                    .withTime(time)
                     .withMembers(group.members())
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
@@ -3946,6 +3948,7 @@ public class GroupMetadataManager {
                     assignor,
                     assignmentConfigs
                 )
+                .withTime(time)
                 .withMembers(group.members())
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())

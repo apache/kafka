@@ -237,18 +237,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId           The consumer group id.
      * @param assignmentEpoch   The consumer group epoch.
+     * @param timestamp         The time at which the target assignment calculation finished.
      * @return The record.
      */
     public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long timestamp
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(assignmentEpoch),
+                    .setAssignmentEpoch(assignmentEpoch)
+                    .setTimestamp(timestamp),
                 (short) 0
             )
         );
@@ -665,18 +668,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId           The group id.
      * @param assignmentEpoch   The group epoch.
+     * @param timestamp         The time at which the target assignment calculation finished.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupTargetAssignmentEpochRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long timestamp
     ) {
         return CoordinatorRecord.record(
             new ShareGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(assignmentEpoch),
+                    .setAssignmentEpoch(assignmentEpoch)
+                    .setTimestamp(timestamp),
                 (short) 0
             )
         );

@@ -312,14 +312,16 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(10),
+                    .setAssignmentEpoch(10)
+                    .setTimestamp(12345L),
                 (short) 0
             )
         );
 
         assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochRecord(
             "group-id",
-            10
+            10,
+            12345L
         ));
     }
 

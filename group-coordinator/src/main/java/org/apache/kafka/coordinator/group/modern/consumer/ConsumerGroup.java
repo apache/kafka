@@ -1239,7 +1239,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             ))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId(), assignmentEpoch(), assignmentTimestamp()));
 
         members().forEach((__, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId(), consumerGroupMember))
