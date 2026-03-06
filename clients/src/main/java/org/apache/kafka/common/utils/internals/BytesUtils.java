@@ -63,7 +63,7 @@ public final class BytesUtils {
      */
     public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
 
-    public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
+    public interface ByteArrayComparator extends Comparator<byte[]> {
 
         int compare(final byte[] buffer1, int offset1, int length1,
                     final byte[] buffer2, int offset2, int length2);
