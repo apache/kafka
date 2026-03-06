@@ -245,6 +245,7 @@ public class TransactionMetadata {
         data.nextProducerId = clientProducerId();
         data.nextProducerEpoch = (short) (clientProducerEpoch() + 1);
         data.txnLastUpdateTimestamp = updateTimestamp;
+
         return prepareTransitionTo(data);
     }
 
@@ -304,6 +305,7 @@ public class TransactionMetadata {
         data.nextProducerEpoch = nextProducerEpoch;
         data.txnLastUpdateTimestamp = updateTimestamp;
         data.clientTransactionVersion = clientTransactionVersion;
+
         return prepareTransitionTo(data);
     }
 
@@ -324,12 +326,13 @@ public class TransactionMetadata {
             data.producerEpoch = hasNextProducerEpoch() ? nextProducerEpoch : 0;
         } else {
             data.producerId = producerId;
-            data.producerEpoch = producerEpoch;
+            data.producerEpoch = clientProducerEpoch();
         }
         data.nextProducerId = RecordBatch.NO_PRODUCER_ID;
         data.nextProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
         data.topicPartitions = new HashSet<>();
         data.txnLastUpdateTimestamp = updateTimestamp;
+
         return prepareTransitionTo(data);
     }
 
@@ -521,16 +524,19 @@ public class TransactionMetadata {
         short transitLastProducerEpoch = transitMetadata.lastProducerEpoch();
 
         if (isAtLeastTransactionsV2 &&
-            (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT) &&
-            transitProducerId != producerId) {
-            // Producer ID rotation case: validate that the transition metadata has the correct prevProducerId
-            // and that the transitProducerEpoch matches the nextProducerEpoch (which may have been bumped during EndTransaction).
-            // If nextProducerEpoch is not set (NO_PRODUCER_EPOCH), then transitProducerEpoch should be 0 (standard rotation).
-            boolean epochMatches = hasNextProducerEpoch() ?
-                transitProducerEpoch == nextProducerEpoch : transitProducerEpoch == 0;
-            return transitLastProducerEpoch == lastProducerEpoch &&
-                   transitMetadata.prevProducerId() == producerId &&
-                   epochMatches;
+           (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT)) {
+            if (transitProducerId != producerId) {
+                // Producer ID rotation case: validate that the transition metadata has the correct prevProducerId
+                // and that the transitProducerEpoch matches the nextProducerEpoch (which may have been bumped during EndTransaction).
+                // If nextProducerEpoch is not set (NO_PRODUCER_EPOCH), then transitProducerEpoch should be 0 (standard rotation).
+                boolean epochMatches = hasNextProducerEpoch() ?
+                        transitProducerEpoch == nextProducerEpoch : transitProducerEpoch == 0;
+                return transitLastProducerEpoch == lastProducerEpoch &&
+                        transitMetadata.prevProducerId() == producerId &&
+                        epochMatches;
+            } else {
+                return transitProducerEpoch == clientProducerEpoch() && transitProducerId == producerId;
+            }
         }
 
         if (isAtLeastTransactionsV2 &&

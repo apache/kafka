@@ -340,7 +340,10 @@ public class TransactionManager {
                     .setEnable2Pc(enable2PC)
                     .setKeepPreparedTxn(keepPreparedTxn);
 
-            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
+            // Use unstable API version when 2PC features are enabled (requires InitProducerId v6)
+            boolean enableUnstableLastVersion = enable2PC || keepPreparedTxn;
+            InitProducerIdHandler handler = new InitProducerIdHandler(
+                    new InitProducerIdRequest.Builder(requestData, enableUnstableLastVersion),
                     isEpochBump);
             enqueueRequest(handler);
             return handler.result;
@@ -1528,6 +1531,9 @@ public class TransactionManager {
                         initProducerIdResponse.data().ongoingTxnProducerId(),
                         initProducerIdResponse.data().ongoingTxnProducerEpoch()
                     );
+                    // Set transactionStarted to true because there is an ongoing transaction
+                    // on the server that needs to be completed with EndTxn.
+                    transactionStarted = true;
                 } else {
                     transitionTo(State.READY);
                 }
