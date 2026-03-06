@@ -1841,7 +1841,7 @@ class KafkaConfigTest {
       "In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
       "(group.version, streams.version, share.version) via kafka-features.sh. " +
       "Please remove the configuration, which will restore all protocols to the default enabled state, to prepare for the upgrade."
-    val shareDeprecationWarning = s"'share' in $configName is deprecated. " +
+    val shareDeprecationWarning = s"'share' in `$configName` is deprecated. " +
       "Share groups are controlled by the 'share.version' feature. " +
       "This config will be removed in Kafka 5.0."
 
