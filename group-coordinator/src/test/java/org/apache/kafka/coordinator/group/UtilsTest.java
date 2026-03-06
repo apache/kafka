@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -42,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class UtilsTest {
+    private static final Logger LOG = LoggerFactory.getLogger(UtilsTest.class);
+    private static final String GROUP_ID = "test-group";
     private static final Uuid FOO_TOPIC_ID = Uuid.randomUuid();
     private static final String FOO_TOPIC_NAME = "foo";
     private static final String BAR_TOPIC_NAME = "bar";
@@ -253,7 +257,9 @@ public class UtilsTest {
 
         Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
             topicPartitions,
-            LEAVE_GROUP_STATIC_MEMBER_EPOCH // -2
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH, // -2
+            LOG,
+            GROUP_ID
         );
 
         // Verify epoch is adjusted to 0
@@ -276,7 +282,9 @@ public class UtilsTest {
 
         Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
             topicPartitions,
-            LEAVE_GROUP_STATIC_MEMBER_EPOCH  // -2
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH,  // -2
+            LOG,
+            GROUP_ID
         );
 
         // Verify assignment epochs are used
@@ -300,8 +308,8 @@ public class UtilsTest {
                 .setAssignmentEpochs(List.of(0))
         );
 
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(Utils.class)) {
-            Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(topicPartitions, 7);
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(UtilsTest.class)) {
+            Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(topicPartitions, 7, LOG, GROUP_ID);
             // Verify fallback to default epoch for empty epochs list
             assertEquals(
                 mkAssignmentWithEpochs(
@@ -311,9 +319,10 @@ public class UtilsTest {
                 ),
                 result
             );
-            // Verify error log
+            appender.getMessages("ERROR").forEach(System.out::println);
+            // Verify error log includes group id
             assertEquals(1, appender.getMessages("ERROR").stream()
-                .filter(msg -> msg.contains("Size of assignment epochs 1 is not equal to partitions 3 for topic "
+                .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 1 is not equal to partitions 3 for topic "
                     + FOO_TOPIC_ID))
                 .count());
         }

@@ -27,6 +27,8 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -242,15 +244,19 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder updateWith(ConsumerGroupCurrentMemberAssignmentValue record) {
+        public Builder updateWith(
+            ConsumerGroupCurrentMemberAssignmentValue record,
+            Logger log,
+            String groupId
+        ) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedPartitions(
-                Utils.assignmentFromTopicPartitions(record.assignedPartitions(), record.memberEpoch())
+                Utils.assignmentFromTopicPartitions(record.assignedPartitions(), record.memberEpoch(), log, groupId)
             );
             setPartitionsPendingRevocation(
-                Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation(), record.memberEpoch())
+                Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation(), record.memberEpoch(), log, groupId)
             );
             return this;
         }

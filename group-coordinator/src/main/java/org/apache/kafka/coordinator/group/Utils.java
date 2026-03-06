@@ -34,7 +34,6 @@ import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -51,8 +50,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Utils {
-    private static final Logger log = LoggerFactory.getLogger(Utils.class);
-
     private Utils() {}
 
     /**
@@ -240,11 +237,15 @@ public class Utils {
      *
      * @param topicPartitions The list of TopicPartitions.
      * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
+     * @param log The logger to use for logging errors.
+     * @param groupId The group id for logging context.
      * @return a map of topic id and partitions with assignment epochs.
      */
     public static Map<Uuid, Map<Integer, Integer>> assignmentFromTopicPartitions(
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
-        int defaultEpoch
+        int defaultEpoch,
+        Logger log,
+        String groupId
     ) {
         // For legacy static member, the defaultEpoch could be -2 (LEAVE_GROUP_STATIC_MEMBER_EPOCH).
         // But we want to ensure the default memberEpoch assigned is non-negative.
@@ -262,9 +263,9 @@ public class Utils {
                 }
             } else {
                 if (epochs != null) {
-                    log.error("Size of assignment epochs {} is not equal to partitions {} for topic {}. " +
+                    log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for topic {}. " +
                             "Using default epoch {} for all partitions.",
-                        epochs.size(), partitions.size(), tp.topicId(), adjustedDefaultEpoch);
+                        groupId, epochs.size(), partitions.size(), tp.topicId(), adjustedDefaultEpoch);
                 }
                 for (Integer partition : partitions) {
                     partitionEpochs.put(partition, adjustedDefaultEpoch);

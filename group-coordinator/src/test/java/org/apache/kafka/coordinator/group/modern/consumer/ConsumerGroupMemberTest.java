@@ -29,6 +29,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +50,8 @@ import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMe
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupMemberTest {
+    private static final Logger LOG = LoggerFactory.getLogger(ConsumerGroupMemberTest.class);
+    private static final String GROUP_ID = "test-group";
 
     @Test
     public void testNewMember() {
@@ -246,7 +250,7 @@ public class ConsumerGroupMemberTest {
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .updateWith(record)
+            .updateWith(record, LOG, GROUP_ID)
             .build();
 
         assertEquals(10, member.memberEpoch());
@@ -271,7 +275,7 @@ public class ConsumerGroupMemberTest {
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .updateWith(record)
+            .updateWith(record, LOG, GROUP_ID)
             .build();
 
         assertEquals(-2, member.memberEpoch());
@@ -317,7 +321,7 @@ public class ConsumerGroupMemberTest {
         assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
         Assignment targetAssignment = new Assignment(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
-            .updateWith(record)
+            .updateWith(record, LOG, GROUP_ID)
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
@@ -379,7 +383,7 @@ public class ConsumerGroupMemberTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Arrays.asList(0, 1, 2))));
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId.toString())
-            .updateWith(record)
+            .updateWith(record, LOG, GROUP_ID)
             .build();
 
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()

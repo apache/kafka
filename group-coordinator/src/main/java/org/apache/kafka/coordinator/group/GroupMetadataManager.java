@@ -5367,7 +5367,7 @@ public class GroupMetadataManager {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             ConsumerGroupMember oldMember = group.getOrMaybeCreateMember(memberId, true);
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
-                .updateWith(value)
+                .updateWith(value, log, groupId)
                 .build();
             group.updateMember(newMember);
         } else {
