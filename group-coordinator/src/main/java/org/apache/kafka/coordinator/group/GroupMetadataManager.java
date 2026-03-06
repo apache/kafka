@@ -1020,6 +1020,15 @@ public class GroupMetadataManager {
             return streamsGroup;
         } else if (group.type() == STREAMS) {
             return (StreamsGroup) group;
+        } else if (group.type() == CLASSIC && ((ClassicGroup) group).isSimpleGroup()) {
+            // If the group is a simple classic group, it was automatically created to hold committed
+            // offsets when no group-metadata-backed group existed. Simple classic groups do not have
+            // any GroupMetadataKey/Value records in the __consumer_offsets topic, only offset commit
+            // records, so the in-memory group can be safely replaced here. Without this, replaying
+            // streams group records after offset commit records would not work.
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            groups.put(groupId, streamsGroup);
+            return streamsGroup;
         } else {
             // We don't support upgrading/downgrading between protocols at the moment, so
             // we throw an exception if a group exists with the wrong type.
