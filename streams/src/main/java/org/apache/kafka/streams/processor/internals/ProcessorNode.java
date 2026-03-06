@@ -209,8 +209,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             // like Scala or Kotlin do not, and thus we need to catch `Exception`
             // (instead of `RuntimeException`) to work well with those languages
 
-            // If the processing exception handler is not set,
-            // rethrow the exception to let it bubble up to the uncaught exception handler.
+            // By default, The processing exception handler is only set for regular stream tasks, not for
+            // global state update tasks which use a different error handling mechanism.
             if (processingExceptionHandler == null) {
                 throw processingException;
             }

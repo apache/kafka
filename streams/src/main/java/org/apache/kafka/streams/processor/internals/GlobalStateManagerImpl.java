@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
@@ -92,6 +93,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
+    private Sensor droppedRecordsSensor;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -148,6 +150,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
         }
 
+        droppedRecordsSensor = droppedRecordsSensor(
+            Thread.currentThread().getName(),
+            globalProcessorContext.taskId().toString(),
+            globalProcessorContext.metrics()
+        );
+
         final Set<String> changelogTopics = new HashSet<>();
         for (final StateStore stateStore : topology.globalStateStores()) {
             final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
@@ -168,6 +176,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 throw new StreamsException("Encountered a topic-partition not associated with any global state store");
             }
         });
+
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
@@ -340,11 +349,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 deserializationException,
                                 record,
                                 log,
-                                droppedRecordsSensor(
-                                    Thread.currentThread().getName(),
-                                    globalProcessorContext.taskId().toString(),
-                                    globalProcessorContext.metrics()
-                                ),
+                                droppedRecordsSensor,
                                 null
                             );
                             continue; // Skip this record
@@ -404,11 +409,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                             PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
                                     throw new FailedProcessingException(null, processingException);
                                 }
-                                droppedRecordsSensor(
-                                    Thread.currentThread().getName(),
-                                    globalProcessorContext.taskId().toString(),
-                                    globalProcessorContext.metrics()
-                                ).record();
+                                droppedRecordsSensor.record();
                             } else {
                                 throw processingException;
                             }
