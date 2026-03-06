@@ -20,13 +20,11 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -291,9 +289,7 @@ public class GroupConfigTest {
 
         GroupCoordinatorConfig groupCoordinatorConfig = new GroupCoordinatorConfig(new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF, configs, false));
-        ShareGroupConfig shareGroupConfig = new ShareGroupConfig(new AbstractConfig(
-            Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
-            configs, false));
+        ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(configs);
 
         Properties newGroupConfig = new Properties();
         newGroupConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");

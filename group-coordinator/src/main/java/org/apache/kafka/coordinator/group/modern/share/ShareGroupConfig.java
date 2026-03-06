@@ -21,6 +21,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
+import java.util.Arrays;
+import java.util.Map;
+
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -118,6 +121,16 @@ public class ShareGroupConfig {
         shareGroupMaxShareSessions = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG);
         shareGroupPersisterClassName = config.getString(ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG);
         validate();
+    }
+
+    public static ShareGroupConfig fromProps(Map<?, ?> props) {
+        return new ShareGroupConfig(
+            new AbstractConfig(
+                Utils.mergeConfigs(Arrays.asList(CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
+                props,
+                false
+            )
+        );
     }
 
     /** Share group configuration **/

@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.coordinator;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.internal.ControlRecordType;
@@ -28,7 +27,6 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoaderImpl;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -74,7 +72,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -274,11 +271,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
         time = new MockTime();
         Map<String, Object> props = new HashMap<>();
         config = GroupCoordinatorConfig.fromProps(props);
-        shareGroupConfig = new ShareGroupConfig(new AbstractConfig(
-            Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
-            new HashMap<>(),
-            false
-        ));
+        shareGroupConfig = ShareGroupConfig.fromProps(props);
         serde = new GroupCoordinatorRecordSerde();
     }
 

@@ -17,9 +17,7 @@
 
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import org.junit.jupiter.api.AfterEach;
@@ -29,7 +27,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -209,27 +206,11 @@ public class GroupConfigManagerTest {
     }
 
     public static GroupConfigManager createConfigManager(Map<String, Object> overrides) {
-        GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(overrides);
-        ShareGroupConfig shareGroupConfig = createShareGroupConfig(overrides);
+        GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfig.fromProps(overrides);
+        ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
         Map<String, Integer> defaultConfig = new HashMap<>(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
 
         return new GroupConfigManager(defaultConfig, groupCoordinatorConfig, shareGroupConfig);
-    }
-
-    private static GroupCoordinatorConfig createGroupCoordinatorConfig(Map<String, Object> overrides) {
-        return new GroupCoordinatorConfig(new AbstractConfig(
-            GroupCoordinatorConfig.CONFIG_DEF,
-            overrides,
-            false
-        ));
-    }
-
-    private static ShareGroupConfig createShareGroupConfig(Map<String, Object> overrides) {
-        return new ShareGroupConfig(new AbstractConfig(
-            Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
-            overrides,
-            false
-        ));
     }
 }
