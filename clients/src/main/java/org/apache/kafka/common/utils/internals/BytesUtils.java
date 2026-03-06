@@ -18,7 +18,6 @@ package org.apache.kafka.common.utils.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
 
