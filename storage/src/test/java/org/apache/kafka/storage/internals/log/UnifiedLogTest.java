@@ -1257,7 +1257,7 @@ public class UnifiedLogTest {
         assertEquals(List.of(10L, 20L), getSegmentOffsets(log, 13, 21));
         assertEquals(List.of(10L), getSegmentOffsets(log, 13, 17));
 
-        // from < to is bad
+        // from > to is bad
         assertThrows(IllegalArgumentException.class, () -> log.logSegments(10, 0));
     }
 

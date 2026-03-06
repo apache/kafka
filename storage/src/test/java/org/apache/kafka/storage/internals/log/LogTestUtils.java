@@ -33,17 +33,16 @@ import org.apache.kafka.server.common.RequestLocal;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class LogTestUtils {
     public static LogSegment createSegment(long offset, File logDir, int indexIntervalBytes, Time time) throws IOException {
@@ -196,11 +195,10 @@ public class LogTestUtils {
         return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, partitionLeaderEpoch);
     }
 
-    public static void deleteProducerSnapshotFiles(File logDir) throws IOException {
-        Set<File> files = Stream.of(logDir.listFiles()).filter(f -> f.isFile() && f.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX)).collect(Collectors.toSet());
-        for (File file : files) {
-            Utils.delete(file);
-        }
+    public static void deleteProducerSnapshotFiles(File logDir) {
+        Stream.of(logDir.listFiles())
+                .filter(f -> f.isFile() && f.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX))
+                .forEach(f -> assertDoesNotThrow(() -> Utils.delete(f)));
     }
 
     public static List<Long> listProducerSnapshotOffsets(File logDir) throws IOException {
@@ -242,11 +240,7 @@ public class LogTestUtils {
                 : MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
                         producerEpoch, baseSequence, simpleRecords.toArray(new SimpleRecord[0]));
 
-            try {
-                log.appendAsLeader(records, 0);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            assertDoesNotThrow(() -> log.appendAsLeader(records, 0));
             sequence.addAndGet(numRecords);
         };
     }
