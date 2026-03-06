@@ -660,6 +660,12 @@ public class ConfigDefTest {
     }
 
     @Test
+    public void testConvertValueToStringNullType() {
+        assertEquals("foobar", ConfigDef.convertToString("foobar", null));
+        assertNull(ConfigDef.convertToString(null, null));
+    }
+
+    @Test
     public void testClassWithAlias() {
         final String alias = "PluginAlias";
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();

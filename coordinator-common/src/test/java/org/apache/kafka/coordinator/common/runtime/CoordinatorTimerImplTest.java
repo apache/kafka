@@ -19,13 +19,15 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -135,7 +137,7 @@ public class CoordinatorTimerImplTest {
                 operationCalled.set(true);
             } catch (RejectedExecutionException e) {
                 rejectedExceptionThrown.set(true);
-                return FutureUtils.failedFuture(e);
+                return CompletableFuture.failedFuture(e);
             }
             return CompletableFuture.completedFuture(null);
         };
@@ -180,7 +182,7 @@ public class CoordinatorTimerImplTest {
                 operation.generate();
             } catch (RejectedExecutionException e) {
                 // Expected for the overridden timer.
-                return FutureUtils.failedFuture(e);
+                return CompletableFuture.failedFuture(e);
             }
             return CompletableFuture.completedFuture(null);
         };
@@ -237,7 +239,7 @@ public class CoordinatorTimerImplTest {
             var count = callCount.incrementAndGet();
             if (count == 1) {
                 // Fail the first time.
-                return FutureUtils.failedFuture(new RuntimeException("Simulated failure"));
+                return CompletableFuture.failedFuture(new RuntimeException("Simulated failure"));
             }
             return CompletableFuture.completedFuture(null);
         };
@@ -281,7 +283,7 @@ public class CoordinatorTimerImplTest {
         CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             callCount.incrementAndGet();
-            return FutureUtils.failedFuture(new RuntimeException("Simulated failure"));
+            return CompletableFuture.failedFuture(new RuntimeException("Simulated failure"));
         };
 
         var timer = new CoordinatorTimerImpl<>(
@@ -314,15 +316,17 @@ public class CoordinatorTimerImplTest {
         assertEquals(1, callCount.get());
     }
 
-    @Test
-    public void testTimerIgnoredOnNotCoordinatorException() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testTimerIgnoredOnNotCoordinatorException(boolean wrapException) throws InterruptedException {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
         CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             callCount.incrementAndGet();
-            return FutureUtils.failedFuture(new NotCoordinatorException("Not coordinator"));
+            var ex = new NotCoordinatorException("Not coordinator");
+            return CompletableFuture.failedFuture(wrapException ? new CompletionException(ex) : ex);
         };
 
         var timer = new CoordinatorTimerImpl<>(
@@ -355,15 +359,17 @@ public class CoordinatorTimerImplTest {
         assertEquals(1, callCount.get());
     }
 
-    @Test
-    public void testTimerIgnoredOnCoordinatorLoadInProgressException() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testTimerIgnoredOnCoordinatorLoadInProgressException(boolean wrapException) throws InterruptedException {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
         CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             callCount.incrementAndGet();
-            return FutureUtils.failedFuture(new CoordinatorLoadInProgressException("Loading"));
+            var ex = new CoordinatorLoadInProgressException("Loading");
+            return CompletableFuture.failedFuture(wrapException ? new CompletionException(ex) : ex);
         };
 
         var timer = new CoordinatorTimerImpl<>(
@@ -543,7 +549,7 @@ public class CoordinatorTimerImplTest {
             operation.generate();
             var count = callCount.incrementAndGet();
             if (count == 1) {
-                return FutureUtils.failedFuture(new RuntimeException("Simulated failure"));
+                return CompletableFuture.failedFuture(new RuntimeException("Simulated failure"));
             }
             return CompletableFuture.completedFuture(null);
         };
@@ -579,8 +585,9 @@ public class CoordinatorTimerImplTest {
         assertEquals(0, timer.size());
     }
 
-    @Test
-    public void testTaskCleanupOnFailedFutureWithoutOperationExecution() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testTaskCleanupOnFailedFutureWithoutOperationExecution(boolean wrapException) throws InterruptedException {
         var mockTimer = new MockTimer();
         var operationCalled = new AtomicBoolean(false);
 
@@ -589,7 +596,8 @@ public class CoordinatorTimerImplTest {
         // (2) events failing before being executed.
         CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             // Don't call operation.generate() - simulates event never being executed
-            return FutureUtils.failedFuture(new NotCoordinatorException("Not coordinator"));
+            NotCoordinatorException ex = new NotCoordinatorException("Not coordinator");
+            return CompletableFuture.failedFuture(wrapException ? new CompletionException(ex) : ex);
         };
 
         var timer = new CoordinatorTimerImpl<>(

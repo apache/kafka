@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -383,7 +384,7 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void flush() {
+                        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
 
                         }
 

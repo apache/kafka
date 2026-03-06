@@ -23,7 +23,8 @@
   // Version 2 is the first flexible version.
   // Version 3 is the same as version 2 (new field in response).
   // Version 4 is the same as version 2 (new fields in response).
-  "validVersions": "1-4",
+  // Version 5 is the same as version 2 (new fields in response).
+  "validVersions": "1-5",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]DescribableLogDirTopic", "versions": "0+", "nullableVersions": "0+",

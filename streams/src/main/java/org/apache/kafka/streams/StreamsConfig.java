@@ -537,6 +537,14 @@ public class StreamsConfig extends AbstractConfig {
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
     static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
+    /** {@code dsl.store.suppliers.class } */
+    public static final String DSL_STORE_FORMAT_CONFIG = "dsl.store.format";
+    public static final String DSL_STORE_FORMAT_DEFAULT = "DEFAULT";
+    public static final String DSL_STORE_FORMAT_HEADERS = "HEADERS";
+    private static final String DSL_STORE_FORMAT_DOC = "Specifies the state store format for DSL operators. " +
+        "'DEFAULT' creates either timestamped or plain state stores, depending on context. " +
+        "'HEADERS' creates headers-aware stores that preserve record headers.";
+
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
@@ -791,7 +799,15 @@ public class StreamsConfig extends AbstractConfig {
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
         "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config.";
 
-    /** {@code topology.optimization} */
+    /**
+     * {@code topology.optimization}
+     *
+     * <p><b>Important:</b> Setting this config alone is not sufficient to enable optimizations.
+     * You must also pass the {@link java.util.Properties} object to
+     * {@link org.apache.kafka.streams.StreamsBuilder#build(java.util.Properties)} when building
+     * your topology. Calling {@code StreamsBuilder.build()} without the properties argument will
+     * result in no optimizations being applied, even if this config is set.
+     */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
         + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
@@ -801,7 +817,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
-        + "\"NO_OPTIMIZATION\" by default.";
+        + "\"NO_OPTIMIZATION\" by default. "
+        + "Note: this config must also be passed to StreamsBuilder#build(Properties) "
+        + "for optimizations to take effect.";
 
     /**
      * {@code windowed.inner.class.serde}
@@ -1112,6 +1130,12 @@ public class StreamsConfig extends AbstractConfig {
                     DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
                     Importance.LOW,
                     DSL_STORE_SUPPLIERS_CLASS_DOC)
+            .define(DSL_STORE_FORMAT_CONFIG,
+                    Type.STRING,
+                    DSL_STORE_FORMAT_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
+                    Importance.LOW,
+                    DSL_STORE_FORMAT_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),

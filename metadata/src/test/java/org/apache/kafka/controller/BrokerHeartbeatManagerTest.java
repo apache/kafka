@@ -110,7 +110,8 @@ public class BrokerHeartbeatManagerTest {
         Set<UsableBroker> brokers = new HashSet<>();
         for (Iterator<UsableBroker> iterator = new UsableBrokerIterator(
             manager.brokers().iterator(),
-            id -> id % 2 == 0 ? Optional.of("rack1") : Optional.of("rack2"));
+            id -> id % 2 == 0 ? Optional.of("rack1") : Optional.of("rack2"),
+            id -> id % 3 != 0);
              iterator.hasNext(); ) {
             brokers.add(iterator.next());
         }
@@ -131,10 +132,8 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(4, true, 100);
         assertEquals(98L, manager.lowestActiveOffset());
         Set<UsableBroker> expected = new HashSet<>();
-        expected.add(new UsableBroker(0, Optional.of("rack1"), false));
         expected.add(new UsableBroker(1, Optional.of("rack2"), false));
         expected.add(new UsableBroker(2, Optional.of("rack1"), false));
-        expected.add(new UsableBroker(3, Optional.of("rack2"), false));
         expected.add(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
         manager.maybeUpdateControlledShutdownOffset(2, 0);

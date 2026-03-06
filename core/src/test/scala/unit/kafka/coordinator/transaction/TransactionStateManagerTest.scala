@@ -28,7 +28,8 @@ import org.apache.kafka.common.errors.InvalidRegularExpression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics}
 import org.apache.kafka.common.protocol.{Errors, MessageUtil}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
@@ -917,7 +918,7 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).asInstanceOf[String]
+          val transactionalId = TransactionLog.read(record.key, record.value()).asInstanceOf[TransactionLog.TxnTombstone].transactionId()
           assertNull(record.value)
           expiredTransactionalIds += transactionalId
           assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))

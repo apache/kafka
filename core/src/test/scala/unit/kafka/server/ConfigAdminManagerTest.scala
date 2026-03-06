@@ -23,7 +23,9 @@ import java.util.Collections
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => LAlterConfigsResourceCollection}
@@ -418,5 +420,25 @@ class ConfigAdminManagerTest {
     assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "foo")))
     assertFalse(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz")))
     assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz", "foo")))
+  }
+
+  @Test
+  def testPrepareIncrementalConfigsWithNonExistentKey(): Unit = {
+    val configProps = new java.util.Properties()
+    val configKeys: Map[String, ConfigKey] = Map.empty
+
+    val appendOp = new AlterConfigOp(
+      new ConfigEntry("non.existent.key", "value"), OpType.APPEND)
+    assertEquals("Unknown config name: non.existent.key",
+      Assertions.assertThrows(classOf[InvalidConfigurationException],
+        () => ConfigAdminManager.prepareIncrementalConfigs(
+          Seq(appendOp), configProps, configKeys)).getMessage)
+
+    val subtractOp = new AlterConfigOp(
+      new ConfigEntry("non.existent.key", "value"), OpType.SUBTRACT)
+    assertEquals("Unknown config name: non.existent.key",
+      Assertions.assertThrows(classOf[InvalidConfigurationException],
+        () => ConfigAdminManager.prepareIncrementalConfigs(
+          Seq(subtractOp), configProps, configKeys)).getMessage)
   }
 }

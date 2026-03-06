@@ -85,8 +85,11 @@ public abstract class AbstractSessionBytesStoreTest {
     
     enum StoreType {
         RocksDBSessionStore,
+        RocksDBSessionStoreWithHeaders,
         RocksDBTimeOrderedSessionStoreWithIndex,
         RocksDBTimeOrderedSessionStoreWithoutIndex,
+        RocksDBTimeOrderedSessionStoreWithHeadersWithIndex,
+        RocksDBTimeOrderedSessionStoreWithHeadersWithoutIndex,
         InMemoryStore
     }
 
@@ -126,6 +129,49 @@ public abstract class AbstractSessionBytesStoreTest {
                                 retentionPeriod,
                                 false
                         ),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBSessionStoreWithHeaders: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod) {
+                            @Override
+                            public SessionStore<Bytes, byte[]> get() {
+                                return new RocksDBSessionStoreWithHeaders(
+                                    new RocksDBSegmentedBytesStore(
+                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(),
+                                        new SessionKeySchema()));
+                            }
+                        },
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedSessionStoreWithHeadersWithIndex: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true) {
+                            @Override
+                            public SessionStore<Bytes, byte[]> get() {
+                                return new RocksDBTimeOrderedSessionStoreWithHeaders(
+                                    new RocksDBTimeOrderedSessionSegmentedBytesStore(
+                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(), true));
+                            }
+                        },
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedSessionStoreWithHeadersWithoutIndex: {
+                return Stores.sessionStoreBuilder(
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false) {
+                            @Override
+                            public SessionStore<Bytes, byte[]> get() {
+                                return new RocksDBTimeOrderedSessionStoreWithHeaders(
+                                    new RocksDBTimeOrderedSessionSegmentedBytesStore(
+                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(), false));
+                            }
+                        },
                         keySerde,
                         valueSerde
                 ).build();

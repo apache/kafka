@@ -18,15 +18,15 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.RequestLocal;
 
@@ -95,6 +95,48 @@ public class LogTestUtils {
             0L,
             RecordBatch.NO_PARTITION_LEADER_EPOCH
         );
+    }
+
+    /**
+     * Create a single record batch with the specified compression and timestamp.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key, long timestamp) {
+        return records(
+            List.of(new SimpleRecord(timestamp, key, value)),
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            codec,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Create a single record batch with the specified compression, timestamp, and magic value.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key,
+                                                  long timestamp, byte magicValue) {
+        return records(
+            List.of(new SimpleRecord(timestamp, key, value)),
+            magicValue,
+            codec,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Read a string from a ByteBuffer using the default charset.
+     */
+    public static String readString(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        return new String(bytes);
     }
 
     public static MemoryRecords records(List<SimpleRecord> records,
