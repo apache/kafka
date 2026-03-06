@@ -56,7 +56,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
+        final DslStoreFormat storeFormat = dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         materialized.storeName(),
@@ -69,10 +69,18 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
                 ))
                 : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<?> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde());
+        final StoreBuilder<?> builder;
+        if (storeFormat == DslStoreFormat.HEADERS) {
+            builder = Stores.timestampedWindowStoreWithHeadersBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
+        } else {
+            builder = Stores.timestampedWindowStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

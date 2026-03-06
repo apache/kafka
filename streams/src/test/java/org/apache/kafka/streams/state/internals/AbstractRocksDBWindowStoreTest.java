@@ -87,7 +87,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
                 return Stores.windowStoreBuilder(
                         new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
                                 retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                true),
+                                true, false),
                         keySerde,
                         valueSerde
                 ).build();
@@ -97,7 +97,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
                 return Stores.windowStoreBuilder(
                         new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
                                 retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                false),
+                                false, false),
                         keySerde,
                         valueSerde
                 ).build();

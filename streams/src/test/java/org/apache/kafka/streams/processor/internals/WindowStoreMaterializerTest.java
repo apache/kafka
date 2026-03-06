@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedWindowBy
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.internals.TimeOrderedCachingWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -93,7 +94,7 @@ public class WindowStoreMaterializerTest {
                     DslStoreSuppliers.class,
                     emptyMap()
             );
-        lenient().doReturn("default")
+        lenient().doReturn("timestamped")
                 .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
     }
 
@@ -118,7 +119,7 @@ public class WindowStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateDefaultTimestampedBuilderWithCachingDisabled() {
+    public void shouldCreateTimestampedBuilderWithCachingDisabled() {
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withCachingDisabled(), nameProvider, STORE_PREFIX
         );
@@ -130,7 +131,7 @@ public class WindowStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateDefaultTimestampedBuilderWithLoggingDisabled() {
+    public void shouldCreateTimestampedBuilderWithLoggingDisabled() {
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, STORE_PREFIX
         );
@@ -143,7 +144,7 @@ public class WindowStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateDefaultTimestampedBuilderWithCachingAndLoggingDisabled() {
+    public void shouldCreateTimestampedBuilderWithCachingAndLoggingDisabled() {
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX
         );
@@ -279,6 +280,99 @@ public class WindowStoreMaterializerTest {
     public void shouldCreateHeadersAwareStoreWithCachingAndLoggingDisabled() {
         doReturn("headers")
                 .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX
+        );
+
+        final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertFalse(wrapped instanceof CachingWindowStore);
+        assertFalse(wrapped instanceof ChangeLoggingTimestampedWindowBytesStoreWithHeaders);
+    }
+
+    @Test
+    public void shouldCreateTimestampedStoreWithOnWindowClose() {
+        emitStrategy = EmitStrategy.onWindowClose();
+
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store")
+                .withCachingDisabled(), nameProvider, STORE_PREFIX);
+
+        final TimestampedWindowStore<String, String> store = getTimestampedStore(materialized);
+
+        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(MeteredTimestampedWindowStore.class, store);
+        assertInstanceOf(ChangeLoggingTimestampedWindowBytesStore.class, logging);
+    }
+
+    @Test
+    public void shouldCreateTimestampedStoreWithOnWindowCloseAndCachingEnabled() {
+        emitStrategy = EmitStrategy.onWindowClose();
+
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
+
+        final TimestampedWindowStore<String, String> store = getTimestampedStore(materialized);
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(TimeOrderedCachingWindowStore.class, wrapped);
+    }
+
+    @Test
+    public void shouldCreateHeadersAwareStoreWithOnWindowClose() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        emitStrategy = EmitStrategy.onWindowClose();
+
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store")
+                .withCachingDisabled(), nameProvider, STORE_PREFIX);
+
+        final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(MeteredTimestampedWindowStoreWithHeaders.class, store);
+        assertInstanceOf(ChangeLoggingTimestampedWindowBytesStoreWithHeaders.class, logging);
+    }
+
+    @Test
+    public void shouldCreateHeadersAwareStoreWithOnWindowCloseAndLoggingDisabled() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        emitStrategy = EmitStrategy.onWindowClose();
+
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, STORE_PREFIX
+        );
+
+        final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertFalse(wrapped instanceof ChangeLoggingTimestampedWindowBytesStoreWithHeaders);
+    }
+
+    @Test
+    public void shouldCreateHeadersAwareStoreWithOnWindowCloseAndCachingEnabled() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        emitStrategy = EmitStrategy.onWindowClose();
+
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
+
+        final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(TimeOrderedCachingWindowStore.class, wrapped);
+    }
+
+    @Test
+    public void shouldCreateHeadersAwareStoreWithOnWindowCloseAndCachingAndLoggingDisabled() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        emitStrategy = EmitStrategy.onWindowClose();
 
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX
