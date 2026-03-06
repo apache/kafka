@@ -239,6 +239,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldThrowIfStoreHasInvalidState() {
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.close();
+        rocksDBStore.init(context, rocksDBStore);
+    }
+
+    @Test
     public void shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {
@@ -356,7 +364,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setTableFormatConfig(new PlainTableConfig());
-            options.useFixedLengthPrefixExtractor(1);
         }
 
         public void close(final String storeName, final Options options) {

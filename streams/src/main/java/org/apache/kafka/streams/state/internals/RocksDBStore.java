@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -84,6 +85,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.metricsImpl;
@@ -184,8 +186,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @SuppressWarnings("unchecked")
     void openDB(final Map<String, Object> configs, final File stateDir) {
-        // initialize the default rocksdb options
 
+        final boolean eosEnabled = StreamsConfig.InternalConfig.getBoolean(configs, EXACTLY_ONCE_V2, false);
+        // initialize the default rocksdb options
         final DBOptions dbOptions = new DBOptions();
         // Defaults to true. Supports offset managements: KAFKA-20212
         dbOptions.setAtomicFlush(true);
@@ -246,9 +249,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         openRocksDB(dbOptions, columnFamilyOptions);
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         try {
-            cfAccessor.open(dbAccessor);
-        } catch (final Throwable fatal) {
-            throw new ProcessorStateException(fatal);
+            cfAccessor.open(dbAccessor, !eosEnabled);
+        } catch (final StreamsException fatal) {
+            final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
+            throw new ProcessorStateException(fatalMessage, fatal);
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error opening store " + name, e);
         }
 
         addValueProvidersToMetricsRecorder();
@@ -869,7 +875,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
 
-        void open(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
+        /**
+         * Initializes the ColumnFamily.
+         * @throws StreamsException if an invalid state is found and ignoreInvalidState is false
+         */
+        void open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
         boolean isOpen();
 

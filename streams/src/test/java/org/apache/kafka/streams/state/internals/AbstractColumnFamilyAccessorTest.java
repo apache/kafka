@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,9 +32,13 @@ import org.rocksdb.RocksDBException;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 abstract class AbstractColumnFamilyAccessorTest {
@@ -48,12 +53,42 @@ abstract class AbstractColumnFamilyAccessorTest {
 
     abstract AbstractColumnFamilyAccessor createColumnFamilyAccessor();
     private final LongSerializer offsetSerializer = new LongSerializer();
-    private final StringSerializer topicSerializer = new StringSerializer();
+    private final StringSerializer keySerializer = new StringSerializer();
+    private final byte[] openValue = toBytes(1L);
+    private final byte[] closedValue = toBytes(0L);
 
 
     @BeforeEach
     public void setUp() {
         accessor = createColumnFamilyAccessor();
+    }
+
+    @Test
+    public void shouldOpenClean() throws RocksDBException {
+        when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(closedValue);
+
+        // Open the ColumnFamily
+        accessor.open(dbAccessor, false);
+        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(openValue));
+
+        // Now close the ColumnFamily
+        accessor.close(dbAccessor);
+        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(closedValue));
+    }
+
+    @Test
+    public void shouldThrowOnOpenAfterAUncleanClose() throws RocksDBException {
+        when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(openValue);
+        final StreamsException thrown = assertThrowsExactly(StreamsException.class, () -> accessor.open(dbAccessor, false));
+        assertEquals("Invalid state during store open. Expected state to be either empty or closed", thrown.getMessage());
+    }
+
+    @Test
+    public void shouldIgnoreExceptionAfterUncleanClose() throws RocksDBException {
+        when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(openValue);
+        accessor.open(dbAccessor, true);
+        assertTrue(accessor.isOpen());
+        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(openValue));
     }
 
     @Test
@@ -63,8 +98,16 @@ abstract class AbstractColumnFamilyAccessorTest {
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
         accessor.commit(dbAccessor, changelogOffsets);
         verify(dbAccessor).flush(any(ColumnFamilyHandle[].class));
-        verify(dbAccessor).put(eq(offsetsCF), eq(topicSerializer.serialize(null, tp0.toString())), eq(offsetSerializer.serialize(null, 10L)));
-        verify(dbAccessor).put(eq(offsetsCF), eq(topicSerializer.serialize(null, tp1.toString())), eq(offsetSerializer.serialize(null, 20L)));
+        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes(tp0.toString())), eq(toBytes(10L)));
+        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes(tp1.toString())), eq(toBytes(20L)));
+    }
+
+    private byte[] toBytes(final String s) {
+        return keySerializer.serialize("", s);
+    }
+    
+    private byte[] toBytes(final long l) {
+        return offsetSerializer.serialize("", l);
     }
 
 }
