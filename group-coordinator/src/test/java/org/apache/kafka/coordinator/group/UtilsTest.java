@@ -319,7 +319,6 @@ public class UtilsTest {
                 ),
                 result
             );
-            appender.getMessages("ERROR").forEach(System.out::println);
             // Verify error log includes group id
             assertEquals(1, appender.getMessages("ERROR").stream()
                 .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 1 is not equal to partitions 3 for topic "
