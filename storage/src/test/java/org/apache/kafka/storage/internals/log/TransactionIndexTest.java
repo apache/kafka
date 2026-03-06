@@ -25,8 +25,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -221,6 +223,39 @@ public class TransactionIndexTest {
     public void testIsEmptyWhenFileIsNotEmpty() throws IOException {
         index.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2));
         assertFalse(index.isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testIterableReturnsIndependentIterators() throws Exception {
+        List<AbortedTxn> abortedTxns = List.of(
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(11).setLastOffset(20).setLastStableOffset(15),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(21).setLastOffset(30).setLastStableOffset(25));
+        abortedTxns.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
+
+        Method iterableMethod = TransactionIndex.class.getDeclaredMethod("iterable");
+        iterableMethod.setAccessible(true);
+        Iterable<Object> iterable = (Iterable<Object>) iterableMethod.invoke(index);
+
+        Iterator<Object> iter1 = iterable.iterator();
+        Iterator<Object> iter2 = iterable.iterator();
+
+        // Exhaust iter1
+        int count1 = 0;
+        while (iter1.hasNext()) {
+            iter1.next();
+            count1++;
+        }
+        assertEquals(3, count1);
+
+        // iter2 must be independent — still readable from the beginning
+        int count2 = 0;
+        while (iter2.hasNext()) {
+            iter2.next();
+            count2++;
+        }
+        assertEquals(3, count2);
     }
 
     @Test
