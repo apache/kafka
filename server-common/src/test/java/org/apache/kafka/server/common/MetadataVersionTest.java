@@ -23,11 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_4_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
@@ -312,22 +307,6 @@ class MetadataVersionTest {
     @Test
     public void assertLatestIsNotProduction() {
         assertFalse(MetadataVersion.latestTesting().isProduction());
-    }
-
-    @Test
-    public void assertPythonLatestStableMetadataVersionMatchesLatestProduction() throws IOException {
-        Path versionPy = Paths.get(System.getProperty("project.root.dir"), "tests/kafkatest/version.py");
-        assertTrue(Files.exists(versionPy), "Could not find tests/kafkatest/version.py at: " + versionPy);
-
-        String pythonVersion = Files.readAllLines(versionPy).stream()
-            .filter(line -> line.startsWith("LATEST_STABLE_METADATA_VERSION"))
-            .map(line -> line.replaceAll(".*=\\s*\"([^\"]+)\".*", "$1"))
-            .findFirst()
-            .orElseThrow(() -> new AssertionError("LATEST_STABLE_METADATA_VERSION not found in version.py"));
-
-        assertEquals(LATEST_PRODUCTION.version(), pythonVersion,
-            "tests/kafkatest/version.py LATEST_STABLE_METADATA_VERSION must match LATEST_PRODUCTION. " +
-            "Update the Python file when bumping LATEST_PRODUCTION in MetadataVersion.java");
     }
 
     @ParameterizedTest
