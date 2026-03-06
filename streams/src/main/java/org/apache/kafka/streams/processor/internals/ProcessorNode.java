@@ -253,8 +253,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
             if (!deadLetterQueueRecords.isEmpty()) {
                 if (!(internalProcessorContext instanceof RecordCollector.Supplier)) {
-                    log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
-                            "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
+                    log.warn("Dead letter queue records cannot be sent for global store/KTable processors. " +
+                            "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
                             errorHandlerContext);
                 } else {
                     final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();

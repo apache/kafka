@@ -843,13 +843,16 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
         };
+    /**
+     * {@code processing.exception.handler.global.enabled}
+     * @deprecated Since 4.3. Default will change to {@code true} when removed.
+     */
     @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG = "processing.exception.handler.global.enabled";
     private static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC =
-            "When false (default), maintains backwards-compatible behaviour where global exceptions terminate or gracefully shut down the application. " +
-                    "When true, enables the ProcessingExceptionHandler for GlobalKTable exceptions. " +
-                    "This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
+            "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
+                    "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
     static {
         CONFIG = new ConfigDef()
@@ -871,6 +874,11 @@ public class StreamsConfig extends AbstractConfig {
                     0,
                     Importance.HIGH,
                     NUM_STANDBY_REPLICAS_DOC)
+            .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.HIGH,
+                    PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -1257,12 +1265,7 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC)
-            .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,
-                    Type.BOOLEAN,
-                    false,
-                    Importance.HIGH,
-                    PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC);
+                    WINDOW_SIZE_MS_DOC);
     }
 
     // this is the list of configs for underlying clients

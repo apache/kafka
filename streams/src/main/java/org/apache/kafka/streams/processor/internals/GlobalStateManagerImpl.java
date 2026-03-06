@@ -380,8 +380,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                             processingException
                                         ), "Invalid ProcessingExceptionHandler response");
                                     if (!response.deadLetterQueueRecords().isEmpty()) {
-                                        log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
-                                                "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
+                                        log.warn("Dead letter queue records cannot be sent for global state/KTable processors. " +
+                                                "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
                                             errorHandlerContext);
                                     }
                                 } catch (final Exception fatalUserException) {
@@ -404,8 +404,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                             PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
                                     throw new FailedProcessingException(null, processingException);
                                 }
-                                // RESUME - log and continue
-                                log.warn("Processing exception handler chose to resume for record at offset {}", record.offset(), processingException);
                                 droppedRecordsSensor(
                                     Thread.currentThread().getName(),
                                     globalProcessorContext.taskId().toString(),
