@@ -119,7 +119,6 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         private final Time time = Time.SYSTEM;
         protected final KStreamImplJoin.TimeTracker timeTracker = new KStreamImplJoin.TimeTracker();
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext<Windowed<KIn>, Change<VAgg>> context) {
             super.init(context);
@@ -150,7 +149,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new SessionCacheFlushListener<>(context),
+                    new SessionCacheFlushListenerWithHeader<>(context),
                     sendOldValues);
             }
         }
@@ -384,8 +383,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
 
         private SessionStore<KIn, AggregationWithHeaders<VAgg>> store;
-
-        @SuppressWarnings("unchecked")
+        
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             store = context.getStateStore(storeName);

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -24,7 +26,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-class SessionCacheFlushListener<KOut, VOut>
+class SessionCacheFlushListenerWithHeader<KOut, VOut>
     implements CacheFlushListener<Windowed<KOut>, AggregationWithHeaders<VOut>> {
 
     private final InternalProcessorContext<Windowed<KOut>, Change<VOut>> context;
@@ -32,7 +34,7 @@ class SessionCacheFlushListener<KOut, VOut>
     @SuppressWarnings("rawtypes")
     private final ProcessorNode myNode;
 
-    SessionCacheFlushListener(final ProcessorContext<Windowed<KOut>, Change<VOut>> context) {
+    SessionCacheFlushListenerWithHeader(final ProcessorContext<Windowed<KOut>, Change<VOut>> context) {
         this.context = (InternalProcessorContext<Windowed<KOut>, Change<VOut>>) context;
         myNode = this.context.currentNode();
     }
@@ -45,10 +47,15 @@ class SessionCacheFlushListener<KOut, VOut>
             final VOut newValue = AggregationWithHeaders.getAggregationOrNull(record.value().newValue);
             final VOut oldValue = AggregationWithHeaders.getAggregationOrNull(record.value().oldValue);
 
+            final Headers headers = record.value().newValue != null
+                ? record.value().newValue.headers()
+                : new RecordHeaders();
+
             context.forward(
                 record
                     .withValue(new Change<>(newValue, oldValue, record.value().isLatest))
-                    .withTimestamp(record.key().window().end()));
+                    .withTimestamp(record.key().window().end())
+                    .withHeaders(headers));
         } finally {
             context.setCurrentNode(prev);
         }

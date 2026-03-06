@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.state.DslSessionParams;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
@@ -58,7 +59,7 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
     }
 
     @Override
-    public StoreBuilder<?> builder() {
+    public  StoreBuilder<SessionStoreWithHeaders<K, V>> builder() {
         final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : DslStoreFormat.HEADERS;
         final SessionBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().sessionStore(new DslSessionParams(
@@ -68,7 +69,7 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
                         storeFormat))
                 : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<?> builder = Stores.sessionStoreBuilderWithHeaders(
+        final StoreBuilder<SessionStoreWithHeaders<K, V>> builder = Stores.sessionStoreBuilderWithHeaders(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde()

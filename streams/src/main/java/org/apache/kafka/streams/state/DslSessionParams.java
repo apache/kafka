@@ -40,6 +40,7 @@ public class DslSessionParams {
      *                          contain the inactivity gap of the session and the entire grace period.)
      * @param emitStrategy      defines how to emit results
      */
+    @Deprecated
     public DslSessionParams(
             final String name,
             final Duration retentionPeriod,

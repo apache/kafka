@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class SessionCacheFlushListenerTest {
+public class SessionCacheFlushListenerWithHeaderTest {
     @Test
     public void shouldForwardKeyNewValueOldValueAndTimestamp() {
         @SuppressWarnings("unchecked")
@@ -46,7 +46,7 @@ public class SessionCacheFlushListenerTest {
                 new Change<>("newValue", "oldValue"),
                 73L));
 
-        new SessionCacheFlushListener<>(context).apply(
+        new SessionCacheFlushListenerWithHeader<>(context).apply(
             new Record<>(
                 new Windowed<>("key", new SessionWindow(21L, 73L)),
                 new Change<>(
