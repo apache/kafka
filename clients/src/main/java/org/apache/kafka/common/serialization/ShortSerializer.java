@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+
 public class ShortSerializer implements Serializer<Short> {
     public byte[] serialize(String topic, Short data) {
         if (data == null)
@@ -25,5 +29,16 @@ public class ShortSerializer implements Serializer<Short> {
             (byte) (data >>> 8),
             data.byteValue()
         };
+    }
+
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, Short data) {
+        if (data == null)
+            return null;
+
+        ByteBuffer buffer = ByteBuffer.allocate(2);
+        buffer.putShort(data);
+        buffer.flip();
+        return buffer;
     }
 }

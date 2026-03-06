@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -642,8 +643,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
                                                    + "].");
             return partition;
         }
-        byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
-        byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
+        ByteBuffer keyBytes = keySerializer.serializeToByteBuffer(topic, record.headers(), record.key());
+        ByteBuffer valueBytes = valueSerializer.serializeToByteBuffer(topic, record.headers(), record.value());
         if (partitioner == null) {
             return this.cluster.partitionsForTopic(record.topic()).get(0).partition();
         }

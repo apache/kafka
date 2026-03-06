@@ -33,8 +33,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -116,9 +114,6 @@ public final class Utils {
     public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
-
-    private static final VarHandle INT_HANDLE =
-            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
 
     /**
      * Get a sorted list representation of a collection.
@@ -282,6 +277,28 @@ public final class Utils {
      */
     public static byte[] toNullableArray(ByteBuffer buffer) {
         return buffer == null ? null : toArray(buffer);
+    }
+
+    /**
+     * Convert a ByteBuffer to a nullable byte array, returning the backing array directly
+     * when it exactly represents the buffer's contents (zero offset, full length) to avoid
+     * allocation. Falls back to {@link #toArray(ByteBuffer)} otherwise.
+     *
+     * @param buffer The buffer to convert
+     * @return The resulting array or null if the buffer is null
+     */
+    public static byte[] toNullableArrayZeroCopy(ByteBuffer buffer) {
+        if (buffer == null)
+            return null;
+
+        if (buffer.hasArray()) {
+            byte[] arr = buffer.array();
+            if (buffer.arrayOffset() == 0 && arr.length == buffer.remaining()) {
+                return arr;
+            }
+        }
+
+        return toArray(buffer);
     }
 
     /**
@@ -495,12 +512,23 @@ public final class Utils {
 
     /**
      * Generates 32 bit murmur2 hash from byte array
+     *
      * @param data byte array to hash
      * @return 32 bit hash of the given array
      */
-    @SuppressWarnings("fallthrough")
     public static int murmur2(final byte[] data) {
-        int length = data.length;
+        return murmur2(ByteBuffer.wrap(data));
+    }
+
+    /**
+     * Generates 32 bit murmur2 hash from a ByteBuffer.
+     *
+     * @param data The input ByteBuffer. Only bytes between position and limit are hashed.
+     *             The buffer's position is not modified.
+     */
+    @SuppressWarnings("fallthrough")
+    public static int murmur2(final ByteBuffer data) {
+        int length = data.remaining();
         int seed = 0x9747b28c;
         // 'm' and 'r' are mixing constants generated offline.
         // They're not really 'magic', they just happen to work well.
@@ -510,10 +538,13 @@ public final class Utils {
         // Initialize the hash to a random value
         int h = seed ^ length;
         int length4 = length >> 2;
+        int pos = data.position();
 
         for (int i = 0; i < length4; i++) {
-            final int i4 = i << 2;
-            int k = (int) INT_HANDLE.get(data, i4);
+            int k = data.getInt(pos + (i << 2));
+            if (data.order() != java.nio.ByteOrder.LITTLE_ENDIAN) {
+                k = Integer.reverseBytes(k);
+            }
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -525,11 +556,11 @@ public final class Utils {
         int index = length4 << 2;
         switch (length - index) {
             case 3:
-                h ^= (data[index + 2] & 0xff) << 16;
+                h ^= (data.get(pos + index + 2) & 0xff) << 16;
             case 2:
-                h ^= (data[index + 1] & 0xff) << 8;
+                h ^= (data.get(pos + index + 1) & 0xff) << 8;
             case 1:
-                h ^= data[index] & 0xff;
+                h ^= data.get(pos + index) & 0xff;
                 h *= m;
         }
 

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -33,17 +36,15 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
             return null;
 
         data.rewind();
+        return Utils.toNullableArrayZeroCopy(data);
+    }
 
-        if (data.hasArray()) {
-            byte[] arr = data.array();
-            if (data.arrayOffset() == 0 && arr.length == data.remaining()) {
-                return arr;
-            }
-        }
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, ByteBuffer data) {
+        if (data == null)
+            return null;
 
-        byte[] ret = new byte[data.remaining()];
-        data.get(ret, 0, ret.length);
         data.rewind();
-        return ret;
+        return data;
     }
 }

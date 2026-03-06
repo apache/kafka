@@ -115,6 +115,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -1115,10 +1116,10 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = kafkaProducer(configs, keySerializer, valueSerializer, metadata,
                 null, null, Time.SYSTEM);
 
-        when(keySerializer.serialize(any(), any(), any())).then(invocation ->
-                invocation.<String>getArgument(2).getBytes());
-        when(valueSerializer.serialize(any(), any(), any())).then(invocation ->
-                invocation.<String>getArgument(2).getBytes());
+        when(keySerializer.serializeToByteBuffer(any(), any(), any())).then(invocation ->
+                ByteBuffer.wrap(invocation.<String>getArgument(2).getBytes()));
+        when(valueSerializer.serializeToByteBuffer(any(), any(), any())).then(invocation ->
+                ByteBuffer.wrap(invocation.<String>getArgument(2).getBytes()));
 
         String value = "value";
         String key = "key";
@@ -1136,8 +1137,8 @@ public class KafkaProducerTest {
         //ensure existing headers are not changed, and last header for key is still original value
         assertArrayEquals(record.headers().lastHeader("test").value(), "header2".getBytes());
 
-        verify(valueSerializer).serialize(topic, record.headers(), value);
-        verify(keySerializer).serialize(topic, record.headers(), key);
+        verify(valueSerializer).serializeToByteBuffer(topic, record.headers(), value);
+        verify(keySerializer).serializeToByteBuffer(topic, record.headers(), key);
 
         producer.close(Duration.ofMillis(0));
     }
@@ -1516,8 +1517,8 @@ public class KafkaProducerTest {
                 eq(topic),
                 anyInt(),
                 anyLong(),
-                any(),
-                any(),
+                any(byte[].class),
+                any(byte[].class),
                 any(),
                 any(),
                 anyLong(),
@@ -2754,8 +2755,8 @@ public class KafkaProducerTest {
         TopicPartition initialSelectedPartition,
         Cluster cluster
     ) throws InterruptedException {
-        byte[] serializedKey = ctx.serializer.serialize(topic, record.key());
-        byte[] serializedValue = ctx.serializer.serialize(topic, record.value());
+        ByteBuffer serializedKey = ctx.serializer.serializeToByteBuffer(topic, new RecordHeaders(), record.key());
+        ByteBuffer serializedValue = ctx.serializer.serializeToByteBuffer(topic, new RecordHeaders(), record.value());
         long timestamp = record.timestamp() == null ? ctx.time.milliseconds() : record.timestamp();
 
         ProduceRequestResult requestResult = new ProduceRequestResult(initialSelectedPartition);
@@ -2763,26 +2764,26 @@ public class KafkaProducerTest {
             requestResult,
             5,
             timestamp,
-            serializedKey.length,
-            serializedValue.length,
+            serializedKey == null ? -1 : serializedKey.remaining(),
+            serializedValue == null ? -1 : serializedValue.remaining(),
             ctx.time
         );
 
         when(ctx.partitioner.partition(
-            initialSelectedPartition.topic(),
-            record.key(),
-            serializedKey,
-            record.value(),
-            serializedValue,
-            cluster
+            eq(initialSelectedPartition.topic()),
+            eq(record.key()),
+            any(ByteBuffer.class),
+            eq(record.value()),
+            any(ByteBuffer.class),
+            eq(cluster)
         )).thenReturn(initialSelectedPartition.partition());
 
         when(ctx.accumulator.append(
             eq(initialSelectedPartition.topic()),            // 0
             eq(initialSelectedPartition.partition()),        // 1
             eq(timestamp),                                   // 2
-            eq(serializedKey),                               // 3
-            eq(serializedValue),                             // 4
+            any(ByteBuffer.class),                           // 3
+            any(ByteBuffer.class),                           // 4
             eq(Record.EMPTY_HEADERS),                        // 5
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),

@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
@@ -258,7 +259,6 @@ public class RecordAccumulator {
      * Add a record to the accumulator, return the append result
      * <p>
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
-     * <p>
      *
      * @param topic The topic to which this record is being sent
      * @param partition The partition to which this record is being sent or RecordMetadata.UNKNOWN_PARTITION
@@ -277,6 +277,37 @@ public class RecordAccumulator {
                                      long timestamp,
                                      byte[] key,
                                      byte[] value,
+                                     Header[] headers,
+                                     AppendCallbacks callbacks,
+                                     long maxTimeToBlock,
+                                     long nowMs,
+                                     Cluster cluster) throws InterruptedException {
+        return append(topic, partition, timestamp, Utils.wrapNullable(key), Utils.wrapNullable(value),
+                headers, callbacks, maxTimeToBlock, nowMs, cluster);
+    }
+
+    /**
+     * Add a record to the accumulator, return the append result
+     * <p>
+     * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
+     *
+     * @param topic The topic to which this record is being sent
+     * @param partition The partition to which this record is being sent or RecordMetadata.UNKNOWN_PARTITION
+     *                  if any partition could be used
+     * @param timestamp The timestamp of the record
+     * @param key The key for the record as a ByteBuffer
+     * @param value The value for the record as a ByteBuffer
+     * @param headers the Headers for the record
+     * @param callbacks The callbacks to execute
+     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     * @param nowMs The current time, in milliseconds
+     * @param cluster The cluster metadata
+     */
+    public RecordAppendResult append(String topic,
+                                     int partition,
+                                     long timestamp,
+                                     ByteBuffer key,
+                                     ByteBuffer value,
                                      Header[] headers,
                                      AppendCallbacks callbacks,
                                      long maxTimeToBlock,
@@ -376,8 +407,8 @@ public class RecordAccumulator {
                                               int partition,
                                               Deque<ProducerBatch> dq,
                                               long timestamp,
-                                              byte[] key,
-                                              byte[] value,
+                                              ByteBuffer key,
+                                              ByteBuffer value,
                                               Header[] headers,
                                               AppendCallbacks callbacks,
                                               ByteBuffer buffer,
@@ -422,7 +453,7 @@ public class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");

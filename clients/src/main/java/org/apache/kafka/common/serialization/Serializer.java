@@ -17,8 +17,10 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -81,6 +83,34 @@ public interface Serializer<T> extends Closeable {
      */
     default byte[] serialize(String topic, Headers headers, T data) {
         return serialize(topic, data);
+    }
+
+    /**
+     * Convert {@code data} into a {@link ByteBuffer}.
+     *
+     * <p>It is recommended to serialize {@code null} data to a {@code null} {@link ByteBuffer}.
+     *
+     * <p>The caller cannot make any assumptions about the returned {@link ByteBuffer} like the
+     * position, limit, capacity, etc., or if it is backed by {@link ByteBuffer#hasArray() an array or not}.
+     *
+     * <p>Similarly, if this method is overridden, the implementation cannot make any assumptions about
+     * how the returned {@link ByteBuffer} will be used.
+     *
+     * <p>Note that the passed in {@link Headers} may be empty, but never {@code null}.
+     * The implementation is allowed to modify the passed in headers, as a side effect of serialization.
+     * It is considered best practice to not delete or modify existing headers, but rather only add new ones.
+     *
+     * @param topic
+     *        topic associated with data
+     * @param headers
+     *        headers associated with the record
+     * @param data
+     *        typed data; may be {@code null}
+     *
+     * @return serialized {@link ByteBuffer}; may be {@code null}
+     */
+    default ByteBuffer serializeToByteBuffer(String topic, Headers headers, T data) {
+        return Utils.wrapNullable(serialize(topic, headers, data));
     }
 
     /**

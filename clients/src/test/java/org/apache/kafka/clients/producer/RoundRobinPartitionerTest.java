@@ -55,7 +55,7 @@ public class RoundRobinPartitionerTest {
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
             Collections.emptySet(), Collections.emptySet());
         for (int i = 1; i <= 100; i++) {
-            int part = partitioner.partition("test", null, null, null, null, cluster);
+            int part = partitioner.partition("test", null, null, null, (byte[]) null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
