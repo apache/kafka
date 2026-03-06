@@ -54,6 +54,9 @@ class TimestampedToHeadersIteratorAdapter<K> implements KeyValueIterator<K, byte
     @Override
     public KeyValue<K, byte[]> next() {
         final KeyValue<K, byte[]> timestampedKeyValue = innerIterator.next();
+        if (timestampedKeyValue == null) {
+            return null;
+        }
         return KeyValue.pair(timestampedKeyValue.key, convertToHeaderFormat(timestampedKeyValue.value));
     }
 }
