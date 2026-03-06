@@ -491,6 +491,17 @@ public class ReassignPartitionsCommand {
     }
 
     /**
+     * Get the set of broker IDs that are currently live in the cluster.
+     * Only live brokers can be successfully configured via incrementalAlterConfigs.
+     *
+     * @param adminClient     The AdminClient to use.
+     * @return               The set of live broker IDs.
+     */
+    private static Set<Integer> getLiveBrokerIds(Admin adminClient) throws ExecutionException, InterruptedException {
+        return adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
+    }
+
+    /**
      * Clear all topic-level and broker-level throttles.
      *
      * @param adminClient     The AdminClient to use.
@@ -499,8 +510,10 @@ public class ReassignPartitionsCommand {
     private static void clearAllThrottles(Admin adminClient,
                                           List<Entry<TopicPartition, List<Integer>>> targetParts
     ) throws ExecutionException, InterruptedException {
-        Set<Integer> brokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
+        Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
+        Set<Integer> brokers = new HashSet<>(liveBrokers);
         targetParts.forEach(t -> brokers.addAll(t.getValue()));
+        brokers.retainAll(liveBrokers);
 
         System.out.printf("Clearing broker-level throttles on broker%s %s%n",
             brokers.size() == 1 ? "" : "s", brokers.stream().map(Object::toString).collect(Collectors.joining(",")));
@@ -1183,6 +1196,8 @@ public class ReassignPartitionsCommand {
 
     /**
      * Modify the leader/follower replication throttles for a set of brokers.
+     * Only applies throttle to currently live brokers, so reassignment can proceed
+     * even when some brokers are down (avoids TimeoutException on incrementalAlterConfigs).
      *
      * @param adminClient The Admin instance to use
      * @param reassigningBrokers The set of brokers involved in the reassignment
@@ -1192,8 +1207,15 @@ public class ReassignPartitionsCommand {
                                           Set<Integer> reassigningBrokers,
                                           long interBrokerThrottle) throws ExecutionException, InterruptedException {
         if (interBrokerThrottle >= 0) {
+            Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
+            Set<Integer> brokersToUpdate = reassigningBrokers.stream()
+                .filter(liveBrokers::contains)
+                .collect(Collectors.toSet());
+            if (brokersToUpdate.isEmpty()) {
+                return;
+            }
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
-            reassigningBrokers.forEach(brokerId -> {
+            brokersToUpdate.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
                 ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
@@ -1208,6 +1230,8 @@ public class ReassignPartitionsCommand {
 
     /**
      * Modify the log dir reassignment throttle for a set of brokers.
+     * Only applies throttle to currently live brokers, so reassignment can proceed
+     * even when some brokers are down (avoids TimeoutException on incrementalAlterConfigs).
      *
      * @param admin The Admin instance to use
      * @param movingBrokers The set of broker to alter the throttle of
@@ -1217,8 +1241,15 @@ public class ReassignPartitionsCommand {
                                      Set<Integer> movingBrokers,
                                      long logDirThrottle) throws ExecutionException, InterruptedException {
         if (logDirThrottle >= 0) {
+            Set<Integer> liveBrokers = getLiveBrokerIds(admin);
+            Set<Integer> brokersToUpdate = movingBrokers.stream()
+                .filter(liveBrokers::contains)
+                .collect(Collectors.toSet());
+            if (brokersToUpdate.isEmpty()) {
+                return;
+            }
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
-            movingBrokers.forEach(brokerId -> {
+            brokersToUpdate.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
                 ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
