@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,8 +44,6 @@ import java.util.Set;
 public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTasksWithEpochs,
                                    Map<String, Set<Integer>> standbyTasks,
                                    Map<String, Set<Integer>> warmupTasks) {
-
-    private static final Logger log = LoggerFactory.getLogger(TasksTupleWithEpochs.class);
 
     public TasksTupleWithEpochs {
         activeTasksWithEpochs = Collections.unmodifiableMap(Objects.requireNonNull(activeTasksWithEpochs));
