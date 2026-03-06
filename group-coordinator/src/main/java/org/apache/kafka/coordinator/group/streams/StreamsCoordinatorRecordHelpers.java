@@ -218,15 +218,15 @@ public class StreamsCoordinatorRecordHelpers {
     /**
      * Creates a StreamsGroupTargetAssignmentMetadata record.
      *
-     * @param groupId         The streams group id.
-     * @param assignmentEpoch The assignment epoch.
-     * @param timestamp       The time at which the target assignment calculation finished.
+     * @param groupId             The streams group id.
+     * @param assignmentEpoch     The assignment epoch.
+     * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
     public static CoordinatorRecord newStreamsGroupTargetAssignmentEpochRecord(
         String groupId,
         int assignmentEpoch,
-        long timestamp
+        long assignmentTimestamp
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
 
@@ -236,7 +236,7 @@ public class StreamsCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMetadataValue()
                     .setAssignmentEpoch(assignmentEpoch)
-                    .setTimestamp(timestamp),
+                    .setAssignmentTimestamp(assignmentTimestamp),
                 (short) 0
             )
         );

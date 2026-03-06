@@ -382,7 +382,7 @@ class StreamsCoordinatorRecordHelpersTest {
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMetadataValue()
                     .setAssignmentEpoch(42)
-                    .setTimestamp(12345L),
+                    .setAssignmentTimestamp(12345L),
                 (short) 0
             )
         );

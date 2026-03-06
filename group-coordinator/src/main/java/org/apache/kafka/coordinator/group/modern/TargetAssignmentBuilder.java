@@ -140,11 +140,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         @Override
-        protected CoordinatorRecord newTargetAssignmentEpochRecord(String groupId, int assignmentEpoch, long timestampMs) {
+        protected CoordinatorRecord newTargetAssignmentEpochRecord(
+            String groupId,
+            int assignmentEpoch,
+            long assignmentTimestamp
+        ) {
             return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(
                 groupId,
                 assignmentEpoch,
-                timestampMs
+                assignmentTimestamp
             );
         }
 
@@ -210,11 +214,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         @Override
-        protected CoordinatorRecord newTargetAssignmentEpochRecord(String groupId, int assignmentEpoch, long timestampMs) {
+        protected CoordinatorRecord newTargetAssignmentEpochRecord(
+            String groupId,
+            int assignmentEpoch,
+            long assignmentTimestamp
+        ) {
             return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(
                 groupId,
                 assignmentEpoch,
-                timestampMs
+                assignmentTimestamp
             );
         }
 
@@ -510,8 +518,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         // Bump the target assignment epoch.
-        long timestampMs = time.milliseconds();
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch, timestampMs));
+        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch, time.milliseconds()));
 
         return new TargetAssignmentResult(records, newGroupAssignment.members());
     }

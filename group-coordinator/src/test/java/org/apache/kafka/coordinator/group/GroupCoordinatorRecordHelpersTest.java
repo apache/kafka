@@ -313,7 +313,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
                     .setAssignmentEpoch(10)
-                    .setTimestamp(12345L),
+                    .setAssignmentTimestamp(12345L),
                 (short) 0
             )
         );

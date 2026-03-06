@@ -369,10 +369,10 @@ public class StreamsGroup implements Group {
     /**
      * Sets the time at which the assignment calculation finished.
      *
-     * @param timestamp The time at which the assignment calculation finished.
+     * @param targetAssignmentTimestamp The time at which the assignment calculation finished.
      */
-    public void setTargetAssignmentTimestamp(long timestamp) {
-        this.targetAssignmentTimestamp.set(timestamp);
+    public void setTargetAssignmentTimestamp(long targetAssignmentTimestamp) {
+        this.targetAssignmentTimestamp.set(targetAssignmentTimestamp);
     }
 
     /**
