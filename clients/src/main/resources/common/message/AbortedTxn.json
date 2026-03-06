@@ -31,5 +31,6 @@
     { "name": "LastStableOffset", "type": "int64", "versions": "0+",
       "about": "The last stable offset at the time the transaction was aborted"
     }
+    // Note: adding new fields may require TransactionIndex to be refactored to read version-per-record.
   ]
 }
