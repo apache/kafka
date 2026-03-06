@@ -1728,6 +1728,155 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldHandleTimeoutAtEpochOverflowBoundaryCorrectlyAndRetryInitProducerIdTV2(): Unit = {
+    // 1. The transaction coordinator aborts the transaction due to a timeout at epoch 32766
+    //    (timeout -> prepare abort -> complete abort with producerId rotation)
+    // 2. The original client retries InitProducerId with the old producerId/epoch.
+
+    val epochAtMaxBoundary = (Short.MaxValue - 1).toShort // 32766
+    val now = time.milliseconds()
+
+    val rotatedProducerId = producerId + 1L
+    val rotatedEpoch = 0.toShort
+    when(pidGenerator.generateProducerId())
+      .thenReturn(rotatedProducerId)
+
+    // Create transaction metadata at the epoch boundary that would cause overflow IFF double-incremented
+    val txnMetadata = new TransactionMetadata(
+      transactionalId,
+      producerId,
+      RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID,
+      epochAtMaxBoundary,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs,
+      TransactionState.ONGOING,
+      partitions,
+      now,
+      now,
+      TV_2
+    )
+    assertTrue(txnMetadata.isProducerEpochExhausted)
+
+    // Mock the transaction manager to return our test transaction as timed out
+    when(transactionManager.timedOutTransactions())
+      .thenReturn(List(TransactionalIdAndProducerIdEpoch(transactionalId, producerId, epochAtMaxBoundary)))
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+
+    // Mock the append operation to simulate successful write and update the metadata
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      any[Errors => Unit](),
+      any(),
+      any())
+    ).thenAnswer(invocation => {
+      val transitMetadata = invocation.getArgument[TxnTransitMetadata](2)
+      val callback = invocation.getArgument[Errors => Unit](3)
+      txnMetadata.completeTransitionTo(transitMetadata)
+      callback.apply(Errors.NONE)
+    })
+
+    // Simulate marker write completion by appending COMPLETE_ABORT.
+    doAnswer(invocation => {
+      val markerCoordinatorEpoch = invocation.getArgument[Int](0)
+      val markerTxnMetadata = invocation.getArgument[TransactionMetadata](2)
+      val newTxnMetadata = invocation.getArgument[TxnTransitMetadata](3)
+      transactionManager.appendTransactionToLog(
+        markerTxnMetadata.transactionalId(),
+        markerCoordinatorEpoch,
+        newTxnMetadata,
+        _ => (),
+        _ == Errors.COORDINATOR_NOT_AVAILABLE,
+        RequestLocal.noCaching
+      )
+      null
+    }).when(transactionMarkerChannelManager).addTxnMarkersToSend(
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(TransactionResult.ABORT),
+      ArgumentMatchers.eq(txnMetadata),
+      any[TxnTransitMetadata]()
+    )
+
+    // Track the actual behavior
+    var callbackInvoked = false
+
+    def checkOnEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)
+                                     (error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
+      callbackInvoked = true
+
+      // TransitMetadata should be rotated.
+      assertEquals(Errors.NONE, error, "Expected no errors in the callback")
+      assertEquals(rotatedProducerId, newProducerId, "Expected producer ID should be rotated because of epoch exhausted.")
+      assertEquals(rotatedEpoch, newProducerEpoch, "Expected producer epoch to be 0 as a result of ProducerId rotation.")
+
+      // The local transaction state is not updated yet.
+      assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state())
+      assertEquals(producerId, txnMetadata.producerId(), "Expected producer ID should not be rotated because txnMarker is not written yet.")
+      assertEquals(Short.MaxValue, txnMetadata.producerEpoch,
+        s"Expected transaction metadata producer epoch to be ${Short.MaxValue} " +
+          s"after timeout handling, but was ${txnMetadata.producerEpoch}"
+      )
+    }
+
+    // Execute the timeout abort process
+    coordinator.abortTimedOutTransactions(checkOnEndTransactionComplete)
+
+    // the transaction completion callback was invoked.
+    assertTrue(callbackInvoked, "Callback should have been invoked")
+
+    val capturedTransitions = capturedTxnTransitMetadata.getAllValues.asScala.toList
+    val prepareAbortTransition = capturedTransitions.head
+    assertEquals(TransactionState.PREPARE_ABORT, prepareAbortTransition.txnState)
+    assertEquals(rotatedProducerId, prepareAbortTransition.nextProducerId)
+    assertTrue(capturedTransitions.exists(_.txnState == TransactionState.COMPLETE_ABORT))
+
+    // Verify the transaction metadata was correctly updated to the final epoch as a result of sendMarkerTxn.
+    assertEquals(TransactionState.COMPLETE_ABORT, txnMetadata.state())
+    assertEquals(rotatedProducerId, txnMetadata.producerId())
+    assertEquals(rotatedEpoch, txnMetadata.producerEpoch)
+
+    // Verify the basic flow was attempted
+    verify(transactionManager).timedOutTransactions()
+    verify(transactionManager, times(2)).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any(),
+      any(),
+      any(),
+      any()
+    )
+    verify(transactionManager, atLeast(1)).getTransactionState(ArgumentMatchers.eq(transactionalId))
+    verify(pidGenerator, times(1)).generateProducerId()
+    verify(transactionMarkerChannelManager, times(1)).addTxnMarkersToSend(
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(TransactionResult.ABORT),
+      ArgumentMatchers.eq(txnMetadata),
+      any[TxnTransitMetadata]()
+    )
+
+    // WHEN: The original client retries InitProducerId after the coordinator has already
+    // completed the timeout-driven abort and rotated the producerId.
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, epochAtMaxBoundary)),
+      initProducerIdMockCallback
+    )
+    
+    // THEN
+    val expectedResult = InitProducerIdResult(rotatedProducerId, rotatedEpoch, Errors.NONE) 
+    assertEquals(expectedResult, result)
+  }
+
+  @Test
   def testInitProducerIdWithNoLastProducerData(): Unit = {
     // If the metadata doesn't include the previous producer data (for example, if it was written to the log by a broker
     // on an old version), the retry case should fail
