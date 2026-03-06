@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -102,18 +103,6 @@ public class StreamsGroup implements Group {
         public String toLowerCaseString() {
             return lowerCaseName;
         }
-    }
-
-    /**
-     * The target assignment metadata.
-     *
-     * @param assignmentEpoch     The target assignment epoch. An assignment epoch smaller than the
-     *                            group epoch means that a new assignment is required. The
-     *                            assignment epoch is updated when a new assignment is installed.
-     * @param assignmentTimestamp The time at which the target assignment calculation finished.
-     */
-    private record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
-        private static final TargetAssignmentMetadata NONE = new TargetAssignmentMetadata(0, 0L);
     }
 
     public static class DeadlineAndEpoch {

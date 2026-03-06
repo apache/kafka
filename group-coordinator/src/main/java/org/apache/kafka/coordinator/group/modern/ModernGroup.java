@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -44,18 +45,6 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  * The abstract group provides definitions for the consumer and share group.
  */
 public abstract class ModernGroup<T extends ModernGroupMember> implements Group {
-
-    /**
-     * The target assignment metadata.
-     *
-     * @param assignmentEpoch     The target assignment epoch. An assignment epoch smaller than the
-     *                            group epoch means that a new assignment is required. The
-     *                            assignment epoch is updated when a new assignment is installed.
-     * @param assignmentTimestamp The time at which the target assignment calculation finished.
-     */
-    protected record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
-        private static final TargetAssignmentMetadata NONE = new TargetAssignmentMetadata(0, 0L);
-    }
 
     public static class DeadlineAndEpoch {
         static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
