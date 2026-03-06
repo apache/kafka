@@ -250,7 +250,7 @@ public class ConsumerGroupMemberTest {
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .updateWith(record, LOG, GROUP_ID)
+            .updateWith(LOG, GROUP_ID, record)
             .build();
 
         assertEquals(10, member.memberEpoch());
@@ -275,7 +275,7 @@ public class ConsumerGroupMemberTest {
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .updateWith(record, LOG, GROUP_ID)
+            .updateWith(LOG, GROUP_ID, record)
             .build();
 
         assertEquals(-2, member.memberEpoch());
@@ -321,7 +321,7 @@ public class ConsumerGroupMemberTest {
         assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
         Assignment targetAssignment = new Assignment(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
-            .updateWith(record, LOG, GROUP_ID)
+            .updateWith(LOG, GROUP_ID, record)
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
@@ -383,7 +383,7 @@ public class ConsumerGroupMemberTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Arrays.asList(0, 1, 2))));
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId.toString())
-            .updateWith(record, LOG, GROUP_ID)
+            .updateWith(LOG, GROUP_ID, record)
             .build();
 
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()

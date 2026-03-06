@@ -235,17 +235,17 @@ public class Utils {
     /**
      * Creates a map of topic id and partition with assignment epochs from a list of consumer group TopicPartitions.
      *
-     * @param topicPartitions The list of TopicPartitions.
-     * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
      * @param log The logger to use for logging errors.
      * @param groupId The group id for logging context.
+     * @param topicPartitions The list of TopicPartitions.
+     * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
      * @return a map of topic id and partitions with assignment epochs.
      */
     public static Map<Uuid, Map<Integer, Integer>> assignmentFromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
-        int defaultEpoch,
         Logger log,
-        String groupId
+        String groupId,
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
+        int defaultEpoch
     ) {
         // For legacy static member, the defaultEpoch could be -2 (LEAVE_GROUP_STATIC_MEMBER_EPOCH).
         // But we want to ensure the default memberEpoch assigned is non-negative.

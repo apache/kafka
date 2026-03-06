@@ -245,18 +245,18 @@ public class ConsumerGroupMember extends ModernGroupMember {
         }
 
         public Builder updateWith(
-            ConsumerGroupCurrentMemberAssignmentValue record,
             Logger log,
-            String groupId
+            String groupId,
+            ConsumerGroupCurrentMemberAssignmentValue record
         ) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedPartitions(
-                Utils.assignmentFromTopicPartitions(record.assignedPartitions(), record.memberEpoch(), log, groupId)
+                Utils.assignmentFromTopicPartitions(log, groupId, record.assignedPartitions(), record.memberEpoch())
             );
             setPartitionsPendingRevocation(
-                Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation(), record.memberEpoch(), log, groupId)
+                Utils.assignmentFromTopicPartitions(log, groupId, record.partitionsPendingRevocation(), record.memberEpoch())
             );
             return this;
         }

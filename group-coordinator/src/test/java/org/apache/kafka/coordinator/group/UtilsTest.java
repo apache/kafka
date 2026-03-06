@@ -256,10 +256,10 @@ public class UtilsTest {
         );
 
         Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
-            topicPartitions,
-            LEAVE_GROUP_STATIC_MEMBER_EPOCH, // -2
             LOG,
-            GROUP_ID
+            GROUP_ID,
+            topicPartitions,
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH // -2
         );
 
         // Verify epoch is adjusted to 0
@@ -281,10 +281,10 @@ public class UtilsTest {
         );
 
         Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
-            topicPartitions,
-            LEAVE_GROUP_STATIC_MEMBER_EPOCH,  // -2
             LOG,
-            GROUP_ID
+            GROUP_ID,
+            topicPartitions,
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH // -2
         );
 
         // Verify assignment epochs are used
@@ -309,7 +309,7 @@ public class UtilsTest {
         );
 
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(UtilsTest.class)) {
-            Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(topicPartitions, 7, LOG, GROUP_ID);
+            Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(LOG, GROUP_ID, topicPartitions, 7);
             // Verify fallback to default epoch for empty epochs list
             assertEquals(
                 mkAssignmentWithEpochs(
