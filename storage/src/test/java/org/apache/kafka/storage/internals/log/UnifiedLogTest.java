@@ -949,7 +949,7 @@ public class UnifiedLogTest {
             assertNonEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK, batchBaseOffset);
         }
 
-        for (long offset = log.highWatermark(); offset < log.logEndOffset(); offset++) {
+        for (long offset = log.highWatermark(); offset <= log.logEndOffset(); offset++) {
             Long batchBaseOffset = batchBaseOffsets.floor(offset);
             assertNotNull(batchBaseOffset);
             assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK, batchBaseOffset);
@@ -1069,7 +1069,7 @@ public class UnifiedLogTest {
             assertNonEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED, batchBaseOffset);
         }
 
-        for (long offset = log.lastStableOffset(); offset < log.logEndOffset(); offset++) {
+        for (long offset = log.lastStableOffset(); offset <= log.logEndOffset(); offset++) {
             Long batchBaseOffset = batchBaseOffsets.floor(offset);
             assertNotNull(batchBaseOffset);
             assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED, batchBaseOffset);
@@ -1242,7 +1242,7 @@ public class UnifiedLogTest {
         assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
 
         // segments expire in size
-        for (int i = 1; i < (2 * msgPerSeg + 2); i++) {
+        for (int i = 1; i <= (2 * msgPerSeg + 2); i++) {
             log.appendAsLeader(createRecords.get(), 0);
         }
         assertEquals(3, log.numberOfSegments(), "There should be exactly 3 segments.");
@@ -1273,7 +1273,7 @@ public class UnifiedLogTest {
         UnifiedLog log = createLog(logDir, logConfig);
         assertEquals(OptionalLong.empty(), log.oldestProducerSnapshotOffset());
 
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i <= 100; i++) {
             SimpleRecord record = new SimpleRecord(mockTime.milliseconds(), String.valueOf(i).getBytes());
             log.appendAsLeader(LogTestUtils.records(List.of(record)), 0);
         }
