@@ -120,24 +120,18 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
 
     @Override
     public void openExisting(final StateStoreContext context, final long streamTime) {
-        try {
-            final File dir = new File(context.stateDir(), name);
-            if (dir.exists()) {
-                final String[] list = dir.list();
-                if (list != null) {
-                    Arrays.stream(list)
-                            .map(segment -> segmentIdFromSegmentName(segment, dir))
-                            .sorted() // open segments in the id order
-                            .filter(segmentId -> segmentId >= 0)
-                            .forEach(segmentId -> getOrCreateSegment(segmentId, context));
-                }
-            } else {
-                if (!dir.mkdir()) {
-                    throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for segments %s", dir, name));
-                }
+        final File dir = new File(context.stateDir(), name);
+        if (dir.exists() && dir.isDirectory()) {
+            final String[] list = dir.list();
+            Arrays.stream(list)
+                    .map(segment -> segmentIdFromSegmentName(segment, dir))
+                    .filter(segmentId -> segmentId >= 0)
+                    .sorted() // open segments in the id order
+                    .forEach(segmentId -> getOrCreateSegment(segmentId, context));
+        } else {
+            if (!dir.mkdir()) {
+                throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for segments %s", dir, name));
             }
-        } catch (final Exception ex) {
-            // ignore
         }
 
         cleanupExpiredSegments(streamTime);
