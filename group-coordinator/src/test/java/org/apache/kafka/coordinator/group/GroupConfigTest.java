@@ -17,13 +17,16 @@
 
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -278,6 +281,25 @@ public class GroupConfigTest {
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
+    public void testValidateUsesAllGroupTypeDefaults() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
+
+        GroupCoordinatorConfig groupCoordinatorConfig = new GroupCoordinatorConfig(new AbstractConfig(
+            GroupCoordinatorConfig.CONFIG_DEF, configs, false));
+        ShareGroupConfig shareGroupConfig = new ShareGroupConfig(new AbstractConfig(
+            Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
+            configs, false));
+
+        Properties newGroupConfig = new Properties();
+        newGroupConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
+
+        assertDoesNotThrow(() ->
+            GroupConfig.validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig));
     }
 
     private Properties createValidGroupConfig() {

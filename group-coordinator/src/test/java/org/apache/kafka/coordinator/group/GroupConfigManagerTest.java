@@ -63,7 +63,6 @@ import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.S
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -111,22 +110,6 @@ public class GroupConfigManagerTest {
         GroupConfig config = configOptional.get();
         assertEquals(50000, config.getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
-    }
-
-    @Test
-    public void testValidateUsesAllGroupTypeDefaults() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
-
-        GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(configs);
-        ShareGroupConfig shareGroupConfig = createShareGroupConfig(configs);
-
-        Properties newGroupConfig = new Properties();
-        newGroupConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
-
-        assertDoesNotThrow(() ->
-            GroupConfigManager.validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig));
     }
 
     /**
