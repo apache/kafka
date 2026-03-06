@@ -42,7 +42,7 @@ import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -317,7 +317,7 @@ public class TargetAssignmentBuilderTest {
         );
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(List.of(newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newConsumerGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -358,7 +358,7 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(List.of(newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newConsumerGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -423,7 +423,7 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
                         20,
                         12345L
@@ -503,7 +503,7 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
                         20,
                         12345L
@@ -596,7 +596,7 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
                         20,
                         12345L
@@ -680,7 +680,7 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
                         20,
                         12345L
@@ -760,7 +760,7 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
                         20,
                         12345L
@@ -838,7 +838,7 @@ public class TargetAssignmentBuilderTest {
                     mkTopicAssignment(fooTopicId, 5, 6),
                     mkTopicAssignment(barTopicId, 5, 6)
                 )),
-                newConsumerGroupTargetAssignmentEpochRecord(
+                newConsumerGroupTargetAssignmentMetadataRecord(
                     "my-group",
                     20,
                     12345L
@@ -920,7 +920,7 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
                         20,
                         12345L

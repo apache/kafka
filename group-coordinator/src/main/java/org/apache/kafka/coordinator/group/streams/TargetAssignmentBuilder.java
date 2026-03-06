@@ -329,7 +329,7 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
             groupId,
             groupEpoch,
             time.milliseconds()

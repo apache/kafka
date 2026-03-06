@@ -240,7 +240,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentMetadataRecord(
         String groupId,
         int assignmentEpoch,
         long assignmentTimestamp
@@ -671,7 +671,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newShareGroupTargetAssignmentMetadataRecord(
         String groupId,
         int assignmentEpoch,
         long assignmentTimestamp

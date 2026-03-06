@@ -145,7 +145,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             int assignmentEpoch,
             long assignmentTimestamp
         ) {
-            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(
+            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(
                 groupId,
                 assignmentEpoch,
                 assignmentTimestamp
@@ -219,7 +219,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             int assignmentEpoch,
             long assignmentTimestamp
         ) {
-            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(
+            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(
                 groupId,
                 assignmentEpoch,
                 assignmentTimestamp

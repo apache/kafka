@@ -223,7 +223,7 @@ public class StreamsCoordinatorRecordHelpers {
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentMetadataRecord(
         String groupId,
         int assignmentEpoch,
         long assignmentTimestamp

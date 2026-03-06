@@ -47,7 +47,7 @@ import java.util.TreeMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
-import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
@@ -78,7 +78,7 @@ public class TargetAssignmentBuilderTest {
         TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch, 12345L)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, groupEpoch, 12345L)
         );
 
         assertEquals(expectedRecords, result.records());
@@ -131,7 +131,7 @@ public class TargetAssignmentBuilderTest {
         );
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(List.of(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -174,7 +174,7 @@ public class TargetAssignmentBuilderTest {
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(List.of(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -241,7 +241,7 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 2));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -319,7 +319,7 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 3));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -409,7 +409,7 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 3));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -491,7 +491,7 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 2));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -569,7 +569,7 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 2));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L
@@ -649,7 +649,7 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 1));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
             20,
             12345L

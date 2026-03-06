@@ -99,7 +99,7 @@ public class ConsumerGroupBuilder {
         );
 
         // Add target assignment epoch.
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch, assignmentTimestamp));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, assignmentEpoch, assignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->

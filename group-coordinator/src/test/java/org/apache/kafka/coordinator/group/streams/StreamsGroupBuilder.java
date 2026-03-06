@@ -117,7 +117,7 @@ public class StreamsGroupBuilder {
         }
 
         // Add target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId,
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId,
             targetAssignmentEpoch, targetAssignmentTimestamp));
 
         // Add current assignment records for members.
