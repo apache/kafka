@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -160,46 +162,37 @@ public class RebalanceProtocolMigrationIntegrationTest {
         final Properties props = props();
         final String appId = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
 
-        // Step 1: Run with the classic protocol and process a record.
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-        processExactlyOneRecord(streamsBuilder, props, "1", "A");
+        processExactlyOneRecord(streamsBuilder, props, "1", "A", true);
 
-        // Wait for session to time out so the group becomes empty.
-        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
-            waitForEmptyConsumerGroup(adminClient, appId, 1000);
-        }
-
-        // Step 2: Commit an offset for an "orphan" topic using the same group ID.
-        // This offset commit record will precede the streams group records in the
-        // log and will survive compaction because the streams group never commits
-        // for this topic-partition.
+        // Commit an offset for an unrelated topic using the same group ID.
+        // This creates an offset commit record in __consumer_offsets with a
+        // key that differs from the streams group's own offset commits, so it
+        // won't be compacted away when the streams group overwrites its offsets.
         final String orphanTopic = "orphan-" + safeTestName;
         CLUSTER.createTopic(orphanTopic);
         commitOrphanOffset(appId, orphanTopic);
 
-        // Step 3: Migrate to the streams protocol and process a record. This
-        // writes a GroupMetadata tombstone for the classic group followed by
-        // streams group records.
+        // Migrate to the streams protocol. This writes a GroupMetadata
+        // tombstone for the classic group followed by streams group records.
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         processExactlyOneRecord(streamsBuilder, props, "2", "B");
 
-        // Step 4: Configure aggressive compaction so that the GroupMetadata
-        // tombstone is removed, leaving only the orphan offset commit record
-        // before the streams group records.
+        // Configure aggressive compaction and flood __consumer_offsets so that
+        // the GroupMetadata tombstone is removed, leaving only the orphan
+        // offset commit record before the streams group records.
         configureAggressiveCompaction();
-
-        // Step 5: Flood __consumer_offsets with offset commits to trigger segment
-        // rotation and compaction.
         floodConsumerOffsetsForCompaction();
 
-        // Wait for compaction to clean up the GroupMetadata tombstone.
+        // Wait for compaction. If compaction does not run in time, the test
+        // still passes (false positive) but will not regress on failures.
         Thread.sleep(5000);
 
-        // Step 6: Restart the broker to force replay of __consumer_offsets.
+        // Restart the broker to force replay of __consumer_offsets.
         CLUSTER.shutdownBroker(0);
         CLUSTER.startBroker(0);
 
-        // Step 7: Verify the broker can still serve the streams group after replay.
+        // Verify the broker can still serve the streams group after replay.
         processExactlyOneRecord(streamsBuilder, props, "3", "C");
     }
 
@@ -211,8 +204,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        try (final org.apache.kafka.clients.consumer.KafkaConsumer<String, String> consumer =
-                 new org.apache.kafka.clients.consumer.KafkaConsumer<>(consumerProps)) {
+        try (final KafkaConsumer<String, String> consumer =
+                 new KafkaConsumer<>(consumerProps)) {
             final TopicPartition tp = new TopicPartition(topic, 0);
             consumer.assign(List.of(tp));
             consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0)));
@@ -253,8 +246,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
         final String metadata = "x".repeat(4000);
         for (int i = 0; i < 200; i++) {
             consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "compaction-trigger-" + i);
-            try (final org.apache.kafka.clients.consumer.KafkaConsumer<String, String> consumer =
-                     new org.apache.kafka.clients.consumer.KafkaConsumer<>(consumerProps)) {
+            try (final KafkaConsumer<String, String> consumer =
+                     new KafkaConsumer<>(consumerProps)) {
                 final TopicPartition tp = new TopicPartition(inputTopic, 0);
                 consumer.assign(List.of(tp));
                 for (int round = 0; round < 13; round++) {
@@ -293,6 +286,16 @@ public class RebalanceProtocolMigrationIntegrationTest {
         final String key,
         final String value)
         throws Exception {
+        processExactlyOneRecord(streamsBuilder, props, key, value, false);
+    }
+
+    private void processExactlyOneRecord(
+        final StreamsBuilder streamsBuilder,
+        final Properties props,
+        final String key,
+        final String value,
+        final boolean leaveGroup)
+        throws Exception {
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -307,7 +310,13 @@ public class RebalanceProtocolMigrationIntegrationTest {
             )
         );
 
-        kafkaStreams.close();
+        if (leaveGroup) {
+            kafkaStreams.close(
+                CloseOptions.groupMembershipOperation(
+                    CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+        } else {
+            kafkaStreams.close();
+        }
         kafkaStreams = null;
     }
 
