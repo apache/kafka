@@ -112,7 +112,7 @@ public class StreamsGroup implements Group {
      *                            assignment epoch is updated when a new assignment is installed.
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      */
-    private static record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
+    private record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
         private static final TargetAssignmentMetadata NONE = new TargetAssignmentMetadata(0, 0L);
     }
 

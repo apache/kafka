@@ -53,7 +53,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      *                            assignment epoch is updated when a new assignment is installed.
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      */
-    protected static record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
+    protected record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
         private static final TargetAssignmentMetadata NONE = new TargetAssignmentMetadata(0, 0L);
     }
 
