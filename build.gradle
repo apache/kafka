@@ -4148,11 +4148,11 @@ def verifyLatestStableMetadataVersionTask = tasks.register('verifyLatestStableMe
     def mvContent = mvJavaFile.text
     def latestProductionEnumName = mvContent =~ /LATEST_PRODUCTION\s*=\s*(IBP_\w+)/
     if (!latestProductionEnumName) throw new GradleException("Could not find LATEST_PRODUCTION in MetadataVersion.java")
-    def alias = latestProductionEnumName[0][1] // e.g. "IBP_4_3_IV0"
+    def latestProductionEnumConstant = latestProductionEnumName[0][1] // e.g. "IBP_4_3_IV0"
 
     // Extract version from enum constant, e.g. IBP_4_3_IV0(30, "4.3", "IV0", true) -> 4.3-IV0
-    def enumMatch = mvContent =~ /${alias}\(\d+,\s*"(\d+\.\d+)",\s*"(IV\d+)"/
-    if (!enumMatch) throw new GradleException("Could not find enum definition for ${alias} in MetadataVersion.java")
+    def enumMatch = mvContent =~ /${latestProductionEnumConstant}\(\d+,\s*"(\d+\.\d+)",\s*"(IV\d+)"/
+    if (!enumMatch) throw new GradleException("Could not find enum definition for ${latestProductionEnumConstant} in MetadataVersion.java")
     def javaVersion = "${enumMatch[0][1]}-${enumMatch[0][2]}" // e.g. "4.3-IV0"
 
     // Extract LATEST_STABLE_METADATA_VERSION from version.py
@@ -4167,7 +4167,7 @@ def verifyLatestStableMetadataVersionTask = tasks.register('verifyLatestStableMe
         "Make sure LATEST_PRODUCTION in MetadataVersion.java and LATEST_STABLE_METADATA_VERSION in tests/kafkatest/version.py are in sync."
       )
     }
-    println "LATEST_STABLE_METADATA_VERSION is consistent: ${javaVersion}"
+    println "MetadataVersion.java LATEST_PRODUCTION=${latestProductionEnumConstant} (${javaVersion}) matches version.py LATEST_STABLE_METADATA_VERSION=${pyVersion}"
   }
 }
 
