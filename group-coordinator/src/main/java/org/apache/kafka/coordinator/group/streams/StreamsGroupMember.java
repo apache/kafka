@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -249,12 +250,14 @@ public record StreamsGroupMember(String memberId,
             return this;
         }
 
-        public Builder updateWith(StreamsGroupCurrentMemberAssignmentValue record) {
+        public Builder updateWith(Logger log, String groupId, StreamsGroupCurrentMemberAssignmentValue record) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedTasks(
                 TasksTupleWithEpochs.fromCurrentAssignmentRecord(
+                    log,
+                    groupId,
                     record.activeTasks(),
                     record.standbyTasks(),
                     record.warmupTasks(),
@@ -263,6 +266,8 @@ public record StreamsGroupMember(String memberId,
             );
             setTasksPendingRevocation(
                 TasksTupleWithEpochs.fromCurrentAssignmentRecord(
+                    log,
+                    groupId,
                     record.activeTasksPendingRevocation(),
                     record.standbyTasksPendingRevocation(),
                     record.warmupTasksPendingRevocation(),

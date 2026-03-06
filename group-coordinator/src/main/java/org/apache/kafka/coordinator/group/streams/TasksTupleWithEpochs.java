@@ -106,13 +106,15 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
      * @return The TasksTupleWithEpochs
      */
     public static TasksTupleWithEpochs fromCurrentAssignmentRecord(
+        Logger log,
+        String groupId,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> activeTasks,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> standbyTasks,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> warmupTasks,
         int memberEpoch
     ) {
         return new TasksTupleWithEpochs(
-            parseActiveTasksWithEpochs(activeTasks, memberEpoch),
+            parseActiveTasksWithEpochs(log, groupId, activeTasks, memberEpoch),
             parseSimpleTasks(standbyTasks),
             parseSimpleTasks(warmupTasks)
         );
@@ -129,6 +131,8 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     }
 
     private static Map<String, Map<Integer, Integer>> parseActiveTasksWithEpochs(
+        Logger log,
+        String groupId,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIdsList,
         int memberEpoch
     ) {
@@ -147,9 +151,9 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
                 }
             } else {
                 if (epochs != null) {
-                    log.error("Size of assignment epochs {} is not equal to partitions {} for subtopology {}. " +
+                    log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for subtopology {}. " +
                             "Using default epoch {} for all partitions.",
-                        epochs.size(), partitions.size(), subtopologyId, memberEpoch);
+                        groupId, epochs.size(), partitions.size(), subtopologyId, memberEpoch);
                 }
                 // Legacy record without epochs: use member epoch as default
                 for (Integer partition : partitions) {
