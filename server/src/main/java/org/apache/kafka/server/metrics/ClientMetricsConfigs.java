@@ -140,12 +140,12 @@ public class ClientMetricsConfigs extends AbstractConfig {
         return CONFIG.names();
     }
 
-    public static void validate(String subscriptionName, Map<?, ?> properties) {
+    public static void validate(String subscriptionName, Map<?, ?> props) {
         if (subscriptionName == null || subscriptionName.isEmpty()) {
             throw new InvalidRequestException("Subscription name can't be empty");
         }
 
-        validateConfigs(properties);
+        validateConfigs(props);
     }
 
     @SuppressWarnings("unchecked")
