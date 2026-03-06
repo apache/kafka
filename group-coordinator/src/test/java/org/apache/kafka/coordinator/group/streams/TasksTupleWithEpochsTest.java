@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 
 import org.junit.jupiter.api.Test;
@@ -152,9 +153,16 @@ public class TasksTupleWithEpochsTest {
             .setPartitions(Arrays.asList(1, 2, 3))
             .setAssignmentEpochs(Arrays.asList(10, 11))); // Only 2 epochs for 3 partitions
 
-        assertThrows(IllegalStateException.class, () ->
-            TasksTupleWithEpochs.fromCurrentAssignmentRecord(activeTasks, List.of(), List.of(), 100)
-        );
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TasksTupleWithEpochs.class)) {
+            TasksTupleWithEpochs tuple = TasksTupleWithEpochs.fromCurrentAssignmentRecord(activeTasks, List.of(), List.of(), 100);
+            assertEquals(
+                Map.of(SUBTOPOLOGY_1, Map.of(1, 100, 2, 100, 3, 100)),
+                tuple.activeTasksWithEpochs()
+            );
+            assertEquals(1, appender.getMessages("ERROR").stream()
+                .filter(msg -> msg.contains("Size of assignment epochs 2 is not equal to partitions 3 for subtopology 1."))
+                .count());
+        }
     }
 
     @Test

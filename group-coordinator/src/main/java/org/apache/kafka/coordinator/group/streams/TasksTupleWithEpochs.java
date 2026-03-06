@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,6 +45,8 @@ import java.util.Set;
 public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTasksWithEpochs,
                                    Map<String, Set<Integer>> standbyTasks,
                                    Map<String, Set<Integer>> warmupTasks) {
+
+    private static final Logger log = LoggerFactory.getLogger(TasksTupleWithEpochs.class);
 
     public TasksTupleWithEpochs {
         activeTasksWithEpochs = Collections.unmodifiableMap(Objects.requireNonNull(activeTasksWithEpochs));
@@ -137,19 +141,16 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
 
             Map<Integer, Integer> partitionsWithEpochs = new HashMap<>();
 
-            if (epochs != null && !epochs.isEmpty()) {
-                if (epochs.size() != partitions.size()) {
-                    throw new IllegalStateException(
-                        "Assignment epochs must be provided for all partitions. " +
-                        "Subtopology " + subtopologyId + " has " + partitions.size() +
-                        " partitions but " + epochs.size() + " epochs"
-                    );
-                }
-
+            if (epochs != null && epochs.size() == partitions.size()) {
                 for (int i = 0; i < partitions.size(); i++) {
                     partitionsWithEpochs.put(partitions.get(i), epochs.get(i));
                 }
             } else {
+                if (epochs != null) {
+                    log.error("Size of assignment epochs {} is not equal to partitions {} for subtopology {}. " +
+                            "Using default epoch {} for all partitions.",
+                        epochs.size(), partitions.size(), subtopologyId, memberEpoch);
+                }
                 // Legacy record without epochs: use member epoch as default
                 for (Integer partition : partitions) {
                     partitionsWithEpochs.put(partition, memberEpoch);
