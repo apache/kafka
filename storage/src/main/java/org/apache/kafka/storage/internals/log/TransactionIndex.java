@@ -49,6 +49,8 @@ import java.util.OptionalLong;
  */
 public class TransactionIndex implements Closeable {
 
+    // Note: if new fields are added to AbortedTxn, this code may need to be changed to read the
+    // version bytes first for each record and then determine the record body size based on the version.
     private static final int ABORTED_TXN_RECORD_SIZE =
         MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, new AbortedTxn()).remaining();
 
