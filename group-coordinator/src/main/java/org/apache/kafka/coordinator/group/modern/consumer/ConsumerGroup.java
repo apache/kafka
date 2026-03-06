@@ -896,11 +896,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
+        } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
             for (ModernGroupMember member : members.values()) {
-                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
+                if (!member.isReconciledTo(assignmentEpoch())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -1121,7 +1121,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
@@ -1156,8 +1156,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
-        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
-        consumerGroup.setTargetAssignmentTimestamp(0L);
+        consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
             // The assigned partition can be empty if the member just joined and has never synced.
