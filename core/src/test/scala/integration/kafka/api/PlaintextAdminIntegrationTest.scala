@@ -1158,9 +1158,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
-  def testGroupConfigClampedAfterBrokerRestart(): Unit = {
+  def testGroupConfigEvaluatedAfterBrokerRestart(): Unit = {
     client = createAdminClient
-    val groupId = "capped-config-test-group"
+    val groupId = "evaluated-config-test-group"
     val groupResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
 
     // Set a valid group config (55000 is within default [45000, 60000])
@@ -1175,7 +1175,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var describeResult = client.describeConfigs(util.List.of(groupResource))
     var configs = describeResult.all.get(15, TimeUnit.SECONDS)
     assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
-    // Before restart, 55000 is within [45000, 60000], so no clamping
+    // Before restart, 55000 is within [45000, 60000], so no adjustment needed
     assertEquals(55000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
 
     // Kill all brokers
@@ -1199,7 +1199,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG,
       configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
 
-    // Verify runtime value is clamped (55000 capped to new max 50000)
+    // Verify effective value is adjusted (55000 evaluated to new max 50000)
     assertEquals(50000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
   }
 

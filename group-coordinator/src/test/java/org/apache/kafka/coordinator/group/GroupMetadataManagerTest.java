@@ -20503,7 +20503,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testConsumerGroupCappedConfigs() {
+    public void testConsumerGroupEvaluatedConfigs() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
         String memberId = Uuid.randomUuid().toString();
@@ -20565,17 +20565,17 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(result.response().memberEpoch()));
         assertEquals(1, result.response().memberEpoch());
 
-        // Verify heartbeat interval is capped to min.
+        // Verify heartbeat interval is evaluated to min.
         assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
             result.response().heartbeatIntervalMs());
 
-        // Verify session timeout is capped to max.
+        // Verify session timeout is evaluated to max.
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT);
     }
 
     @Test
-    public void testShareGroupCappedConfigs() {
+    public void testShareGroupEvaluatedConfigs() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
         String memberId = Uuid.randomUuid().toString();
@@ -20655,17 +20655,17 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(result.response().getKey().memberEpoch()));
         assertEquals(1, result.response().getKey().memberEpoch());
 
-        // Verify heartbeat interval is capped to min.
+        // Verify heartbeat interval is evaluated to min.
         assertEquals(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
             result.response().getKey().heartbeatIntervalMs());
 
-        // Verify session timeout is capped to max.
+        // Verify session timeout is evaluated to max.
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT);
     }
 
     @Test
-    public void testStreamsGroupCappedConfigs() {
+    public void testStreamsGroupEvaluatedConfigs() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -20727,7 +20727,7 @@ public class GroupMetadataManagerTest {
         newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 100);
         context.updateGroupConfig(groupId, newGroupConfig);
 
-        // Session timer is rescheduled on second heartbeat, new assignment with capped parameter is calculated.
+        // Session timer is rescheduled on second heartbeat, new assignment with evaluated parameter is calculated.
         result = context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -20735,15 +20735,15 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(result.response().data().memberEpoch())
                 .setRackId("bla"));
 
-        // Verify heartbeat interval is capped to min.
+        // Verify heartbeat interval is evaluated to min.
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
             result.response().data().heartbeatIntervalMs());
 
-        // Verify session timeout is capped to max.
+        // Verify session timeout is evaluated to max.
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT);
 
-        // Verify that the number of standby replicas is capped to max.
+        // Verify that the number of standby replicas is evaluated to max.
         assertEquals(Map.of("num.standby.replicas",
                 String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
             assignor.lastPassedAssignmentConfigs());
