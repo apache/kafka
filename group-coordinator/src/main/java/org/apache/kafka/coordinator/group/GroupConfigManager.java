@@ -83,11 +83,11 @@ public class GroupConfigManager implements AutoCloseable {
      * @throws InvalidConfigurationException If validation fails.
      */
     public static void validate(
-        Map<?, ?> newGroupConfig,
+        Map<String, ?> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
-        Map<Object, Object> combinedConfigs = new HashMap<>();
+        Map<String, Object> combinedConfigs = new HashMap<>();
         combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
         combinedConfigs.putAll(newGroupConfig);
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);

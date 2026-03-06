@@ -94,7 +94,7 @@ public class GroupConfigManagerTest {
         GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(configs);
         ShareGroupConfig shareGroupConfig = createShareGroupConfig();
 
-        Properties newGroupConfig = new Properties();
+        Map<String, String> newGroupConfig = new HashMap<>();
         newGroupConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
 
         assertDoesNotThrow(() ->

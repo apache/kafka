@@ -208,9 +208,9 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Map<?, ?> props) {
+    public static void validateNames(Map<String, ?> props) {
         Set<String> names = configNames();
-        for (Object name : props.keySet()) {
+        for (String name : props.keySet()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
@@ -221,7 +221,7 @@ public final class GroupConfig extends AbstractConfig {
      * Validates the values of the given properties.
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
-    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+    private static void validateValues(Map<String, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -317,9 +317,9 @@ public final class GroupConfig extends AbstractConfig {
      * Check that the given properties contain only valid consumer group config names and that all values can be
      * parsed and are valid.
      */
-    public static void validate(Map<?, ?> props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+    public static void validate(Map<String, ?> props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         validateNames(props);
-        Map<?, ?> valueMaps = CONFIG.parse(props);
+        Map<String, Object> valueMaps = CONFIG.parse(props);
         validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
     }
 
