@@ -14,10 +14,12 @@ package kafka.api
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
-import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, ConsumerGroupDescription}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, OffsetAndMetadata}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{GroupIdNotFoundException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaFuture, TopicCollection, TopicPartition}
+import org.apache.kafka.common.{ConsumerGroupState, GroupState, GroupType, KafkaFuture, TopicCollection, TopicPartition}
+import org.apache.kafka.common.serialization.Serdes
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
@@ -26,11 +28,14 @@ import org.apache.kafka.common.record.internal.CompressionType
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
+import org.apache.kafka.streams.{GroupProtocol => StreamsGroupProtocol}
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Timeout
 
 import java.time.Duration
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 import scala.concurrent.ExecutionException
 
@@ -286,6 +291,79 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
+  def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedStreamsGroup(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a classic group grp5 with one member, then commit an offset
+      // for an unrelated topic. This orphaned offset record will survive
+      // compaction because the streams group never commits for this partition.
+      withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
+        consumer.subscribe(java.util.List.of("foo"))
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+      }
+
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "orphan",
+        numPartitions = 1
+      )
+      withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
+        val tp = new TopicPartition("orphan", 0)
+        consumer.assign(java.util.List.of(tp))
+        consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(0)))
+      }
+
+      // Upgrade the group to the streams protocol.
+      withStreamsApp(applicationId = "grp5", inputTopic = "foo") { streams =>
+        TestUtils.waitUntilTrue(
+          () => streams.state() == KafkaStreams.State.RUNNING,
+          msg = "Streams app did not reach RUNNING state"
+        )
+      }
+    }
+
+    // Force compaction twice: the first roll+compact removes classic group
+    // records from the old segment; the second ensures the GroupMetadata
+    // tombstone (now in an inactive segment) is also removed. After this,
+    // only orphaned offset commits remain before the streams group records.
+    rollAndCompactConsumerOffsets()
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeStreamsGroups(java.util.List.of("grp5"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      val group = groups("grp5").get(10, TimeUnit.SECONDS)
+      assertEquals("grp5", group.groupId)
+      assertEquals(GroupState.EMPTY, group.groupState)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testRecreatingConsumerOffsetsTopic(): Unit = {
     withAdmin { admin =>
       TestUtils.createTopicWithAdminRaw(
@@ -332,6 +410,14 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   }
 
   private def rollAndCompactConsumerOffsets(): Unit = {
+    // Set delete.retention.ms=0 so tombstones are removed during compaction.
+    withAdmin { admin =>
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, "__consumer_offsets")
+      admin.incrementalAlterConfigs(java.util.Map.of(resource, java.util.List.of(
+        new AlterConfigOp(new ConfigEntry("delete.retention.ms", "0"), AlterConfigOp.OpType.SET)
+      ))).all().get()
+    }
+
     val tp = new TopicPartition("__consumer_offsets", 0)
     val broker = cluster.brokers.asScala.head._2
     val log = broker.logManager.getLog(tp).get
@@ -363,6 +449,32 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       f(consumer)
     } finally {
       consumer.close()
+    }
+  }
+
+  private def withStreamsApp(
+    applicationId: String,
+    inputTopic: String
+  )(f: KafkaStreams => Unit): Unit = {
+    val builder = new StreamsBuilder()
+    builder.stream(inputTopic)
+
+    val props = new Properties()
+    props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId)
+    props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
+    props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, classOf[Serdes.StringSerde].getName)
+    props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[Serdes.StringSerde].getName)
+    props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, StreamsGroupProtocol.STREAMS.name())
+    props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "500")
+    props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "100")
+
+    val streams = new KafkaStreams(builder.build(), props)
+    try {
+      streams.start()
+      f(streams)
+    } finally {
+      streams.close(Duration.ofSeconds(30))
+      streams.cleanUp()
     }
   }
 
