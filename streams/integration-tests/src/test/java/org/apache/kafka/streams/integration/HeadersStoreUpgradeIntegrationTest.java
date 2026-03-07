@@ -654,6 +654,78 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     @Test
+    public void shouldFailDowngradeFromTimestampedKeyValueStoreWithHeadersToTimestampedKeyValueStore() throws Exception {
+        final Properties props = props();
+        setupAndPopulateKeyValueStoreWithHeaders(props);
+        kafkaStreams = null;
+
+        // Attempt to downgrade to non-headers key-value store
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+
+        boolean exceptionThrown = false;
+        try {
+            kafkaStreams.start();
+        } catch (final Exception e) {
+            Throwable cause = e;
+            while (cause != null) {
+                if (cause instanceof ProcessorStateException &&
+                    cause.getMessage() != null &&
+                    cause.getMessage().contains("headers-aware") &&
+                    cause.getMessage().contains("Downgrade")) {
+                    exceptionThrown = true;
+                    break;
+                }
+                cause = cause.getCause();
+            }
+
+            if (!exceptionThrown) {
+                throw new AssertionError("Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+            }
+        } finally {
+            kafkaStreams.close(Duration.ofSeconds(30L));
+        }
+
+        if (!exceptionThrown) {
+            throw new AssertionError("Expected ProcessorStateException to be thrown when attempting to downgrade from headers-aware to non-headers key-value store");
+        }
+    }
+
+    @Test
+    public void shouldSuccessfullyDowngradeFromTimestampedKeyValueStoreWithHeadersToTimestampedKeyValueStoreAfterCleanup() throws Exception {
+        final Properties props = props();
+        setupAndPopulateKeyValueStoreWithHeaders(props);
+
+        kafkaStreams.cleanUp(); // Delete local state
+        kafkaStreams = null;
+
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+        kafkaStreams.start();
+
+        processKeyValueAndVerifyTimestampedValue("key3", "value3", 333L);
+        processKeyValueAndVerifyTimestampedValue("key4", "value4", 444L);
+
+        kafkaStreams.close();
+    }
+
+    @Test
     public void shouldFailDowngradeFromTimestampedWindowStoreWithHeadersToTimestampedWindowStore() throws Exception {
         final Properties props = props();
         setupAndPopulateWindowStoreWithHeaders(props, singletonList(KeyValue.pair("key1", 100L)));
@@ -807,6 +879,28 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams.start();
 
         return CLUSTER.time.milliseconds();
+    }
+
+    private void setupAndPopulateKeyValueStoreWithHeaders(final Properties props) throws Exception {
+        final StreamsBuilder headersBuilder = new StreamsBuilder();
+        headersBuilder.addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(headersBuilder.build(), props);
+        kafkaStreams.start();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("source", "test".getBytes());
+
+        processKeyValueWithTimestampAndHeadersAndVerify("key1", "value1", 11L, headers, headers);
+        processKeyValueWithTimestampAndHeadersAndVerify("key2", "value2", 22L, headers, headers);
+
+        kafkaStreams.close();
     }
 
     private void produceRecordWithHeaders(final String key, final String value, final long timestamp) throws Exception {
