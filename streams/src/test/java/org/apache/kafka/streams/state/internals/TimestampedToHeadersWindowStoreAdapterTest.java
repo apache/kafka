@@ -75,7 +75,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
 
         underlyingStore = new RocksDBTimestampedWindowStore(
                 segmentedBytesStore,
-                false,  // retainDuplicates
+                false,
                 WINDOW_SIZE
         );
 
