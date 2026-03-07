@@ -155,6 +155,9 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+
         // Handle KeyQuery: convert byte[] result from timestamped to headers format
         if (query instanceof KeyQuery) {
             final KeyQuery<Bytes, byte[]> keyQuery = (KeyQuery<Bytes, byte[]>) query;
@@ -162,16 +165,12 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
 
             if (rawResult.isSuccess()) {
                 final byte[] convertedValue = convertToHeaderFormat(rawResult.getResult());
-                final QueryResult<byte[]> convertedResult =
-                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedValue);
-                return (QueryResult<R>) convertedResult;
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedValue);
             } else {
-                return (QueryResult<R>) rawResult;
+                result = (QueryResult<R>) rawResult;
             }
-        }
-
-        // Handle RangeQuery: wrap iterator to convert values
-        if (query instanceof RangeQuery) {
+        } else if (query instanceof RangeQuery) {
+            // Handle RangeQuery: wrap iterator to convert values
             final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
             final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
                     store.query(rangeQuery, positionBound, config);
@@ -179,16 +178,22 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
                         new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
-                final QueryResult<KeyValueIterator<Bytes, byte[]>> convertedResult =
-                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
-                return (QueryResult<R>) convertedResult;
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
-                return (QueryResult<R>) rawResult;
+                result = (QueryResult<R>) rawResult;
             }
+        } else {
+            // For other query types, delegate to the underlying store
+            result = store.query(query, positionBound, config);
         }
 
-        // For other query types, delegate to the underlying store
-        return store.query(query, positionBound, config);
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns"
+            );
+        }
+
+        return result;
     }
 
     @Override
