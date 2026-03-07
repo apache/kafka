@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.server.common.TransactionVersion;
 
 import java.util.HashSet;
