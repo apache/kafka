@@ -18,11 +18,27 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,11 +46,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.io.File;
+import java.time.Instant;
 import java.util.Collections;
+import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -201,5 +224,134 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         assertThrows(NullPointerException.class, () -> new TimestampedWindowStoreWithHeadersBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
+    }
+
+    // IQv2 Tests for native headers store (RocksDBTimestampedWindowStoreWithHeaders)
+
+    private static final long WINDOW_SIZE = 10_000L;
+    private static final long RETENTION_PERIOD = 60_000L;
+    private static final long SEGMENT_INTERVAL = 30_000L;
+
+    private RocksDBTimestampedWindowStoreWithHeaders nativeHeadersStore;
+    private InternalMockProcessorContext<String, String> context;
+    private File baseDir;
+
+    @BeforeEach
+    public void setUpIQv2Tests() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        baseDir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                baseDir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsConfig(props)
+        );
+
+        final SegmentedBytesStore segmentedBytesStore = new RocksDBTimestampedSegmentedBytesStoreWithHeaders(
+                "iqv2-native-headers-test-store",
+                "test-metrics-scope",
+                RETENTION_PERIOD,
+                SEGMENT_INTERVAL,
+                new WindowKeySchema()
+        );
+
+        nativeHeadersStore = new RocksDBTimestampedWindowStoreWithHeaders(
+                segmentedBytesStore,
+                false,  // retainDuplicates
+                WINDOW_SIZE
+        );
+
+        nativeHeadersStore.init(context, nativeHeadersStore);
+    }
+
+    @AfterEach
+    public void tearDownIQv2Tests() {
+        if (nativeHeadersStore != null) {
+            nativeHeadersStore.close();
+        }
+    }
+
+    @Test
+    public void shouldReturnUnknownQueryTypeForWindowKeyQueryOnNativeHeadersStore() {
+        final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
+                new Bytes("test-key".getBytes()),
+                Instant.ofEpochMilli(0),
+                Instant.ofEpochMilli(Long.MAX_VALUE)
+        );
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+
+        final QueryResult<WindowStoreIterator<byte[]>> result = nativeHeadersStore.query(query, positionBound, config);
+
+        // Verify: Native headers store returns UNKNOWN_QUERY_TYPE for IQv2
+        assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
+        assertEquals(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                result.getFailureReason(),
+                "Expected UNKNOWN_QUERY_TYPE failure reason"
+        );
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldReturnUnknownQueryTypeForWindowRangeQueryOnNativeHeadersStore() {
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withWindowStartRange(
+                Instant.ofEpochMilli(0),
+                Instant.ofEpochMilli(Long.MAX_VALUE)
+        );
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+                nativeHeadersStore.query(query, positionBound, config);
+
+        // Verify: Native headers store returns UNKNOWN_QUERY_TYPE for IQv2
+        assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
+        assertEquals(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                result.getFailureReason(),
+                "Expected UNKNOWN_QUERY_TYPE failure reason"
+        );
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoForNativeHeadersStoreWhenRequested() {
+        final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
+                new Bytes("test-key".getBytes()),
+                Instant.ofEpochMilli(0),
+                Instant.ofEpochMilli(Long.MAX_VALUE)
+        );
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(true); // Enable execution info
+
+        final QueryResult<WindowStoreIterator<byte[]>> result = nativeHeadersStore.query(query, positionBound, config);
+
+        // Verify: Execution info was collected
+        assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
+        boolean foundHeadersStoreInfo = false;
+        for (final String info : result.getExecutionInfo()) {
+            if (info.contains("Handled in") && info.contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName())) {
+                foundHeadersStoreInfo = true;
+                break;
+            }
+        }
+        assertTrue(foundHeadersStoreInfo, "Expected execution info to mention the native headers store class");
+    }
+
+    @Test
+    public void shouldNotCollectExecutionInfoForNativeHeadersStoreWhenNotRequested() {
+        final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
+                new Bytes("test-key".getBytes()),
+                Instant.ofEpochMilli(0),
+                Instant.ofEpochMilli(Long.MAX_VALUE)
+        );
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false); // Disable execution info
+
+        final QueryResult<WindowStoreIterator<byte[]>> result = nativeHeadersStore.query(query, positionBound, config);
+
+        // Verify: No execution info was collected
+        assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
     }
 }

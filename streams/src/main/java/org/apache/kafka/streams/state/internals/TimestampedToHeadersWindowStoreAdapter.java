@@ -213,24 +213,43 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
 
-        final QueryResult<R> result = store.query(query, positionBound, config);
+        // Handle WindowKeyQuery: wrap iterator to convert from timestamped to headers format
+        if (query instanceof WindowKeyQuery) {
+            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = store.query(windowKeyQuery, positionBound, config);
 
-        if (!result.isSuccess()) {
-            return result;
+            if (rawResult.isSuccess()) {
+                final WindowStoreIterator<byte[]> wrappedIterator =
+                    new TimestampedWindowToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else if (query instanceof WindowRangeQuery) {
+            // Handle WindowRangeQuery: wrap iterator to convert values
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                store.query(windowRangeQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
+                    new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            // For other query types, delegate to the underlying store
+            result = store.query(query, positionBound, config);
         }
 
-        // Wrap iterators to convert from timestamped format to header format
-        if (query instanceof WindowKeyQuery) {
-            final QueryResult<WindowStoreIterator<byte[]>> rawResult = (QueryResult<WindowStoreIterator<byte[]>>) result;
-            final WindowStoreIterator<byte[]> wrappedIterator = new TimestampedWindowToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
-            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
-        } else if (query instanceof WindowRangeQuery) {
-            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-                (QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>>) result;
-            final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
-                new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
-            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns"
+            );
         }
 
         return result;
