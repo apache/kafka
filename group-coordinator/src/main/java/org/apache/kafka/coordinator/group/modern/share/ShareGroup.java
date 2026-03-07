@@ -313,7 +313,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             .setAssignorName(defaultAssignor)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asShareGroupDescribeMember(

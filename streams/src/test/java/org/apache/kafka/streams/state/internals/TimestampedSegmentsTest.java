@@ -306,7 +306,7 @@ public class TimestampedSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + "-" + formatter.format(new Date(segmentId * segmentInterval)));
             //noinspection ResultOfMethodCallIgnored
-            Files.createFile(oldSegment.toPath());
+            Files.createDirectory(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
@@ -328,7 +328,7 @@ public class TimestampedSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + ":" + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
             //noinspection ResultOfMethodCallIgnored
-            Files.createFile(oldSegment.toPath());
+            Files.createDirectory(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);

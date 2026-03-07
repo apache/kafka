@@ -75,6 +75,8 @@ For a detailed migration guide with code examples, see [Migrating from Streams S
 
 ## Streams API changes in 4.2.0
 
+**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. Users planning to migrate should upgrade their brokers to a later release that includes the fix.
+
 ### General Availability for a core feature set of the Streams Rebalance Protocol (KIP-1071)
 
 The Streams Rebalance Protocol is a broker-driven rebalancing system designed specifically for Kafka Streams applications. 

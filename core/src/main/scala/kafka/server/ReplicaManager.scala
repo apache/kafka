@@ -407,6 +407,10 @@ class ReplicaManager(val config: KafkaConfig,
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
       completeDelayedOperationsWhenNotPartitionLeader(topicPartition, topicId)
+      // Clean up per-partition expiration metrics regardless of whether the local log
+      // is deleted. This covers both partition deletion and reassignment (leader -> follower).
+      DelayedProduceMetrics.removePartitionMetrics(topicPartition)
+      DelayedRemoteListOffsets.removePartitionMetrics(topicPartition)
     }
 
     // Third delete the logs and checkpoint.
@@ -2513,7 +2517,11 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
       partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
-        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)}
+        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)
+        // Clean up per-partition expiration metrics when transitioning from leader to follower.
+        DelayedProduceMetrics.removePartitionMetrics(topicPartition)
+        DelayedRemoteListOffsets.removePartitionMetrics(topicPartition)
+      }
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }
