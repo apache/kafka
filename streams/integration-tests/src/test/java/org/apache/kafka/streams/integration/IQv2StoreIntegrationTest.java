@@ -22,8 +22,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -64,10 +62,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -267,22 +263,6 @@ public class IQv2StoreIntegrationTest {
                 return true;
             }
         },
-        TIME_ROCKS_KV_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME);
-            }
-
-            @Override
-            public boolean keyValue() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeaders() {
-                return true;
-            }
-        },
         IN_MEMORY_WINDOW {
             @Override
             public StoreSupplier<?> supplier() {
@@ -371,10 +351,6 @@ public class IQv2StoreIntegrationTest {
         public boolean isSession() {
             return false;
         }
-
-        public boolean isHeaders() {
-            return false;
-        }
     }
 
     public static Stream<Arguments> data() {
@@ -418,7 +394,6 @@ public class IQv2StoreIntegrationTest {
             for (int i = 0; i < 10; i++) {
                 final int key = i / 2;
                 final int partition = key % partitions;
-                final Headers headers = new RecordHeaders().add("key-" + i, ("value-" + i).getBytes());
                 final Future<RecordMetadata> send = producer.send(
                     new ProducerRecord<>(
                         INPUT_TOPIC_NAME,
@@ -426,7 +401,7 @@ public class IQv2StoreIntegrationTest {
                         WINDOW_START + Duration.ofMinutes(2).toMillis() * i,
                         key,
                         i,
-                        headers
+                        null
                     )
                 );
                 futures.add(send);
@@ -465,11 +440,6 @@ public class IQv2StoreIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         if (Objects.equals(kind, "DSL") && supplier instanceof KeyValueBytesStoreSupplier) {
-            if (storeToTest.isHeaders()) {
-                // DSL doesn't support headers stores - skip this test combination
-                kafkaStreams = null;
-                return;
-            }
             setUpKeyValueDSLTopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof KeyValueBytesStoreSupplier) {
             setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
@@ -599,26 +569,7 @@ public class IQv2StoreIntegrationTest {
                                            final StoresToTest storeToTest) {
         final StoreBuilder<?> keyValueStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
-        if (storeToTest.isHeaders()) {
-            keyValueStoreStoreBuilder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                supplier,
-                Serdes.Integer(),
-                Serdes.Integer()
-            );
-            processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
-                @Override
-                public void process(final Record<Integer, Integer> record) {
-                    final TimestampedKeyValueStoreWithHeaders<Integer, Integer> stateStore =
-                        context().getStateStore(keyValueStoreStoreBuilder.name());
-                    stateStore.put(
-                        record.key(),
-                        ValueTimestampHeaders.make(
-                            record.value(), record.timestamp(), record.headers()
-                        )
-                    );
-                }
-            };
-        } else if (storeToTest.timestamped()) {
+        if (storeToTest.timestamped()) {
             keyValueStoreStoreBuilder = Stores.timestampedKeyValueStoreBuilder(
                 supplier,
                 Serdes.Integer(),
@@ -819,12 +770,6 @@ public class IQv2StoreIntegrationTest {
     @MethodSource("data")
     public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
         setup(cache, log, storeToTest, kind, groupProtocol);
-
-        // Skip this test combination if setup determined it's not supported (e.g., DSL with headers stores)
-        if (kafkaStreams == null) {
-            return;
-        }
-
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -834,7 +779,7 @@ public class IQv2StoreIntegrationTest {
                 shouldCollectExecutionInfo();
                 shouldCollectExecutionInfoUnderFailure();
                 if (storeToTest.keyValue()) {
-                    if (storeToTest.timestamped() || storeToTest.isHeaders()) {
+                    if (storeToTest.timestamped()) {
                         shouldHandleKeyQuery(2,  5);
                         shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                         shouldHandleRangeQueries();
