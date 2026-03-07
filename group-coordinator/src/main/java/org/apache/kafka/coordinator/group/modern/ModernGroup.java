@@ -135,7 +135,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataHash = new TimelineLong(snapshotRegistry);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
-        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.NONE);
+        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.ZERO);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
     }

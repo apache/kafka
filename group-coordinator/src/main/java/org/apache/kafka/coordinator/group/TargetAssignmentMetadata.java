@@ -25,5 +25,9 @@ package org.apache.kafka.coordinator.group;
  * @param assignmentTimestamp The time at which the target assignment calculation finished.
  */
 public record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimestamp) {
-    public static final TargetAssignmentMetadata NONE = new TargetAssignmentMetadata(0, 0L);
+    /**
+     * The initial target assignment metadata for groups.
+     * This is different to tombstoned assignment metadata which has an assignment epoch of -1.
+     */
+    public static final TargetAssignmentMetadata ZERO = new TargetAssignmentMetadata(0, 0L);
 }
