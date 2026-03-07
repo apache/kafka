@@ -7157,7 +7157,7 @@ public class SharePartitionTest {
 
         AcquisitionLockTimerTask timerTask = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(1)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs, timerTask.delayMs);
     }
@@ -7179,13 +7179,13 @@ public class SharePartitionTest {
 
         AcquisitionLockTimerTask timerTask1 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(1)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs1, timerTask1.delayMs);
 
         AcquisitionLockTimerTask timerTask2 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(4)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig, Mockito.times(2)).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs2, timerTask2.delayMs);
     }
@@ -12352,6 +12352,98 @@ public class SharePartitionTest {
 
         // Records are still in the cached state, not archived.
         assertFalse(sharePartition.cachedState().isEmpty());
+    }
+
+    @Test
+    public void testMaxInFlightRecordsUsesGroupConfigWhenPresent() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(5000);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(2000)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // maxInFlightRecords() should return the group config value, not the default.
+        assertEquals(5000, sharePartition.maxInFlightRecords());
+    }
+
+    @Test
+    public void testMaxInFlightRecordsFallsBackToDefaultWhenNoGroupConfig() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(2000)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // maxInFlightRecords() should return the default value.
+        assertEquals(2000, sharePartition.maxInFlightRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksDecrease() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(100)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 50);
+
+        // Acquire 50 records, which is under the default limit of 100.
+        fetchAcquiredRecords(sharePartition, records, 50);
+
+        // Dynamically decrease the limit to 30 via group config.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(30);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // The effective limit should now be 30.
+        assertEquals(30, sharePartition.maxInFlightRecords());
+
+        // 50 in-flight > 30 limit, but canAcquireRecords checks nextFetchOffset != endOffset + 1
+        // first. Since all records [0-49] are acquired, nextFetchOffset == endOffset + 1 == 50,
+        // so the second check (numInFlightRecords < maxInFlightRecords) applies: 50 < 30 is false.
+        assertFalse(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksIncrease() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(10)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 10);
+
+        // Acquire 10 records, hitting the default limit.
+        fetchAcquiredRecords(sharePartition, records, 10);
+
+        // canAcquireRecords should be false with default limit of 10.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Increase limit to 500 via group config.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(500);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        assertEquals(500, sharePartition.maxInFlightRecords());
+
+        // Now canAcquireRecords should be true: 10 < 500.
+        assertTrue(sharePartition.canAcquireRecords());
     }
 
     private static class SharePartitionBuilder {
