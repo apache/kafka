@@ -1441,6 +1441,7 @@ public class StreamsPartitionAssignorTest {
     public void testOnAssignment(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         taskManager = mock(TaskManager.class);
+        lenient().when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
 
         final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
             new HostInfo("localhost", 9090),
