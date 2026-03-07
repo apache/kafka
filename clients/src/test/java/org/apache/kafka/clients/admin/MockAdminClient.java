@@ -1087,7 +1087,8 @@ public class MockAdminClient extends AdminClient {
                         logDirDescription.error(),
                         topicPartitionReplicaInfoMap,
                         logDirDescription.totalBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES),
-                        logDirDescription.usableBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES)));
+                        logDirDescription.usableBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES),
+                        logDirDescription.isCordoned()));
                 }
             }
         }

@@ -636,7 +636,7 @@ public class ReplicationControlManagerTest {
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
                 setErrorMessage("Unable to replicate the partition 3 time(s): All " +
-                    "brokers are currently fenced."));
+                    "brokers are currently fenced, or have all their log directories cordoned."));
         assertEquals(expectedResponse, result.response());
 
         ctx.registerBrokers(0, 1, 2);
@@ -894,7 +894,7 @@ public class ReplicationControlManagerTest {
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
             setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
                 "replication factor of 4 cannot be reached because only 3 broker(s) " +
-                "are registered."));
+                "are registered or some brokers have all their log directories cordoned."));
         assertEquals(expectedResponse, result.response());
     }
 
@@ -3409,6 +3409,27 @@ public class ReplicationControlManagerTest {
 
     private static List<ApiMessageAndVersion> filter(List<ApiMessageAndVersion> records, Class<? extends ApiMessage> clazz) {
         return records.stream().filter(r -> clazz.equals(r.message().getClass())).collect(Collectors.toList());
+    }
+
+    @Test
+    void testHandleDirectoriesCordoned() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        int b1 = 101;
+        Uuid dir1b1 = Uuid.fromString("suitdzfTTdqoWcy8VqmkUg");
+        Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
+        ctx.registerBrokersWithDirs(b1, List.of(dir1b1, dir2b1));
+        ctx.unfenceBrokers(b1);
+        assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
+        assertEquals(
+                List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                        .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                        .setCordonedLogDirs(List.of(dir1b1)), (short) 3)),
+                filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        ctx.replay(records);
+        assertEquals(List.of(dir1b1), ctx.clusterControl.registration(b1).cordonedDirectories());
     }
 
     @ParameterizedTest

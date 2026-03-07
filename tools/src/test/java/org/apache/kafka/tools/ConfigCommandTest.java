@@ -33,10 +33,14 @@ import org.apache.kafka.clients.admin.DescribeConfigsOptions;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.DescribeUserScramCredentialsResult;
+import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
+import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -1413,6 +1417,87 @@ public class ConfigCommandTest {
         assertEquals("An entity name must be specified with --alter of groups", exception.getMessage());
     }
 
+    @Test
+    public void testDescribeGroupConfigOldBroker() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--describe"));
+
+        KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        ListConfigResourcesResult listConfigResourcesResult = mock(ListConfigResourcesResult.class);
+        when(listConfigResourcesResult.all()).thenReturn(future);
+
+        AtomicBoolean listedConfigResources = new AtomicBoolean(false);
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+                ConfigResource.Type type = configResourceTypes.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, type);
+                future.completeExceptionally(new UnsupportedVersionException("The v0 ListConfigResources only supports CLIENT_METRICS"));
+                listedConfigResources.set(true);
+                return listConfigResourcesResult;
+            }
+        };
+
+        ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        assertTrue(listedConfigResources.get());
+    }
+
+    @Test
+    public void testDescribeGroupConfigOldBrokerNotAuthorized() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--describe"));
+
+        KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        ListConfigResourcesResult listConfigResourcesResult = mock(ListConfigResourcesResult.class);
+        when(listConfigResourcesResult.all()).thenReturn(future);
+
+        AtomicBoolean listedConfigResources = new AtomicBoolean(false);
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+                ConfigResource.Type type = configResourceTypes.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, type);
+                future.completeExceptionally(new ClusterAuthorizationException("Not authorized to the cluster"));
+                listedConfigResources.set(true);
+                return listConfigResourcesResult;
+            }
+        };
+
+        ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        assertTrue(listedConfigResources.get());
+    }
+
+    @Test
+    public void testDescribeGroupConfigOldBrokerUnexpectedException() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--describe"));
+
+        KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        ListConfigResourcesResult listConfigResourcesResult = mock(ListConfigResourcesResult.class);
+        when(listConfigResourcesResult.all()).thenReturn(future);
+
+        AtomicBoolean listedConfigResources = new AtomicBoolean(false);
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+                ConfigResource.Type type = configResourceTypes.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, type);
+                future.completeExceptionally(new InvalidConfigurationException("That was unexpected"));
+                listedConfigResources.set(true);
+                return listConfigResourcesResult;
+            }
+        };
+
+        assertThrows(InvalidConfigurationException.class, () -> ConfigCommand.describeConfig(mockAdminClient, describeOpts));
+        assertTrue(listedConfigResources.get());
+    }
+
     public static String[] toArray(String... first) {
         return first;
     }
@@ -1461,6 +1546,11 @@ public class ConfigCommandTest {
         @Override
         public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
             return mock(AlterClientQuotasResult.class);
+        }
+
+        @Override
+        public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+            return mock(ListConfigResourcesResult.class);
         }
     }
 

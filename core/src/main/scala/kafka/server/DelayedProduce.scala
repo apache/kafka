@@ -151,4 +151,11 @@ object DelayedProduceMetrics {
       TimeUnit.SECONDS,
       Map("topic" -> key.topic, "partition" -> key.partition.toString).asJava)).mark()
   }
+
+  def removePartitionMetrics(partition: TopicPartition): Unit = {
+    if (partitionExpirationMeters.remove(partition) != null) {
+      metricsGroup.removeMetric("ExpiresPerSec",
+        Map("topic" -> partition.topic, "partition" -> partition.partition.toString).asJava)
+    }
+  }
 }

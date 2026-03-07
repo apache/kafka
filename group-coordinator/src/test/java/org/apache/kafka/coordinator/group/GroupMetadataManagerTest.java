@@ -429,7 +429,7 @@ public class GroupMetadataManagerTest {
             mkTopicAssignment(fooTopicId, 1, 2, 3)
         )));
 
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
@@ -519,7 +519,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1, 2)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.STABLE, context.consumerGroupMemberState(groupId, memberId));
@@ -593,7 +593,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 101));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 101, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.UNREVOKED_PARTITIONS, context.consumerGroupMemberState(groupId, memberId));
@@ -663,7 +663,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1, 2)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.UNRELEASED_PARTITIONS, context.consumerGroupMemberState(groupId, memberId));
@@ -734,7 +734,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1, 2)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.STABLE, context.consumerGroupMemberState(groupId, memberId));
@@ -821,7 +821,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 101));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 101, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.UNREVOKED_PARTITIONS, context.consumerGroupMemberState(groupId, memberId));
@@ -926,7 +926,7 @@ public class GroupMetadataManagerTest {
             mkTopicAssignment(fooTopicId, 0, 1, 2)
         )));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment()));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member1));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member2));
 
@@ -1016,7 +1016,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 101));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 101, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.UNREVOKED_PARTITIONS, context.consumerGroupMemberState(groupId, memberId));
@@ -1101,7 +1101,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1, 2)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member));
 
         // Member rejoins with epoch=0 - should succeed.
@@ -1170,7 +1170,7 @@ public class GroupMetadataManagerTest {
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
             )));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
 
         // Member rejoins with epoch=0 - should succeed per KIP-848.
@@ -1286,7 +1286,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1365,7 +1365,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1492,7 +1492,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1584,7 +1584,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, newMetadataImage)
             ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1674,7 +1674,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1764,7 +1764,7 @@ public class GroupMetadataManagerTest {
                 fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1899,7 +1899,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 2)
                     ))
                 ),
-                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3))
             ),
             result.records()
@@ -2139,7 +2139,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 2)
                     ))
                 ),
-                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3))
             ),
             result.records()
@@ -2504,7 +2504,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedRejoinedMember)
         );
 
@@ -2909,7 +2909,7 @@ public class GroupMetadataManagerTest {
             mkTopicAssignment(fooTopicId, 1, 2, 3)
         )));
 
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
@@ -3726,7 +3726,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3))));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, 12345L));
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, context.consumerGroupState(groupId));
 
@@ -3885,7 +3885,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -4013,7 +4013,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -4347,7 +4347,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -4412,7 +4412,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             List.of(
-                new ExpiredTimeout<CoordinatorRecord>(
+                new ExpiredTimeout<>(
                     groupSessionTimeoutKey(groupId, memberId),
                     new CoordinatorResult<>(
                         List.of(
@@ -4473,7 +4473,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -4536,7 +4536,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             List.of(
-                new ExpiredTimeout<CoordinatorRecord>(
+                new ExpiredTimeout<>(
                     groupSessionTimeoutKey(groupId, memberId),
                     new CoordinatorResult<>(
                         List.of(
@@ -4616,7 +4616,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -4894,7 +4894,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupRebalanceTimeoutKey(groupId, memberId1),
                 new CoordinatorResult<>(
                     List.of(
@@ -8039,7 +8039,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberRejoinWithKnownLeaderIdToTriggerRebalanceAndFollowerWithChangeofProtocol()
+    public void testStaticMemberRejoinWithKnownLeaderIdToTriggerRebalanceAndFollowerWithChangeOfProtocol()
         throws Exception {
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -11422,7 +11422,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(classicGroupId, expectedMember),
                 GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(classicGroupId, 1, 0),
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(classicGroupId, memberId, Map.of()),
-                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(classicGroupId, 1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(classicGroupId, 1, context.time.milliseconds()),
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(classicGroupId, expectedMember)
             ),
             result.records()
@@ -11589,7 +11589,7 @@ public class GroupMetadataManagerTest {
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
 
             // Member 2 joins the new consumer group.
@@ -11602,7 +11602,7 @@ public class GroupMetadataManagerTest {
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, assignor.targetPartitions(memberId2)),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
 
             // Member 2 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
@@ -11806,7 +11806,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, expectedMember2.assignedPartitions()),
 
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
@@ -11821,7 +11821,7 @@ public class GroupMetadataManagerTest {
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, assignor.targetPartitions(memberId3)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
 
             // Member 3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
@@ -12079,7 +12079,7 @@ public class GroupMetadataManagerTest {
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage)
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, expectedClassicMember.assignedPartitions()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, group.generationId()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, group.generationId(), 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedClassicMember),
 
             // Remove the static member because the rejoining member replaces it.
@@ -12205,7 +12205,7 @@ public class GroupMetadataManagerTest {
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
 
             // Member 2 joins the new consumer group.
@@ -12217,7 +12217,7 @@ public class GroupMetadataManagerTest {
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 2),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
 
             // Member 2 has no pending revoking partition or pending release partition.
             // Bump its member epoch and transition to STABLE.
@@ -12591,7 +12591,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, expectedMember2.assignedPartitions()),
 
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
@@ -12606,7 +12606,7 @@ public class GroupMetadataManagerTest {
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, assignor.targetPartitions(memberId3)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 2),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
 
             // Member 3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
@@ -13723,7 +13723,7 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, assignor.targetPartitions(memberId)),
                         GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, assignor.targetPartitions(newMemberId))
                     ),
-                    List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+                    List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
 
                     List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember))
                 ),
@@ -13883,7 +13883,7 @@ public class GroupMetadataManagerTest {
             ))),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
@@ -14150,7 +14150,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0),
                         mkTopicAssignment(fooTopicId, 1)))
                 ),
-                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember))
             ),
             joinResult.records
@@ -14385,7 +14385,7 @@ public class GroupMetadataManagerTest {
                     GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(
                         mkTopicAssignment(barTopicId, 0)))
                 ),
-                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
 
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1))
             ),
@@ -14624,7 +14624,7 @@ public class GroupMetadataManagerTest {
                     GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(
                         mkTopicAssignment(barTopicId, 0)))
                 ),
-                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
 
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1))
             ),
@@ -16467,7 +16467,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
                     mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5)),
@@ -16704,7 +16704,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3))));
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, 11));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 11, 12345L));
 
         assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
 
@@ -16826,7 +16826,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 1, 2, 3)
             )));
 
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
 
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
 
@@ -17074,7 +17074,7 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
                     TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1, 2)
                 )),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 2),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -17247,7 +17247,7 @@ public class GroupMetadataManagerTest {
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage)
             )), -1, Map.of("num.standby.replicas", "0")),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 2),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -17333,7 +17333,7 @@ public class GroupMetadataManagerTest {
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage)
             )), -1, Map.of("num.standby.replicas", "0")),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 2),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -17417,7 +17417,7 @@ public class GroupMetadataManagerTest {
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             )), -1, Map.of("num.standby.replicas", "0")),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 2),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -17514,7 +17514,7 @@ public class GroupMetadataManagerTest {
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             )), 1, Map.of("num.standby.replicas", "0")),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 11),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -17817,7 +17817,7 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
                     TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1, 2)
                 )),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 11),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -17940,7 +17940,7 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
                     TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1, 2)
                 )),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 11),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -18913,7 +18913,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId1,
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 1, 2, 3))));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 11));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, 12345L));
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, context.streamsGroupState(groupId));
 
@@ -19083,7 +19083,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
                 )),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 11),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -19205,7 +19205,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
                 )),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 11),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -19344,7 +19344,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -19653,7 +19653,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupRebalanceTimeoutKey(groupId, memberId1),
                 new CoordinatorResult<>(
                     List.of(
@@ -20127,7 +20127,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(classicGroupId, topology),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(classicGroupId, 2, 0, -1, Map.of("num.standby.replicas", "0")),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(classicGroupId, memberId, TasksTuple.EMPTY),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(classicGroupId, 2),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(classicGroupId, 2, context.time.milliseconds()),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(classicGroupId, expectedMember)
             ),
             result.records()
@@ -20631,8 +20631,9 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group is created if it does not exist.
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord("foo", 10));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
         assertEquals(10, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
     }
 
     @Test
@@ -20644,6 +20645,22 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord("foo"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
+    }
+
+    @Test
+    public void testReplayConsumerGroupTargetAssignmentMetadataTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group by replaying a value record.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
+
+        // Replay the tombstone. It should reset both the epoch and the timestamp.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
     }
 
     @Test
@@ -20682,6 +20699,44 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayShareGroupTargetAssignmentMetadata() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group is created if it does not exist.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupTargetAssignmentMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMetadataTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group by replaying a value record.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+
+        // Replay the tombstone. It should reset both the epoch and the timestamp.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
     public void testReplayStreamsGroupMemberMetadata() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -20699,6 +20754,33 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group and the member are created if they do not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord("foo", member));
+        assertEquals(member, context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("member"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupMemberMetadataWithSimpleClassicGroup() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // A simple classic group is created when replaying offset commits without a group.
+        // This simulates the scenario where offset commit records are replayed before streams
+        // group records after log compaction has cleaned up the group metadata tombstone.
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup("foo", true);
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+            .setClientId("clientid")
+            .setClientHost("clienthost")
+            .setRackId("rackid")
+            .setInstanceId("instanceid")
+            .setRebalanceTimeoutMs(1000)
+            .setTopologyEpoch(10)
+            .setProcessId("processid")
+            .setUserEndpoint(new Endpoint().setHost("localhost").setPort(9999))
+            .setClientTags(Map.of("key", "value"))
+            .build();
+
+        // The simple classic group should be replaced by a streams group.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord("foo", member));
         assertEquals(member, context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("member"));
     }
@@ -20880,8 +20962,9 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group is created if it does not exist.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord("foo", 10));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
         assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
     }
 
     @Test
@@ -20911,6 +20994,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)
                     .withTargetAssignmentEpoch(10)
+                    .withTargetAssignmentTimestamp(12345L)
                     .withTargetAssignment("m1", tasks)
             )
             .build();
@@ -20927,6 +21011,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
     }
 
     @Test
@@ -22056,7 +22141,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
         );
 
@@ -22124,7 +22209,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
             // The target assignment is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
             // The member current state is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
         );
@@ -22446,7 +22531,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*"),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
         );
 
@@ -22595,7 +22680,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedMember1.memberId(), Map.of()),
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of())
             ),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
             // The member assignment is updated.
             List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1))
         );
@@ -22739,7 +22824,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedMember1.memberId(), Map.of()),
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of())
             ),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())),
             // The member assignment is updated.
             List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1))
         );
@@ -22944,7 +23029,7 @@ public class GroupMetadataManagerTest {
             List.of(
                 GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
                 GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*|bar*"),
-                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
             ),
             result2.records()
@@ -23169,7 +23254,7 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(
             List.of(
-                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
             ),
             result2.records()
@@ -23403,7 +23488,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
         );
 
@@ -23509,7 +23594,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId2),
                 new CoordinatorResult<>(
                     List.of(
@@ -24868,7 +24953,7 @@ public class GroupMetadataManagerTest {
             new InitMapValue(
                 topicName,
                 Set.of(0, 1),
-                0
+                context.time.milliseconds()
             )
         );
 
@@ -25038,7 +25123,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
-        // Cleanup happens from initialzing state only.
+        // Cleanup happens from initializing state only.
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -25582,7 +25667,7 @@ public class GroupMetadataManagerTest {
 
         // Verify foo-0 is unassigned and bar-0 is assigned to member A.
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
-        assertEquals(null, group.currentActiveTaskProcessId(subtopologyFoo, 0));
+        assertNull(group.currentActiveTaskProcessId(subtopologyFoo, 0));
         assertEquals(processIdA, group.currentActiveTaskProcessId(subtopologyBar, 0));
     }
 
