@@ -30,4 +30,13 @@ public record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimes
      * This is different to tombstoned assignment metadata which has an assignment epoch of -1.
      */
     public static final TargetAssignmentMetadata ZERO = new TargetAssignmentMetadata(0, 0L);
+
+    public TargetAssignmentMetadata {
+        if (assignmentEpoch < 0 && assignmentEpoch != -1) {
+            throw new IllegalArgumentException("The assignment epoch must be non-negative or -1.");
+        }
+        if (assignmentTimestamp < 0) {
+            throw new IllegalArgumentException("The assignment timestamp must be non-negative.");
+        }
+    }
 }
