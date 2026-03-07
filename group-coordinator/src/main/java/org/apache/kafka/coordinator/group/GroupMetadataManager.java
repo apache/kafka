@@ -3821,6 +3821,7 @@ public class GroupMetadataManager {
         try {
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionType(subscriptionType)
@@ -3890,6 +3891,7 @@ public class GroupMetadataManager {
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
+                    .withTime(time)
                     .withMembers(group.members())
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
@@ -3955,6 +3957,7 @@ public class GroupMetadataManager {
                     assignor,
                     assignmentConfigs
                 )
+                .withTime(time)
                 .withMembers(group.members())
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
@@ -5337,7 +5340,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             ConsumerGroup group;
             try {
@@ -5350,7 +5353,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
-            group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -5653,7 +5656,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
-            streamsGroup.setTargetAssignmentEpoch(value.assignmentEpoch());
+            streamsGroup.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -5666,7 +5669,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
             }
-            streamsGroup.setTargetAssignmentEpoch(-1);
+            streamsGroup.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -5801,13 +5804,13 @@ public class GroupMetadataManager {
         }
 
         if (value != null) {
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                         + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
-            group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 

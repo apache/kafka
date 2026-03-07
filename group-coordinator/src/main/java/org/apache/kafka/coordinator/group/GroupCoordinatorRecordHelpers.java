@@ -235,20 +235,23 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupTargetAssignmentMetadata record.
      *
-     * @param groupId           The consumer group id.
-     * @param assignmentEpoch   The consumer group epoch.
+     * @param groupId             The consumer group id.
+     * @param assignmentEpoch     The consumer group epoch.
+     * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentMetadataRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long assignmentTimestamp
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(assignmentEpoch),
+                    .setAssignmentEpoch(assignmentEpoch)
+                    .setAssignmentTimestamp(assignmentTimestamp),
                 (short) 0
             )
         );
@@ -663,20 +666,23 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupTargetAssignmentMetadata record.
      *
-     * @param groupId           The group id.
-     * @param assignmentEpoch   The group epoch.
+     * @param groupId             The group id.
+     * @param assignmentEpoch     The group epoch.
+     * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newShareGroupTargetAssignmentMetadataRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long assignmentTimestamp
     ) {
         return CoordinatorRecord.record(
             new ShareGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(assignmentEpoch),
+                    .setAssignmentEpoch(assignmentEpoch)
+                    .setAssignmentTimestamp(assignmentTimestamp),
                 (short) 0
             )
         );
