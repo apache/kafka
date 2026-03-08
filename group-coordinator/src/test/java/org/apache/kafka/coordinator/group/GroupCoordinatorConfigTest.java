@@ -175,6 +175,7 @@ public class GroupCoordinatorConfigTest {
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 10);
+        configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG, 3);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 555);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 200);
@@ -205,6 +206,7 @@ public class GroupCoordinatorConfigTest {
         GroupCoordinatorConfig config = createConfig(configs);
 
         assertEquals(10, config.numThreads());
+        assertEquals(3, config.numBackgroundThreads());
         assertEquals(555, config.consumerGroupSessionTimeoutMs());
         assertEquals(200, config.consumerGroupHeartbeatIntervalMs());
         assertEquals(55, config.consumerGroupMaxSize());

@@ -36,7 +36,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -188,7 +187,7 @@ public final class MessageGenerator {
 
     private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
                                                                       List<String> types) {
-        if (types == null) return Collections.emptyList();
+        if (types == null) return List.of();
         List<TypeClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
             switch (type) {
@@ -216,7 +215,7 @@ public final class MessageGenerator {
 
     private static List<MessageClassGenerator> createMessageClassGenerators(String packageName,
                                                                             List<String> types) {
-        if (types == null) return Collections.emptyList();
+        if (types == null) return List.of();
         List<MessageClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
             switch (type) {

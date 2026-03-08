@@ -966,7 +966,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
-        final String actualDefaultStoreType = streamsConfig.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = streamsConfig.getString(StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"rocksDB\"");
     }
 
@@ -974,17 +974,68 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
-        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
+        props.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualDefaultStoreType = config.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = config.getString(StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"in_memory\"");
     }
 
     @Deprecated
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
-        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "bad_config");
+        props.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldUseDefaultStoreFormatWhenNotSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualFormat = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        assertEquals("DEFAULT", actualFormat, "dsl.store.format should default to 'default'");
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatDefault() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "DEFAULT");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("DEFAULT", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatHeaders() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("HEADERS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidDslStoreFormat() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "invalid_format");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Invalid value invalid_format for configuration dsl.store.format"));
+    }
+
+    @Test
+    public void shouldAcceptDslStoreFormatCaseInsensitively() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "default");
+        StreamsConfig config = new StreamsConfig(props);
+        assertEquals("default", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "DEFAULT");
+        config = new StreamsConfig(props);
+        assertEquals("DEFAULT", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "headers");
+        config = new StreamsConfig(props);
+        assertEquals("headers", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+        config = new StreamsConfig(props);
+        assertEquals("HEADERS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HeAdErS");
+        config = new StreamsConfig(props);
+        assertEquals("HeAdErS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
     }
 
     @Test

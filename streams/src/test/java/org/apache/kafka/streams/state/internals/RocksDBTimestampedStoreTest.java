@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.hamcrest.core.IsNull;
@@ -42,6 +43,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
@@ -163,34 +165,39 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         assertThat(rocksDBStore.approximateNumEntries(), is(5L));
 
         // should add new key8 to new CF
-        rocksDBStore.put(new Bytes("key8".getBytes()), "timestamp+88888888".getBytes());
+        rocksDBStore.put(new Bytes("key8new".getBytes()), "timestamp+88888888".getBytes());
         // one delete on old CF, one put on new CF
         // approx: 3 entries on old CF, 2 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+
+        rocksDBStore.put(new Bytes("key9new".getBytes()), null);
+        // one delete on old CF, one put on new CF
+        // approx: 2 entries on old CF, 1 in new CF
+        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
 
         // putIfAbsent()
 
         // should migrate key4 from old to new CF with old value
         assertThat(rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "timestamp+4444".getBytes()).length, is(8 + 4));
         // one delete on old CF, one put on new CF
-        // approx: 2 entries on old CF, 3 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+        // approx: 1 entries on old CF, 2 in new CF
+        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
 
         // should add new key11 to new CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key11".getBytes()), "timestamp+11111111111".getBytes()), new IsNull<>());
+        assertThat(rocksDBStore.putIfAbsent(new Bytes("key11new".getBytes()), "timestamp+11111111111".getBytes()), new IsNull<>());
         // one delete on old CF, one put on new CF
-        // approx: 1 entries on old CF, 4 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+        // approx: 0 entries on old CF, 3 in new CF
+        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
 
         // should not delete key5 but migrate to new CF
         assertThat(rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length, is(8 + 5));
         // one delete on old CF, one put on new CF
-        // approx: 0 entries on old CF, 5 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+        // approx: 0 entries on old CF, 4 in new CF
+        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
 
         // should be no-op on both CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key12".getBytes()), null), new IsNull<>());
-        // two delete operation, however, only one is counted because old CF count was zero before already
+        assertThat(rocksDBStore.putIfAbsent(new Bytes("key12new".getBytes()), null), new IsNull<>());
+        // one delete operation, however, not counted because old CF count was zero before already
         // approx: 0 entries on old CF, 4 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(4L));
 
@@ -221,7 +228,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
-                assertArrayEquals("key11".getBytes(), keyValue.key.get());
+                assertArrayEquals("key11new".getBytes(), keyValue.key.get());
                 assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'}, keyValue.value);
             }
             {
@@ -249,7 +256,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
-                assertArrayEquals("key8".getBytes(), keyValue.key.get());
+                assertArrayEquals("key8new".getBytes(), keyValue.key.get());
                 assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '8', '8', '8', '8', '8', '8', '8', '8'}, keyValue.value);
             }
             assertFalse(itAll.hasNext());
@@ -280,7 +287,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         try (final KeyValueIterator<Bytes, byte[]> itAll = rocksDBStore.reverseAll()) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
-                assertArrayEquals("key8".getBytes(), keyValue.key.get());
+                assertArrayEquals("key8new".getBytes(), keyValue.key.get());
                 assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '8', '8', '8', '8', '8', '8', '8', '8'}, keyValue.value);
             }
             {
@@ -308,7 +315,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
-                assertArrayEquals("key11".getBytes(), keyValue.key.get());
+                assertArrayEquals("key11new".getBytes(), keyValue.key.get());
                 assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'}, keyValue.value);
             }
             {
@@ -351,7 +358,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
-                assertArrayEquals("key11".getBytes(), keyValue.key.get());
+                assertArrayEquals("key11new".getBytes(), keyValue.key.get());
                 assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'}, keyValue.value);
             }
             assertFalse(it.hasNext());
@@ -388,9 +395,10 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             assertThat(db.get(noTimestampColumnFamily, "key5".getBytes()), new IsNull<>());
             assertThat(db.get(noTimestampColumnFamily, "key6".getBytes()), new IsNull<>());
             assertThat(db.get(noTimestampColumnFamily, "key7".getBytes()).length, is(7));
-            assertThat(db.get(noTimestampColumnFamily, "key8".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key11".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key12".getBytes()), new IsNull<>());
+            assertThat(db.get(noTimestampColumnFamily, "key8new".getBytes()), new IsNull<>());
+            assertThat(db.get(noTimestampColumnFamily, "key9new".getBytes()), new IsNull<>());
+            assertThat(db.get(noTimestampColumnFamily, "key11new".getBytes()), new IsNull<>());
+            assertThat(db.get(noTimestampColumnFamily, "key12new".getBytes()), new IsNull<>());
 
             assertThat(db.get(withTimestampColumnFamily, "unknown".getBytes()), new IsNull<>());
             assertThat(db.get(withTimestampColumnFamily, "key1".getBytes()).length, is(8 + 1));
@@ -400,9 +408,10 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             assertThat(db.get(withTimestampColumnFamily, "key5".getBytes()).length, is(8 + 5));
             assertThat(db.get(withTimestampColumnFamily, "key6".getBytes()), new IsNull<>());
             assertThat(db.get(withTimestampColumnFamily, "key7".getBytes()), new IsNull<>());
-            assertThat(db.get(withTimestampColumnFamily, "key8".getBytes()).length, is(18));
-            assertThat(db.get(withTimestampColumnFamily, "key11".getBytes()).length, is(21));
-            assertThat(db.get(withTimestampColumnFamily, "key12".getBytes()), new IsNull<>());
+            assertThat(db.get(withTimestampColumnFamily, "key8new".getBytes()).length, is(18));
+            assertThat(db.get(noTimestampColumnFamily, "key9new".getBytes()), new IsNull<>());
+            assertThat(db.get(withTimestampColumnFamily, "key11new".getBytes()).length, is(21));
+            assertThat(db.get(withTimestampColumnFamily, "key12new".getBytes()), new IsNull<>());
         } catch (final RuntimeException fatal) {
             errorOccurred = true;
         } finally {
@@ -461,6 +470,29 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        }
+    }
+
+    @Test
+    public void shouldNotSupportDowngradeFromTimestampedToPlainKeyValueStore() {
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key1".getBytes()), "timestamped-value1".getBytes());
+        rocksDBStore.put(new Bytes("key2".getBytes()), "timestamped-value2".getBytes());
+        rocksDBStore.close();
+
+        final RocksDBStore kvStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
+        try {
+            final ProcessorStateException exception = assertThrows(
+                ProcessorStateException.class,
+                () -> kvStore.init(context, kvStore)
+            );
+
+            assertThat(exception.getMessage(), is(
+                "Store " + DB_NAME + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
+                "Downgrade from timestamped to regular store is not supported directly. " +
+                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
+        } finally {
+            kvStore.close();
         }
     }
 

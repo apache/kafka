@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.Record;
 
@@ -47,6 +48,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
+    private final ProcessingExceptionHandler processingExceptionHandler;
     private final Time time;
     private final long flushInterval;
     private long lastFlush;
@@ -56,6 +58,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                                  final InternalProcessorContext<?, ?> processorContext,
                                  final GlobalStateManager stateMgr,
                                  final DeserializationExceptionHandler deserializationExceptionHandler,
+                                 final ProcessingExceptionHandler processingExceptionHandler,
                                  final Time time,
                                  final long flushInterval
                                  ) {
@@ -65,6 +68,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         this.stateMgr = stateMgr;
         this.processorContext = processorContext;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
+        this.processingExceptionHandler = processingExceptionHandler;
         this.time = time;
         this.flushInterval = flushInterval;
     }
@@ -158,7 +162,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final ProcessorNode<?, ?, ?, ?> node : this.topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
-                node.init((InternalProcessorContext) this.processorContext);
+                node.init((InternalProcessorContext) this.processorContext, processingExceptionHandler);
             } finally {
                 processorContext.setCurrentNode(null);
             }
