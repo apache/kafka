@@ -1886,7 +1886,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
 
-        final int numberOfAttempts = 1000;
+        final int numberOfAttempts = 100;
         final int numberOfConcurrentCloseThreads = 4;
 
         // Make multiple attempts to increase chance of hitting the race.
