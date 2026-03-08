@@ -33,6 +33,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
+// TODO: replace with new method in follow-up PR of KIP-1271
 @SuppressWarnings("deprecation")
 public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
