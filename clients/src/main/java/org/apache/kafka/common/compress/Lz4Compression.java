@@ -17,8 +17,8 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ChunkedBytesStream;
@@ -28,7 +28,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import static org.apache.kafka.common.record.CompressionType.LZ4;
+import static org.apache.kafka.common.record.internal.CompressionType.LZ4;
 
 public class Lz4Compression implements Compression {
 

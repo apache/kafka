@@ -21,7 +21,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordVersion}
+import org.apache.kafka.common.record.internal.{MemoryRecords, RecordBatch, RecordVersion}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime

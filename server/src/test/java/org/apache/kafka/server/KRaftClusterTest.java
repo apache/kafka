@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaFuture;
@@ -777,9 +776,9 @@ public class KRaftClusterTest {
                 TopicPartition topicPartition = new TopicPartition("foo", partitionId);
                 var partition = broker.replicaManager().getPartition(topicPartition);
                 if (isHosted) {
-                    assertNotEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertNotEquals(new HostedPartition.None<kafka.cluster.Partition>(), partition, "topicPartition = " + topicPartition);
                 } else {
-                    assertEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertEquals(new HostedPartition.None<kafka.cluster.Partition>(), partition, "topicPartition = " + topicPartition);
                 }
             }
         }
@@ -1142,8 +1141,7 @@ public class KRaftClusterTest {
             try (Admin admin = cluster.admin()) {
                 admin.updateFeatures(
                     Map.of(MetadataVersion.FEATURE_NAME,
-                        new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                    new UpdateFeaturesOptions()
+                        new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))
                 );
                 assertEquals(new SupportedVersionRange((short) 0, (short) 1), admin.describeFeatures().featureMetadata().get()
                     .supportedFeatures().get(KRaftVersion.FEATURE_NAME));
@@ -1215,6 +1213,7 @@ public class KRaftClusterTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testCreateClusterAndRestartControllerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(

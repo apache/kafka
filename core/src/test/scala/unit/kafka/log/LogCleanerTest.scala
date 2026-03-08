@@ -23,7 +23,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
@@ -1146,11 +1147,7 @@ class LogCleanerTest extends Logging {
 
     // Now we append one transaction with a key which conflicts with the COMMIT marker appended above
     def commitRecordKey(): ByteBuffer = {
-      val keySize = ControlRecordType.COMMIT.recordKey().sizeOf()
-      val key = ByteBuffer.allocate(keySize)
-      ControlRecordType.COMMIT.recordKey().writeTo(key)
-      key.flip()
-      key
+      ControlRecordType.COMMIT.recordKey()
     }
 
     val producerId2 = 2L

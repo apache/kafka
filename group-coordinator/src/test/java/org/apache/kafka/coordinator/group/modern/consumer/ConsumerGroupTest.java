@@ -475,7 +475,7 @@ public class ConsumerGroupTest {
         assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
-        consumerGroup.setTargetAssignmentEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
@@ -1000,7 +1000,7 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
         assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
 
-        consumerGroup.setTargetAssignmentEpoch(1);
+        consumerGroup.setTargetAssignmentMetadata(1, 12345L);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
         assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
@@ -1329,7 +1329,7 @@ public class ConsumerGroupTest {
             groupId
         );
         expectedConsumerGroup.setGroupEpoch(10);
-        expectedConsumerGroup.setTargetAssignmentEpoch(10);
+        expectedConsumerGroup.setTargetAssignmentMetadata(10, 0L);
         expectedConsumerGroup.updateTargetAssignment(memberId, new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
         )));
@@ -1366,6 +1366,8 @@ public class ConsumerGroupTest {
 
         assertEquals(expectedConsumerGroup.groupId(), consumerGroup.groupId());
         assertEquals(expectedConsumerGroup.groupEpoch(), consumerGroup.groupEpoch());
+        assertEquals(expectedConsumerGroup.assignmentEpoch(), consumerGroup.assignmentEpoch());
+        assertEquals(expectedConsumerGroup.assignmentTimestamp(), consumerGroup.assignmentTimestamp());
         assertEquals(expectedConsumerGroup.state(), consumerGroup.state());
         assertEquals(expectedConsumerGroup.preferredServerAssignor(), consumerGroup.preferredServerAssignor());
         assertEquals(expectedConsumerGroup.members(), consumerGroup.members());

@@ -36,30 +36,13 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
     }
 
     @Override
-    public KeyValueSegment getOrCreateSegment(final long segmentId,
-                                              final StateStoreContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            final KeyValueSegment newSegment =
-                new KeyValueSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
-
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
-            }
-
-            newSegment.openDB(context.appConfigs(), context.stateDir());
-            return newSegment;
-        }
+    protected KeyValueSegment createSegment(final long segmentId, final String segmentName) {
+        return new KeyValueSegment(segmentName, name, segmentId, position, metricsRecorder);
     }
 
     @Override
-    public KeyValueSegment getOrCreateSegmentIfLive(final long segmentId,
-                                                    final StateStoreContext context,
-                                                    final long streamTime) {
-        final KeyValueSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
-        cleanupExpiredSegments(streamTime);
-        return segment;
+    protected void openSegmentDB(final KeyValueSegment segment, final StateStoreContext context) {
+        segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override

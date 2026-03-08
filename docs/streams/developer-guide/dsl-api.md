@@ -5738,6 +5738,12 @@ Kafka Streams comes with a `test-utils` module to help you test your application
 
 # Kafka Streams DSL for Scala
 
+> **⚠️ DEPRECATION NOTICE**: The Kafka Streams DSL for Scala library (`kafka-streams-scala`) is
+> **deprecated as of Kafka 4.3** and will be **removed in Kafka 5.0**.
+>
+> **See the [migration guide](/{version}/streams/developer-guide/scala-migration)** for instructions
+> and code examples showing how to migrate from the Scala wrapper to the Java API.
+
 The Kafka Streams DSL Java APIs are based on the Builder design pattern, which allows users to incrementally build the target functionality using lower level compositional fluent APIs. These APIs can be called from Scala, but there are several issues:
 
   1. **Additional type annotations** \- The Java APIs use Java generics in a way that are not fully compatible with the type inferencer of the Scala compiler. Hence the user has to add type annotations to the Scala code, which seems rather non-idiomatic in Scala.

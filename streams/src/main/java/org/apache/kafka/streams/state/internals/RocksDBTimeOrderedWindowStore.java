@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 
+import java.util.Map;
 import java.util.Objects;
 
 
@@ -61,8 +63,8 @@ public class RocksDBTimeOrderedWindowStore
     }
 
     @Override
-    public void flush() {
-        wrapped().flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        wrapped().commit(changelogOffsets);
     }
 
     @Override

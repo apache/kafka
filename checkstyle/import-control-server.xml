@@ -32,6 +32,7 @@
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="net.jqwik.api" />
+  <allow pkg="org.apache.commons.validator.routines" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />

@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import java.util.Properties
 import kafka.utils.Logging
 import kafka.utils.Implicits._
-import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
@@ -45,7 +44,7 @@ import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.AbstractKafkaConfig.getMap
-import org.apache.kafka.server.config.{AbstractKafkaConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DynamicConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
@@ -57,8 +56,12 @@ import scala.jdk.OptionConverters.RichOptional
 object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
-    System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
-      DynamicBrokerConfig.dynamicConfigUpdateModes))
+    val combined = new ConfigDef(configDef)
+    // Broker quota configs are dynamic-only and not defined in AbstractKafkaConfig.CONFIG_DEF,
+    // so we need to add them explicitly here for the generated HTML documentation.
+    QuotaConfig.brokerQuotaConfigs().configKeys().forEach((_, v) => combined.define(v))
+    System.out.println(combined.toHtml(4, (config: String) => "brokerconfigs_" + config,
+      JDynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
@@ -95,7 +98,7 @@ object KafkaConfig {
     typeOf(configName) match {
       case Some(t) => Some(t)
       case None =>
-        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
+        JDynamicBrokerConfig.brokerConfigSynonyms(configName, true).asScala.flatMap(typeOf).headOption
     }
   }
 
@@ -129,96 +132,6 @@ object KafkaConfig {
     }
     if (maybeSensitive) Password.HIDDEN else value
   }
-
-  /**
-   * Copy a configuration map, populating some keys that we want to treat as synonyms.
-   */
-  def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
-    val output = new util.HashMap[Any, Any](input)
-    val brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG)
-    val nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG)
-    if (brokerId == null && nodeId != null) {
-      output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId)
-    } else if (brokerId != null && nodeId == null) {
-      output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
-    }
-    output
-  }
-
-  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
-  }
-
-  private def checkDuplicateListenerPorts(endpoints: Seq[Endpoint], listeners: java.util.List[String]): Unit = {
-    val distinctPorts = endpoints.map(_.port).distinct
-    require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
-  }
-
-  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
-    def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean = {
-      val inetAddressValidator = InetAddressValidator.getInstance()
-      (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
-        (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
-    }
-
-    def validate(endPoints: Seq[Endpoint]): Unit = {
-      val distinctListenerNames = endPoints.map(_.listener).distinct
-      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
-
-      val (duplicatePorts, _) = endPoints.filter {
-        // filter port 0 for unit tests
-        ep => ep.port != 0
-      }.groupBy(_.port).partition {
-        case (_, endpoints) => endpoints.size > 1
-      }
-
-      // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
-      val duplicatePortsPartitionedByValidIps = duplicatePorts.map {
-        case (port, eps) =>
-          (port, eps.partition(ep =>
-            ep.host != null && InetAddressValidator.getInstance().isValid(ep.host)
-          ))
-      }
-
-      // Iterate through every grouping of duplicates by port to see if they are valid
-      duplicatePortsPartitionedByValidIps.foreach {
-        case (port, (duplicatesWithIpHosts, duplicatesWithoutIpHosts)) =>
-          if (requireDistinctPorts)
-            checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners)
-
-          duplicatesWithIpHosts match {
-            case eps if eps.isEmpty =>
-            case Seq(ep1, ep2) =>
-              if (requireDistinctPorts) {
-                val errorMessage = "If you have two listeners on " +
-                  s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port"
-                require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), errorMessage)
-
-                // If we reach this point it means that even though duplicatesWithIpHosts in isolation can be valid, if
-                // there happens to be ANOTHER listener on this port without an IP host (such as a null host) then its
-                // not valid.
-                if (duplicatesWithoutIpHosts.nonEmpty)
-                  throw new IllegalArgumentException(errorMessage)
-              }
-            case _ =>
-              // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
-              // and the other is IPv6)
-              if (requireDistinctPorts)
-                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
-                  s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
-          }
-      }
-    }
-
-    val endPoints = try {
-      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap).asScala
-    } catch {
-      case e: Exception =>
-        throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
-    }
-    validate(endPoints)
-    endPoints
-  }
 }
 
 /**
@@ -230,8 +143,8 @@ object KafkaConfig {
 class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props))
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props))
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
@@ -288,9 +201,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def quotaConfig: QuotaConfig = _quotaConfig
 
   /** ********* General Configuration ***********/
-  val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
-  val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
@@ -379,7 +289,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def numNetworkThreads = getInt(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
 
   /***************** rack configuration **************/
-  val rack = Option(getString(ServerConfigs.BROKER_RACK_CONFIG))
   val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Log Configuration ***********/
@@ -520,7 +429,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def listeners: Seq[Endpoint] =
-    KafkaConfig.listenerListToEndPoints(getList(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
+    AbstractKafkaConfig.listenerListToEndPoints(getList(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap).asScala
 
   def controllerListeners: Seq[Endpoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listener))
@@ -537,7 +446,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def effectiveAdvertisedControllerListeners: Seq[Endpoint] = {
     val advertisedListenersProp = getList(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
-      KafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      AbstractKafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, false).asScala
         .filter(l => controllerListenerNames.contains(l.listener))
     } else {
       Seq.empty
@@ -567,12 +476,22 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getList(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val advertisedListeners = if (advertisedListenersProp != null) {
-      KafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      AbstractKafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, false).asScala
     } else {
       listeners
     }
     // Only expose broker listeners
     advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listener))
+  }
+
+  def validateCordonedLogDirs(): Unit = {
+    val cordonedLogDirs = getList(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG)
+    if (cordonedLogDirs.contains(ServerLogConfigs.CORDONED_LOG_DIRS_ALL)) {
+      require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
+    } else {
+      val unknownLogDirs = cordonedLogDirs.asScala.filter(!logDirs().contains(_))
+      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
+    }
   }
 
   validateValues()
@@ -665,6 +584,14 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG)
+      if (originals.containsKey(ServerLogConfigs.NUM_PARTITIONS_CONFIG)) {
+        warn(s"${ServerLogConfigs.NUM_PARTITIONS_CONFIG} is defined in the broker role. This configuration will be ignored in 5.0. " +
+          s"Please set ${ServerLogConfigs.NUM_PARTITIONS_CONFIG} in the controller role instead.")
+      }
+      if (originals.containsKey(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)) {
+        warn(s"${ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG} is defined in the broker role. This configuration will be ignored in 5.0. " +
+          s"Please set ${ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG} in the controller role instead.")
+      }
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
@@ -702,6 +629,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
           s"Found ${advertisedBrokerListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
           s"are ${listenerNames.map(_.value).mkString(",")}"
       )
+      validateCordonedLogDirs()
     }
 
     require(!effectiveAdvertisedBrokerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),

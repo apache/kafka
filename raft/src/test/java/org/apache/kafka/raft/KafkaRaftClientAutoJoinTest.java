@@ -17,7 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.server.common.KRaftVersion;
 

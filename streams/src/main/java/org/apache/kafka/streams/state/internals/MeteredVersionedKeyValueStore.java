@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -64,6 +65,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> The key type
  * @param <V> The (raw) value type
  */
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class MeteredVersionedKeyValueStore<K, V>
     extends WrappedStateStore<VersionedBytesStore, K, V>
     implements VersionedKeyValueStore<K, V> {
@@ -347,8 +350,8 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     @Override
-    public void flush() {
-        internal.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        internal.commit(changelogOffsets);
     }
 
     @Override
