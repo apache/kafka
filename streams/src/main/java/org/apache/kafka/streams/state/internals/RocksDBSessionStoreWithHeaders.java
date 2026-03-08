@@ -16,17 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 
 /**
  * RocksDB-backed session store with support for record headers.
  * <p>
- * This store extends {@link RocksDBSessionStore} and overrides
- * {@code query()} to disable IQv2 for header-aware stores.
+ * This store extends {@link RocksDBSessionStore} and delegates
+ * {@code query()} to the parent to support IQv2 for header-aware stores.
  * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
  *
@@ -36,10 +32,5 @@ class RocksDBSessionStoreWithHeaders extends RocksDBSessionStore implements Head
 
     RocksDBSessionStoreWithHeaders(final SegmentedBytesStore bytesStore) {
         super(bytesStore);
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
-        throw new UnsupportedOperationException("Querying stores with headers is not supported");
     }
 }
