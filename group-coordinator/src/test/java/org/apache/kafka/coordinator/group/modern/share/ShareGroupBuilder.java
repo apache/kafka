@@ -31,6 +31,7 @@ public class ShareGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;
+    private long assignmentTimestamp;
     private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private long metadataHash = 0L;
@@ -39,6 +40,7 @@ public class ShareGroupBuilder {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
         this.assignmentEpoch = 0;
+        this.assignmentTimestamp = 0L;
     }
 
     public ShareGroupBuilder withMember(ShareGroupMember member) {
@@ -61,6 +63,11 @@ public class ShareGroupBuilder {
         return this;
     }
 
+    public ShareGroupBuilder withAssignmentTimestamp(long assignmentTimestamp) {
+        this.assignmentTimestamp = assignmentTimestamp;
+        return this;
+    }
+
     public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
@@ -78,7 +85,7 @@ public class ShareGroupBuilder {
         );
 
         // Add target assignment epoch.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, assignmentEpoch, assignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->

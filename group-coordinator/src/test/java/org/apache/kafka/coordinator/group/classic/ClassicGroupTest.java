@@ -1385,7 +1385,7 @@ public class ClassicGroupTest {
             groupId
         );
         consumerGroup.setGroupEpoch(10);
-        consumerGroup.setTargetAssignmentEpoch(10);
+        consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());
 
         consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
@@ -1538,7 +1538,7 @@ public class ClassicGroupTest {
             groupId
         );
         consumerGroup.setGroupEpoch(10);
-        consumerGroup.setTargetAssignmentEpoch(10);
+        consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());
         consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
         )));
