@@ -118,8 +118,8 @@ public class ProducerManager implements Closeable {
                     future.complete(metadata);
                 }
             };
-            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
-                    serde.serialize(remoteLogMetadata)), callback);
+            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum,
+                    remoteLogMetadata.metadataKey(), serde.serialize(remoteLogMetadata)), callback);
         } catch (Exception ex) {
             future.completeExceptionally(ex);
         }

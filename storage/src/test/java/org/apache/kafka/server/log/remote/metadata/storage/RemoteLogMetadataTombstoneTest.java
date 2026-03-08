@@ -336,7 +336,7 @@ public class RemoteLogMetadataTombstoneTest {
         rlmm.updateRemoteLogSegmentMetadata(deleteStart).get();
 
         RemoteLogSegmentMetadataUpdate deleteFinish = new RemoteLogSegmentMetadataUpdate(
-                segmentId,
+                segmentId2,
                 time.milliseconds(),
                 java.util.Optional.empty(),
                 RemoteLogSegmentState.DELETE_SEGMENT_FINISHED,
