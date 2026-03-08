@@ -2488,6 +2488,31 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testRetriableAddPartitionsToTxnTimesOut() throws Exception {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        assertFalse(responseFuture.isDone());
+
+        for (int i = 0; i < 20; i++) {
+            prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, epoch, producerId);
+        }
+
+        for (int i = 0; i < 20 && !transactionManager.hasError(); i++) {
+            sender.runOnce();
+        }
+
+        assertTrue(transactionManager.hasError());
+        assertInstanceOf(TimeoutException.class, transactionManager.lastError());
+
+        runUntil(responseFuture::isDone);
+        assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, responseFuture::get).getCause());
+    }
+
+    @Test
     public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() {
         testRetriableErrorInTxnOffsetCommit(Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
