@@ -38,16 +38,16 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.DefaultRecord;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecord;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -71,7 +71,6 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.share.persister.WriteShareGroupStateResult;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -909,7 +908,7 @@ public class SharePartitionTest {
     public void testMaybeInitializeWithReadException() {
         Persister persister = Mockito.mock(Persister.class);
         // Complete the future exceptionally for read state.
-        Mockito.when(persister.readState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Read exception")));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Read exception")));
         SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition1.maybeInitialize();
@@ -7514,7 +7513,7 @@ public class SharePartitionTest {
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Write exception")));
         CompletableFuture<Void> writeResult = sharePartition1.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(IllegalStateException.class, writeResult);
@@ -12245,6 +12244,114 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionAllData(0, 0, 0L, Errors.NONE.code(), Errors.NONE.message(),
                                 List.of())))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+    }
+
+    @Test
+    public void testMaxDeliveryCountUsesGroupConfigWhenPresent() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(8);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(5)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // maxDeliveryCount() should return the group config value, not the default.
+        assertEquals(8, sharePartition.maxDeliveryCount());
+    }
+
+    @Test
+    public void testMaxDeliveryCountFallsBackToDefaultWhenNoGroupConfig() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(5)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // maxDeliveryCount() should return the default value.
+        assertEquals(5, sharePartition.maxDeliveryCount());
+    }
+
+    @Test
+    public void testDynamicDeliveryCountDecreaseCausesArchival() {
+        // Start with a high default limit so records are not archived initially.
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(10)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(5, 10);
+
+        // Acquire and release: deliveryCount becomes 1, then released to AVAILABLE.
+        fetchAcquiredRecords(sharePartition, records, 10);
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
+
+        // Acquire again: deliveryCount becomes 2, state=ACQUIRED.
+        fetchAcquiredRecords(sharePartition, records, 10);
+
+        // Dynamically decrease the limit to 2 via group config BEFORE releasing.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(2);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // Release: archival check fires because deliveryCount(2) >= maxDeliveryCount(2),
+        // so records transition to ARCHIVED instead of AVAILABLE.
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
+
+        // Next fetch should return 0 records since all records are archived.
+        fetchAcquiredRecords(sharePartition, records, 0);
+
+        // Records should have been archived - next fetch offset should have advanced.
+        assertEquals(15, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testDynamicDeliveryCountIncreaseAllowsMoreDeliveries() {
+        // Start with limit = 2, records get archived after 2 deliveries.
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(5, 10);
+
+        // First acquire: deliveryCount = 1.
+        fetchAcquiredRecords(sharePartition, records, 10);
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
+
+        // Now increase limit to 10 via group config before the second acquire.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(10);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // Second acquire: deliveryCount = 2. With old limit (2) this would archive.
+        // With new limit (10) it should stay acquirable.
+        fetchAcquiredRecords(sharePartition, records, 10);
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
+
+        // Third acquire should still work since limit is now 10.
+        fetchAcquiredRecords(sharePartition, records, 10);
+
+        // Records are still in the cached state, not archived.
+        assertFalse(sharePartition.cachedState().isEmpty());
     }
 
     private static class SharePartitionBuilder {

@@ -58,7 +58,6 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -386,7 +385,6 @@ public interface GroupCoordinator {
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
      * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
-     * @param timeout           The operation timeout.
      *
      * @return A future yielding the result.
      */
@@ -396,8 +394,7 @@ public interface GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        short transactionVersion,
-        Duration timeout
+        short transactionVersion
     );
 
     /**

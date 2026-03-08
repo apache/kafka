@@ -43,7 +43,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
-import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.record.internal.FileRecords
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
@@ -4114,8 +4114,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private def disableEligibleLeaderReplicas(admin: Admin): Unit = {
     if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
       admin.updateFeatures(
-        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
-        new UpdateFeaturesOptions()).all().get()
+        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))).all().get()
     }
   }
 

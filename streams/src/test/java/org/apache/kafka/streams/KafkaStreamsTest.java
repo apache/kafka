@@ -416,32 +416,13 @@ public class KafkaStreamsTest {
             try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
                 assertEquals(1, constructed.constructed().size());
                 final StateDirectory stateDirectory = constructed.constructed().get(0);
-                verify(stateDirectory, times(0)).initializeStartupTasks(any(), any(), any());
+                verify(stateDirectory, times(0)).initializeStartupStores(any(), any(), any());
                 streams.start();
-                verify(stateDirectory, times(1)).initializeStartupTasks(any(), any(), any());
+                verify(stateDirectory, times(1)).initializeStartupStores(any(), any(), any());
             }
         }
     }
 
-    @Test
-    public void shouldCloseStartupTasksAfterFirstRebalance() throws Exception {
-        prepareStreams();
-        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
-        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
-        prepareThreadState(streamThreadOne, state1);
-        prepareThreadState(streamThreadTwo, state2);
-        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
-            (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
-            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-                assertEquals(1, constructed.constructed().size());
-                final StateDirectory stateDirectory = constructed.constructed().get(0);
-                streams.setStateListener(streamsStateListener);
-                streams.start();
-                waitForCondition(() -> streams.state() == State.RUNNING, "Streams never started.");
-                verify(stateDirectory, times(1)).closeStartupTasks();
-            }
-        }
-    }
 
     @Test
     public void stateShouldTransitToRunningIfNonDeadThreadsBackToRunning() throws Exception {

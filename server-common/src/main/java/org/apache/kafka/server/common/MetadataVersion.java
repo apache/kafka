@@ -120,15 +120,18 @@ public enum MetadataVersion {
     // Enables "streams" groups by default for new clusters (KIP-1071).
     IBP_4_2_IV1(29, "4.2", "IV1", false),
 
+    // Enables support for cordoned log dirs
+    // BrokerRegistrationChangeRecord and RegisterBrokerRecord are updated
+    IBP_4_3_IV0(30, "4.3", "IV0", true),
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error unless
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
+    IBP_4_4_IV0(31, "4.4", "IV0", false);
 
-    // New version for the Kafka 4.3.0 release.
-    IBP_4_3_IV0(30, "4.3", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -148,7 +151,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_2_IV1;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_3_IV0;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
@@ -212,8 +215,15 @@ public enum MetadataVersion {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }
 
+    public boolean isCordonedLogDirsSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_3_IV0);
+    }
+
     public short registerBrokerRecordVersion() {
-        if (isDirectoryAssignmentSupported()) {
+        if (isCordonedLogDirsSupported()) {
+            // new cordonedLogDirs field
+            return (short) 4;
+        } else if (isDirectoryAssignmentSupported()) {
             // new logDirs field
             return (short) 3;
         } else if (isMigrationSupported()) {

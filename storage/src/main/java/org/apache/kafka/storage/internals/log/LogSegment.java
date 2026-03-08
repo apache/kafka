@@ -18,11 +18,11 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.FileRecords.LogOffsetPosition;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.FileRecords.LogOffsetPosition;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
 import kafka.cluster.Partition
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.SimpleRecord
+import org.apache.kafka.common.record.internal.SimpleRecord
 import org.apache.kafka.metadata.{KRaftMetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
