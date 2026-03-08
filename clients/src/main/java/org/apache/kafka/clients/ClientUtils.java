@@ -64,10 +64,10 @@ public final class ClientUtils {
      * @throws UnknownHostException if DNS resolution fails
      */
     private static List<InetSocketAddress> resolveAddress(
-            String url,
-            String host,
-            Integer port,
-            ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+        String url,
+        String host,
+        Integer port,
+        ClientDnsLookup clientDnsLookup) throws UnknownHostException {
 
         List<InetSocketAddress> addresses = new ArrayList<>();
 

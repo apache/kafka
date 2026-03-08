@@ -639,11 +639,16 @@ public class NetworkClient implements KafkaClient {
      *                metadata timeout
      * @param now The current time in milliseconds
      * @return The list of responses received
+     *
+     * @implNote During bootstrap, this method may perform blocking DNS lookups to resolve bootstrap server addresses.
+     *           If DNS resolution is slow or fails, this method may block for longer than the specified timeout.
+     *           The blocking behavior will continue until either: (1) DNS resolution succeeds, (2) the bootstrap
+     *           timeout expires (throwing BootstrapResolutionException), or (3) the poll timeout is reached.
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
-        ensureBootstrapped(now);
+        ensureBootstrapped(timeout, now);
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -1187,7 +1192,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static class BootstrapConfiguration {
-        public List<String> bootstrapServers;
+        public final List<String> bootstrapServers;
         public final ClientDnsLookup clientDnsLookup;
         public final long bootstrapResolveTimeoutMs;
         private boolean isBootstrapDisabled;
@@ -1227,43 +1232,74 @@ public class NetworkClient implements KafkaClient {
             this.isDisabled = bootstrapConfiguration.isBootstrapDisabled;
         }
 
-        List<InetSocketAddress> tryResolveAddresses(final long currentTimeMs) {
-            timer.update(currentTimeMs);
-            List<InetSocketAddress> addresses = ClientUtils.validateAddresses(bootstrapServers, clientDnsLookup);
-            if (!addresses.isEmpty()) {
-                timer.reset(dnsResolutionTimeoutMs);
-                return addresses;
-            }
-
-            if (timer.isExpired()) {
-                throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap " +
-                        "servers. ");
-            }
-            return ClientUtils.validateAddresses(bootstrapServers, clientDnsLookup);
-        }
-
         boolean isDisabled() {
             return isDisabled;
         }
-
-        boolean isTimerExpired() {
-            return timer.isExpired();
-        }
     }
 
-    void ensureBootstrapped(final long currentTimeMs) {
+    /**
+     * Ensures that the client has successfully resolved and bootstrapped with the configured bootstrap servers.
+     * This method will retry DNS resolution until one of the following conditions is met:
+     * <ul>
+     *   <li>DNS resolution succeeds and bootstrap is complete (method returns normally)</li>
+     *   <li>Bootstrap timeout expires (throws BootstrapResolutionException)</li>
+     *   <li>Poll timeout is reached but bootstrap timeout hasn't expired (method returns to retry later)</li>
+     * </ul>
+     *
+     * @param pollTimeoutMs The poll timeout in milliseconds, controlling how long this method should block
+     *                      during a single poll invocation
+     * @param currentTimeMs The current time in milliseconds
+     * @throws BootstrapResolutionException if the bootstrap timeout expires
+     *         before DNS resolution succeeds
+     *
+     * @implNote This method performs blocking DNS lookups via {@link InetAddress#getAllByName(String)}.
+     *           Each DNS lookup may block for an indefinite amount of time depending on network conditions
+     *           and DNS server responsiveness. As a result, this method may block for longer than pollTimeoutMs
+     *           if DNS resolution is slow. The method will retry DNS resolution in a loop with brief sleeps
+     *           (up to 100ms) between attempts until one of the exit conditions above is met.
+     */
+    void ensureBootstrapped(final long pollTimeoutMs, final long currentTimeMs) {
         if (bootstrapState.isDisabled() || metadataUpdater.isBootstrapped())
             return;
 
-        List<InetSocketAddress> servers = bootstrapState.tryResolveAddresses(currentTimeMs);
-        if (!servers.isEmpty()) {
-            metadataUpdater.bootstrap(servers);
-            return;
-        }
+        long pollDeadlineMs = currentTimeMs + pollTimeoutMs;
 
-        if (bootstrapState.timer.isExpired()) {
-            throw new BootstrapResolutionException("Unable to Resolve Address within the configured period " +
-                    bootstrapState.dnsResolutionTimeoutMs + "ms.");
+        while (true) {
+            long now = time.milliseconds();
+            bootstrapState.timer.update(now);
+
+            List<InetSocketAddress> servers = ClientUtils.validateAddresses(
+                bootstrapState.bootstrapServers, bootstrapState.clientDnsLookup);
+
+            if (!servers.isEmpty()) {
+                // Resolution succeeded
+                bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
+                metadataUpdater.bootstrap(servers);
+                return;
+            }
+
+            // Check which timeout expires first
+            boolean bootstrapExpired = bootstrapState.timer.isExpired();
+            boolean pollExpired = now >= pollDeadlineMs;
+
+            if (bootstrapExpired) {
+                // Bootstrap timeout expired before poll timeout
+                throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
+            }
+
+            if (pollExpired) {
+                // Poll timeout reached but bootstrap timeout hasn't expired yet
+                return;
+            }
+
+            // Sleep briefly before retrying to avoid tight loop
+            long remainingPollTimeMs = pollDeadlineMs - now;
+            long remainingBootstrapTimeMs = bootstrapState.timer.remainingMs();
+            long sleepTimeMs = Math.min(Math.min(remainingPollTimeMs, remainingBootstrapTimeMs), 100);
+
+            if (sleepTimeMs > 0) {
+                time.sleep(sleepTimeMs);
+            }
         }
     }
 
@@ -1291,7 +1327,7 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public List<Node> fetchNodes() {
-            ensureBootstrapped(time.milliseconds());
+            ensureBootstrapped(Long.MAX_VALUE, time.milliseconds());
             return metadata.fetch().nodes();
         }
 
