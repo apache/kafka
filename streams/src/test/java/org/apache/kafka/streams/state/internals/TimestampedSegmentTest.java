@@ -132,4 +132,11 @@ public class TimestampedSegmentTest {
         segment2.close();
         segment3.close();
     }
+
+    @Test
+    public void shouldGetCorrectSegmentString() {
+        final TimestampedSegment segment = new TimestampedSegment("testStore.0", "testStore", 0L, Position.emptyPosition(), metricsRecorder);
+        assertThat(segment.toString(), equalTo("TimestampedSegment(id=0, name=testStore.0)"));
+        segment.close();
+    }
 }

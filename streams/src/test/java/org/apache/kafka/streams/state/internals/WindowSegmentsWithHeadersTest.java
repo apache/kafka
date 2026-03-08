@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TimestampedSegmentsTest extends AbstractRocksDBSegmentsTest<TimestampedSegments> {
+public class WindowSegmentsWithHeadersTest extends AbstractRocksDBSegmentsTest<WindowSegmentsWithHeaders> {
 
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
@@ -34,22 +34,22 @@ public class TimestampedSegmentsTest extends AbstractRocksDBSegmentsTest<Timesta
     private static final String STORE_NAME = "testStore";
 
     @Override
-    TimestampedSegments getSegments() {
-        return new TimestampedSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+    WindowSegmentsWithHeaders getSegments() {
+        return new WindowSegmentsWithHeaders(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }
 
     @Test
     public void shouldCreateSegmentsOfCorrectType() {
-        final TimestampedSegment segment = segments.getOrCreateSegment(0, context);
+        final WindowSegmentWithHeaders segment = segments.getOrCreateSegment(0, context);
         assertNotNull(segment);
-        assertInstanceOf(TimestampedSegment.class, segment);
+        assertInstanceOf(WindowSegmentWithHeaders.class, segment);
         assertEquals(0L, segment.id());
         assertEquals("testStore.0", segment.name());
     }
 
     @Test
     public void shouldOpenSegmentDB() {
-        final TimestampedSegment segment = segments.createSegment(0, segments.segmentName(0));
+        final WindowSegmentWithHeaders segment = segments.createSegment(0, segments.segmentName(0));
         assertFalse(segment.isOpen());
 
         segments.openSegmentDB(segment, context);
@@ -65,19 +65,19 @@ public class TimestampedSegmentsTest extends AbstractRocksDBSegmentsTest<Timesta
         segments.getOrCreateSegment(2, context);
         segments.close();
 
-        final TimestampedSegments newSegments = new TimestampedSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        final WindowSegmentsWithHeaders newSegments = new WindowSegmentsWithHeaders(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
         newSegments.openExisting(context, -1L);
 
         TestSegments.assertMetricExists("block-cache-capacity", STORE_NAME, METRICS_SCOPE, context);
         TestSegments.assertMetricExists("num-immutable-mem-table", STORE_NAME, METRICS_SCOPE, context);
 
-        final List<TimestampedSegment> allSegments = newSegments.allSegments(true);
+        final List<WindowSegmentWithHeaders> allSegments = newSegments.allSegments(true);
         assertEquals(3, allSegments.size());
         assertEquals(0L, allSegments.get(0).id());
         assertEquals(1L, allSegments.get(1).id());
         assertEquals(2L, allSegments.get(2).id());
 
-        final TimestampedSegment segment = newSegments.getOrCreateSegment(3, context);
+        final WindowSegmentWithHeaders segment = newSegments.getOrCreateSegment(3, context);
         assertNotNull(segment);
         assertTrue(segment.isOpen());
 

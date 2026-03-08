@@ -21,9 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.Map;
 import java.util.Objects;
 
 class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
@@ -52,11 +50,6 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
     @Override
     public void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void openDB(final Map<String, Object> configs, final File stateDir) {
-        super.openDB(configs, stateDir);
     }
 
     @Override

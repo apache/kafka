@@ -137,4 +137,12 @@ public class TimestampedSegmentWithHeadersTest {
         segment2.close();
         segment3.close();
     }
+
+    @Test
+    public void shouldGetCorrectSegmentString() {
+        final TimestampedSegmentWithHeaders segment =
+            new TimestampedSegmentWithHeaders("testStore.0", "testStore", 0L, Position.emptyPosition(), metricsRecorder);
+        assertEquals("TimestampedSegmentWithHeaders(id=0, name=testStore.0)", segment.toString());
+        segment.close();
+    }
 }
