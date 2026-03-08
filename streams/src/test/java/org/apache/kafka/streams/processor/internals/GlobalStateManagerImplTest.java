@@ -1149,6 +1149,7 @@ public class GlobalStateManagerImplTest {
         when(processorSupplier.get()).thenReturn(processor);
         when(reprocessFactory.keyDeserializer()).thenReturn(deserializer);
         when(reprocessFactory.valueDeserializer()).thenReturn(deserializer);
+        when(reprocessFactory.processorName()).thenReturn("test-processor");
         when(deserializer.deserialize(any(), any())).thenThrow(new StreamsException("fail"));
     }
 
