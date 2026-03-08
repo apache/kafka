@@ -73,6 +73,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
     private final Set<InMemoryWindowStoreIteratorWrapper> openIterators = ConcurrentHashMap.newKeySet();
 
+    private StateStoreContext stateStoreContext;
     private InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
@@ -103,8 +104,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
-
+        if (stateStoreContext instanceof InternalProcessorContext) {
+            this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+            this.stateStoreContext = stateStoreContext;
+        } else {
+            this.internalProcessorContext = null;
+            this.stateStoreContext = stateStoreContext;
+        }
+        
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
         final String taskName = stateStoreContext.taskId().toString();
@@ -155,7 +162,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         synchronized (position) {
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                if (internalProcessorContext != null) {
+                    expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                }
                 LOG.warn("Skipping record for expired segment.");
             } else {
                 if (value != null) {
@@ -175,7 +184,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                 }
             }
 
-            StoreQueryUtils.updatePosition(position, internalProcessorContext);
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
 
@@ -381,7 +390,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             config,
             this,
             position,
-            internalProcessorContext
+            stateStoreContext
         );
     }
 
