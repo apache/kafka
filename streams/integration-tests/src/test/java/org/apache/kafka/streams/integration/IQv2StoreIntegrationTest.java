@@ -793,7 +793,7 @@ public class IQv2StoreIntegrationTest {
                 Serdes.Integer()
             );
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier =
-            () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+            () -> new ContextualProcessor<>() {
                 @Override
                 public void process(final Record<Integer, Integer> record) {
                     final SessionStoreWithHeaders<Integer, Integer> stateStore =
