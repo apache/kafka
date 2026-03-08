@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowStore;
 
-import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeaderBytes;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
@@ -52,7 +52,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeL
                 ? timestamp(valueTimestampHeaders)
                 : internalContext.recordContext().timestamp(),
             valueTimestampHeaders != null
-                ? headers(valueTimestampHeaders)
+                ? new SerializedHeaders(rawHeaderBytes(valueTimestampHeaders))
                 : internalContext.recordContext().headers(),
             wrapped().getPosition()
         );

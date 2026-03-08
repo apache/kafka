@@ -94,6 +94,4 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         // but it may wrap a deserializer that itself wraps a null deserializer.
         initNullableDeserializer(valueDeserializer, getter);
     }
-
-
 }

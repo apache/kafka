@@ -177,6 +177,25 @@ public class Utils {
     }
 
     /**
+     * Extract the raw serialized header bytes without deserializing individual headers.
+     * <p>
+     * Works for any value format whose leading section is {@code [headersSize(varint)][headers]}
+     * (e.g. AggregationWithHeaders and ValueTimestampHeaders), returning just the {@code [headers]}
+     * bytes. For empty headers this returns a zero-length array. This lets the changelog write path
+     * carry the headers through as opaque bytes (see {@link SerializedHeaders}) without paying for
+     * a deserialization that the producer would only re-serialize.
+     */
+    public static byte[] rawHeaderBytes(final byte[] rawValueWithHeaders) {
+        if (rawValueWithHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueWithHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        return readBytes(buffer, headersSize);
+    }
+
+    /**
      * Extract timestamp from serialized ValueTimestampHeaders.
      */
     public static long timestamp(final byte[] rawValueTimestampHeaders) {

@@ -20,8 +20,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 
-import static org.apache.kafka.streams.state.internals.Utils.headers;
 import static org.apache.kafka.streams.state.internals.Utils.rawAggregation;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeaderBytes;
 
 /**
  * Change-logging wrapper for a session bytes store whose values also carry headers.
@@ -64,7 +64,7 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
             internalContext.recordContext().timestamp(),
             aggregationWithHeaders == null
                 ? internalContext.recordContext().headers()
-                : headers(aggregationWithHeaders),
+                : new SerializedHeaders(rawHeaderBytes(aggregationWithHeaders)),
             wrapped().getPosition()
         );
     }

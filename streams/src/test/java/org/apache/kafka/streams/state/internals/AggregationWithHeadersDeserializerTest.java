@@ -129,4 +129,43 @@ public class AggregationWithHeadersDeserializerTest {
     public void shouldReturnNullForNullInput() {
         assertNull(Utils.headers(null));
     }
+
+    @Test
+    public void shouldExtractRawHeaderBytesWithHeaders() {
+        final Long aggregation = 100L;
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        headers.add("key2", "value2".getBytes());
+        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+
+        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
+        final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
+
+        final byte[] rawHeaderBytes = Utils.rawHeaderBytes(serialized);
+        assertNotNull(rawHeaderBytes);
+
+        final Headers roundTripped = HeadersDeserializer.deserialize(rawHeaderBytes);
+        assertEquals(2, roundTripped.toArray().length);
+        assertArrayEquals("value1".getBytes(), roundTripped.lastHeader("key1").value());
+        assertArrayEquals("value2".getBytes(), roundTripped.lastHeader("key2").value());
+    }
+
+    @Test
+    public void shouldExtractEmptyRawHeaderBytes() {
+        final Long aggregation = 100L;
+        final Headers headers = new RecordHeaders();
+        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+
+        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
+        final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
+
+        final byte[] rawHeaderBytes = Utils.rawHeaderBytes(serialized);
+        assertNotNull(rawHeaderBytes);
+        assertEquals(0, rawHeaderBytes.length);
+    }
+
+    @Test
+    public void shouldReturnNullRawHeaderBytesForNullInput() {
+        assertNull(Utils.rawHeaderBytes(null));
+    }
 }

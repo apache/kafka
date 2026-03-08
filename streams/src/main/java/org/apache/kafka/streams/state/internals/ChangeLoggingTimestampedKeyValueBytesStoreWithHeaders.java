@@ -22,7 +22,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
 
-import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeaderBytes;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
@@ -56,7 +56,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
                 : timestamp(valueTimestampHeaders),
             valueTimestampHeaders == null
                 ? internalContext.recordContext().headers()
-                : headers(valueTimestampHeaders)
+                : new SerializedHeaders(rawHeaderBytes(valueTimestampHeaders))
         );
     }
 
@@ -74,7 +74,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
                     : timestamp(valueTimestampHeaders),
                 valueTimestampHeaders == null
                     ? internalContext.recordContext().headers()
-                    : headers(valueTimestampHeaders)
+                    : new SerializedHeaders(rawHeaderBytes(valueTimestampHeaders))
             );
         }
         return previous;
@@ -93,7 +93,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
                     : timestamp(valueTimestampHeaders),
                 valueTimestampHeaders == null
                     ? internalContext.recordContext().headers()
-                    : headers(valueTimestampHeaders)
+                    : new SerializedHeaders(rawHeaderBytes(valueTimestampHeaders))
             );
         }
     }
