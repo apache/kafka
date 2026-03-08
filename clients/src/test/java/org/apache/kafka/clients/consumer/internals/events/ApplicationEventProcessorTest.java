@@ -202,10 +202,11 @@ public class ApplicationEventProcessorTest {
         doReturn(true).when(subscriptionState).assignFromUser(Collections.singleton(tp));
         processor.process(event);
         if (withGroupId) {
-            verify(commitRequestManager).maybeAutoCommitSyncBeforeRebalance(12345);
+            verify(commitRequestManager).maybeAutoCommitOnAssignment();
         } else {
-            verify(commitRequestManager, never()).maybeAutoCommitSyncBeforeRebalance(anyLong());
+            verify(commitRequestManager, never()).maybeAutoCommitOnAssignment();
         }
+        verify(commitRequestManager, never()).maybeAutoCommitSyncBeforeRebalance(anyLong());
         verify(metadata).requestUpdateForNewTopics();
         verify(subscriptionState).assignFromUser(Collections.singleton(tp));
         assertDoesNotThrow(() -> event.future().get());

@@ -280,7 +280,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
-    private CompletableFuture<Void> doAutoCommitAsync() {
+    private void doAutoCommitAsync() {
         OffsetCommitRequestState requestState = createOffsetCommitRequest(
             subscriptions.allConsumed(),
             Long.MAX_VALUE);
@@ -290,9 +290,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         // auto-commit after the backoff expires.
         resetAutoCommitTimer();
         maybeResetTimerWithBackoff(result);
-        // Return a Void future that completes when the commit completes (ignoring errors,
-        // consistent with async auto-commit behavior which logs but does not propagate errors)
-        return result.thenApply(v -> null);
+    }
+
+    /**
+     * Trigger a best-effort async auto-commit when assign() is called with new partitions.
+     * Fires once without blocking; the caller does not wait for the result.
+     */
+    public void maybeAutoCommitOnAssignment() {
+        if (autoCommitEnabled()) {
+            doAutoCommitAsync();
+        }
     }
 
     /**

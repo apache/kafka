@@ -1251,6 +1251,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
+    /**
+     * Best-effort, non-blocking auto-commit used when assign() is called.
+     * Fires once without blocking; on a retriable error the timer is reset to
+     * rebalanceConfig.retryBackoffMs.
+     */
+    public void maybeAutoCommitOnAssignment() {
+        if (autoCommitEnabled) {
+            nextAutoCommitTimer.reset(autoCommitIntervalMs);
+            autoCommitOffsetsAsync();
+        }
+    }
+
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
