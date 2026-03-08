@@ -32,6 +32,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -71,6 +72,10 @@ public final class GroupConfig extends AbstractConfig {
         "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
         "Non-transactional records will be returned unconditionally in either mode.";
 
+    public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG = "share.renew.acknowledge.enable";
+    public static final boolean SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT = true;
+    public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC = "Whether the renew acknowledge type is enabled for the share group.";
+
     public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "streams.session.timeout.ms";
 
     public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "streams.heartbeat.interval.ms";
@@ -102,6 +107,8 @@ public final class GroupConfig extends AbstractConfig {
     public final int streamsInitialRebalanceDelayMs;
 
     public final String shareIsolationLevel;
+
+    public final boolean shareRenewAcknowledgeEnable;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -152,6 +159,11 @@ public final class GroupConfig extends AbstractConfig {
             in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
             MEDIUM,
             SHARE_ISOLATION_LEVEL_DOC)
+        .define(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG,
+            BOOLEAN,
+            SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT,
+            MEDIUM,
+            SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -191,6 +203,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
+        this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -433,6 +446,13 @@ public final class GroupConfig extends AbstractConfig {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
         }
+    }
+    
+    /**
+     * The share group renew acknowledge enable.
+     */
+    public boolean shareRenewAcknowledgeEnable() {
+        return shareRenewAcknowledgeEnable;
     }
 
     public static void main(String[] args) {
