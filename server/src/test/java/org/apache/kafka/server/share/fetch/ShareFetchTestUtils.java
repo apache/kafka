@@ -145,12 +145,4 @@ public class ShareFetchTestUtils {
         }
     }
 
-    /**
-     * Clear all the yammer metrics.
-     */
-    public static void clearYammerMetrics() {
-        KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().forEach(
-            metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName)
-        );
-    }
 }

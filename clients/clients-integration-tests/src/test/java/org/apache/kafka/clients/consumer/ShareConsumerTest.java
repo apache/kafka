@@ -75,6 +75,7 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
@@ -184,7 +185,7 @@ public class ShareConsumerTest {
 
     @AfterEach
     public void tearDown() {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        YammerMetricsTestUtils.clearYammerMetrics();
     }
 
     @ClusterTest

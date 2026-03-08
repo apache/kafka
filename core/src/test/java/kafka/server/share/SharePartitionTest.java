@@ -55,6 +55,7 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
+import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -138,7 +139,7 @@ public class SharePartitionTest {
 
     @BeforeEach
     public void setUp() {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        YammerMetricsTestUtils.clearYammerMetrics();
         mockTimer = new MockTimer();
         sharePartitionMetrics = new SharePartitionMetrics(GROUP_ID, TOPIC_ID_PARTITION.topic(), TOPIC_ID_PARTITION.partition());
     }

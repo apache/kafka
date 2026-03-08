@@ -47,6 +47,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.Custo
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -273,7 +274,7 @@ public class RemoteLogManagerTest {
             remoteLogManager.close();
             remoteLogManager = null;
         }
-        kafka.utils.TestUtils.clearYammerMetrics();
+        YammerMetricsTestUtils.clearYammerMetrics();
     }
 
     @Test

@@ -18,6 +18,7 @@ package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
+import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ShareGroupListener;
 import org.apache.kafka.test.TestUtils;
@@ -29,7 +30,6 @@ import org.mockito.Mockito;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.clearYammerMetrics;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.yammerMetricValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,7 +41,7 @@ public class ShareSessionCacheTest {
 
     @BeforeEach
     public void setUp() {
-        clearYammerMetrics();
+        YammerMetricsTestUtils.clearYammerMetrics();
     }
 
     @Test
