@@ -98,6 +98,36 @@ public class WindowedWordCountProcessorTest {
     }
 
     @Test
+    public void shouldWorkWithInMemoryStoreUsingStateStoreContext() {
+        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+
+        final WindowStore<String, Integer> store =
+            Stores.windowStoreBuilder(Stores.inMemoryWindowStore("WindowedCounts",
+                                                                 Duration.ofDays(24),
+                                                                 Duration.ofMillis(100),
+                                                                 false),
+                                      Serdes.String(),
+                                      Serdes.Integer())
+                  .withLoggingDisabled()
+                  .withCachingDisabled()
+                  .build();
+        store.init(context.getStateStoreContext(), store);
+
+        verifyWordCountProcessorOutput(
+            context,
+            asList(
+                new CapturedForward<>(new Record<>("[alpha@100/200]", "2", 1_000L)),
+                new CapturedForward<>(new Record<>("[beta@100/200]", "1", 1_000L)),
+                new CapturedForward<>(new Record<>("[gamma@100/200]", "1", 1_000L)),
+                new CapturedForward<>(new Record<>("[delta@200/300]", "1", 1_000L)),
+                new CapturedForward<>(new Record<>("[gamma@200/300]", "1", 1_000L))
+            )
+        );
+
+        store.close();
+    }
+
+    @Test
     public void shouldWorkWithPersistentStore() throws IOException {
         final File stateDir = TestUtils.tempDirectory();
 
@@ -157,6 +187,46 @@ public class WindowedWordCountProcessorTest {
         }
     }
 
+    @Test
+    public void shouldWorkWithPersistentStoreUsingStateStoreContext() throws IOException {
+        final File stateDir = TestUtils.tempDirectory();
+
+        try {
+            final MockProcessorContext<String, String> context = new MockProcessorContext<>(
+                new Properties(),
+                new TaskId(0, 0),
+                stateDir
+            );
+
+            final WindowStore<String, Integer> store =
+                Stores.windowStoreBuilder(Stores.persistentWindowStore("WindowedCounts",
+                                                                       Duration.ofDays(24),
+                                                                       Duration.ofMillis(100),
+                                                                       false),
+                                          Serdes.String(),
+                                          Serdes.Integer())
+                      .withLoggingDisabled()
+                      .withCachingDisabled()
+                      .build();
+            store.init(context.getStateStoreContext(), store);
+
+            verifyWordCountProcessorOutput(
+                context,
+                asList(
+                    new CapturedForward<>(new Record<>("[alpha@100/200]", "2", 1_000L)),
+                    new CapturedForward<>(new Record<>("[beta@100/200]", "1", 1_000L)),
+                    new CapturedForward<>(new Record<>("[delta@200/300]", "1", 1_000L)),
+                    new CapturedForward<>(new Record<>("[gamma@100/200]", "1", 1_000L)),
+                    new CapturedForward<>(new Record<>("[gamma@200/300]", "1", 1_000L))
+                )
+            );
+
+            store.close();
+        } finally {
+            Utils.delete(stateDir);
+        }
+    }
+
     private InternalProcessorContext<?, ?> mockInternalProcessorContext(final MockProcessorContext<String, String> context) {
         return mockInternalProcessorContext(context, null);
     }
@@ -175,5 +245,20 @@ public class WindowedWordCountProcessorTest {
         }).when(internalProcessorContext).register(any(), any());
 
         return internalProcessorContext;
+    }
+
+    private void verifyWordCountProcessorOutput(final MockProcessorContext<String, String> context,
+                                                final List<CapturedForward<? extends String, ? extends String>> expected) {
+        final Processor<String, String, String, String> processor = new WindowedWordCountProcessorSupplier().get();
+        processor.init(context);
+
+        processor.process(new Record<>("key", "alpha beta gamma alpha", 101L));
+        processor.process(new Record<>("key", "gamma delta", 221L));
+
+        assertThat(context.forwarded().isEmpty(), is(true));
+
+        context.scheduledPunctuators().get(0).getPunctuator().punctuate(1_000L);
+
+        assertThat(context.forwarded(), is(expected));
     }
 }

@@ -57,6 +57,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private final long retentionPeriod;
     private final KeySchema keySchema;
 
+    private StateStoreContext stateStoreContext;
     private InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -250,12 +251,14 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final long timestamp = keySchema.segmentTimestamp(key);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
-        final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
+        final S segment = segments.getOrCreateSegmentIfLive(segmentId, stateStoreContext, observedStreamTime);
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+            if (internalProcessorContext != null) {
+                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());    
+            }
         } else {
             synchronized (position) {
-                StoreQueryUtils.updatePosition(position, internalProcessorContext);
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
                 segment.put(key, value);
             }
         }
@@ -284,7 +287,13 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
-        this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
+        if (stateStoreContext instanceof InternalProcessorContext) {
+            this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
+            this.stateStoreContext = stateStoreContext;
+        } else {
+            this.internalProcessorContext = null;
+            this.stateStoreContext = stateStoreContext;
+        }
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
@@ -300,7 +309,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
         segments.setPosition(position);
-        segments.openExisting(internalProcessorContext, observedStreamTime);
+        segments.openExisting(stateStoreContext, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
@@ -372,7 +381,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key()));
             final long segmentId = segments.segmentId(timestamp);
-            final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
+            final S segment = segments.getOrCreateSegmentIfLive(segmentId, stateStoreContext, observedStreamTime);
             if (segment != null) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
