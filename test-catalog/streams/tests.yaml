@@ -1913,12 +1913,14 @@ org.apache.kafka.streams.processor.internals.GlobalStateTaskTest:
 - shouldInitializeContext
 - shouldInitializeProcessorTopology
 - shouldInitializeStateManager
+- shouldInvokeProcessExceptionHandlerWhenEnabled
 - shouldNotCheckpointIfNotReceivedEnoughRecords
 - shouldNotCheckpointWhenFlushIntervalHasNotLapsed
 - shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler
 - shouldNotThrowStreamsExceptionWhenValueDeserializationFails
 - shouldProcessRecordsForOtherTopic
 - shouldProcessRecordsForTopic
+- shouldPropagateExceptionWhenHandlerDisabled
 - shouldThrowStreamsExceptionWhenKeyDeserializationFails
 - shouldThrowStreamsExceptionWhenValueDeserializationFails
 - shouldWipeGlobalStateDirectory

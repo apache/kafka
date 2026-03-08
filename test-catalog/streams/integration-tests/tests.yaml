@@ -60,6 +60,12 @@ org.apache.kafka.streams.integration.GlobalKTableIntegrationTest:
 - shouldKStreamGlobalKTableJoin
 - shouldKStreamGlobalKTableLeftJoin
 - shouldRestoreGlobalInMemoryKTableOnRestart
+- testProcessingExceptionHandlerContinueEnabledRestorationPhase
+- testProcessingExceptionHandlerContinueEnabledRunTimePhase
+- testProcessingExceptionHandlerDisabledRestorationPhase
+- testProcessingExceptionHandlerDisabledRunTimePhase
+- testProcessingExceptionHandlerFailEnabledRestorationPhase
+- testProcessingExceptionHandlerFailEnabledRunTimePhase
 org.apache.kafka.streams.integration.GlobalStateReprocessTest:
 - shouldReprocessWithUserProvidedStore
 org.apache.kafka.streams.integration.GlobalThreadShutDownOrderTest:
