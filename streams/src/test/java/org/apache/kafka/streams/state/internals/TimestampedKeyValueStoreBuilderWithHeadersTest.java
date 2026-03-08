@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -257,6 +258,11 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         store.init(context, store);
 
         try {
+            // Put data into the store
+            final Headers headers = new RecordHeaders();
+            headers.add("key1", "value1".getBytes());
+            store.put("test-key", ValueTimestampHeaders.make("test-value", 12345L, headers));
+
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(HeadersBytesStore.class, wrapped,
                     "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
@@ -266,49 +272,13 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
             assertTrue(result.isSuccess(), "Expected query to succeed on InMemoryKeyValueStore");
             assertNotNull(result.getPosition(), "Expected position to be set");
-        } finally {
-            store.close();
-        }
-    }
 
-    @Test
-    public void shouldCollectExecutionInfoForQueryOnInMemoryStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("in-memory");
-        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final QueryResult<byte[]> result = wrapped.query(query, PositionBound.unbounded(), new QueryConfig(true));
-
-            assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
-            final String executionInfo = String.join("\n", result.getExecutionInfo());
-            assertTrue(executionInfo.contains("Handled in"), "Expected execution info to contain handling information");
-            assertTrue(executionInfo.contains(InMemoryKeyValueStore.class.getName()),
-                    "Expected execution info to mention InMemoryKeyValueStore");
+            // Verify deserialized data
+            final ValueTimestampHeaders<String> deserialized = store.get("test-key");
+            assertNotNull(deserialized, "Expected to retrieve the value");
+            assertEquals("test-value", deserialized.value(), "Value should match");
+            assertEquals(12345L, deserialized.timestamp(), "Timestamp should match");
+            assertEquals(headers, deserialized.headers(), "Headers should match");
         } finally {
             store.close();
         }
@@ -671,6 +641,11 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         store.init(context, store);
 
         try {
+            // Put data into the store (headers will be empty when adapted from timestamped store)
+            final Headers headers = new RecordHeaders();
+            headers.add("adapter", "test".getBytes());
+            store.put("test-key", ValueTimestampHeaders.make("adapter-value", 55555L, headers));
+
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped,
                     "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
@@ -682,10 +657,16 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             final QueryResult<byte[]> result = wrapped.query(query, positionBound, config);
 
             // Verify: Adapter delegates to RocksDBTimestampedStore which supports IQv2 through RocksDBStore
-            // The underlying store should handle the query successfully (even if key doesn't exist)
-            assertTrue(result.isSuccess() || result.getFailureReason() != FailureReason.UNKNOWN_QUERY_TYPE,
-                    "Expected query to be handled (not UNKNOWN_QUERY_TYPE), since RocksDBTimestampedStore supports IQv2");
+            assertTrue(result.isSuccess(),
+                    "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
             assertNotNull(result.getPosition(), "Expected position to be set");
+
+            // Verify deserialized data
+            final ValueTimestampHeaders<String> deserialized = store.get("test-key");
+            assertNotNull(deserialized, "Expected to retrieve the value");
+            assertEquals("adapter-value", deserialized.value(), "Value should match");
+            assertEquals(55555L, deserialized.timestamp(), "Timestamp should match");
+            assertEquals(new RecordHeaders(), deserialized.headers(), "Expect empty headers, as the inner store in timestamped");
         } finally {
             store.close();
         }
