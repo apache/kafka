@@ -3082,6 +3082,35 @@ public class ShareConsumerTest {
         verifyYammerMetricCount("ackType=Renew", 0);
     }
 
+    @ClusterTest
+    public void testRenewAcknowledgementDisabled() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        alterShareRenewAcknowledgeEnable("group1", false);
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(List.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+
+            for (ConsumerRecord<byte[], byte[]> rec : records) {
+                shareConsumer.acknowledge(rec, AcknowledgeType.RENEW);
+            }
+
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+            assertEquals(1, result.size());
+            Optional<KafkaException> error = result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic()));
+            assertTrue(error.isPresent());
+            assertInstanceOf(InvalidRecordStateException.class, error.get());
+        }
+    }
+
     @ClusterTest(
         brokers = 1,
         serverProperties = {
@@ -4317,6 +4346,19 @@ public class ShareConsumerTest {
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+                .all()
+                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    private void alterShareRenewAcknowledgeEnable(String groupId, boolean newValue) {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, Boolean.toString(newValue)), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)

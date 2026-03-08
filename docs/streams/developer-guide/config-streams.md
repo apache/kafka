@@ -75,6 +75,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * num.stream.threads
     * probing.rebalance.interval.ms
     * processing.exception.handler
+    * processing.exception.handler.global.enabled (deprecated)
     * processing.guarantee
     * processor.wrapper.class
     * production.exception.handler
@@ -1446,7 +1447,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > The processing exception handler allows you to manage exceptions triggered during the processing of a record. The implemented exception handler needs to return a `FAIL` or `CONTINUE` depending on the record and the exception thrown. Returning `FAIL` will signal that Streams should shut down and `CONTINUE` will signal that Streams should ignore the issue and continue processing.
 > 
-> **Note:** This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.
+> **Note:** By default, this handler applies only to regular stream processing tasks. To enable exception handling for global stores/KTable processing (which is recommended), see `processing.exception.handler.global.enabled` below. When global exception handling is disabled (default), exceptions occurring during global store/KTable processing will bubble up to the configured uncaught exception handler.
 > 
 > The following library built-in exception handlers are available:
 > 
@@ -1483,6 +1484,32 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >             dlqTopic = .. // get the topic name from the configs map
 >         }
 >     }
+
+### processing.exception.handler.global.enabled (deprecated)
+
+> Controls whether the configured `ProcessingExceptionHandler` is invoked for exceptions occurring during global store/KTable processing. When set to `true` (recommended), the handler specified via `processing.exception.handler` will be invoked for exceptions occurring during global store/KTable processing. When set to `false` (default), exceptions from global store/KTable will not invoke the processing exception handler and will instead bubble up to the configured uncaught exception handler.
+> 
+> **Default value:** `false`
+> 
+> **Deprecated:** The config is deprecated for removal in 5.0 release. With the removal of the config, the processing exception handler will be applied during global state/KTable processing and cannot be disabled any longer. Thus, it's recommended to enable this config now, to avoid backward incompatibilities in the future.
+> 
+> **Important Notes:**
+> 
+>   * Dead Letter Queue (DLQ) functionality is not supported for global store/KTable. For global store/KTable exceptions, the record metadata will be logged and the record will not be sent to the DLQ.
+>   * When this feature is enabled, you can use either the built-in handlers (`LogAndContinueProcessingExceptionHandler` or `LogAndFailProcessingExceptionHandler`) or provide a custom implementation of `ProcessingExceptionHandler`.
+>   * For more details, see [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread).
+> 
+> **Example Configuration:**
+>     
+>     
+>     Properties streamsSettings = new Properties();
+>     
+>     // Configure the processing exception handler
+>     streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, 
+>                         LogAndContinueProcessingExceptionHandler.class);
+>     
+>     // Enable exception handling for Global KTables
+>     streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
 
 ### processing.guarantee
 

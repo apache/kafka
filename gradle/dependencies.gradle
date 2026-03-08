@@ -53,7 +53,7 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.80",
+  bcpkix: "1.83",
   caffeine: "3.2.0",
   bndlib: "7.1.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.2.0",
@@ -72,6 +72,7 @@ versions += [
   // SLF4J 2.x fluent API in test code, avoiding the runtime incompatibility.
   jetty: "12.0.25",
   jersey: "3.1.10",
+  jgit: "7.5.0.202512021534-r",
   jline: "3.30.4",
   jmh: "1.37",
   hamcrest: "3.0",
@@ -176,6 +177,11 @@ libs += [
   jettyServlets: "org.eclipse.jetty.ee10:jetty-ee10-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
   jerseyHk2: "org.glassfish.jersey.inject:jersey-hk2:$versions.jersey",
+  jgit: "org.eclipse.jgit:org.eclipse.jgit:$versions.jgit",
+  // SSH support for JGit based on Apache MINA sshd
+  jgitSshApache: "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:$versions.jgit",
+  // GPG support for JGit based on BouncyCastle (commit signing)
+  jgitGpgBc: "org.eclipse.jgit:org.eclipse.jgit.gpg.bc:$versions.jgit",
   jline: "org.jline:jline:$versions.jline",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
