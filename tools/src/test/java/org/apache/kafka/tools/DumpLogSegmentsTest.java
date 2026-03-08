@@ -337,6 +337,25 @@ public class DumpLogSegmentsTest {
         assertEquals(Collections.emptyMap(), errors.shallowOffsetNotFound);
     }
 
+    @Test
+    public void testIndexSanityCheck() throws Exception {
+        log = createTestLog();
+        addSimpleRecords(log, new ArrayList<>());
+
+        String output = runDumpLogSegments(new String[] {"--index-sanity-check", "--files", indexFilePath});
+        assertTrue(output.contains("passed sanity check"), output);
+    }
+
+    @Test
+    public void testTimeIndexVerifyOnly() throws Exception {
+        log = createTestLog();
+        addSimpleRecords(log, new ArrayList<>());
+
+        String errOutput = captureStandardErr(
+            () -> runDumpLogSegments(new String[] {"--verify-index-only", "--files", indexFilePath}));
+        assertTrue(errOutput.isEmpty(), errOutput);
+    }
+
     private int countSubstring(String str, String sub) {
         int count = 0;
         for (int i = 0; i <= str.length() - sub.length(); i++) {
@@ -1592,6 +1611,16 @@ public class DumpLogSegmentsTest {
 
         String errOutput = captureStandardErr(
             () -> runDumpLogSegments(new String[]{"--files", unknownFile.getAbsolutePath()}));
+        assertTrue(errOutput.contains("Ignoring unknown file"), errOutput);
+    }
+
+    @Test
+    public void testDumpFileWithNoDotInName() throws Exception {
+        File noDotFile = new File(logDir, "nodotfile");
+        Files.write(noDotFile.toPath(), new byte[0]);
+
+        String errOutput = captureStandardErr(
+            () -> runDumpLogSegments(new String[]{"--files", noDotFile.getAbsolutePath()}));
         assertTrue(errOutput.contains("Ignoring unknown file"), errOutput);
     }
 }
