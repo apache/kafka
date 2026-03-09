@@ -511,7 +511,7 @@ public class ReassignPartitionsCommand {
      * @param targetParts     The target partitions loaded from the JSON file.
      */
     static void clearAllThrottles(Admin adminClient,
-                                          List<Entry<TopicPartition, List<Integer>>> targetParts
+                                  List<Entry<TopicPartition, List<Integer>>> targetParts
     ) throws ExecutionException, InterruptedException {
         Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
         Set<Integer> brokersFromAssignment = new HashSet<>();
