@@ -269,6 +269,34 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
+    private <K, V> void verifyLegacyTimestampedValue(final K key,
+                                                     final V value,
+                                                     final long timestamp)
+        throws Exception {
+
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
+                        IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null) {
+                        return false;
+                    }
+
+                    final ValueAndTimestamp<V> result = store.get(key);
+                    return result != null && result.value().equals(value) && result.timestamp() == timestamp;
+                } catch (final Exception swallow) {
+                    swallow.printStackTrace();
+                    System.err.println(swallow.getMessage());
+                    return false;
+                }
+            },
+            60_000L,
+            "Could not get expected result in time.");
+    }
+
+
     private <K, V> void processKeyValueWithTimestampAndHeadersAndVerify(final K key,
                                                                         final V value,
                                                                         final long timestamp,
@@ -718,6 +746,10 @@ public class HeadersStoreUpgradeIntegrationTest {
 
         kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
         kafkaStreams.start();
+
+        // verify legacy key, values
+        verifyLegacyTimestampedValue("key1", "value1", 11L);
+        verifyLegacyTimestampedValue("key2", "value2", 22L);
 
         processKeyValueAndVerifyTimestampedValue("key3", "value3", 333L);
         processKeyValueAndVerifyTimestampedValue("key4", "value4", 444L);
