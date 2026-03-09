@@ -67,6 +67,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -97,6 +98,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -130,6 +132,11 @@ public class OffsetMetadataManagerTest {
 
             Builder withGroupMetadataManager(GroupMetadataManager groupMetadataManager) {
                 this.groupMetadataManager = groupMetadataManager;
+                return this;
+            }
+
+            Builder withMetadataImage(MetadataImage metadataImage) {
+                this.metadataImage = metadataImage;
                 return this;
             }
 
@@ -1250,6 +1257,57 @@ public class OffsetMetadataManagerTest {
         // Verify that a larger epoch is rejected.
         request.setGenerationIdOrMemberEpoch(11);
         assertThrows(IllegalGenerationException.class, () -> context.commitOffset(request));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetCommitWithZeroUuidResolvesTopicId() {
+        // Verifies that when a consumer group member commits with ZERO_UUID topic ID
+        // the topic ID is resolved from metadata for assignment epoch validation.
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(barTopicId, barTopicName, 3)
+            .build();
+
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // Create an empty group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
+            "foo",
+            true
+        );
+
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(Map.of(barTopicId, Map.of(0, 5)))
+            .build()
+        );
+
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("foo")
+            .setMemberId("member")
+            .setGenerationIdOrMemberEpoch(3) // stale member epoch
+            .setTopics(List.of(
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(barTopicName)
+                    .setTopicId(Uuid.ZERO_UUID) // ZERO_UUID topic_id
+                    .setPartitions(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100L)
+                    ))
+            ));
+
+        // Should fail because member epoch (3) < assignment epoch (5).
+        assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
+
+        // Now try with member epoch >= assignment epoch, should succeed.
+        request.setGenerationIdOrMemberEpoch(5);
+        assertDoesNotThrow(() -> context.commitOffset(request));
     }
 
     @Test
