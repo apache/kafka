@@ -39,9 +39,9 @@ public class ShareGroupConfigProvider {
      * @return The record lock duration for the group.
      */
     public int recordLockDurationMsOrDefault(String groupId, int defaultValue) {
-        return manager.groupConfig(groupId)
-            .map(GroupConfig::shareRecordLockDurationMs)
-            .orElse(defaultValue);
+        return manager.groupConfig(groupId).
+            map(GroupConfig::shareRecordLockDurationMs).
+            orElse(defaultValue);
     }
 
     /**
@@ -70,5 +70,18 @@ public class ShareGroupConfigProvider {
         return manager.groupConfig(groupId)
             .map(GroupConfig::sharePartitionMaxRecordLocks)
             .orElse(defaultValue);
+    }
+
+    /**
+     * The method is used to check if renew acknowledge is enabled for the group. If the group config
+     * is present, then the value from the group config is used. Otherwise, the default value is used.
+     *
+     * @param groupId The group id for which the renew acknowledge enable is to be checked.
+     * @return true if renew acknowledge is enabled for the group, false otherwise.
+     */
+    public boolean isRenewAcknowledgeEnabled(String groupId) {
+        return manager.groupConfig(groupId)
+            .map(GroupConfig::shareRenewAcknowledgeEnable)
+            .orElse(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT);
     }
 }

@@ -2305,6 +2305,11 @@ public class SharePartition {
                 byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
 
                 if (ackType == AcknowledgeType.RENEW.id) {
+                    if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                        log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                        return Optional.of(new InvalidRecordStateException(
+                            "Renewing acquisition locks is not enabled for the group."));
+                    }
                     // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
                     // We do not care about recordState map here.
                     // Only valid for ACQUIRED offsets; the check above ensures this.
@@ -2378,6 +2383,11 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
+                if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                    log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                    return Optional.of(new InvalidRecordStateException(
+                        "Renewing acquisition locks is not enabled for the group."));
+                }
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
                 log.debug("Renewing acquisition lock for {}-{} with batch {}-{} for member {}.",

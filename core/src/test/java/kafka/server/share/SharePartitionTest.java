@@ -10382,6 +10382,79 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testRenewAcknowledgeDisabledWithCompleteBatchAck() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManagerWithRenewDisabled())
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, records.size());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        CompletableFuture<Void> future = sharePartition.acknowledge(MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id))));
+
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("No exception thrown");
+        } catch (Exception e) {
+            assertNotNull(e);
+            assertInstanceOf(InvalidRecordStateException.class, e.getCause());
+            assertTrue(e.getCause().getMessage().contains("Renewing acquisition locks is not enabled for the group."));
+        }
+
+        // The batch should still be in ACQUIRED state since the renew was rejected.
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testRenewAcknowledgeDisabledWithPerOffsetAck() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManagerWithRenewDisabled())
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
+        assertEquals(1, records.size());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        CompletableFuture<Void> future = sharePartition.acknowledge(MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 1,
+                List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id))));
+
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("No exception thrown");
+        } catch (Exception e) {
+            assertNotNull(e);
+            assertInstanceOf(InvalidRecordStateException.class, e.getCause());
+            assertTrue(e.getCause().getMessage().contains("Renewing acquisition locks is not enabled for the group."));
+        }
+
+        // The offsets should still be in ACQUIRED state since the renew was rejected
+        // at the first offset. The batch has per-offset state at this point because the
+        // ack had per-offset ack types.
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertNotNull(batch.offsetState());
+        assertEquals(RecordState.ACQUIRED, batch.offsetState().get(0L).state());
+        assertEquals(RecordState.ACQUIRED, batch.offsetState().get(1L).state());
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());
+    }
+
+    @Test
     public void testAcquireSingleBatchInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
@@ -12444,6 +12517,15 @@ public class SharePartitionTest {
 
         // Now canAcquireRecords should be true: 10 < 500.
         assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    private static GroupConfigManager groupConfigManagerWithRenewDisabled() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
+        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
+        return groupConfigManager;
     }
 
     private static class SharePartitionBuilder {
