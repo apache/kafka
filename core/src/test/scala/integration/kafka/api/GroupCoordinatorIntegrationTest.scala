@@ -374,12 +374,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       }
 
       // Upgrade the group to the streams protocol.
-      withStreamsApp(applicationId = "grp5", inputTopic = "foo") { streams =>
-        TestUtils.waitUntilTrue(
-          () => streams.state() == KafkaStreams.State.RUNNING,
-          msg = "Streams app did not reach RUNNING state"
-        )
-      }
+      withStreamsApp(applicationId = "grp5", inputTopic = "foo")
     }
 
     // Force a compaction.
@@ -435,12 +430,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       configureDeleteRetention()
 
       // Upgrade the group to the streams protocol.
-      withStreamsApp(applicationId = "grp5", inputTopic = "foo") { streams =>
-        TestUtils.waitUntilTrue(
-          () => streams.state() == KafkaStreams.State.RUNNING,
-          msg = "Streams app did not reach RUNNING state"
-        )
-      }
+      withStreamsApp(applicationId = "grp5", inputTopic = "foo")
     }
 
     // Force compaction twice to remove tombstones: the first pass sets
@@ -582,7 +572,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   private def withStreamsApp(
     applicationId: String,
     inputTopic: String
-  )(f: KafkaStreams => Unit): Unit = {
+  ): Unit = {
     val builder = new StreamsBuilder()
     builder.stream(inputTopic)
 
@@ -598,7 +588,10 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     val streams = new KafkaStreams(builder.build(), props)
     try {
       streams.start()
-      f(streams)
+      TestUtils.waitUntilTrue(
+        () => streams.state() == KafkaStreams.State.RUNNING,
+        msg = "Streams app did not reach RUNNING state"
+      )
     } finally {
       streams.close(Duration.ofSeconds(30))
       streams.cleanUp()
