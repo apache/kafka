@@ -20,6 +20,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes.ListSerde;
 import org.apache.kafka.common.utils.Utils;
 
@@ -160,6 +162,11 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     @Override
     public List<Inner> deserialize(String topic, byte[] data) {
+        return deserialize(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public List<Inner> deserialize(String topic, Headers headers, byte[] data) {
         if (data == null) {
             return null;
         }
@@ -184,7 +191,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                     log.trace("Deserialized list so far: {}", deserializedList); // avoid logging actual data above TRACE level since it may contain sensitive information
                     throw new SerializationException("End of the stream was reached prematurely");
                 }
-                deserializedList.add(inner.deserialize(topic, payload));
+                deserializedList.add(inner.deserialize(topic, headers, payload));
             }
             return deserializedList;
         } catch (IOException e) {
