@@ -740,6 +740,9 @@ org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategyTest:
 - testTimestamp
 - testValidator
 org.apache.kafka.coordinator.group.UtilsTest:
+- testAssignmentFromTopicPartitionsWithEpochsProvided
+- testAssignmentFromTopicPartitionsWithNegativeDefaultEpoch
+- testAssignmentFromTopicPartitionsWithUnequalEpochLength
 - testComputeGroupHashWithDifferentOrder
 - testComputeGroupHashWithEmptyMap
 - testComputeGroupHashWithSameKeyButDifferentValue
@@ -958,6 +961,7 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMemberTest:
 - testNewMember
 - testUpdateMember
 - testUpdateWithConsumerGroupCurrentMemberAssignmentValue
+- testUpdateWithConsumerGroupCurrentMemberAssignmentValueWithNegativeEpoch
 - testUpdateWithConsumerGroupMemberMetadataValue
 org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testAddPartitionEpochs
