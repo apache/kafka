@@ -19,14 +19,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.AlterConfigOp;
-import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -148,88 +141,6 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         processExactlyOneRecord(streamsBuilder, props, "3", "C");
-    }
-
-    @Test
-    public void shouldMigrateFromClassicToStreamsAfterBrokerRestart() throws Exception {
-        // This test reproduces KAFKA-20254: after log compaction removes the
-        // GroupMetadata tombstone from __consumer_offsets, offset commit records
-        // (which precede the streams group records in the log) create a simple
-        // classic group during replay, and then the streams group records must
-        // handle this existing simple classic group.
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
-        final KStream<String, String> input = streamsBuilder.stream(
-            inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
-        input.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-
-        final Properties props = props();
-
-        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-        processExactlyOneRecord(streamsBuilder, props, "1", "A", true);
-
-        // Set delete.retention.ms=0 on __consumer_offsets before the tombstone
-        // is written. This ensures that when compaction runs later, the
-        // GroupMetadata tombstone will be eligible for removal.
-        configureDeleteRetention();
-
-        // Migrate to the streams protocol. Don't process any records so
-        // the streams group doesn't commit offsets — this way the classic
-        // group's offset commits survive compaction.
-        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
-        kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
-        kafkaStreams.start();
-        TestUtils.waitForCondition(
-            () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
-            "Streams app did not reach RUNNING state");
-        kafkaStreams.close();
-        kafkaStreams = null;
-
-        // Force compaction: the first pass sets deleteHorizonMs on tombstones.
-        // Then write a single offset commit to create dirty data so the second
-        // pass re-cleans the segment and removes the expired tombstones.
-        CLUSTER.rollAndCompactConsumerOffsets();
-        writeOneOffsetCommit();
-        CLUSTER.rollAndCompactConsumerOffsets();
-
-        // Restart the broker to force replay of __consumer_offsets.
-        CLUSTER.shutdownBroker(0);
-        CLUSTER.startBroker(0);
-
-        // Verify the broker can still serve the streams group after replay.
-        processExactlyOneRecord(streamsBuilder, props, "2", "B");
-    }
-
-    private void configureDeleteRetention() throws Exception {
-        try (final Admin adminClient = Admin.create(
-            Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
-            final ConfigResource resource = new ConfigResource(
-                ConfigResource.Type.TOPIC, "__consumer_offsets");
-            adminClient.incrementalAlterConfigs(Map.of(resource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.DELETE_RETENTION_MS_CONFIG, "0"), AlterConfigOp.OpType.SET),
-                new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.0"), AlterConfigOp.OpType.SET)
-            ))).all().get();
-        }
-    }
-
-    private void writeOneOffsetCommit() {
-        // Write a single offset commit to create dirty data past the cleaner
-        // checkpoint so the cleaner will re-process previously compacted
-        // segments on the next compaction pass.
-        final Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "compaction-trigger");
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-        try (final KafkaConsumer<String, String> consumer =
-                 new KafkaConsumer<>(consumerProps)) {
-            final TopicPartition tp = new TopicPartition(inputTopic, 0);
-            consumer.assign(List.of(tp));
-            consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0)));
-        }
     }
 
     @Test

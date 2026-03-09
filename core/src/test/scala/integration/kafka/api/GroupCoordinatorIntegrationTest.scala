@@ -244,23 +244,17 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         numPartitions = 3
       )
 
-      // Create a classic group grp4 with one member and commit offsets.
-      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
+      // Create a classic group grp4 with one member. Upgrades the group to the consumer
+      // protocol.
+      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
         consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
         }, msg = "Consumer did not get an non empty assignment")
-        consumer.commitSync()
       }
 
-      // Set delete.retention.ms=0 before the tombstone is written so that
-      // compaction will remove it.
-      configureDeleteRetention()
-
-      // Upgrade the group to the consumer protocol. Don't commit offsets
-      // so the classic group's offset commits survive compaction.
-      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CONSUMER, enableAutoCommit = false) { consumer =>
+      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
         consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
@@ -269,11 +263,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       }
     }
 
-    // Force compaction: the first pass sets deleteHorizonMs on tombstones.
-    // Then write a single offset commit to create dirty data so the second
-    // pass re-cleans the segment and removes the expired tombstones.
-    rollAndCompactConsumerOffsets()
-    writeOneOffsetCommit()
+    // Force a compaction.
     rollAndCompactConsumerOffsets()
 
     // Restart the broker to reload the group coordinator.
@@ -301,6 +291,71 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
+  def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedConsumerGroupAndTombstoneRemoved(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a classic group with one member and commit offsets.
+      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
+        consumer.subscribe(java.util.List.of("foo"))
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+        consumer.commitSync()
+      }
+
+      // Set delete.retention.ms=0 before the tombstone is written so that
+      // compaction will remove it.
+      configureDeleteRetention()
+
+      // Upgrade the group to the consumer protocol. Don't commit offsets
+      // so the classic group's offset commits survive compaction.
+      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CONSUMER, enableAutoCommit = false) { consumer =>
+        consumer.subscribe(java.util.List.of("foo"))
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+      }
+    }
+
+    // Force compaction twice to remove tombstones: the first pass sets
+    // deleteHorizonMs, and the second pass removes them.
+    rollAndCompactConsumerOffsets()
+    writeOneOffsetCommit()
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. Without the fix for KAFKA-20254, the offset
+    // commit records create a simple classic group during replay and the
+    // consumer group records fail to load.
+    withAdmin { admin =>
+      val groups = admin
+        .describeConsumerGroups(java.util.List.of("grp4"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      assertDescribedGroup(groups, "grp4", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedStreamsGroup(): Unit = {
     withAdmin { admin =>
       TestUtils.createTopicWithAdminRaw(
@@ -309,7 +364,63 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         numPartitions = 3
       )
 
-      // Create a classic group grp5 with one member and commit offsets.
+      // Create a classic group with one member.
+      withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
+        consumer.subscribe(java.util.List.of("foo"))
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+      }
+
+      // Upgrade the group to the streams protocol.
+      withStreamsApp(applicationId = "grp5", inputTopic = "foo") { streams =>
+        TestUtils.waitUntilTrue(
+          () => streams.state() == KafkaStreams.State.RUNNING,
+          msg = "Streams app did not reach RUNNING state"
+        )
+      }
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeStreamsGroups(java.util.List.of("grp5"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      val group = groups("grp5").get(10, TimeUnit.SECONDS)
+      assertEquals("grp5", group.groupId)
+      assertEquals(GroupState.EMPTY, group.groupState)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedStreamsGroupAndTombstoneRemoved(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a classic group with one member and commit offsets.
       withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
         consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
@@ -332,9 +443,8 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       }
     }
 
-    // Force compaction: the first pass sets deleteHorizonMs on tombstones.
-    // Then write a single offset commit to create dirty data so the second
-    // pass re-cleans the segment and removes the expired tombstones.
+    // Force compaction twice to remove tombstones: the first pass sets
+    // deleteHorizonMs, and the second pass removes them.
     rollAndCompactConsumerOffsets()
     writeOneOffsetCommit()
     rollAndCompactConsumerOffsets()
@@ -344,8 +454,9 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     cluster.startBroker(0)
 
     // Verify the state of the groups to ensure that the group coordinator
-    // was correctly loaded. If replaying any of the records fails, the
-    // group coordinator won't be available.
+    // was correctly loaded. Without the fix for KAFKA-20254, the offset
+    // commit records create a simple classic group during replay and the
+    // streams group records fail to load.
     withAdmin { admin =>
       val groups = admin
         .describeStreamsGroups(java.util.List.of("grp5"))
