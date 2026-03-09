@@ -20,7 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.utils.PrimitiveRef;
+
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
@@ -225,44 +225,42 @@ public class TransactionIndex implements Closeable {
         if (channel == null)
             return List.of();
 
-        return () -> {
-            ByteBuffer buffer = ByteBuffer.allocate(ABORTED_TXN_RECORD_SIZE);
-            PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
-            return new Iterator<>() {
+        return () -> new Iterator<>() {
+            private final ByteBuffer buffer = ByteBuffer.allocate(ABORTED_TXN_RECORD_SIZE);
+            private int position = 0;
 
-                @Override
-                public boolean hasNext() {
-                    try {
-                        return channel.position() - position.value >= ABORTED_TXN_RECORD_SIZE;
-                    } catch (IOException e) {
-                        throw new KafkaException("Failed read position from the transaction index " + file.getAbsolutePath(), e);
-                    }
+            @Override
+            public boolean hasNext() {
+                try {
+                    return channel.position() - position >= ABORTED_TXN_RECORD_SIZE;
+                } catch (IOException e) {
+                    throw new KafkaException("Failed read position from the transaction index " + file.getAbsolutePath(), e);
                 }
+            }
 
-                @Override
-                public AbortedTxnWithPosition next() {
-                    try {
-                        buffer.clear();
-                        Utils.readFully(channel, buffer, position.value);
-                        buffer.flip();
+            @Override
+            public AbortedTxnWithPosition next() {
+                try {
+                    buffer.clear();
+                    Utils.readFully(channel, buffer, position);
+                    buffer.flip();
 
-                        short version = buffer.getShort();
-                        if (version < AbortedTxn.LOWEST_SUPPORTED_VERSION || version > AbortedTxn.HIGHEST_SUPPORTED_VERSION)
-                            throw new KafkaException("Unexpected aborted transaction version " + version
-                                + " in transaction index " + file.getAbsolutePath() + ", supported version range is "
-                                + AbortedTxn.LOWEST_SUPPORTED_VERSION + " to " + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
-                        AbortedTxn abortedTxn = new AbortedTxn(new ByteBufferAccessor(buffer), version);
-                        AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position.value);
-                        position.value += ABORTED_TXN_RECORD_SIZE;
-                        return nextEntry;
-                    } catch (IOException e) {
-                        // We received an unexpected error reading from the index file. We propagate this as an
-                        // UNKNOWN error to the consumer, which will cause it to retry the fetch.
-                        throw new KafkaException("Failed to read from the transaction index " + file.getAbsolutePath(), e);
-                    }
+                    short version = buffer.getShort();
+                    if (version < AbortedTxn.LOWEST_SUPPORTED_VERSION || version > AbortedTxn.HIGHEST_SUPPORTED_VERSION)
+                        throw new KafkaException("Unexpected aborted transaction version " + version
+                            + " in transaction index " + file.getAbsolutePath() + ", supported version range is "
+                            + AbortedTxn.LOWEST_SUPPORTED_VERSION + " to " + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
+                    AbortedTxn abortedTxn = new AbortedTxn(new ByteBufferAccessor(buffer), version);
+                    AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position);
+                    position += ABORTED_TXN_RECORD_SIZE;
+                    return nextEntry;
+                } catch (IOException e) {
+                    // We received an unexpected error reading from the index file. We propagate this as an
+                    // UNKNOWN error to the consumer, which will cause it to retry the fetch.
+                    throw new KafkaException("Failed to read from the transaction index " + file.getAbsolutePath(), e);
                 }
+            }
 
-            };
         };
     }
 
