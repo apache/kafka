@@ -93,8 +93,8 @@ public class ClientAssertionRequestFormatter implements HttpRequestFormatter, Cl
         // grant_type: Encoded per RFC 6749 Section 4.4.2
         requestParameters.append("&grant_type=").append(URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8));
         if (!Utils.isBlank(clientId)) {
-            // client_id: Typically an alphanumeric identifier, no encoding needed
-            requestParameters.append("&client_id=").append(clientId);
+            // client_id: Encoded for consistency with other parameters per RFC 6749
+            requestParameters.append("&client_id=").append(URLEncoder.encode(clientId, StandardCharsets.UTF_8));
         }
         if (!Utils.isBlank(scope)) {
             // scope: May contain special characters, encoded per RFC 6749 Section 3.3
@@ -102,7 +102,7 @@ public class ClientAssertionRequestFormatter implements HttpRequestFormatter, Cl
             requestParameters.append("&scope=").append(encodedScope);
         }
 
-        return String.valueOf(requestParameters);
+        return requestParameters.toString();
     }
 
     @Override

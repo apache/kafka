@@ -82,7 +82,7 @@ public class ClientSecretRequestFormatter implements HttpRequestFormatter {
             throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, clientId);
 
         if (Utils.isBlank(clientSecret))
-            throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, clientId);
+            throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, clientSecret);
 
         clientId = clientId.trim();
         clientSecret = clientSecret.trim();
