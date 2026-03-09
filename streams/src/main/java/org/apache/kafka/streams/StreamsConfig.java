@@ -1536,6 +1536,12 @@ public class StreamsConfig extends AbstractConfig {
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
         verifyStreamsProtocolCompatibility(doLog);
+        if (!getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG)) {
+            log.warn("Processing exception handler is not enabled for the GlobalThread. " +
+                "It's recommended to set `" + StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG + "` to true to enable it. " +
+                "Enabling the processing exception handler for global state/KTable processing now, ensures future backward compatibility. " +
+                "The processing exception handler will get enabled by default with Apache Kafka 5.0 release.");
+        }
     }
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
