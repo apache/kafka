@@ -66,8 +66,8 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets}
 import org.apache.kafka.server.{HostedPartition, PartitionFetchState}
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteFetch, DelayedRemoteListOffsets}
 import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics
@@ -261,8 +261,8 @@ class ReplicaManagerTest {
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager)
     try {
-      def callback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
-        assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
+      def callback(responseStatus: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+        assert(responseStatus.values().iterator().next().error == Errors.INVALID_REQUIRED_ACKS)
       }
       rm.appendRecords(
         timeout = 0,
@@ -2459,8 +2459,8 @@ class ReplicaManagerTest {
     numOfRecords: Int
   ): AtomicReference[PartitionResponse] = {
     val produceResult = new AtomicReference[PartitionResponse]()
-    def callback(response: Map[TopicIdPartition, PartitionResponse]): Unit = {
-      produceResult.set(response(topicPartition))
+    def callback(response: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+      produceResult.set(response.get(topicPartition))
     }
 
     val records = MemoryRecords.withRecords(
@@ -2706,10 +2706,10 @@ class ReplicaManagerTest {
                             transactionVersion: Short = TransactionVersion.TV_UNKNOWN): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     val topicIdPartition = new TopicIdPartition(topicId, partition)
-    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(topicIdPartition)
-      assertTrue(response.isDefined)
-      result.fire(response.get)
+      assertNotNull(response)
+      result.fire(response)
     }
 
     replicaManager.appendRecords(
