@@ -32,6 +32,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -52,6 +53,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String SHARE_RECORD_LOCK_DURATION_MS_CONFIG = "share.record.lock.duration.ms";
 
+    public static final String SHARE_DELIVERY_COUNT_LIMIT_CONFIG = "share.delivery.count.limit";
+
     public static final String SHARE_AUTO_OFFSET_RESET_CONFIG = "share.auto.offset.reset";
     public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetResetStrategy.LATEST.name();
     public static final String SHARE_AUTO_OFFSET_RESET_DOC = "The strategy to initialize the share-partition start offset. " +
@@ -68,6 +71,10 @@ public final class GroupConfig extends AbstractConfig {
         "If set to \"read_committed\", the share group will only deliver transactional records which have been committed. " +
         "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
         "Non-transactional records will be returned unconditionally in either mode.";
+
+    public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG = "share.renew.acknowledge.enable";
+    public static final boolean SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT = true;
+    public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC = "Whether the renew acknowledge type is enabled for the share group.";
 
     public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "streams.session.timeout.ms";
 
@@ -87,6 +94,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public final int shareRecordLockDurationMs;
 
+    public final int shareDeliveryCountLimit;
+
     public final String shareAutoOffsetReset;
 
     public final int streamsSessionTimeoutMs;
@@ -98,6 +107,8 @@ public final class GroupConfig extends AbstractConfig {
     public final int streamsInitialRebalanceDelayMs;
 
     public final String shareIsolationLevel;
+
+    public final boolean shareRenewAcknowledgeEnable;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -130,6 +141,12 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(1000),
             MEDIUM,
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
+        .define(SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
+            INT,
+            ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT,
+            atLeast(2),
+            MEDIUM,
+            ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
         .define(SHARE_AUTO_OFFSET_RESET_CONFIG,
             STRING,
             SHARE_AUTO_OFFSET_RESET_DEFAULT,
@@ -142,6 +159,11 @@ public final class GroupConfig extends AbstractConfig {
             in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
             MEDIUM,
             SHARE_ISOLATION_LEVEL_DOC)
+        .define(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG,
+            BOOLEAN,
+            SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT,
+            MEDIUM,
+            SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -174,12 +196,14 @@ public final class GroupConfig extends AbstractConfig {
         this.shareSessionTimeoutMs = getInt(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         this.shareHeartbeatIntervalMs = getInt(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        this.shareDeliveryCountLimit = getInt(SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
         this.shareAutoOffsetReset = getString(SHARE_AUTO_OFFSET_RESET_CONFIG);
         this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
+        this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -199,7 +223,7 @@ public final class GroupConfig extends AbstractConfig {
      */
     public static void validateNames(Properties props) {
         Set<String> names = configNames();
-        for (Object name : props.keySet()) {
+        for (String name : props.stringPropertyNames()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
@@ -216,6 +240,7 @@ public final class GroupConfig extends AbstractConfig {
         int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         int shareSessionTimeout = (Integer) valueMaps.get(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        int shareDeliveryCountLimit = (Integer) valueMaps.get(SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
         int streamsSessionTimeoutMs = (Integer) valueMaps.get(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         int streamsHeartbeatIntervalMs = (Integer) valueMaps.get(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         int streamsNumStandbyReplicas = (Integer) valueMaps.get(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
@@ -258,6 +283,14 @@ public final class GroupConfig extends AbstractConfig {
         if (shareRecordLockDurationMs > shareGroupConfig.shareGroupMaxRecordLockDurationMs()) {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be less than or equal to " +
                 ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
+        }
+        if (shareDeliveryCountLimit < shareGroupConfig.shareGroupMinDeliveryCountLimit()) {
+            throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be greater than or equal to " +
+                    ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
+        }
+        if (shareDeliveryCountLimit > shareGroupConfig.shareGroupMaxDeliveryCountLimit()) {
+            throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be less than or equal to " +
+                    ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
         }
         if (streamsHeartbeatIntervalMs < groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
@@ -355,6 +388,10 @@ public final class GroupConfig extends AbstractConfig {
         return shareHeartbeatIntervalMs;
     }
 
+    public int shareDeliveryCountLimit() {
+        return shareDeliveryCountLimit;
+    }
+
     /**
      * The share group record lock duration milliseconds.
      */
@@ -409,6 +446,13 @@ public final class GroupConfig extends AbstractConfig {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
         }
+    }
+    
+    /**
+     * The share group renew acknowledge enable.
+     */
+    public boolean shareRenewAcknowledgeEnable() {
+        return shareRenewAcknowledgeEnable;
     }
 
     public static void main(String[] args) {

@@ -135,7 +135,7 @@ public class TargetAssignmentBuilderBenchmark {
     private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(
         Map<String, ConsumerGroupMember> members
     ) {
-        this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(
+        this.groupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(
             members,
             subscriptionType,
             topicResolver

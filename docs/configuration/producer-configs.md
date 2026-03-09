@@ -26,4 +26,4 @@ type: docs
 -->
 
 
-Below is the producer configuration: {{< include-html file="/static/43/generated/producer_config.html" >}} 
+Below is the producer configuration: {{< include-html file="/static/{version}/generated/producer_config.html" >}} 

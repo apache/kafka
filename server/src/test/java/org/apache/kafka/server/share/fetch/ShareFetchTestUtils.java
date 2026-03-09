@@ -19,10 +19,10 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.test.TestUtils;
 

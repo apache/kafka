@@ -37,6 +37,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Map;
+
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -208,21 +210,21 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldFlushTimestampedStore() {
+    public void shouldCommitTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        wrapper.flush();
+        wrapper.commit(Map.of());
 
-        verify(timestampedStore).flush();
+        verify(timestampedStore).commit(Map.of());
     }
 
     @Test
-    public void shouldFlushVersionedStore() {
+    public void shouldCommitVersionedStore() {
         givenWrapperWithVersionedStore();
 
-        wrapper.flush();
+        wrapper.commit(Map.of());
 
-        verify(versionedStore).flush();
+        verify(versionedStore).commit(Map.of());
     }
 
     @Test

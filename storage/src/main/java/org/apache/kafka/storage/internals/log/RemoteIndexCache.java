@@ -30,6 +30,7 @@ import org.apache.kafka.server.util.KafkaScheduler;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.github.benmanes.caffeine.cache.Ticker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -120,10 +122,38 @@ public class RemoteIndexCache implements Closeable {
      * @param logDir               log directory
      */
     public RemoteIndexCache(long maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
+        this(maxSize, -1L, false, remoteStorageManager, logDir);
+    }
+
+    /**
+     * Creates RemoteIndexCache with the given configs.
+     *
+     * @param maxSize              maximum bytes size of segment index entries to be cached.
+     * @param ttlMs                maximum time in milliseconds an entry can remain in cache after last access. -1 to disable.
+     * @param recordStats          whether to record cache statistics. Recording statistics requires bookkeeping with each operation.
+     * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
+     * @param logDir               log directory
+     */
+    public RemoteIndexCache(long maxSize, long ttlMs, boolean recordStats, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
+        this(maxSize, ttlMs, recordStats, remoteStorageManager, logDir, null);
+    }
+
+    /**
+     * Creates RemoteIndexCache with the given configs and custom ticker (for testing).
+     *
+     * @param maxSize              maximum bytes size of segment index entries to be cached.
+     * @param ttlMs                maximum time in milliseconds an entry can remain in cache after last access. -1 to disable.
+     * @param recordStats          whether to record cache statistics. Recording statistics requires bookkeeping with each operation.
+     * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
+     * @param logDir               log directory
+     * @param ticker               custom ticker for testing time-based eviction (null for system ticker)
+     */
+    public RemoteIndexCache(long maxSize, long ttlMs, boolean recordStats, RemoteStorageManager remoteStorageManager, String logDir,
+                           Ticker ticker) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
-        internalCache = initEmptyCache(maxSize);
+        internalCache = initEmptyCache(maxSize, ttlMs, recordStats, ticker);
         init();
         cleanerScheduler.startup();
     }
@@ -138,10 +168,24 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
-        return Caffeine.newBuilder()
+    private Cache<Uuid, Entry> initEmptyCache(long maxSize, long ttlMs, boolean recordStats, Ticker ticker) {
+        Caffeine<Uuid, Entry> builder = Caffeine.newBuilder()
                 .maximumWeight(maxSize)
-                .weigher((Uuid key, Entry entry) -> (int) entry.entrySizeBytes)
+                .weigher((Uuid key, Entry entry) -> (int) entry.entrySizeBytes);
+
+        if (recordStats) {
+            builder.recordStats();
+        }
+
+        if (ticker != null) {
+            builder.ticker(ticker);
+        }
+
+        if (ttlMs > 0) {
+            builder.expireAfterAccess(ttlMs, TimeUnit.MILLISECONDS);
+        }
+
+        return builder
                 // This listener is invoked each time an entry is being automatically removed due to eviction. The cache will invoke this listener
                 // during the atomic operation to remove the entry (refer: https://github.com/ben-manes/caffeine/wiki/Removal),
                 // hence, care must be taken to ensure that this operation is not expensive. Note that this listener is not invoked when

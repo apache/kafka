@@ -103,10 +103,11 @@ Guide](https://kafka.apache.org/protocol.html).
 
 Nullable Fields
 ---------------
-Booleans, ints, floats and uuid can never be null.  However, fields that are strings,
-bytes, records, struct, or arrays may optionally be "nullable".  When a field is 
-"nullable", that simply means that we are prepared to serialize and deserialize
-null entries for that field.
+Booleans, ints, floats and uuid can never be null. Uuid fields use a special zero uuid
+value (all bits set to 0) as a sentinel to represent "no UUID" instead of null. However,
+fields that are strings, bytes, records, struct, or arrays may optionally be "nullable".
+When a field is "nullable", that simply means that we are prepared to serialize and
+deserialize null entries for that field.
 
 If you want to declare a field as nullable, you set "nullableVersions" for that
 field.  Nullability is implemented as a version range in order to accommodate a
@@ -247,6 +248,11 @@ in this set will be accessible in O(1) time with an automatically generated
 "find" function.  The order of elements in the set will still be preserved,
 however.  New entries that are added to the set always show up as last in the
 ordering.
+
+Note that "mapKey" does not affect how the data is sent over the network.  It
+only affects the in-memory data structure used by the generated code.  Adding or
+removing "mapKey" on an existing field is not an incompatible change and does
+not require a new version in "validVersions".
 
 Incompatible Changes
 --------------------

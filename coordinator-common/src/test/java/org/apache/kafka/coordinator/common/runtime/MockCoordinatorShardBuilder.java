@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<MockCoordinatorShard, String> {
     private SnapshotRegistry snapshotRegistry;
-    private CoordinatorTimer<Void, String> timer;
+    private CoordinatorTimer<String> timer;
     private CoordinatorExecutor<String> executor;
 
     @Override
@@ -63,7 +63,7 @@ public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<Mock
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withTimer(
-        CoordinatorTimer<Void, String> timer
+        CoordinatorTimer<String> timer
     ) {
         this.timer = timer;
         return this;

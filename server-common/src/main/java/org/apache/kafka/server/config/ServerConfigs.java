@@ -19,7 +19,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 

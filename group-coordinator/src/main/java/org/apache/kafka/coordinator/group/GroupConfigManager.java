@@ -76,9 +76,10 @@ public class GroupConfigManager implements AutoCloseable {
     /**
      * Validate the given properties.
      *
-     * @param newGroupConfig                 The new group config.
-     * @param groupCoordinatorConfig         The group coordinator config.
-     * @throws InvalidConfigurationException If validation fails
+     * @param newGroupConfig         The new group config.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     * @throws InvalidConfigurationException If validation fails.
      */
     public static void validate(
         Properties newGroupConfig,
@@ -86,7 +87,7 @@ public class GroupConfigManager implements AutoCloseable {
         ShareGroupConfig shareGroupConfig
     ) {
         Properties combinedConfigs = new Properties();
-        combinedConfigs.putAll(groupCoordinatorConfig.extractConsumerGroupConfigMap());
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
         combinedConfigs.putAll(newGroupConfig);
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }

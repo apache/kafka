@@ -26,8 +26,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
-class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment>, Segment {
-    public final long id;
+class KeyValueSegment extends RocksDBStore implements Segment {
+    private final long id;
 
     KeyValueSegment(final String segmentName,
                     final String windowName,
@@ -40,6 +40,11 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
     }
 
     @Override
+    public long id() {
+        return id;
+    }
+
+    @Override
     public void destroy() throws IOException {
         Utils.delete(dbDir);
     }
@@ -47,11 +52,6 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
     @Override
     public synchronized void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
         super.deleteRange(keyFrom, keyTo);
-    }
-
-    @Override
-    public int compareTo(final KeyValueSegment segment) {
-        return Long.compare(id, segment.id);
     }
 
     @Override

@@ -131,10 +131,13 @@ class ShareConsumerPerformanceService(PerformanceService):
             last = line
 
         # Parse and save the last line's information
+        # The script kafka-share-consumer-perf-test.sh first prints the header line in the following format:
+        #   start.time, end.time, data.consumed.in.MB, MB.sec, nMsg.sec, data.consumed.in.nMsg, fetch.time.ms
+        # The corresponding results are then printed in the same order, so we can parse the last line for the results.
         if last is not None:
             parts = last.split(',')
             self.results[idx-1] = {
                 'total_mb': float(parts[2]),
                 'mbps': float(parts[3]),
-                'records_per_sec': float(parts[5]),
+                'records_per_sec': float(parts[4]),
             }
