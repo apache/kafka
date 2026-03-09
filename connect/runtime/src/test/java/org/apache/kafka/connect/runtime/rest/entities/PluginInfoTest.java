@@ -17,9 +17,15 @@
 package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
+import org.apache.kafka.connect.tools.MockSinkConnector;
+import org.apache.kafka.connect.tools.MockSourceConnector;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,5 +40,35 @@ public class PluginInfoTest {
         assertFalse(filter.equals(new Object()));
         assertFalse(filter.equals(null));
         assertTrue(filter.equals(PluginDesc.UNDEFINED_VERSION));
+    }
+
+    @Test
+    public void testPluginInfoJsonSerialization() throws Exception {
+        ClassLoader classLoader = PluginInfoTest.class.getClassLoader();
+        PluginInfo sinkInfo = new PluginInfo(
+            new PluginDesc<>(MockSinkConnector.class, "1.0.0", PluginType.SINK, classLoader)
+        );
+        PluginInfo sourceInfo = new PluginInfo(
+            new PluginDesc<>(MockSourceConnector.class, "2.0.0", PluginType.SOURCE, classLoader)
+        );
+
+        final ObjectMapper objectMapper = new ObjectMapper();
+
+        // Serialize to JSON
+        String serializedSink = objectMapper.writeValueAsString(sinkInfo);
+        String serializedSource = objectMapper.writeValueAsString(sourceInfo);
+
+        // Verify type field is lowercase in JSON
+        assertTrue(serializedSink.contains("\"type\":\"sink\""),
+            "Expected type to be lowercase 'sink' but got: " + serializedSink);
+        assertTrue(serializedSource.contains("\"type\":\"source\""),
+            "Expected type to be lowercase 'source' but got: " + serializedSource);
+
+        // Deserialize back and verify
+        PluginInfo deserializedSink = objectMapper.readValue(serializedSink, PluginInfo.class);
+        PluginInfo deserializedSource = objectMapper.readValue(serializedSource, PluginInfo.class);
+
+        assertEquals(PluginType.SINK, deserializedSink.type());
+        assertEquals(PluginType.SOURCE, deserializedSource.type());
     }
 }

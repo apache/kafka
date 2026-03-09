@@ -166,7 +166,7 @@ public interface Group {
      *
      * @param timer The coordinator timer.
      */
-    default void cancelTimers(CoordinatorTimer<Void, CoordinatorRecord> timer) {}
+    default void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {}
 
     /**
      * @return Whether the group is in Empty state.

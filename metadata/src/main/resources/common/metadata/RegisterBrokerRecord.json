@@ -16,11 +16,12 @@
 // Version 1 adds InControlledShutdown
 // Version 2 adds IsMigratingZkBroker
 // Version 3 adds LogDirs
+// Version 4 adds CordonedLogDirs
 {
   "apiKey": 0,
   "type": "metadata",
   "name": "RegisterBrokerRecord",
-  "validVersions": "0-3",
+  "validVersions": "0-4",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -58,6 +59,8 @@
     { "name": "InControlledShutdown", "type": "bool", "versions": "1+", "default": "false",
       "about": "True if the broker is in controlled shutdown." },
     { "name": "LogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": 0,
-      "about": "Log directories configured in this broker which are available." }
+      "about": "Log directories configured in this broker which are available." },
+    { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "4+", "taggedVersions": "4+", "tag": "1",
+      "about": "Log directories that are cordoned." }
   ]
 }

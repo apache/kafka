@@ -58,13 +58,11 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 /**
@@ -387,7 +385,6 @@ public interface GroupCoordinator {
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
      * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
-     * @param timeout           The operation timeout.
      *
      * @return A future yielding the result.
      */
@@ -397,8 +394,7 @@ public interface GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        short transactionVersion,
-        Duration timeout
+        short transactionVersion
     );
 
     /**
@@ -409,17 +405,6 @@ public interface GroupCoordinator {
      * @return The partition index.
      */
     int partitionFor(String groupId);
-
-    /**
-     * Remove the provided deleted partitions offsets.
-     *
-     * @param topicPartitions   The deleted partitions.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
-     */
-    void onPartitionsDeleted(
-        List<TopicPartition> topicPartitions,
-        BufferSupplier bufferSupplier
-    ) throws ExecutionException, InterruptedException;
 
     /**
      * Group coordinator is now the leader for the given partition at the

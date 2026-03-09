@@ -990,6 +990,19 @@ The size of a partition on disk, measured in bytes.
 <tr>  
 <td>
 
+Partition size as a percentage of retention bytes limit
+</td>  
+<td>
+
+kafka.log:type=Log,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td>  
+<td>
+
+The partition size expressed as a percentage of the configured retention.bytes limit. Returns 0 for topics with tiered storage enabled (where the metric is reported by RemoteLogManager) or when retention bytes is unlimited. May exceed 100% if retention cleanup is delayed.
+</td> </tr>  
+<tr>  
+<td>
+
 Number of log segments in a partition
 </td>  
 <td>
@@ -1836,6 +1849,32 @@ kafka.log.remote:type=RemoteLogManager,name=RemoteLogReaderFetchRateAndTimeMs
 <tr>  
 <td>
 
+Retention Size In Percent
+</td>  
+<td>
+
+Total partition size (local + remote) as a percentage of the configured retention.bytes limit. Available for tiered storage topics. May exceed 100% if retention cleanup is delayed. Returns 0 when retention bytes is unlimited.
+</td>  
+<td>
+
+kafka.log.remote:type=RemoteLogManager,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td> </tr>  
+<tr>  
+<td>
+
+Local Retention Size In Percent
+</td>  
+<td>
+
+Local log size as a percentage of the configured local.retention.bytes limit. Available for tiered storage topics. Helps operators monitor pressure on local disks independently of remote storage. May exceed 100% if retention cleanup is delayed. Returns 0 when local retention bytes is unlimited.
+</td>  
+<td>
+
+kafka.log.remote:type=RemoteLogManager,name=LocalRetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td> </tr>  
+<tr>  
+<td>
+
 Delayed Remote List Offsets Expires Per Sec
 </td>  
 <td>
@@ -2045,7 +2084,7 @@ Average Poll Idle Ratio
 </td>  
 <td>
 
-The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.
+The ratio of time the Raft IO thread is idle as opposed to doing work (e.g. handling requests or replicating from the leader)
 </td>  
 <td>
 
@@ -3312,7 +3351,7 @@ kafka.producer:type=producer-metrics,client-id=([-.\w]+)
 
 ### Producer Sender Metrics
 
-{{< include-html file="/static/43/generated/producer_metrics.html" >}} 
+{{< include-html file="/static/{version}/generated/producer_metrics.html" >}} 
 
 ## Consumer monitoring
 
@@ -3832,11 +3871,11 @@ kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)
 
 ### Consumer Fetch Metrics
 
-{{< include-html file="/static/43/generated/consumer_metrics.html" >}} 
+{{< include-html file="/static/{version}/generated/consumer_metrics.html" >}} 
 
 ## Connect Monitoring
 
-A Connect worker process contains all the producer and consumer metrics as well as metrics specific to Connect. The worker process itself has a number of metrics, while each connector and task have additional metrics. {{< include-html file="/static/43/generated/connect_metrics.html" >}} 
+A Connect worker process contains all the producer and consumer metrics as well as metrics specific to Connect. The worker process itself has a number of metrics, while each connector and task have additional metrics. {{< include-html file="/static/{version}/generated/connect_metrics.html" >}} 
 
 ## Streams Monitoring
 

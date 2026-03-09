@@ -47,7 +47,7 @@ Kafka and Kafka Streams configuration options must be configured before using St
 
 # Configuration parameter reference
 
-This section contains the most common Streams configuration parameters. For a full reference, see the [Streams](/43/javadoc/org/apache/kafka/streams/StreamsConfig.html) Javadocs.
+This section contains the most common Streams configuration parameters. For a full reference, see the [Streams](/{version}/javadoc/org/apache/kafka/streams/StreamsConfig.html) Javadocs.
 
   * Required configuration parameters
     * application.id
@@ -75,6 +75,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * num.stream.threads
     * probing.rebalance.interval.ms
     * processing.exception.handler
+    * processing.exception.handler.global.enabled (deprecated)
     * processing.guarantee
     * processor.wrapper.class
     * production.exception.handler
@@ -300,7 +301,7 @@ The minimum number of in-sync replicas available for replication if the producer
 
 ## Optional configuration parameters
 
-Here are the optional [Streams](/43/javadoc/org/apache/kafka/streams/StreamsConfig.html) javadocs, sorted by level of importance:
+Here are the optional [Streams](/{version}/javadoc/org/apache/kafka/streams/StreamsConfig.html) javadocs, sorted by level of importance:
 
 >   * High: These are parameters with a default value which is most likely not a good fit for production use. It's highly recommended to revisit these parameters for production usage.
 >   * Medium: The default values of these parameters should work for production for many cases, but it's not uncommon that they are changed, for example to tune performance.
@@ -1190,8 +1191,8 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > The deserialization exception handler allows you to manage record exceptions that fail to deserialize. This can be caused by corrupt data, incorrect serialization logic, or unhandled record types. The implemented exception handler needs to return a `FAIL` or `CONTINUE` depending on the record and the exception thrown. Returning `FAIL` will signal that Streams should shut down and `CONTINUE` will signal that Streams should ignore the issue and continue processing. The following library built-in exception handlers are available:
 > 
->   * [LogAndContinueExceptionHandler](/43/javadoc/org/apache/kafka/streams/errors/LogAndContinueExceptionHandler.html): This handler logs the deserialization exception and then signals the processing pipeline to continue processing more records. This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records that fail to deserialize.
->   * [LogAndFailExceptionHandler](/43/javadoc/org/apache/kafka/streams/errors/LogAndFailExceptionHandler.html). This handler logs the deserialization exception and then signals the processing pipeline to stop processing more records.
+>   * [LogAndContinueExceptionHandler](/{version}/javadoc/org/apache/kafka/streams/errors/LogAndContinueExceptionHandler.html): This handler logs the deserialization exception and then signals the processing pipeline to continue processing more records. This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records that fail to deserialize.
+>   * [LogAndFailExceptionHandler](/{version}/javadoc/org/apache/kafka/streams/errors/LogAndFailExceptionHandler.html). This handler logs the deserialization exception and then signals the processing pipeline to stop processing more records.
 > 
 
 > 
@@ -1226,7 +1227,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### production.exception.handler (deprecated: default.production.exception.handler)
 
-> The production exception handler allows you to manage exceptions triggered when trying to interact with a broker such as attempting to produce a record that is too large. By default, Kafka provides and uses the [DefaultProductionExceptionHandler](/43/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html) that always fails when these exceptions occur.
+> The production exception handler allows you to manage exceptions triggered when trying to interact with a broker such as attempting to produce a record that is too large. By default, Kafka provides and uses the [DefaultProductionExceptionHandler](/{version}/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html) that always fails when these exceptions occur.
 > 
 > An exception handler can return `FAIL`, `CONTINUE`, or `RETRY` depending on the record and the exception thrown. Returning `FAIL` will signal that Streams should shut down. `CONTINUE` will signal that Streams should ignore the issue and continue processing. For `RetriableException` the handler may return `RETRY` to tell the runtime to retry sending the failed record (**Note:** If `RETRY` is returned for a non-`RetriableException` it will be treated as `FAIL`.) If you want to provide an exception handler that always ignores records that are too large, you could implement something like the following:
 >     
@@ -1260,9 +1261,9 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### default.timestamp.extractor
 
-> A timestamp extractor pulls a timestamp from an instance of [ConsumerRecord](/43/javadoc/org/apache/kafka/clients/consumer/ConsumerRecord.html). Timestamps are used to control the progress of streams.
+> A timestamp extractor pulls a timestamp from an instance of [ConsumerRecord](/{version}/javadoc/org/apache/kafka/clients/consumer/ConsumerRecord.html). Timestamps are used to control the progress of streams.
 > 
-> The default extractor is [FailOnInvalidTimestamp](/43/javadoc/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html). This extractor retrieves built-in timestamps that are automatically embedded into Kafka messages by the Kafka producer client since [Kafka version 0.10](https://cwiki.apache.org/confluence/x/eaSnAw). Depending on the setting of Kafka's server-side `log.message.timestamp.type` broker and `message.timestamp.type` topic parameters, this extractor provides you with:
+> The default extractor is [FailOnInvalidTimestamp](/{version}/javadoc/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html). This extractor retrieves built-in timestamps that are automatically embedded into Kafka messages by the Kafka producer client since [Kafka version 0.10](https://cwiki.apache.org/confluence/x/eaSnAw). Depending on the setting of Kafka's server-side `log.message.timestamp.type` broker and `message.timestamp.type` topic parameters, this extractor provides you with:
 > 
 >   * **event-time** processing semantics if `log.message.timestamp.type` is set to `CreateTime` aka "producer time" (which is the default). This represents the time when a Kafka producer sent the original message. If you use Kafka's official producer client, the timestamp represents milliseconds since the epoch.
 >   * **ingestion-time** processing semantics if `log.message.timestamp.type` is set to `LogAppendTime` aka "broker time". This represents the time when the Kafka broker received the original message, in milliseconds since the epoch.
@@ -1273,12 +1274,12 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 > If you have data with invalid timestamps and want to process it, then there are two alternative extractors available. Both work on built-in timestamps, but handle invalid timestamps differently.
 > 
->   * [LogAndSkipOnInvalidTimestamp](/43/javadoc/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html): This extractor logs a warn message and returns the invalid timestamp to Kafka Streams, which will not process but silently drop the record. This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an invalid built-in timestamp in your input data.
->   * [UsePartitionTimeOnInvalidTimestamp](/43/javadoc/org/apache/kafka/streams/processor/UsePartitionTimeOnInvalidTimestamp.html). This extractor returns the record's built-in timestamp if it is valid (i.e. not negative). If the record does not have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the same topic partition as the current record as a timestamp estimation. In case that no timestamp can be estimated, it throws an exception.
+>   * [LogAndSkipOnInvalidTimestamp](/{version}/javadoc/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html): This extractor logs a warn message and returns the invalid timestamp to Kafka Streams, which will not process but silently drop the record. This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an invalid built-in timestamp in your input data.
+>   * [UsePartitionTimeOnInvalidTimestamp](/{version}/javadoc/org/apache/kafka/streams/processor/UsePartitionTimeOnInvalidTimestamp.html). This extractor returns the record's built-in timestamp if it is valid (i.e. not negative). If the record does not have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the same topic partition as the current record as a timestamp estimation. In case that no timestamp can be estimated, it throws an exception.
 > 
 
 > 
-> Another built-in extractor is [WallclockTimestampExtractor](/43/javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html). This extractor does not actually "extract" a timestamp from the consumed record but rather returns the current time in milliseconds from the system clock (think: `System.currentTimeMillis()`), which effectively means Streams will operate on the basis of the so-called **processing-time** of events.
+> Another built-in extractor is [WallclockTimestampExtractor](/{version}/javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html). This extractor does not actually "extract" a timestamp from the consumed record but rather returns the current time in milliseconds from the system clock (think: `System.currentTimeMillis()`), which effectively means Streams will operate on the basis of the so-called **processing-time** of events.
 > 
 > You can also provide your own timestamp extractors, for instance to retrieve timestamps embedded in the payload of messages. If you cannot extract a valid timestamp, you can either throw an exception, return a negative timestamp, or estimate a timestamp. Returning a negative timestamp will result in data loss - the corresponding record will not be processed but silently dropped. If you want to estimate a new timestamp, you can use the value provided via `previousTimestamp` (i.e., a Kafka Streams timestamp estimation). Here is an example of a custom `TimestampExtractor` implementation:
 >     
@@ -1446,12 +1447,12 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > The processing exception handler allows you to manage exceptions triggered during the processing of a record. The implemented exception handler needs to return a `FAIL` or `CONTINUE` depending on the record and the exception thrown. Returning `FAIL` will signal that Streams should shut down and `CONTINUE` will signal that Streams should ignore the issue and continue processing.
 > 
-> **Note:** This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.
+> **Note:** By default, this handler applies only to regular stream processing tasks. To enable exception handling for global stores/KTable processing (which is recommended), see `processing.exception.handler.global.enabled` below. When global exception handling is disabled (default), exceptions occurring during global store/KTable processing will bubble up to the configured uncaught exception handler.
 > 
 > The following library built-in exception handlers are available:
 > 
->   * [LogAndContinueProcessingExceptionHandler](/43/javadoc/org/apache/kafka/streams/errors/LogAndContinueProcessingExceptionHandler.html): This handler logs the processing exception and then signals the processing pipeline to continue processing more records. This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records that fail to be processed.
->   * [LogAndFailProcessingExceptionHandler](/43/javadoc/org/apache/kafka/streams/errors/LogAndFailProcessingExceptionHandler.html). This handler logs the processing exception and then signals the processing pipeline to stop processing more records.
+>   * [LogAndContinueProcessingExceptionHandler](/{version}/javadoc/org/apache/kafka/streams/errors/LogAndContinueProcessingExceptionHandler.html): This handler logs the processing exception and then signals the processing pipeline to continue processing more records. This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records that fail to be processed.
+>   * [LogAndFailProcessingExceptionHandler](/{version}/javadoc/org/apache/kafka/streams/errors/LogAndFailProcessingExceptionHandler.html). This handler logs the processing exception and then signals the processing pipeline to stop processing more records.
 > 
 
 > 
@@ -1484,6 +1485,32 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >         }
 >     }
 
+### processing.exception.handler.global.enabled (deprecated)
+
+> Controls whether the configured `ProcessingExceptionHandler` is invoked for exceptions occurring during global store/KTable processing. When set to `true` (recommended), the handler specified via `processing.exception.handler` will be invoked for exceptions occurring during global store/KTable processing. When set to `false` (default), exceptions from global store/KTable will not invoke the processing exception handler and will instead bubble up to the configured uncaught exception handler.
+> 
+> **Default value:** `false`
+> 
+> **Deprecated:** The config is deprecated for removal in 5.0 release. With the removal of the config, the processing exception handler will be applied during global state/KTable processing and cannot be disabled any longer. Thus, it's recommended to enable this config now, to avoid backward incompatibilities in the future.
+> 
+> **Important Notes:**
+> 
+>   * Dead Letter Queue (DLQ) functionality is not supported for global store/KTable. For global store/KTable exceptions, the record metadata will be logged and the record will not be sent to the DLQ.
+>   * When this feature is enabled, you can use either the built-in handlers (`LogAndContinueProcessingExceptionHandler` or `LogAndFailProcessingExceptionHandler`) or provide a custom implementation of `ProcessingExceptionHandler`.
+>   * For more details, see [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread).
+> 
+> **Example Configuration:**
+>     
+>     
+>     Properties streamsSettings = new Properties();
+>     
+>     // Configure the processing exception handler
+>     streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, 
+>                         LogAndContinueProcessingExceptionHandler.class);
+>     
+>     // Enable exception handling for Global KTables
+>     streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+
 ### processing.guarantee
 
 > The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers what is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../core-concepts#streams_processing_guarantee). 
@@ -1506,7 +1533,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### rocksdb.config.setter
 
-> The RocksDB configuration. Kafka Streams uses RocksDB as the default storage engine for persistent stores. To change the default configuration for RocksDB, you can implement `RocksDBConfigSetter` and provide your custom class via [rocksdb.config.setter](/43/javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html).
+> The RocksDB configuration. Kafka Streams uses RocksDB as the default storage engine for persistent stores. To change the default configuration for RocksDB, you can implement `RocksDBConfigSetter` and provide your custom class via [rocksdb.config.setter](/{version}/javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html).
 > 
 > Here is an example that adjusts the memory size consumed by RocksDB.
 >     
@@ -1566,7 +1593,24 @@ We recommend listing specific optimizations in the config for production code so
 
 These optimizations include moving/reducing repartition topics and reusing the source topic as the changelog for source KTables. These optimizations will save on network traffic and storage in Kafka without changing the semantics of your applications. Enabling them is recommended. 
 
-Note that you need to do two things to enable optimizations. In addition to setting this config to `StreamsConfig.OPTIMIZE`, you'll need to pass in your configuration properties when building your topology by using the overloaded `StreamsBuilder.build(Properties)` method. For example `KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)`. 
+**Important:** Enabling optimizations requires two steps. Both are necessary — setting the config alone is not enough:
+
+1. Set `topology.optimization` to `StreamsConfig.OPTIMIZE` (or a comma-separated list of specific optimizations) in your `Properties` object.
+2. Pass the same `Properties` object to the overloaded `StreamsBuilder.build(Properties)` method when building your topology.
+
+For example:
+
+```java
+Properties properties = new Properties();
+properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+// Step 2: pass properties to build() — this is required for optimizations to take effect
+Topology topology = streamsBuilder.build(properties);
+
+KafkaStreams myStream = new KafkaStreams(topology, properties);
+```
+
+If you call `streamsBuilder.build()` without passing the `Properties` object, optimizations will **not** be applied even if the config is set. 
  
  #### upgrade.from
 
@@ -1574,9 +1618,9 @@ Note that you need to do two things to enable optimizations. In addition to sett
  
  ### Kafka consumers, producer and admin client configuration parameters
  
- You can specify parameters for the Kafka [consumers](/43/javadoc/org/apache/kafka/clients/consumer/package-summary.html), [producers](/43/javadoc/org/apache/kafka/clients/producer/package-summary.html), and [admin client](/43/javadoc/org/apache/kafka/kafka/clients/admin/package-summary.html) that are used internally. The consumer, producer and admin client settings are defined by specifying parameters in a `StreamsConfig` instance.
+ You can specify parameters for the Kafka [consumers](/{version}/javadoc/org/apache/kafka/clients/consumer/package-summary.html), [producers](/{version}/javadoc/org/apache/kafka/clients/producer/package-summary.html), and [admin client](/{version}/javadoc/org/apache/kafka/kafka/clients/admin/package-summary.html) that are used internally. The consumer, producer and admin client settings are defined by specifying parameters in a `StreamsConfig` instance.
  
- In this example, the Kafka [consumer session timeout](/43/javadoc/org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG) is configured to be 60000 milliseconds in the Streams settings:
+ In this example, the Kafka [consumer session timeout](/{version}/javadoc/org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG) is configured to be 60000 milliseconds in the Streams settings:
      
      
      Properties streamsSettings = new Properties();

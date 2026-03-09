@@ -790,6 +790,17 @@ public class ConfigDef {
         }
     }
 
+    /**
+     * Convert the provided object into a string based on its type.
+     * <p>
+     * This method uses Java's {@link #toString()} for {@link Type#BOOLEAN}, {@link Type#SHORT}, {@link Type#INT},
+     * {@link Type#LONG}, {@link Type#DOUBLE}, {@link Type#STRING} and {@link Type#PASSWORD} objects.
+     * For {@link Type#LIST} objects, Java's {@link #toString()} is used for each entry and entries are concatenated
+     * separated by commas. For {@link Type#CLASS} objects, {@link Class#getName()} is used.
+     * @param parsedValue The object to convert into a string
+     * @param type The type of the object
+     * @return The string representation of the provided object and type
+     */
     public static String convertToString(Object parsedValue, Type type) {
         if (parsedValue == null) {
             return null;

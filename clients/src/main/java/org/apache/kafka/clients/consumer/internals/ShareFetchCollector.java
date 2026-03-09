@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -33,7 +33,7 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 
 /**
  * {@code ShareFetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
- * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.Record} in the {@link RecordBatch} is converted
+ * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.internal.Record} in the {@link RecordBatch} is converted
  * to a {@link ConsumerRecord} and added to the returned {@link Fetch}.
  *
  * @param <K> Record key type

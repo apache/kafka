@@ -176,6 +176,7 @@ public class ProcessorStateManager implements StateManager {
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
     private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
+    private final StateDirectory stateDirectory;
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
 
@@ -211,6 +212,7 @@ public class ProcessorStateManager implements StateManager {
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
+        this.stateDirectory = stateDirectory;
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -227,19 +229,6 @@ public class ProcessorStateManager implements StateManager {
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
         return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
-    }
-
-    /**
-     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
-     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
-     * assigned StreamThread's context.
-     */
-    void assignToStreamThread(final LogContext logContext,
-                              final Collection<TopicPartition> sourcePartitions) {
-        this.sourcePartitions.clear();
-        this.log = logContext.logger(ProcessorStateManager.class);
-        this.logPrefix = logContext.logPrefix();
-        this.sourcePartitions.addAll(sourcePartitions);
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -312,6 +301,8 @@ public class ProcessorStateManager implements StateManager {
                               store.stateStore.name());
                 }
             }
+
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
 
             if (!loadedCheckpoints.isEmpty()) {
                 log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
@@ -475,45 +466,48 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+
             // If null means the lag for this partition is not known yet
             if (optionalLag.isPresent()) {
                 storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
             }
+
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
         }
     }
 
     /**
      * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
-     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
-     *                          or flushing state store get IO errors; such error should cause the thread to die
+     * @throws StreamsException fatal error when committing the state store, for example sending changelog records failed
+     *                          or committing state store get IO errors; such error should cause the thread to die
      */
     @Override
     public void flush() {
         RuntimeException firstException = null;
-        // attempting to flush the stores
+        // attempting to commit the stores
         if (!stores.isEmpty()) {
-            log.debug("Flushing all stores registered in the state manager: {}", stores);
+            log.debug("Committing all stores registered in the state manager: {}", stores);
             for (final StateStoreMetadata metadata : stores.values()) {
                 final StateStore store = metadata.stateStore;
-                log.trace("Flushing store {}", store.name());
+                log.trace("Committing store {}", store.name());
                 try {
-                    store.flush();
+                    store.commit(Map.of());
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
                             firstException = new ProcessorStateException(
-                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                format("%sFailed to commit state store %s", logPrefix, store.name()),
                                 exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
-                                format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
-                        log.error("Failed to flush state store {}: ", store.name(), firstException);
+                                format("%sFailed to commit state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to commit state store {}: ", store.name(), firstException);
                     } else {
-                        log.error("Failed to flush state store {}: ", store.name(), exception);
+                        log.error("Failed to commit state store {}: ", store.name(), exception);
                     }
                 }
             }
@@ -533,9 +527,9 @@ public class ProcessorStateManager implements StateManager {
                 final StateStore store = metadata.stateStore;
 
                 try {
-                    // buffer should be flushed to send all records to changelog
+                    // buffer should be committed to send all records to changelog
                     if (store instanceof TimeOrderedKeyValueBuffer) {
-                        store.flush();
+                        store.commit(Map.of());
                     } else if (store instanceof CachedStateStore) {
                         ((CachedStateStore<?, ?>) store).flushCache();
                     }
@@ -660,6 +654,8 @@ public class ProcessorStateManager implements StateManager {
                         store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
+
+        stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
     }
 
     @Override
