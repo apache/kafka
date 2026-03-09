@@ -21,10 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -212,13 +208,6 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
             return wrapped().backwardAll();
-        }
-
-        @Override
-        public <R> QueryResult<R> query(final Query<R> query,
-                                        final PositionBound positionBound,
-                                        final QueryConfig config) {
-            throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
         }
 
         @Override
