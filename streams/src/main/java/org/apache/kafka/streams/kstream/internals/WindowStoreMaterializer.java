@@ -56,7 +56,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat();
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         materialized.storeName(),

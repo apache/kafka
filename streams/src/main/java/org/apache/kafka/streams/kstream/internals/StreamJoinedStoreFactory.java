@@ -82,7 +82,6 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
         final WindowBytesStoreSupplier supplier = storeSupplier == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         this.name,
@@ -91,11 +90,11 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                         true,
                         EmitStrategy.onWindowUpdate(),
                         false,
-                        storeFormat
+                        DslStoreFormat.PLAIN
                 ))
                 : storeSupplier;
 
-        final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
+        final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.windowStoreBuilder(
                 supplier,
                 joinedInternal.keySerde(),
                 valueSerde
