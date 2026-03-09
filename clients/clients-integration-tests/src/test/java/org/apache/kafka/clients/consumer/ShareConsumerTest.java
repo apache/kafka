@@ -4376,16 +4376,7 @@ public class ShareConsumerTest {
     }
 
     private void alterShareRenewAcknowledgeEnable(String groupId, boolean newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, Boolean.toString(newValue)), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, Boolean.toString(newValue));
     }
 
     private List<Integer> topicPartitionLeader(Admin adminClient, String topicName, int partition) throws InterruptedException, ExecutionException {
