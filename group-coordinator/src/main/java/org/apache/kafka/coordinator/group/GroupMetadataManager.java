@@ -1263,15 +1263,16 @@ public class GroupMetadataManager {
      * @param leavingMembers            The leaving member(s) that triggered the downgrade validation.
      * @param joiningMember             The newly joined member if the downgrade is triggered by static member replacement.
      *                                  When not null, must have an instanceId that matches the replaced member.
-     * @param hasSubscriptionChanged    The boolean indicating whether the joining member has a different subscription
-     *                                  from the replaced member. Only used when joiningMember is set.
+     * @param rebalance                 Whether to trigger a rebalance after the downgrade.
+     * @param rebalanceReason           The reason for the rebalance, if {@code rebalance} is {@code true}.
      * @param records                   The record list to which the conversion records are added.
      */
     private void convertToClassicGroup(
         ConsumerGroup consumerGroup,
         Set<ConsumerGroupMember> leavingMembers,
         ConsumerGroupMember joiningMember,
-        boolean hasSubscriptionChanged,
+        boolean rebalance,
+        String rebalanceReason,
         List<CoordinatorRecord> records
     ) {
         if (joiningMember == null) {
@@ -1312,12 +1313,8 @@ public class GroupMetadataManager {
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
 
-        // If the downgrade is triggered by a member leaving the group or a static
-        // member replacement with a different subscription, a rebalance should be triggered.
-        if (joiningMember == null) {
-            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic for member leaving.", classicGroup.groupId()));
-        } else if (hasSubscriptionChanged) {
-            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic for static member replacement with different subscription.", classicGroup.groupId()));
+        if (rebalance) {
+            prepareRebalance(classicGroup, rebalanceReason);
         }
 
         log.info("[GroupId {}] Converted the consumer group to a classic group.", consumerGroup.groupId());
@@ -2585,7 +2582,8 @@ public class GroupMetadataManager {
             // 2. If the static member subscription hasn't changed, reconcile the member's assignment with the existing
             // assignment if the member is not fully reconciled yet. If the static member subscription has changed, a
             // rebalance will be triggered during downgrade anyway so we can skip the reconciliation.
-            if (!bumpGroupEpoch) {
+            boolean rebalance = group.assignmentEpoch() < groupEpoch;
+            if (!rebalance) {
                 updatedMember = maybeReconcile(
                     groupId,
                     updatedMember,
@@ -2604,7 +2602,10 @@ public class GroupMetadataManager {
                 group,
                 Set.of(),
                 updatedMember,
-                bumpGroupEpoch,
+                rebalance,
+                rebalance ?
+                    String.format("Downgrade group %s from consumer to classic with stale assignment.", group.groupId()) :
+                    null,
                 records
             );
         } else {
@@ -4209,7 +4210,14 @@ public class GroupMetadataManager {
 
         List<CoordinatorRecord> records = new ArrayList<>();
         if (validateOnlineDowngradeWithFencedMembers(group, members)) {
-            convertToClassicGroup(group, members, null, false, records);
+            convertToClassicGroup(
+                group,
+                members,
+                null,
+                true,
+                String.format("Downgrade group %s from consumer to classic for member leaving.", group.groupId()),
+                records
+            );
             return new CoordinatorResult<>(records, response, null, false);
         } else {
             for (ConsumerGroupMember member : members) {
