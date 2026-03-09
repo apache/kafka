@@ -84,7 +84,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
 
         if (hasTimestampedCF) {
             // Upgrading from timestamped store - use 2 CFs: LEGACY_TIMESTAMPED + HEADERS
-            openFromTimestampedStore(dbOptions, columnFamilyOptions); // here  check that default has no data
+            openFromTimestampedStore(dbOptions, columnFamilyOptions); // needs to check that default-CF has no data
         } else {
             openFromDefaultStore(dbOptions, columnFamilyOptions);
         }
@@ -136,12 +136,18 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         try (final RocksIterator defaultIter = db.newIterator(columnFamilies.get(0))) {
             defaultIter.seekToFirst();
             if (defaultIter.isValid()) {
+                // Close all column family handles before throwing
+                columnFamilies.get(0).close();
+                columnFamilies.get(1).close();
+                columnFamilies.get(2).close();
                 throw new ProcessorStateException(
                     "Inconsistent store state for " + name + ". " +
                         "Cannot have both plain (DEFAULT) and timestamped data simultaneously. " +
                         "Headers store can upgrade from either plain or timestamped format, but not both."
                 );
             }
+            // close default column family handle
+            columnFamilies.get(0).close();
         }
 
         final ColumnFamilyHandle legacyTimestampedCf = columnFamilies.get(1);

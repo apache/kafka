@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -38,11 +37,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
@@ -67,29 +66,6 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
             throw new IllegalArgumentException("Provided store must be a plain (non-timestamped) key value store, but it is timestamped.");
         }
         this.store = store;
-    }
-
-    /**
-     * Extract raw plain value from serialized ValueTimestampHeaders.
-     * This strips both the headers and timestamp portions.
-     *
-     * Format conversion:
-     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
-     * Output: [value]
-     */
-    static byte[] rawPlainValue(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // Skip headers and timestamp (8 bytes)
-        buffer.position(buffer.position() + headersSize + 8);
-
-        final byte[] result = new byte[buffer.remaining()];
-        buffer.get(result);
-        return result;
     }
 
     @Override

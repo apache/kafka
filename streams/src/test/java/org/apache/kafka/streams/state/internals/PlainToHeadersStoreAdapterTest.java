@@ -33,7 +33,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
@@ -89,26 +88,6 @@ public class PlainToHeadersStoreAdapterTest {
         );
 
         assertTrue(exception.getMessage().contains("Provided store must be a plain (non-timestamped)"));
-    }
-
-    @Test
-    public void shouldExtractRawPlainValue() {
-        // Format: [headersSize(varint)][headers][timestamp(8)][value]
-        // Create a value with headers size=0, timestamp=-1, value="test"
-        final byte[] value = "test".getBytes();
-        final ByteBuffer buffer = ByteBuffer.allocate(1 + 8 + value.length);
-        buffer.put((byte) 0x00); // headers size = 0
-        buffer.putLong(-1L); // timestamp = -1
-        buffer.put(value);
-
-        final byte[] result = PlainToHeadersStoreAdapter.rawPlainValue(buffer.array());
-
-        assertArrayEquals(value, result);
-    }
-
-    @Test
-    public void shouldReturnNullForNullRawPlainValue() {
-        assertNull(PlainToHeadersStoreAdapter.rawPlainValue(null));
     }
 
     @Test

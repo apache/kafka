@@ -260,8 +260,13 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams.start();
 
         processKeyValueAndVerifyValue("key1", "value1");
+        final long lastUpdateKeyOne = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
+
         processKeyValueAndVerifyValue("key2", "value2");
+        final long lastUpdateKeyTwo = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
+
         processKeyValueAndVerifyValue("key3", "value3");
+        final long lastUpdateKeyThree = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         kafkaStreams.close();
         kafkaStreams = null;
@@ -279,18 +284,10 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
-        if (persistentStore) {
-            // Verify legacy data can be read with empty headers and timestamp = -1
-            verifyLegacyValuesWithEmptyHeaders("key1", "value1", -1);
-            verifyLegacyValuesWithEmptyHeaders("key2", "value2", -1);
-            verifyLegacyValuesWithEmptyHeaders("key3", "value3", -1);
-        } else {
-            // Verify legacy data can be read with empty headers.
-            // When data is read from the changelog, the timestamp is set to record.timestamp.
-            verifyLegacyValuesWithEmptyHeaders("key1", "value1");
-            verifyLegacyValuesWithEmptyHeaders("key2", "value2");
-            verifyLegacyValuesWithEmptyHeaders("key3", "value3");
-        }
+        // Verify legacy data can be read with empty headers and timestamp
+        verifyLegacyValuesWithEmptyHeaders("key1", "value1", lastUpdateKeyOne);
+        verifyLegacyValuesWithEmptyHeaders("key2", "value2", lastUpdateKeyTwo);
+        verifyLegacyValuesWithEmptyHeaders("key3", "value3", lastUpdateKeyThree);
 
         // Process new records with headers
         final Headers headers = new RecordHeaders();

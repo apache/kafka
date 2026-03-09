@@ -45,7 +45,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.streams.state.internals.RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -276,50 +275,23 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldFailWhenBothPlainAndTimestampedDataExist() throws Exception {
+    public void shouldFailWhenBothPlainAndTimestampedDataExist() {
         // This is an invalid state - we can't have both DEFAULT CF with data AND LEGACY_TIMESTAMPED CF
-        // First create a plain store
+        // Step 1: Create a plain store with two keys
         final RocksDBStore kvStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
         kvStore.init(context, kvStore);
-        kvStore.put(new Bytes("plainKey".getBytes()), "plainValue".getBytes());
+        kvStore.put(new Bytes("plainKey1".getBytes()), "value1".getBytes());
+        kvStore.put(new Bytes("plainKey2".getBytes()), "value2".getBytes());
         kvStore.close();
 
-        // Now manually add timestamped CF with data (simulating corrupted state)
-        final DBOptions dbOptions = new DBOptions();
-        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+        // Step 2: Open as timestamped store and migrate one key (simulating partial migration)
+        final RocksDBTimestampedStore timestampedStore = new RocksDBTimestampedStore(DB_NAME, METRICS_SCOPE);
+        timestampedStore.init(context, timestampedStore);
+        timestampedStore.get(new Bytes("plainKey1".getBytes())); // Triggers migration of plainKey1 to LEGACY_TIMESTAMPED CF
+        timestampedStore.close();
+        // Now we have: plainKey2 in DEFAULT CF, plainKey1 in LEGACY_TIMESTAMPED CF
 
-        final List<ColumnFamilyDescriptor> columnFamilyDescriptors = List.of(
-            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
-
-        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>();
-        RocksDB db = null;
-        ColumnFamilyHandle timestampedCF = null;
-        try {
-            db = RocksDB.open(
-                dbOptions,
-                new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
-                columnFamilyDescriptors,
-                columnFamilies);
-
-            // Create the timestamped CF and add data to it
-            timestampedCF = db.createColumnFamily(
-                new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions));
-            db.put(timestampedCF, "timestampedKey".getBytes(), wrapTimestampedValue("1".getBytes()));
-        } finally {
-            if (timestampedCF != null) {
-                timestampedCF.close();
-            }
-            for (final ColumnFamilyHandle cf : columnFamilies) {
-                cf.close();
-            }
-            if (db != null) {
-                db.close();
-            }
-            dbOptions.close();
-            columnFamilyOptions.close();
-        }
-
-        // Now try to open with headers store - should fail
+        // Step 3: Try to open with headers store - should fail
         final ProcessorStateException exception = assertThrows(
             ProcessorStateException.class,
             () -> rocksDBStore.init(context, rocksDBStore)
@@ -327,6 +299,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         assertTrue(exception.getMessage().contains("Inconsistent store state"));
         assertTrue(exception.getMessage().contains("Cannot have both plain (DEFAULT) and timestamped data simultaneously"));
+        assertTrue(exception.getMessage().contains("Headers store can upgrade from either plain or timestamped format, but not both."));
     }
 
     @Test
@@ -856,50 +829,20 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldTransitionFromPlainUpgradeModeToRegularMode() throws Exception {
+    public void shouldTransitionFromPlainUpgradeModeToRegularMode() {
         // Prepare plain store
         prepareKeyValueStore();
 
         // Open in upgrade mode
         rocksDBStore.init(context, rocksDBStore);
 
-        // Migrate all data by reading it
+        // Migrate all data by reading it (lazy migration deletes from DEFAULT CF)
         rocksDBStore.get(new Bytes("key1".getBytes()));
         rocksDBStore.get(new Bytes("key2".getBytes()));
 
         rocksDBStore.close();
 
-        // Clear the default CF manually
-        final DBOptions dbOptions = new DBOptions();
-        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
-
-        final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
-
-        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>();
-        RocksDB db = null;
-        try {
-            db = RocksDB.open(
-                dbOptions,
-                new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
-                columnFamilyDescriptors,
-                columnFamilies);
-
-            db.delete(columnFamilies.get(0), "key1".getBytes());
-            db.delete(columnFamilies.get(0), "key2".getBytes());
-        } finally {
-            for (final ColumnFamilyHandle cf : columnFamilies) {
-                cf.close();
-            }
-            if (db != null) {
-                db.close();
-            }
-            dbOptions.close();
-            columnFamilyOptions.close();
-        }
-
-        // Reopen - should now be in regular mode since DEFAULT CF is empty
+        // Reopen - should now be in regular mode since DEFAULT CF is empty after migration
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
