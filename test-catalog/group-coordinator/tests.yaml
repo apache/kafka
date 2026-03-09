@@ -1036,6 +1036,13 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilderTest:
 - testStableToStable
 - testStableToStableWithAssignmentTopicsNoLongerInSubscription
 - testStableToStableWithNewPartitions
+org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProviderTest:
+- testDeliveryCountLimitOrDefaultWithGroupConfig
+- testDeliveryCountLimitOrDefaultWithoutGroupConfig
+- testIsRenewAcknowledgeDisabledWithGroupConfig
+- testIsRenewAcknowledgeEnabledWithoutGroupConfig
+- testRecordLockDurationMsOrDefaultWithGroupConfig
+- testRecordLockDurationMsOrDefaultWithoutGroupConfig
 org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest:
 - testConfigs
 - testInvalidConfigs

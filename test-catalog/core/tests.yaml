@@ -2838,8 +2838,6 @@ kafka.server.share.ShareFetchUtilsTest:
 - testAccumulateAcquiredRecordsNoMerging
 - testAccumulateAcquiredRecordsSingleRecord
 - testAccumulateAcquiredRecordsWithRanges
-- testDeliveryCountLimitOrDefaultWithGroupConfig
-- testDeliveryCountLimitOrDefaultWithoutGroupConfig
 - testProcessFetchResponse
 - testProcessFetchResponseWhenNoRecordsAreAcquired
 - testProcessFetchResponseWithEmptyRecords
@@ -3143,6 +3141,8 @@ kafka.server.share.SharePartitionTest:
 - testReleaseMultipleRecordBatch
 - testReleaseOffsetWithWriteShareGroupStateFailure
 - testReleaseSingleRecordBatch
+- testRenewAcknowledgeDisabledWithCompleteBatchAck
+- testRenewAcknowledgeDisabledWithPerOffsetAck
 - testRenewAcknowledgeOnExpiredBatch
 - testRenewAcknowledgeWithCompleteBatchAck
 - testRenewAcknowledgeWithPerOffsetAck

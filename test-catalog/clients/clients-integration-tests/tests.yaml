@@ -386,6 +386,7 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testPollThrowsInterruptExceptionIfInterrupted
 - testReadCommittedIsolationLevel
 - testReadUncommittedIsolationLevel
+- testRenewAcknowledgementDisabled
 - testRenewAcknowledgementInvalidStateRecord
 - testRenewAcknowledgementNoResultInPoll
 - testRenewAcknowledgementOnCommitSync
