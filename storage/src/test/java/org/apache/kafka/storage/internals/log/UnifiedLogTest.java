@@ -2018,7 +2018,7 @@ public class UnifiedLogTest {
             // larger than the fetch size
             // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
             // partition
-            FetchDataInfo fetchInfo = log.read(i, 1, FetchIsolation.LOG_END, false);
+            var fetchInfo = log.read(i, 1, FetchIsolation.LOG_END, false);
             assertTrue(fetchInfo.firstEntryIncomplete);
             assertInstanceOf(FileRecords.class, fetchInfo.records);
             assertEquals(1, fetchInfo.records.sizeInBytes());
@@ -2078,7 +2078,7 @@ public class UnifiedLogTest {
      */
     @Test
     public void testLogRolls() throws IOException, InterruptedException {
-        /* create a multipart log with 100 messages */
+        // create a multipart log with 100 messages
         var logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(100)
                 .build();
@@ -2094,7 +2094,7 @@ public class UnifiedLogTest {
         }
         log.flush(false);
 
-        /* do successive reads to ensure all our messages are there */
+        // do successive reads to ensure all our messages are there
         var offset = 0L;
         for (var i = 0; i < numMessages; i++) {
             var batches = log.read(offset, 1024 * 1024, FetchIsolation.LOG_END, true).records.batches();
@@ -2122,19 +2122,19 @@ public class UnifiedLogTest {
      */
     @Test
     public void testCompressedMessages() throws IOException {
-        /* this log should roll after every message set */
+        // this log should roll after every message set
         var logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(110)
                 .build();
         log = createLog(logDir, logConfig);
 
-        /* append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3 */
+        // append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3
         log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(),
                 new SimpleRecord("hello".getBytes()), new SimpleRecord("there".getBytes())), 0);
         log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(),
                 new SimpleRecord("alpha".getBytes()), new SimpleRecord("beta".getBytes())), 0);
 
-        /* we should always get the first message in the compressed set when reading any offset in the set */
+        // we should always get the first message in the compressed set when reading any offset in the set
         assertEquals(0, read(log, 0).iterator().next().offset(), "Read at offset 0 should produce 0");
         assertEquals(0, read(log, 1).iterator().next().offset(), "Read at offset 1 should produce 0");
         assertEquals(2, read(log, 2).iterator().next().offset(), "Read at offset 2 should produce 2");
