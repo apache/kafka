@@ -225,6 +225,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
+import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -1422,21 +1423,21 @@ public class GroupMetadataManager {
      * it owns any other partitions.
      *
      * @param ownedTopicPartitions  The partitions provided by the consumer in the request.
-     * @param target                The partitions that the member should have.
+     * @param target                The partitions that the member should have with assignment epochs.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
     private static boolean isSubset(
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
-        Map<Uuid, Set<Integer>> target
+        Map<Uuid, Map<Integer, Integer>> target
     ) {
         if (ownedTopicPartitions == null) return false;
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
-            Set<Integer> partitions = target.get(topicPartitions.topicId());
+            Map<Integer, Integer> partitions = target.get(topicPartitions.topicId());
             if (partitions == null) return false;
             for (Integer partitionId : topicPartitions.partitions()) {
-                if (!partitions.contains(partitionId)) return false;
+                if (!partitions.containsKey(partitionId)) return false;
             }
         }
 
@@ -3573,7 +3574,7 @@ public class GroupMetadataManager {
                 log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                         + "assignedPartitions={} and revokedPartitions={}.",
                     groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                    assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+                    assignmentWithEpochsToString(updatedMember.assignedPartitions()), assignmentWithEpochsToString(updatedMember.partitionsPendingRevocation()));
             }
 
             // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.
@@ -4129,9 +4130,12 @@ public class GroupMetadataManager {
         ConsumerGroupMember member
     ) {
         // We will write a member epoch of -2 for this departing static member.
+        // Assignment epochs are reset to 0 so when the static member rejoins, partitions
+        // are considered assigned from epoch 0 to the new member ID.
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .setPartitionsPendingRevocation(Map.of())
+            .resetAssignedPartitionsEpochsToZero()
             .build();
 
         return new CoordinatorResult<>(
@@ -5375,7 +5379,7 @@ public class GroupMetadataManager {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             ConsumerGroupMember oldMember = group.getOrMaybeCreateMember(memberId, true);
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
-                .updateWith(value)
+                .updateWith(log, groupId, value)
                 .build();
             group.updateMember(newMember);
         } else {
@@ -7614,7 +7618,7 @@ public class GroupMetadataManager {
         try {
             return ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
-                    member.assignedPartitions(),
+                    Utils.toAssignmentWithoutEpochs(member.assignedPartitions()),
                     metadataImage
                 ),
                 ConsumerProtocol.deserializeVersion(
