@@ -321,6 +321,10 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(0)))
       }
 
+      // Set delete.retention.ms=0 before the tombstone is written so that
+      // compaction will remove it.
+      configureDeleteRetention()
+
       // Upgrade the group to the streams protocol.
       withStreamsApp(applicationId = "grp5", inputTopic = "foo") { streams =>
         TestUtils.waitUntilTrue(
@@ -330,11 +334,11 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       }
     }
 
-    // Force compaction twice: the first roll+compact removes classic group
-    // records from the old segment; the second ensures the GroupMetadata
-    // tombstone (now in an inactive segment) is also removed. After this,
-    // only orphaned offset commits remain before the streams group records.
+    // Force compaction: the first pass sets deleteHorizonMs on tombstones.
+    // Then flood with offset commits to create dirty data so the second
+    // pass re-cleans the segment and removes the expired tombstones.
     rollAndCompactConsumerOffsets()
+    floodConsumerOffsetsForCompaction()
     rollAndCompactConsumerOffsets()
 
     // Restart the broker to reload the group coordinator.
@@ -409,6 +413,31 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     }
   }
 
+  private def floodConsumerOffsetsForCompaction(): Unit = {
+    // Commit offsets for many different groups to create dirty data
+    // in __consumer_offsets, forcing the cleaner to re-clean
+    // previously compacted segments.
+    val metadata = "x" * 4000
+    for (i <- 0 until 200) {
+      withConsumer(groupId = s"compaction-trigger-$i", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
+        val tp = new TopicPartition("foo", 0)
+        consumer.assign(java.util.List.of(tp))
+        for (round <- 0 until 13) {
+          consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(round, metadata)))
+        }
+      }
+    }
+  }
+
+  private def configureDeleteRetention(): Unit = {
+    withAdmin { admin =>
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, "__consumer_offsets")
+      admin.incrementalAlterConfigs(java.util.Map.of(resource, java.util.List.of(
+        new AlterConfigOp(new ConfigEntry("delete.retention.ms", "0"), AlterConfigOp.OpType.SET)
+      ))).all().get()
+    }
+  }
+
   private def rollAndCompactConsumerOffsets(): Unit = {
     // Set delete.retention.ms=0 so tombstones are removed during compaction.
     withAdmin { admin =>
@@ -421,8 +450,9 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     val tp = new TopicPartition("__consumer_offsets", 0)
     val broker = cluster.brokers.asScala.head._2
     val log = broker.logManager.getLog(tp).get
+    val endOffset = log.logEndOffset
     log.roll()
-    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0, 60000L))
+    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, endOffset, 60000L))
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {

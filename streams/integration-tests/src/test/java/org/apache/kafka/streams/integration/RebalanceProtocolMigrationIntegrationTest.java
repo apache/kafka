@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
@@ -73,6 +74,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
     private static final Properties BROKER_PROPS = new Properties();
     static {
         BROKER_PROPS.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, 1000L);
+        BROKER_PROPS.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
+        BROKER_PROPS.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
     }
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, BROKER_PROPS);
 
@@ -165,6 +168,11 @@ public class RebalanceProtocolMigrationIntegrationTest {
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         processExactlyOneRecord(streamsBuilder, props, "1", "A", true);
 
+        // Set delete.retention.ms=0 on __consumer_offsets before the tombstone
+        // is written. This ensures that when compaction runs later, the
+        // GroupMetadata tombstone will be eligible for removal.
+        configureDeleteRetention();
+
         // Commit an offset for an unrelated topic using the same group ID.
         // This creates an offset commit record in __consumer_offsets with a
         // key that differs from the streams group's own offset commits, so it
@@ -178,15 +186,15 @@ public class RebalanceProtocolMigrationIntegrationTest {
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         processExactlyOneRecord(streamsBuilder, props, "2", "B");
 
-        // Configure aggressive compaction and flood __consumer_offsets so that
-        // the GroupMetadata tombstone is removed, leaving only the orphan
-        // offset commit record before the streams group records.
-        configureAggressiveCompaction();
+        // Flood __consumer_offsets to fill up segments and trigger compaction
+        // across all partitions, then force compaction twice.
         floodConsumerOffsetsForCompaction();
-
-        // Wait for compaction. If compaction does not run in time, the test
-        // still passes (false positive) but will not regress on failures.
-        Thread.sleep(5000);
+        CLUSTER.rollAndCompactConsumerOffsets();
+        // Flood again to create dirty data for the second compaction pass,
+        // which is needed to re-clean the segment and remove tombstones
+        // whose deleteHorizonMs was set during the first pass.
+        floodConsumerOffsetsForCompaction();
+        CLUSTER.rollAndCompactConsumerOffsets();
 
         // Restart the broker to force replay of __consumer_offsets.
         CLUSTER.shutdownBroker(0);
@@ -212,20 +220,14 @@ public class RebalanceProtocolMigrationIntegrationTest {
         }
     }
 
-    private void configureAggressiveCompaction() throws Exception {
+    private void configureDeleteRetention() throws Exception {
         try (final Admin adminClient = Admin.create(
             Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
             final ConfigResource resource = new ConfigResource(
                 ConfigResource.Type.TOPIC, "__consumer_offsets");
             adminClient.incrementalAlterConfigs(Map.of(resource, List.of(
                 new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.SEGMENT_BYTES_CONFIG, "1048576"), AlterConfigOp.OpType.SET),
-                new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.DELETE_RETENTION_MS_CONFIG, "1"), AlterConfigOp.OpType.SET),
-                new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "0"), AlterConfigOp.OpType.SET),
-                new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.01"), AlterConfigOp.OpType.SET)
+                    TopicConfig.DELETE_RETENTION_MS_CONFIG, "0"), AlterConfigOp.OpType.SET)
             ))).all().get();
         }
     }
@@ -238,11 +240,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         // Commit offsets for many different groups to fill up __consumer_offsets
-        // segments and trigger log compaction across all partitions. Use metadata
-        // strings close to the maximum allowed size (4096 bytes) to fill 1MB
-        // segments faster. With 200 groups, 13 rounds, and ~4KB per record,
-        // each of the 5 __consumer_offsets partitions receives ~2MB of data,
-        // filling at least 2 segments.
+        // segments and trigger log compaction. Use metadata strings close to
+        // the maximum allowed size (4096 bytes) to fill segments faster.
         final String metadata = "x".repeat(4000);
         for (int i = 0; i < 200; i++) {
             consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "compaction-trigger-" + i);

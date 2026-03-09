@@ -248,8 +248,10 @@ public class EmbeddedKafkaCluster {
         final TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
         final kafka.server.BrokerServer broker = cluster.brokers().values().iterator().next();
         final kafka.log.LogManager logManager = broker.logManager();
-        logManager.getLog(tp, false).get().roll();
-        assertTrue(logManager.cleaner().awaitCleaned(tp, 0, 60000L),
+        final var unifiedLog = logManager.getLog(tp, false).get();
+        final long endOffset = unifiedLog.logEndOffset();
+        unifiedLog.roll();
+        assertTrue(logManager.cleaner().awaitCleaned(tp, endOffset, 60000L),
             "Compaction of __consumer_offsets did not complete in time");
     }
 
