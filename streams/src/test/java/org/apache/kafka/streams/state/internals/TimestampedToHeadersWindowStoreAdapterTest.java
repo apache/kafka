@@ -16,16 +16,24 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -39,7 +47,10 @@ import java.io.File;
 import java.time.Instant;
 import java.util.Properties;
 
+import static java.time.Duration.ofMillis;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -92,36 +103,152 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
 
     @Test
     public void shouldHandleWindowKeyQuerySuccessfully() {
-        final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-                new Bytes("test-key".getBytes()),
+        // Build a typed window store using timestamped window store (adapter wraps it)
+        final TimestampedWindowStoreWithHeaders<String, String> store = Stores.timestampedWindowStoreWithHeadersBuilder(
+            Stores.persistentTimestampedWindowStore(
+                "typed-adapter-test",
+                ofMillis(RETENTION_PERIOD),
+                ofMillis(WINDOW_SIZE),
+                false),
+            Serdes.String(),
+            Serdes.String())
+            .withLoggingDisabled()
+            .build();
+
+        store.init(context, store);
+
+        try {
+            // Put data into the store (headers will be empty when adapted from timestamped store)
+            final Headers headers1 = new RecordHeaders();
+            headers1.add("key", "header1".getBytes());
+            store.put("test-key", ValueTimestampHeaders.make("value1", 1000L, headers1), 1000L);
+
+            final Headers headers2 = new RecordHeaders();
+            headers2.add("key", "header2".getBytes());
+            store.put("test-key", ValueTimestampHeaders.make("value2", 5000L, headers2), 5000L);
+
+            // Verify adapter is used for legacy timestamped window store
+            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+            assertInstanceOf(TimestampedToHeadersWindowStoreAdapter.class, wrapped,
+                    "Expected TimestampedToHeadersWindowStoreAdapter for legacy timestamped window store");
+
+            // Query at typed level - WindowKeyQuery should return windowed values with timestamps
+            final WindowKeyQuery<String, ValueAndTimestamp<String>> query = WindowKeyQuery.withKeyAndWindowStartRange(
+                "test-key",
                 Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
-        );
-        final PositionBound positionBound = PositionBound.unbounded();
-        final QueryConfig config = new QueryConfig(false);
+                Instant.ofEpochMilli(10000L)
+            );
+            final QueryResult<WindowStoreIterator<ValueAndTimestamp<String>>> result =
+                store.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        final QueryResult<WindowStoreIterator<byte[]>> result = adapter.query(query, positionBound, config);
+            // Verify IQv2 query result
+            // Adapter delegates to RocksDBTimestampedWindowStore which supports IQv2
+            assertTrue(result.isSuccess(),
+                    "Expected query to succeed since RocksDBTimestampedWindowStore supports IQv2");
+            assertNotNull(result.getPosition(), "Expected position to be set");
+            assertNotNull(result.getResult(), "Expected non-null result");
 
-        assertTrue(result.isSuccess(), "Expected query to succeed");
-        assertNotNull(result.getResult(), "Expected result iterator to be present");
-        assertNotNull(result.getPosition(), "Expected position to be set");
+            // Verify the actual query results
+            final WindowStoreIterator<ValueAndTimestamp<String>> iterator = result.getResult();
+            assertTrue(iterator.hasNext(), "Expected at least one result");
+
+            KeyValue<Long, ValueAndTimestamp<String>> kv = iterator.next();
+            assertEquals(1000L, kv.key, "Expected first window timestamp");
+            assertInstanceOf(ValueAndTimestamp.class, kv.value);
+            assertEquals("value1", kv.value.value(), "WindowKeyQuery should return the value");
+            assertEquals(1000L, kv.value.timestamp(), "WindowKeyQuery should return the timestamp");
+
+            assertTrue(iterator.hasNext(), "Expected second result");
+            kv = iterator.next();
+            assertEquals(5000L, kv.key, "Expected second window timestamp");
+            assertEquals("value2", kv.value.value(), "WindowKeyQuery should return the value");
+            assertEquals(5000L, kv.value.timestamp(), "WindowKeyQuery should return the timestamp");
+
+            assertFalse(iterator.hasNext(), "Expected no more results");
+            iterator.close();
+        } finally {
+            store.close();
+        }
     }
 
     @Test
     public void shouldHandleWindowRangeQuerySuccessfully() {
-        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withWindowStartRange(
+        // Build a typed window store using timestamped window store (adapter wraps it)
+        final TimestampedWindowStoreWithHeaders<String, String> store = Stores.timestampedWindowStoreWithHeadersBuilder(
+            Stores.persistentTimestampedWindowStore(
+                "typed-range-adapter-test",
+                ofMillis(RETENTION_PERIOD),
+                ofMillis(WINDOW_SIZE),
+                false),
+            Serdes.String(),
+            Serdes.String())
+            .withLoggingDisabled()
+            .build();
+
+        store.init(context, store);
+
+        try {
+            // Put data into the store (headers will be empty when adapted from timestamped store)
+            final Headers headers1 = new RecordHeaders();
+            headers1.add("source", "key1".getBytes());
+            store.put("key1", ValueTimestampHeaders.make("value1", 1000L, headers1), 1000L);
+
+            final Headers headers2 = new RecordHeaders();
+            headers2.add("source", "key2".getBytes());
+            store.put("key2", ValueTimestampHeaders.make("value2", 5000L, headers2), 5000L);
+
+            final Headers headers3 = new RecordHeaders();
+            headers3.add("source", "key3".getBytes());
+            store.put("key3", ValueTimestampHeaders.make("value3", 3000L, headers3), 3000L);
+
+            // Verify adapter is used for legacy timestamped window store
+            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+            assertInstanceOf(TimestampedToHeadersWindowStoreAdapter.class, wrapped,
+                    "Expected TimestampedToHeadersWindowStoreAdapter for legacy timestamped window store");
+
+            // Query at typed level - WindowRangeQuery should return all windowed key-values with timestamps
+            final WindowRangeQuery<String, ValueAndTimestamp<String>> query = WindowRangeQuery.withWindowStartRange(
                 Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
-        );
-        final PositionBound positionBound = PositionBound.unbounded();
-        final QueryConfig config = new QueryConfig(false);
+                Instant.ofEpochMilli(10000L)
+            );
+            final QueryResult<KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>>> result =
+                store.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
-                adapter.query(query, positionBound, config);
+            // Verify IQv2 query result
+            // Adapter delegates to RocksDBTimestampedWindowStore which supports IQv2
+            assertTrue(result.isSuccess(),
+                    "Expected query to succeed since RocksDBTimestampedWindowStore supports IQv2");
+            assertNotNull(result.getResult(), "Expected result iterator to be present");
+            assertNotNull(result.getPosition(), "Expected position to be set");
 
-        assertTrue(result.isSuccess(), "Expected query to succeed");
-        assertNotNull(result.getResult(), "Expected result iterator to be present");
-        assertNotNull(result.getPosition(), "Expected position to be set");
+            // Verify the actual query results (should be sorted by key then timestamp)
+            final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> iterator = result.getResult();
+
+            assertTrue(iterator.hasNext(), "Expected at least one result");
+            KeyValue<Windowed<String>, ValueAndTimestamp<String>> kv = iterator.next();
+            assertEquals("key1", kv.key.key(), "Expected first key");
+            assertEquals(1000L, kv.key.window().start(), "Expected first window start");
+            assertInstanceOf(ValueAndTimestamp.class, kv.value);
+            assertEquals("value1", kv.value.value(), "WindowRangeQuery should return the value");
+            assertEquals(1000L, kv.value.timestamp(), "WindowRangeQuery should return the timestamp");
+
+            assertTrue(iterator.hasNext(), "Expected second result");
+            kv = iterator.next();
+            assertEquals("key2", kv.key.key(), "Expected second key");
+            assertEquals(5000L, kv.key.window().start(), "Expected second window start");
+            assertEquals("value2", kv.value.value(), "WindowRangeQuery should return the value");
+
+            assertTrue(iterator.hasNext(), "Expected third result");
+            kv = iterator.next();
+            assertEquals("key3", kv.key.key(), "Expected third key");
+            assertEquals(3000L, kv.key.window().start(), "Expected third window start");
+            assertEquals("value3", kv.value.value(), "WindowRangeQuery should return the value");
+
+            assertFalse(iterator.hasNext(), "Expected no more results");
+            iterator.close();
+        } finally {
+            store.close();
+        }
     }
 
     @Test
