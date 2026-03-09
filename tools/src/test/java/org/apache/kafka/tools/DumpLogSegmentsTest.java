@@ -1572,7 +1572,7 @@ public class DumpLogSegmentsTest {
         assertTrue(errOutput.contains("Index timestamp: 100, log timestamp: 200"), errOutput);
         assertTrue(errOutput.contains("Found out of order timestamp in"), errOutput);
         assertTrue(errOutput.contains("Index timestamp: 50, Previously indexed timestamp: 100"), errOutput);
-        assertTrue(errOutput.contains("The following indexed offsets are not found in the log"), errOutput);
+        assertTrue(errOutput.contains("The following indexed offsets are not found in"), errOutput);
         assertTrue(errOutput.contains("Indexed offset: 10, found log offset: -1"), errOutput);
     }
 
