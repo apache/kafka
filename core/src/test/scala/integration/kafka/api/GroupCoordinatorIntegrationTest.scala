@@ -244,34 +244,23 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         numPartitions = 3
       )
 
-      // Create a classic group grp4 with one member, then commit an offset
-      // for an unrelated topic. This orphaned offset record will survive
-      // compaction because the consumer group never commits for this partition.
-      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
+      // Create a classic group grp4 with one member and commit offsets.
+      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
         consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
         }, msg = "Consumer did not get an non empty assignment")
-      }
-
-      TestUtils.createTopicWithAdminRaw(
-        admin = admin,
-        topic = "orphan",
-        numPartitions = 1
-      )
-      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
-        val tp = new TopicPartition("orphan", 0)
-        consumer.assign(java.util.List.of(tp))
-        consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(0)))
+        consumer.commitSync()
       }
 
       // Set delete.retention.ms=0 before the tombstone is written so that
       // compaction will remove it.
       configureDeleteRetention()
 
-      // Upgrade the group to the consumer protocol.
-      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
+      // Upgrade the group to the consumer protocol. Don't commit offsets
+      // so the classic group's offset commits survive compaction.
+      withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CONSUMER, enableAutoCommit = false) { consumer =>
         consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
@@ -320,26 +309,14 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         numPartitions = 3
       )
 
-      // Create a classic group grp5 with one member, then commit an offset
-      // for an unrelated topic. This orphaned offset record will survive
-      // compaction because the streams group never commits for this partition.
-      withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
+      // Create a classic group grp5 with one member and commit offsets.
+      withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
         consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
         }, msg = "Consumer did not get an non empty assignment")
-      }
-
-      TestUtils.createTopicWithAdminRaw(
-        admin = admin,
-        topic = "orphan",
-        numPartitions = 1
-      )
-      withConsumer(groupId = "grp5", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
-        val tp = new TopicPartition("orphan", 0)
-        consumer.assign(java.util.List.of(tp))
-        consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(0)))
+        consumer.commitSync()
       }
 
       // Set delete.retention.ms=0 before the tombstone is written so that

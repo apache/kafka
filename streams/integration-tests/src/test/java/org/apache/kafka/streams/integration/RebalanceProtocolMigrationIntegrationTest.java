@@ -163,7 +163,6 @@ public class RebalanceProtocolMigrationIntegrationTest {
         input.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         final Properties props = props();
-        final String appId = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
 
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         processExactlyOneRecord(streamsBuilder, props, "1", "A", true);
@@ -173,18 +172,17 @@ public class RebalanceProtocolMigrationIntegrationTest {
         // GroupMetadata tombstone will be eligible for removal.
         configureDeleteRetention();
 
-        // Commit an offset for an unrelated topic using the same group ID.
-        // This creates an offset commit record in __consumer_offsets with a
-        // key that differs from the streams group's own offset commits, so it
-        // won't be compacted away when the streams group overwrites its offsets.
-        final String orphanTopic = "orphan-" + safeTestName;
-        CLUSTER.createTopic(orphanTopic);
-        commitOrphanOffset(appId, orphanTopic);
-
-        // Migrate to the streams protocol. This writes a GroupMetadata
-        // tombstone for the classic group followed by streams group records.
+        // Migrate to the streams protocol. Don't process any records so
+        // the streams group doesn't commit offsets — this way the classic
+        // group's offset commits survive compaction.
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
-        processExactlyOneRecord(streamsBuilder, props, "2", "B");
+        kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
+        kafkaStreams.start();
+        TestUtils.waitForCondition(
+            () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
+            "Streams app did not reach RUNNING state");
+        kafkaStreams.close();
+        kafkaStreams = null;
 
         // Force compaction: the first pass sets deleteHorizonMs on tombstones.
         // Then write a single offset commit to create dirty data so the second
@@ -198,23 +196,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
         CLUSTER.startBroker(0);
 
         // Verify the broker can still serve the streams group after replay.
-        processExactlyOneRecord(streamsBuilder, props, "3", "C");
-    }
-
-    private void commitOrphanOffset(final String groupId, final String topic) {
-        final Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-        try (final KafkaConsumer<String, String> consumer =
-                 new KafkaConsumer<>(consumerProps)) {
-            final TopicPartition tp = new TopicPartition(topic, 0);
-            consumer.assign(List.of(tp));
-            consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0)));
-        }
+        processExactlyOneRecord(streamsBuilder, props, "2", "B");
     }
 
     private void configureDeleteRetention() throws Exception {
