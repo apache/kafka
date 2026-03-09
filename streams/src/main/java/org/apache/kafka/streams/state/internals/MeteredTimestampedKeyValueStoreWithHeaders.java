@@ -124,7 +124,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         Objects.requireNonNull(key, "key cannot be null");
         final Headers headers = value != null ? value.headers() : new RecordHeaders();
         final ValueTimestampHeaders<V> currentValue = maybeMeasureLatency(
-            () -> outerValue(wrapped().putIfAbsent(keyBytes(key, headers), serdes.rawValue(value, headers))),
+            () -> deserializeValue(wrapped().putIfAbsent(keyBytes(key, headers), serdes.rawValue(value, headers))),
             time,
             putIfAbsentSensor
         );
