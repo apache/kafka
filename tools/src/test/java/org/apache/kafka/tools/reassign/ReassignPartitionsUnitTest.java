@@ -809,6 +809,46 @@ public class ReassignPartitionsUnitTest {
     }
 
     /**
+     * Test that modifyInterBrokerThrottle with empty liveBrokers returns early without calling incrementalAlterConfigs.
+     * Covers the case when describeCluster returns no nodes (entire cluster down).
+     */
+    @Test
+    public void testModifyInterBrokerThrottleWithEmptyLiveBrokers() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(3).build()) {
+            Admin adminThatFailsIfConfigAltered = (Admin) Proxy.newProxyInstance(
+                Admin.class.getClassLoader(),
+                new Class<?>[]{Admin.class},
+                (proxy, method, args) -> {
+                    if ("incrementalAlterConfigs".equals(method.getName())) {
+                        throw new AssertionError("incrementalAlterConfigs should not be called when liveBrokers is empty");
+                    }
+                    return method.invoke(adminClient, args);
+                });
+            modifyInterBrokerThrottle(adminThatFailsIfConfigAltered, Set.of(0, 1, 2), 1000, Collections.emptySet());
+        }
+    }
+
+    /**
+     * Test that modifyLogDirThrottle with empty liveBrokers returns early without calling incrementalAlterConfigs.
+     * Covers the case when describeCluster returns no nodes (entire cluster down).
+     */
+    @Test
+    public void testModifyLogDirThrottleWithEmptyLiveBrokers() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(3).build()) {
+            Admin adminThatFailsIfConfigAltered = (Admin) Proxy.newProxyInstance(
+                Admin.class.getClassLoader(),
+                new Class<?>[]{Admin.class},
+                (proxy, method, args) -> {
+                    if ("incrementalAlterConfigs".equals(method.getName())) {
+                        throw new AssertionError("incrementalAlterConfigs should not be called when liveBrokers is empty");
+                    }
+                    return method.invoke(adminClient, args);
+                });
+            modifyLogDirThrottle(adminThatFailsIfConfigAltered, Set.of(0, 1, 2), 2000, Collections.emptySet());
+        }
+    }
+
+    /**
      * Test that clearAllThrottles only clears throttles on live brokers when some brokers are down.
      * Called by --verify when reassignment completes.
      */

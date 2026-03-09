@@ -61,6 +61,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -514,7 +515,14 @@ public class ReassignPartitionsCommand {
     ) throws ExecutionException, InterruptedException {
         Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
         Set<Integer> brokersFromAssignment = new HashSet<>();
-        targetParts.forEach(t -> brokersFromAssignment.addAll(t.getValue()));
+        if (targetParts != null) {
+            for (Entry<TopicPartition, List<Integer>> t : targetParts) {
+                List<Integer> replicas = t.getValue();
+                if (replicas != null) {
+                    brokersFromAssignment.addAll(replicas);
+                }
+            }
+        }
         Set<Integer> downBrokers = brokersFromAssignment.stream()
             .filter(b -> !liveBrokers.contains(b))
             .collect(Collectors.toSet());
@@ -533,10 +541,13 @@ public class ReassignPartitionsCommand {
             clearBrokerLevelThrottles(adminClient, liveBrokers);
         }
 
-        Set<String> topics = targetParts.stream().map(t -> t.getKey().topic()).collect(Collectors.toSet());
-        System.out.printf("Clearing topic-level throttles on topic%s %s%n",
-            topics.size() == 1 ? "" : "s", String.join(",", topics));
-        clearTopicLevelThrottles(adminClient, topics);
+        Set<String> topics = (targetParts == null ? List.<Entry<TopicPartition, List<Integer>>>of() : targetParts)
+            .stream().map(t -> t.getKey().topic()).collect(Collectors.toSet());
+        if (!topics.isEmpty()) {
+            System.out.printf("Clearing topic-level throttles on topic%s %s%n",
+                topics.size() == 1 ? "" : "s", String.join(",", topics));
+            clearTopicLevelThrottles(adminClient, topics);
+        }
     }
 
     /**
@@ -1239,11 +1250,12 @@ public class ReassignPartitionsCommand {
                                           long interBrokerThrottle,
                                           Set<Integer> liveBrokers) throws ExecutionException, InterruptedException {
         if (interBrokerThrottle >= 0) {
-            Set<Integer> brokersToUpdate = reassigningBrokers.stream()
-                .filter(liveBrokers::contains)
+            Set<Integer> live = liveBrokers != null ? liveBrokers : Collections.<Integer>emptySet();
+            Set<Integer> brokersToUpdate = (reassigningBrokers != null ? reassigningBrokers : Collections.<Integer>emptySet()).stream()
+                .filter(live::contains)
                 .collect(Collectors.toSet());
-            Set<Integer> downBrokers = reassigningBrokers.stream()
-                .filter(b -> !liveBrokers.contains(b))
+            Set<Integer> downBrokers = (reassigningBrokers != null ? reassigningBrokers : Collections.<Integer>emptySet()).stream()
+                .filter(b -> !live.contains(b))
                 .collect(Collectors.toSet());
 
             if (!downBrokers.isEmpty()) {
@@ -1296,11 +1308,13 @@ public class ReassignPartitionsCommand {
                                      long logDirThrottle,
                                      Set<Integer> liveBrokers) throws ExecutionException, InterruptedException {
         if (logDirThrottle >= 0) {
-            Set<Integer> brokersToUpdate = movingBrokers.stream()
-                .filter(liveBrokers::contains)
+            Set<Integer> live = liveBrokers != null ? liveBrokers : Collections.<Integer>emptySet();
+            Set<Integer> moving = movingBrokers != null ? movingBrokers : Collections.<Integer>emptySet();
+            Set<Integer> brokersToUpdate = moving.stream()
+                .filter(live::contains)
                 .collect(Collectors.toSet());
-            Set<Integer> downBrokers = movingBrokers.stream()
-                .filter(b -> !liveBrokers.contains(b))
+            Set<Integer> downBrokers = moving.stream()
+                .filter(b -> !live.contains(b))
                 .collect(Collectors.toSet());
 
             if (!downBrokers.isEmpty()) {
