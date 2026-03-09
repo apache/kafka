@@ -253,6 +253,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupCompletedRebalanceSensor
 - testClassicGroupDelete
+- testClassicGroupHeartbeatToConsumerGroupDuringAssignmentDelay
 - testClassicGroupHeartbeatToConsumerGroupMaintainsSession
 - testClassicGroupHeartbeatToConsumerGroupRebalanceInProgress
 - testClassicGroupHeartbeatToConsumerWithFencedInstanceId
@@ -276,6 +277,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupOnUnloadedEmptyAndPreparingRebalance
 - testClassicGroupSyncOnShareGroup
 - testClassicGroupSyncOnStreamsGroup
+- testClassicGroupSyncToConsumerGroupDuringAssignmentDelay
 - testClassicGroupSyncToConsumerGroupRebalanceInProgress
 - testClassicGroupSyncToConsumerGroupWithAllConsumerProtocolVersions
 - testClassicGroupSyncToConsumerGroupWithFencedInstanceId
@@ -396,6 +398,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testLastConsumerProtocolMemberSessionTimeoutInConsumerGroup
 - testLastJoiningMembersAreKickedOutWhenRejoiningGroupWithMaxSize
 - testLastStaticConsumerProtocolMemberReplacedByClassicProtocolMember
+- testLastStaticConsumerProtocolMemberReplacedByClassicProtocolMemberWhenTargetAssignmentIsStale
 - testLeaderFailureInSyncGroup
 - testLeaveDeadGroup
 - testLeaveGroupInvalidGroup
