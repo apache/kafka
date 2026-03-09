@@ -12519,6 +12519,91 @@ public class SharePartitionTest {
         assertTrue(sharePartition.canAcquireRecords());
     }
 
+    @Test
+    public void testDynamicPartitionMaxRecordLocksExactBoundary() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(50)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 50);
+
+        // Acquire exactly 50 records, hitting the default limit exactly.
+        fetchAcquiredRecords(sharePartition, records, 50);
+
+        // At exact boundary: 50 < 50 is false.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Dynamically set limit to exactly the in-flight count via group config.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(50);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // Still at boundary: 50 < 50 is false.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Increase by 1 to cross the boundary.
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(51);
+
+        // Now 50 < 51 is true.
+        assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksRemoveGroupConfig() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(500);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(100)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // Group config sets limit to 500.
+        assertEquals(500, sharePartition.maxInFlightRecords());
+
+        // Remove group config — should fall back to default of 100.
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        assertEquals(100, sharePartition.maxInFlightRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksDecreaseBelowInFlightAffectsMaxRecordsToAcquire() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(100)
+            .withGroupConfigManager(groupConfigManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 50);
+
+        // Acquire 50 records.
+        fetchAcquiredRecords(sharePartition, records, 50);
+
+        // Decrease limit to 20, well below the 50 in-flight.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(20);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // maxInFlightRecords - inFlightRecordsCount = 20 - 50 = -30, so maxRecordsToAcquire <= 0.
+        // canAcquireRecords should be false since nextFetchOffset == endOffset + 1.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // The existing 50 acquired records should still be intact — cached state is not cleared.
+        assertFalse(sharePartition.cachedState().isEmpty());
+    }
+
     private static GroupConfigManager groupConfigManagerWithRenewDisabled() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
