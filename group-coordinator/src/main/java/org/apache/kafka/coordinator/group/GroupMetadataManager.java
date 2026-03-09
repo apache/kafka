@@ -225,6 +225,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
+import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -1020,6 +1021,15 @@ public class GroupMetadataManager {
             return streamsGroup;
         } else if (group.type() == STREAMS) {
             return (StreamsGroup) group;
+        } else if (group.type() == CLASSIC && ((ClassicGroup) group).isSimpleGroup()) {
+            // If the group is a simple classic group, it was automatically created to hold committed
+            // offsets when no group-metadata-backed group existed. Simple classic groups do not have
+            // any GroupMetadataKey/Value records in the __consumer_offsets topic, only offset commit
+            // records, so the in-memory group can be safely replaced here. Without this, replaying
+            // streams group records after offset commit records would not work.
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            groups.put(groupId, streamsGroup);
+            return streamsGroup;
         } else {
             // We don't support upgrading/downgrading between protocols at the moment, so
             // we throw an exception if a group exists with the wrong type.
@@ -1413,21 +1423,21 @@ public class GroupMetadataManager {
      * it owns any other partitions.
      *
      * @param ownedTopicPartitions  The partitions provided by the consumer in the request.
-     * @param target                The partitions that the member should have.
+     * @param target                The partitions that the member should have with assignment epochs.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
     private static boolean isSubset(
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
-        Map<Uuid, Set<Integer>> target
+        Map<Uuid, Map<Integer, Integer>> target
     ) {
         if (ownedTopicPartitions == null) return false;
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
-            Set<Integer> partitions = target.get(topicPartitions.topicId());
+            Map<Integer, Integer> partitions = target.get(topicPartitions.topicId());
             if (partitions == null) return false;
             for (Integer partitionId : topicPartitions.partitions()) {
-                if (!partitions.contains(partitionId)) return false;
+                if (!partitions.containsKey(partitionId)) return false;
             }
         }
 
@@ -3564,7 +3574,7 @@ public class GroupMetadataManager {
                 log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                         + "assignedPartitions={} and revokedPartitions={}.",
                     groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                    assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+                    assignmentWithEpochsToString(updatedMember.assignedPartitions()), assignmentWithEpochsToString(updatedMember.partitionsPendingRevocation()));
             }
 
             // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.
@@ -3812,6 +3822,7 @@ public class GroupMetadataManager {
         try {
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionType(subscriptionType)
@@ -3881,6 +3892,7 @@ public class GroupMetadataManager {
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
+                    .withTime(time)
                     .withMembers(group.members())
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
@@ -3946,6 +3958,7 @@ public class GroupMetadataManager {
                     assignor,
                     assignmentConfigs
                 )
+                .withTime(time)
                 .withMembers(group.members())
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
@@ -4117,9 +4130,12 @@ public class GroupMetadataManager {
         ConsumerGroupMember member
     ) {
         // We will write a member epoch of -2 for this departing static member.
+        // Assignment epochs are reset to 0 so when the static member rejoins, partitions
+        // are considered assigned from epoch 0 to the new member ID.
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .setPartitionsPendingRevocation(Map.of())
+            .resetAssignedPartitionsEpochsToZero()
             .build();
 
         return new CoordinatorResult<>(
@@ -5328,7 +5344,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             ConsumerGroup group;
             try {
@@ -5341,7 +5357,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
-            group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -5363,7 +5379,7 @@ public class GroupMetadataManager {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             ConsumerGroupMember oldMember = group.getOrMaybeCreateMember(memberId, true);
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
-                .updateWith(value)
+                .updateWith(log, groupId, value)
                 .build();
             group.updateMember(newMember);
         } else {
@@ -5644,7 +5660,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
-            streamsGroup.setTargetAssignmentEpoch(value.assignmentEpoch());
+            streamsGroup.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -5657,7 +5673,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
             }
-            streamsGroup.setTargetAssignmentEpoch(-1);
+            streamsGroup.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -5792,13 +5808,13 @@ public class GroupMetadataManager {
         }
 
         if (value != null) {
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                         + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
-            group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -7602,7 +7618,7 @@ public class GroupMetadataManager {
         try {
             return ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
-                    member.assignedPartitions(),
+                    Utils.toAssignmentWithoutEpochs(member.assignedPartitions()),
                     metadataImage
                 ),
                 ConsumerProtocol.deserializeVersion(

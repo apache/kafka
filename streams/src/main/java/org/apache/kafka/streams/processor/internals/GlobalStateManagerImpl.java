@@ -23,14 +23,19 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -53,10 +58,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
@@ -85,6 +92,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
+    private ProcessingExceptionHandler processingExceptionHandler;
+    private Sensor droppedRecordsSensor;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -123,6 +132,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
         deserializationExceptionHandler = config.deserializationExceptionHandler();
+        @SuppressWarnings("deprecation")
+        final boolean globalEnabled = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
+        processingExceptionHandler = globalEnabled ? config.processingExceptionHandler() : null;
     }
 
     @Override
@@ -137,6 +149,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         } catch (final IOException e) {
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
         }
+
+        droppedRecordsSensor = droppedRecordsSensor(
+            Thread.currentThread().getName(),
+            globalProcessorContext.taskId().toString(),
+            globalProcessorContext.metrics()
+        );
 
         final Set<String> changelogTopics = new HashSet<>();
         for (final StateStore stateStore : topology.globalStateStores()) {
@@ -158,6 +176,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 throw new StreamsException("Encountered a topic-partition not associated with any global state store");
             }
         });
+
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
@@ -311,33 +330,90 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
 
-                    try {
-                        if (record.key() != null) {
-                            source.process(new Record(
+                    if (record.key() != null) {
+                        // Deserialization phase
+                        final Record<?, ?> deserializedRecord;
+                        try {
+                            deserializedRecord = new Record<>(
                                 reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
                                 reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
                                 record.timestamp(),
-                                record.headers()));
+                                record.headers());
+                        } catch (final Exception deserializationException) {
+                            // while Java distinguishes checked vs unchecked exceptions, other languages
+                            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                            // (instead of `RuntimeException`) to work well with those languages
+                            handleDeserializationFailure(
+                                deserializationExceptionHandler,
+                                globalProcessorContext,
+                                deserializationException,
+                                record,
+                                log,
+                                droppedRecordsSensor,
+                                null
+                            );
+                            continue; // Skip this record
+                        }
+                        final ProcessingExceptionHandler.Response response;
+                        // Processing phase
+                        try {
+                            ((Processor) source).process(deserializedRecord);
                             restoreCount++;
                             batchRestoreCount++;
+                        } catch (final Exception processingException) {
+                            // while Java distinguishes checked vs unchecked exceptions, other languages
+                            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                            // (instead of `RuntimeException`) to work well with those languages
+                            if (processingExceptionHandler != null) {
+                                final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                                    globalProcessorContext,
+                                    record.topic(),
+                                    record.partition(),
+                                    record.offset(),
+                                    record.headers(),
+                                    reprocessFactory.processorName(),
+                                    globalProcessorContext.taskId(),
+                                    record.timestamp(),
+                                    record.key(),
+                                    record.value()
+                                );
+                                try {
+                                    response =
+                                        Objects.requireNonNull(processingExceptionHandler.handleError(
+                                            errorHandlerContext,
+                                            deserializedRecord,
+                                            processingException
+                                        ), "Invalid ProcessingExceptionHandler response");
+                                    if (!response.deadLetterQueueRecords().isEmpty()) {
+                                        log.warn("Dead letter queue records cannot be sent for global state/KTable processors. " +
+                                                "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
+                                            errorHandlerContext);
+                                    }
+                                } catch (final Exception fatalUserException) {
+                                    log.error(
+                                            "Processing error callback failed after processing error for record: {}",
+                                            errorHandlerContext,
+                                            processingException
+                                    );
+                                    throw new FailedProcessingException(
+                                            "Fatal user code error in processing error callback",
+                                            null,
+                                            fatalUserException
+                                    );
+                                }
+                                
+                                if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
+                                    log.error("Processing exception handler is set to fail upon" +
+                                            " a processing error. If you would rather have the streaming pipeline" +
+                                            " continue after a processing error, please set the " +
+                                            PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                                    throw new FailedProcessingException(null, processingException);
+                                }
+                                droppedRecordsSensor.record();
+                            } else {
+                                throw processingException;
+                            }
                         }
-                    } catch (final Exception deserializationException) {
-                        // while Java distinguishes checked vs unchecked exceptions, other languages
-                        // like Scala or Kotlin do not, and thus we need to catch `Exception`
-                        // (instead of `RuntimeException`) to work well with those languages
-                        handleDeserializationFailure(
-                            deserializationExceptionHandler,
-                            globalProcessorContext,
-                            deserializationException,
-                            record,
-                            log,
-                            droppedRecordsSensor(
-                                Thread.currentThread().getName(),
-                                globalProcessorContext.taskId().toString(),
-                                globalProcessorContext.metrics()
-                            ),
-                            null
-                        );
                     }
                 }
 

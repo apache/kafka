@@ -457,7 +457,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private MockTime time = new MockTime(0, 0, 0);
+        private MockTime time = new MockTime(0, 1000, 1000);
         private final MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();

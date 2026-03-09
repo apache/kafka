@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -76,7 +78,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
         final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        return storeKeyToWindowKey.toWindowKey(binaryKey, windowSize, serdes.keyDeserializer(), serdes.topic());
+        return storeKeyToWindowKey.toWindowKey(binaryKey, windowSize, serdes.keyDeserializer(), new RecordHeaders(), serdes.topic());
     }
 
     @Override
@@ -92,7 +94,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @FunctionalInterface
     interface StoreKeyToWindowKey {
-        Windowed<Bytes> toWindowKey(final byte[] binaryKey, final long windowSize, final Deserializer<Bytes> deserializer, final String topic);
+        Windowed<Bytes> toWindowKey(final byte[] binaryKey, final long windowSize, final Deserializer<Bytes> deserializer, final Headers headers, final String topic);
     }
 
     @FunctionalInterface
