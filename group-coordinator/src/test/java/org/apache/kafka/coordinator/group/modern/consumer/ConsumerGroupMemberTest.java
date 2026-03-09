@@ -421,9 +421,9 @@ public class ConsumerGroupMemberTest {
         Uuid unassignedTopicId = Uuid.randomUuid();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)), 10))
-            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .build();
 
