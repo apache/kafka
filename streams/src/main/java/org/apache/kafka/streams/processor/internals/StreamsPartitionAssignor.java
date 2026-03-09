@@ -1555,7 +1555,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         } else {
             log.info("Skipping streams metadata update because partition metadata is missing for source topics {}. " +
                     "Will retry after metadata is refreshed.", missingSourceTopics);
-            streamsMetadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
         }
 
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly

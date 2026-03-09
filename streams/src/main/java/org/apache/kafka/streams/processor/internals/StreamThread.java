@@ -1544,7 +1544,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             } else {
                 log.info("Skipping streams metadata update because partition metadata is missing for source topics {}. " +
                         "Will retry after metadata is refreshed.", missingSourceTopics);
-                streamsMetadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
             }
         }
     }
