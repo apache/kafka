@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
 import org.junit.jupiter.api.Test;
 
@@ -123,7 +123,7 @@ public class SessionWindowedSerializerTest {
         when(mockSerializer.serialize(anyString(), any(Headers.class), anyString())).thenReturn("test-value".getBytes());
 
         final String key = "test-key";
-        final Windowed<String> data = new Windowed<>(key, new TimeWindow(0, 1));
+        final Windowed<String> data = new Windowed<>(key, new SessionWindow(0, 1));
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
 
         final SessionWindowedSerializer<String> testSerializer = new SessionWindowedSerializer<>(mockSerializer);

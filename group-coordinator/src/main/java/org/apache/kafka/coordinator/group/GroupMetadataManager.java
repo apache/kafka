@@ -1021,6 +1021,15 @@ public class GroupMetadataManager {
             return streamsGroup;
         } else if (group.type() == STREAMS) {
             return (StreamsGroup) group;
+        } else if (group.type() == CLASSIC && ((ClassicGroup) group).isSimpleGroup()) {
+            // If the group is a simple classic group, it was automatically created to hold committed
+            // offsets when no group-metadata-backed group existed. Simple classic groups do not have
+            // any GroupMetadataKey/Value records in the __consumer_offsets topic, only offset commit
+            // records, so the in-memory group can be safely replaced here. Without this, replaying
+            // streams group records after offset commit records would not work.
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            groups.put(groupId, streamsGroup);
+            return streamsGroup;
         } else {
             // We don't support upgrading/downgrading between protocols at the moment, so
             // we throw an exception if a group exists with the wrong type.
@@ -1254,15 +1263,16 @@ public class GroupMetadataManager {
      * @param leavingMembers            The leaving member(s) that triggered the downgrade validation.
      * @param joiningMember             The newly joined member if the downgrade is triggered by static member replacement.
      *                                  When not null, must have an instanceId that matches the replaced member.
-     * @param hasSubscriptionChanged    The boolean indicating whether the joining member has a different subscription
-     *                                  from the replaced member. Only used when joiningMember is set.
+     * @param rebalance                 Whether to trigger a rebalance after the downgrade.
+     * @param rebalanceReason           The reason for the rebalance, if {@code rebalance} is {@code true}.
      * @param records                   The record list to which the conversion records are added.
      */
     private void convertToClassicGroup(
         ConsumerGroup consumerGroup,
         Set<ConsumerGroupMember> leavingMembers,
         ConsumerGroupMember joiningMember,
-        boolean hasSubscriptionChanged,
+        boolean rebalance,
+        String rebalanceReason,
         List<CoordinatorRecord> records
     ) {
         if (joiningMember == null) {
@@ -1303,12 +1313,8 @@ public class GroupMetadataManager {
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
 
-        // If the downgrade is triggered by a member leaving the group or a static
-        // member replacement with a different subscription, a rebalance should be triggered.
-        if (joiningMember == null) {
-            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic for member leaving.", classicGroup.groupId()));
-        } else if (hasSubscriptionChanged) {
-            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic for static member replacement with different subscription.", classicGroup.groupId()));
+        if (rebalance) {
+            prepareRebalance(classicGroup, rebalanceReason);
         }
 
         log.info("[GroupId {}] Converted the consumer group to a classic group.", consumerGroup.groupId());
@@ -1841,11 +1847,11 @@ public class GroupMetadataManager {
         ConsumerGroup group,
         ConsumerGroupMember member
     ) {
-        // If the group epoch is greater than the member epoch, there is a new rebalance triggered and the member
+        // If the target assignment epoch is greater than the member epoch, there is a new rebalance triggered and the member
         // needs to rejoin to catch up. However, if the member is in UNREVOKED_PARTITIONS state, it means the
         // member has already rejoined, so it needs to first finish revoking the partitions and the reconciliation,
         // and then the next rejoin will be triggered automatically if needed.
-        if (group.groupEpoch() > member.memberEpoch() && !member.state().equals(MemberState.UNREVOKED_PARTITIONS)) {
+        if (group.assignmentEpoch() > member.memberEpoch() && !member.state().equals(MemberState.UNREVOKED_PARTITIONS)) {
             scheduleConsumerGroupJoinTimeoutIfAbsent(group.groupId(), member.memberId(), member.rebalanceTimeoutMs());
             throw Errors.REBALANCE_IN_PROGRESS.exception(
                 String.format("A new rebalance is triggered in group %s and member %s should rejoin to catch up.",
@@ -2576,7 +2582,8 @@ public class GroupMetadataManager {
             // 2. If the static member subscription hasn't changed, reconcile the member's assignment with the existing
             // assignment if the member is not fully reconciled yet. If the static member subscription has changed, a
             // rebalance will be triggered during downgrade anyway so we can skip the reconciliation.
-            if (!bumpGroupEpoch) {
+            boolean rebalance = group.assignmentEpoch() < groupEpoch;
+            if (!rebalance) {
                 updatedMember = maybeReconcile(
                     groupId,
                     updatedMember,
@@ -2595,7 +2602,10 @@ public class GroupMetadataManager {
                 group,
                 Set.of(),
                 updatedMember,
-                bumpGroupEpoch,
+                rebalance,
+                rebalance ?
+                    String.format("Downgrade group %s from consumer to classic with stale assignment.", group.groupId()) :
+                    null,
                 records
             );
         } else {
@@ -3813,6 +3823,7 @@ public class GroupMetadataManager {
         try {
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionType(subscriptionType)
@@ -3882,6 +3893,7 @@ public class GroupMetadataManager {
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
+                    .withTime(time)
                     .withMembers(group.members())
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
@@ -3947,6 +3959,7 @@ public class GroupMetadataManager {
                     assignor,
                     assignmentConfigs
                 )
+                .withTime(time)
                 .withMembers(group.members())
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
@@ -4197,7 +4210,14 @@ public class GroupMetadataManager {
 
         List<CoordinatorRecord> records = new ArrayList<>();
         if (validateOnlineDowngradeWithFencedMembers(group, members)) {
-            convertToClassicGroup(group, members, null, false, records);
+            convertToClassicGroup(
+                group,
+                members,
+                null,
+                true,
+                String.format("Downgrade group %s from consumer to classic for member leaving.", group.groupId()),
+                records
+            );
             return new CoordinatorResult<>(records, response, null, false);
         } else {
             for (ConsumerGroupMember member : members) {
@@ -5332,7 +5352,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             ConsumerGroup group;
             try {
@@ -5345,7 +5365,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
-            group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -5367,7 +5387,7 @@ public class GroupMetadataManager {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             ConsumerGroupMember oldMember = group.getOrMaybeCreateMember(memberId, true);
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
-                .updateWith(value)
+                .updateWith(log, groupId, value)
                 .build();
             group.updateMember(newMember);
         } else {
@@ -5648,7 +5668,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
-            streamsGroup.setTargetAssignmentEpoch(value.assignmentEpoch());
+            streamsGroup.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -5661,7 +5681,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
             }
-            streamsGroup.setTargetAssignmentEpoch(-1);
+            streamsGroup.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -5796,13 +5816,13 @@ public class GroupMetadataManager {
         }
 
         if (value != null) {
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                         + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
-            group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentMetadata(-1, 0L);
         }
     }
 
@@ -7820,10 +7840,10 @@ public class GroupMetadataManager {
 
         Errors error = Errors.NONE;
         // The member should rejoin if any of the following conditions is met.
-        // 1) The group epoch is bumped so the member need to rejoin to catch up.
+        // 1) The target assignment epoch is bumped so the member needs to rejoin to catch up.
         // 2) The member needs to revoke some partitions and rejoin to reconcile with the new epoch.
         // 3) The member's partitions pending assignment are free, so it can rejoin to get the complete assignment.
-        if (member.memberEpoch() < group.groupEpoch() ||
+        if (member.memberEpoch() < group.assignmentEpoch() ||
             member.state() == MemberState.UNREVOKED_PARTITIONS ||
             (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.waitingOnUnreleasedPartition(member))) {
             error = Errors.REBALANCE_IN_PROGRESS;

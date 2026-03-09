@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -42,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UtilsTest {
+    private static final Logger LOG = LoggerFactory.getLogger(UtilsTest.class);
+    private static final String GROUP_ID = "test-group";
     private static final Uuid FOO_TOPIC_ID = Uuid.randomUuid();
     private static final String FOO_TOPIC_NAME = "foo";
     private static final String BAR_TOPIC_NAME = "bar";
@@ -252,6 +257,8 @@ public class UtilsTest {
         );
 
         Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
+            LOG,
+            GROUP_ID,
             topicPartitions,
             LEAVE_GROUP_STATIC_MEMBER_EPOCH // -2
         );
@@ -275,8 +282,10 @@ public class UtilsTest {
         );
 
         Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
+            LOG,
+            GROUP_ID,
             topicPartitions,
-            LEAVE_GROUP_STATIC_MEMBER_EPOCH  // -2
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH // -2
         );
 
         // Verify assignment epochs are used
@@ -291,17 +300,31 @@ public class UtilsTest {
     }
 
     @Test
-    void testAssignmentFromTopicPartitionsWithInvalidEpochLength() {
+    void testAssignmentFromTopicPartitionsWithUnequalEpochLength() {
+        // Empty array epochs list
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions = List.of(
             new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(FOO_TOPIC_ID)
                 .setPartitions(Arrays.asList(0, 1, 2))
-                .setAssignmentEpochs(Arrays.asList(5, 6))
+                .setAssignmentEpochs(List.of(0))
         );
 
-        assertThrows(
-            IllegalStateException.class,
-            () -> Utils.assignmentFromTopicPartitions(topicPartitions, 7)
-        );
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(UtilsTest.class)) {
+            Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(LOG, GROUP_ID, topicPartitions, 7);
+            // Verify fallback to default epoch for empty epochs list
+            assertEquals(
+                mkAssignmentWithEpochs(
+                    mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 0),
+                    mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 1),
+                    mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 2)
+                ),
+                result
+            );
+            // Verify error log includes group id
+            assertEquals(1, appender.getMessages("ERROR").stream()
+                .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 1 is not equal to partitions 3 for topic "
+                    + FOO_TOPIC_ID))
+                .count());
+        }
     }
 }

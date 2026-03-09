@@ -33,6 +33,7 @@ import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsRespon
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.quota.ControllerMutationQuota
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.TopicCreator
@@ -270,10 +271,17 @@ class DefaultAutoTopicCreationManager(
           .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
           .setConfigs(convertToTopicConfigCollections(shareCoordinator.shareGroupStateTopicConfigs()))
       case topicName =>
+        val numPartitions: java.lang.Integer =
+          if (config.originals.containsKey(ServerLogConfigs.NUM_PARTITIONS_CONFIG)) config.numPartitions
+          else CreateTopicsRequest.NO_NUM_PARTITIONS
+        val replicationFactor: java.lang.Short =
+          if (config.originals.containsKey(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)) config.defaultReplicationFactor.toShort
+          else CreateTopicsRequest.NO_REPLICATION_FACTOR
+
         new CreatableTopic()
           .setName(topicName)
-          .setNumPartitions(config.numPartitions)
-          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
+          .setNumPartitions(numPartitions)
+          .setReplicationFactor(replicationFactor)
     }
   }
 

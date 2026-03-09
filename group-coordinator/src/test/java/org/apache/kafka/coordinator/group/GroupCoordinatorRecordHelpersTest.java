@@ -80,8 +80,8 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
@@ -314,14 +314,16 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(10),
+                    .setAssignmentEpoch(10)
+                    .setAssignmentTimestamp(12345L),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentMetadataRecord(
             "group-id",
-            10
+            10,
+            12345L
         ));
     }
 

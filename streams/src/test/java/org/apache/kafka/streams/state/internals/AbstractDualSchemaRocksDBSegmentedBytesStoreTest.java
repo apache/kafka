@@ -1689,6 +1689,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
                         stateSerdes.valueDeserializer().deserialize("dummy", next.value)
