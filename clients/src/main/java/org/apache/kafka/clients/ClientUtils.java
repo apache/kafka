@@ -275,14 +275,31 @@ public final class ClientUtils {
             List<String> bootstrapServers = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
             ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
 
-            // Only validate if bootstrap servers are provided (non-empty list)
-            // This allows configurations that don't use bootstrap (e.g., broker-to-broker) to skip validation
+            // Try to get bootstrap.controllers if it exists (only defined in AdminClientConfig)
+            List<String> bootstrapControllers = null;
+            try {
+                bootstrapControllers = config.getList("bootstrap.controllers");
+            } catch (ConfigException e) {
+                // bootstrap.controllers is not defined in this config (e.g., ProducerConfig, ConsumerConfig)
+                // This is expected and not an error
+            }
+
+            // Determine which bootstrap addresses to use
+            List<String> bootstrapAddresses;
             if (bootstrapServers != null && !bootstrapServers.isEmpty()) {
+                bootstrapAddresses = bootstrapServers;
+                // Only validate if bootstrap servers are provided (non-empty list)
+                // This allows configurations that don't use bootstrap (e.g., broker-to-broker) to skip validation
                 parseAndValidateAddresses(bootstrapServers, dnsLookup);
+            } else if (bootstrapControllers != null && !bootstrapControllers.isEmpty()) {
+                bootstrapAddresses = bootstrapControllers;
+                parseAndValidateAddresses(bootstrapControllers, dnsLookup);
+            } else {
+                bootstrapAddresses = List.of();
             }
 
             bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-                bootstrapServers,
+                bootstrapAddresses,
                 dnsLookup,
                 CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
             );
