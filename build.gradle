@@ -4141,11 +4141,10 @@ def verifyLatestStableMetadataVersionTask = tasks.register('verifyLatestStableMe
   description = "Verifies that LATEST_STABLE_METADATA_VERSION in version.py matches LATEST_PRODUCTION in MetadataVersion.java"
 
   doLast {
-    def mvJavaFile = file("${project.rootDir}/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java")
-    def versionPyFile = file("${project.rootDir}/tests/kafkatest/version.py")
-
     // Extract enum constant name that LATEST_PRODUCTION points to, e.g. LATEST_PRODUCTION = IBP_4_3_IV0 -> IBP_4_3_IV0
-    def mvContent = mvJavaFile.text
+    def mvContent = file("${project.rootDir}/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java").text
+    def pyContent = file("${project.rootDir}/tests/kafkatest/version.py").text
+
     def latestProductionEnumName = mvContent =~ /LATEST_PRODUCTION\s*=\s*(IBP_\w+)/
     if (!latestProductionEnumName) throw new GradleException("Could not find LATEST_PRODUCTION in MetadataVersion.java")
     def latestProductionEnumConstant = latestProductionEnumName[0][1] // e.g. "IBP_4_3_IV0"
@@ -4155,10 +4154,9 @@ def verifyLatestStableMetadataVersionTask = tasks.register('verifyLatestStableMe
     if (!enumMatch) throw new GradleException("Could not find enum definition for ${latestProductionEnumConstant} in MetadataVersion.java")
     def javaVersion = "${enumMatch[0][1]}-${enumMatch[0][2]}" // e.g. "4.3-IV0"
 
-    // Extract LATEST_STABLE_METADATA_VERSION from version.py
-    def pyLine = versionPyFile.readLines().find { it.startsWith("LATEST_STABLE_METADATA_VERSION") }
-    if (!pyLine) throw new GradleException("LATEST_STABLE_METADATA_VERSION not found in version.py")
-    def pyVersion = pyLine.replaceAll(/.*=\s*"([^"]+)".*/, '$1') // e.g. "4.3-IV0"
+    def pyMatch = pyContent =~ /LATEST_STABLE_METADATA_VERSION\s*=\s*"([^"]+)"/
+    if (!pyMatch) throw new GradleException("LATEST_STABLE_METADATA_VERSION not found in version.py")
+    def pyVersion = pyMatch[0][1] // e.g. "4.3-IV0"
 
     if (javaVersion != pyVersion) {
       throw new GradleException(
