@@ -231,7 +231,7 @@ public class UncleanLeaderElectionTest {
         assertInstanceOf(InvalidConfigurationException.class, e.getCause());
     }
 
-    public void verifyUncleanLeaderElectionEnabled(GroupProtocol groupProtocol) throws Exception {
+    private void verifyUncleanLeaderElectionEnabled(GroupProtocol groupProtocol) throws Exception {
         // wait until leader is elected
         int leaderId = awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.empty());
         LOG.debug("Leader for {} is elected to be: {}", TOPIC, leaderId);
@@ -273,7 +273,7 @@ public class UncleanLeaderElectionTest {
         assertEquals(List.of("first", "third"), consumeAllMessages(2, groupProtocol));
     }
 
-    public void verifyUncleanLeaderElectionDisabled(GroupProtocol groupProtocol) throws Exception {
+    private void verifyUncleanLeaderElectionDisabled(GroupProtocol groupProtocol) throws Exception {
         // wait until leader is elected
         int leaderId = awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.empty());
         LOG.debug("Leader for {} is elected to be: {}", TOPIC, leaderId);
