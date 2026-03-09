@@ -571,8 +571,8 @@ public class DumpLogSegments {
                 );
             });
 
-            shallowOffsetNotFound.values().forEach(listOfShallowOffsetNotFound -> {
-                System.err.println("The following indexed offsets are not found in the log.");
+            shallowOffsetNotFound.forEach((fileName, listOfShallowOffsetNotFound) -> {
+                System.err.println("The following indexed offsets are not found in :" + fileName);
                 listOfShallowOffsetNotFound.forEach(pair ->
                     System.err.println("Indexed offset: " + pair.getKey() + ", found log offset: " + pair.getValue())
                 );
