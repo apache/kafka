@@ -32,7 +32,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -80,7 +79,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Setup an embedded Kafka KRaft cluster for integration tests (using {@link org.apache.kafka.common.test.KafkaClusterTestKit} internally) with the
@@ -212,47 +210,6 @@ public class EmbeddedKafkaCluster {
         if (shutdownFailure.get() != null) {
             throw new KafkaException("Failed to shut down producer / embedded Kafka cluster", shutdownFailure.get());
         }
-    }
-
-    /**
-     * Shutdown a single broker by its ID, without destroying the cluster.
-     * Use {@link #startBroker(int)} to restart it.
-     */
-    public void shutdownBroker(final int brokerId) {
-        cluster.brokers().get(brokerId).shutdown();
-    }
-
-    /**
-     * Start a previously shutdown broker by its ID and wait for it to be ready.
-     */
-    public void startBroker(final int brokerId) throws ExecutionException, InterruptedException {
-        cluster.brokers().get(brokerId).startup();
-        cluster.waitForReadyBrokers();
-    }
-
-    /**
-     * Roll the log for partition 0 of __consumer_offsets and wait for compaction to complete.
-     * Sets delete.retention.ms=0 so that tombstones are removed during compaction.
-     */
-    public void rollAndCompactConsumerOffsets() throws Exception {
-        final ConfigResource resource = new ConfigResource(
-            ConfigResource.Type.TOPIC, "__consumer_offsets");
-        try (final Admin adminClient = Admin.create(
-            Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers()))) {
-            adminClient.incrementalAlterConfigs(Map.of(resource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    "delete.retention.ms", "0"), AlterConfigOp.OpType.SET)
-            ))).all().get();
-        }
-
-        final TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
-        final kafka.server.BrokerServer broker = cluster.brokers().values().iterator().next();
-        final kafka.log.LogManager logManager = broker.logManager();
-        final var unifiedLog = logManager.getLog(tp, false).get();
-        final long endOffset = unifiedLog.logEndOffset();
-        unifiedLog.roll();
-        assertTrue(logManager.cleaner().awaitCleaned(tp, endOffset, 60000L),
-            "Compaction of __consumer_offsets did not complete in time");
     }
 
     public String bootstrapServers() {

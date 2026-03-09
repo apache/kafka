@@ -23,9 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.storage.internals.log.CleanerConfig;
-import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -64,13 +61,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
     public static final String INPUT_TOPIC = "migration-input";
     public static final String OUTPUT_TOPIC = "migration-output";
-    private static final Properties BROKER_PROPS = new Properties();
-    static {
-        BROKER_PROPS.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, 1000L);
-        BROKER_PROPS.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
-        BROKER_PROPS.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-    }
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, BROKER_PROPS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     private String inputTopic;
     private String outputTopic;
@@ -172,16 +163,6 @@ public class RebalanceProtocolMigrationIntegrationTest {
         final String key,
         final String value)
         throws Exception {
-        processExactlyOneRecord(streamsBuilder, props, key, value, false);
-    }
-
-    private void processExactlyOneRecord(
-        final StreamsBuilder streamsBuilder,
-        final Properties props,
-        final String key,
-        final String value,
-        final boolean leaveGroup)
-        throws Exception {
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -196,13 +177,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
             )
         );
 
-        if (leaveGroup) {
-            kafkaStreams.close(
-                CloseOptions.groupMembershipOperation(
-                    CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
-        } else {
-            kafkaStreams.close();
-        }
+        kafkaStreams.close();
         kafkaStreams = null;
     }
 
