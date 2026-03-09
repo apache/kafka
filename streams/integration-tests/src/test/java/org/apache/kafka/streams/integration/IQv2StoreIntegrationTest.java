@@ -53,13 +53,11 @@ import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
@@ -331,22 +329,6 @@ public class IQv2StoreIntegrationTest {
             public boolean isSession() {
                 return true;
             }
-        },
-        ROCKS_SESSION_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofDays(1));
-            }
-
-            @Override
-            public boolean isSession() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeaders() {
-                return true;
-            }
         };
 
         public abstract StoreSupplier<?> supplier();
@@ -368,10 +350,6 @@ public class IQv2StoreIntegrationTest {
         }
 
         public boolean isSession() {
-            return false;
-        }
-
-        public boolean isHeaders() {
             return false;
         }
     }
@@ -471,17 +449,9 @@ public class IQv2StoreIntegrationTest {
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof WindowBytesStoreSupplier) {
             setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof SessionBytesStoreSupplier) {
-            // TODO: DSL + session + headers is not yet supported
-            if (storeToTest.isHeaders()) {
-                return;
-            }
             setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof SessionBytesStoreSupplier) {
-            if (storeToTest.isHeaders()) {
-                setUpSessionHeadersPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
-            } else {
-                setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
-            }
+            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -783,51 +753,10 @@ public class IQv2StoreIntegrationTest {
 
     }
 
-    private void setUpSessionHeadersPAPITopology(final SessionBytesStoreSupplier supplier,
-                                                 final StreamsBuilder builder,
-                                                 final boolean cache,
-                                                 final boolean log) {
-        final StoreBuilder<?> sessionStoreBuilder =
-            Stores.sessionStoreBuilderWithHeaders(
-                supplier,
-                Serdes.Integer(),
-                Serdes.Integer()
-            );
-        final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier =
-            () -> new ContextualProcessor<>() {
-                @Override
-                public void process(final Record<Integer, Integer> record) {
-                    final SessionStoreWithHeaders<Integer, Integer> stateStore =
-                        context().getStateStore(sessionStoreBuilder.name());
-                    stateStore.put(
-                        new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())),
-                        AggregationWithHeaders.make(record.value(), record.headers())
-                    );
-                }
-            };
-        if (cache) {
-            sessionStoreBuilder.withCachingEnabled();
-        } else {
-            sessionStoreBuilder.withCachingDisabled();
-        }
-        if (log) {
-            sessionStoreBuilder.withLoggingEnabled(Collections.emptyMap());
-        } else {
-            sessionStoreBuilder.withLoggingDisabled();
-        }
-        builder.addStateStore(sessionStoreBuilder);
-        builder
-            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-            .process(processorSupplier, sessionStoreBuilder.name());
-    }
-
     @AfterEach
     public void afterTest() {
-        // only needed because some of the PAPI cases aren't added yet.
-        if (kafkaStreams != null) {
-            kafkaStreams.close(Duration.ofSeconds(60));
-            kafkaStreams.cleanUp();
-        }
+        kafkaStreams.close(Duration.ofSeconds(60));
+        kafkaStreams.cleanUp();
     }
 
     @AfterAll
@@ -839,10 +768,6 @@ public class IQv2StoreIntegrationTest {
     @MethodSource("data")
     public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
         setup(cache, log, storeToTest, kind, groupProtocol);
-        // DSL + session + headers is not yet supported, setup() returned early
-        if (kafkaStreams == null) {
-            return;
-        }
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
