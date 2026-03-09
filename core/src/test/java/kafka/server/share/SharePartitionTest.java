@@ -123,7 +123,7 @@ public class SharePartitionTest {
     private static final TopicIdPartition TOPIC_ID_PARTITION = new TopicIdPartition(Uuid.randomUuid(), 0, "test-topic");
     private static final String MEMBER_ID = "member-1";
     private static final Time MOCK_TIME = new MockTime();
-    private static final short MAX_IN_FLIGHT_RECORDS = 200;
+    private static final int MAX_IN_FLIGHT_RECORDS = 200;
     private static final int ACQUISITION_LOCK_TIMEOUT_MS = 100;
     private static final int DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS = 120;
     private static final int BATCH_SIZE = 500;
@@ -12465,14 +12465,13 @@ public class SharePartitionTest {
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightRecords(100)
             .withGroupConfigManager(groupConfigManager)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
         MemoryRecords records = memoryRecords(0, 50);
 
-        // Acquire 50 records, which is under the default limit of 100.
+        // Acquire 50 records, which is under the default limit.
         fetchAcquiredRecords(sharePartition, records, 50);
 
         // Dynamically decrease the limit to 30 via group config.
@@ -12561,7 +12560,6 @@ public class SharePartitionTest {
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightRecords(100)
             .withGroupConfigManager(groupConfigManager)
             .withState(SharePartitionState.ACTIVE)
             .build();
@@ -12569,10 +12567,10 @@ public class SharePartitionTest {
         // Group config sets limit to 500.
         assertEquals(500, sharePartition.maxInFlightRecords());
 
-        // Remove group config — should fall back to default of 100.
+        // Remove group config — should fall back to default.
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
 
-        assertEquals(100, sharePartition.maxInFlightRecords());
+        assertEquals(MAX_IN_FLIGHT_RECORDS, sharePartition.maxInFlightRecords());
     }
 
     @Test
@@ -12581,7 +12579,6 @@ public class SharePartitionTest {
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightRecords(100)
             .withGroupConfigManager(groupConfigManager)
             .withState(SharePartitionState.ACTIVE)
             .build();
@@ -12610,6 +12607,8 @@ public class SharePartitionTest {
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
         Mockito.when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
         Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
+        Mockito.when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(MAX_IN_FLIGHT_RECORDS);
+        Mockito.when(groupConfig.shareDeliveryCountLimit()).thenReturn(MAX_DELIVERY_COUNT);
         return groupConfigManager;
     }
 

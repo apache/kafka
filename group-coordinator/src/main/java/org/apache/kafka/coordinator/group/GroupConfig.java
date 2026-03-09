@@ -408,6 +408,9 @@ public final class GroupConfig extends AbstractConfig {
         return shareHeartbeatIntervalMs;
     }
 
+    /**
+     * The share group delivery count limit.
+     */
     public int shareDeliveryCountLimit() {
         return shareDeliveryCountLimit;
     }

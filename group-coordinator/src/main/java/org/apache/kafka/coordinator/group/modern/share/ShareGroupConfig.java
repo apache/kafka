@@ -44,7 +44,7 @@ public class ShareGroupConfig {
     public static final String SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC = "Share-group record lock limit per share-partition.";
 
     public static final String SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.max.partition.max.record.locks";
-    public static final int SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 10000;
+    public static final int SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 4000;
     public static final String SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DOC = "The maximum value of a group configuration for the record lock limit per share-partition.";
 
     public static final String SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.min.partition.max.record.locks";
