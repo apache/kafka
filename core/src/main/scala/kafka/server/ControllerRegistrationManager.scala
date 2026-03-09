@@ -279,13 +279,9 @@ class ControllerRegistrationManager(
 
   private class RequestTimeoutEvent extends EventQueue.Event {
     override def run(): Unit = {
-      try {
-        pendingRpc = false
-        error(s"RequestTimeoutEvent: request timed out.")
-        scheduleNextCommunicationAfterFailure()
-      } catch {
-        case t: Throwable => error("RequestTimeoutEvent error", t)
-      }
+      pendingRpc = false
+      error(s"RequestTimeoutEvent: request timed out.")
+      scheduleNextCommunicationAfterFailure()
     }
   }
 
