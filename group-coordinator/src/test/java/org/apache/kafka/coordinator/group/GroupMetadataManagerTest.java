@@ -13609,9 +13609,9 @@ public class GroupMetadataManagerTest {
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(protocols1)
             )
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                mkTopicAssignment(barTopicId, 0, 1)))
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 10, 0, 1, 2),
+                mkTopicAssignmentWithEpochs(barTopicId, 10, 0, 1)))
             .build();
         ConsumerGroupMember oldMember2 = new ConsumerGroupMember.Builder(oldMemberId2)
             .setInstanceId(instanceId)
@@ -13623,8 +13623,8 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
             .setServerAssignorName(NoOpPartitionAssignor.NAME)
             .setRebalanceTimeoutMs(45000)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 10, 3, 4, 5)))
             .build();
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
@@ -15319,8 +15319,8 @@ public class GroupMetadataManagerTest {
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(protocols)
             )
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 10, 0, 1, 2)))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
             .setState(MemberState.STABLE)
@@ -15331,7 +15331,7 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(List.of(barTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
-            .setAssignedPartitions(mkAssignment())
+            .setAssignedPartitions(mkAssignmentWithEpochs())
             .build();
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
@@ -15686,8 +15686,8 @@ public class GroupMetadataManagerTest {
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(protocols)
             )
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 10, 0, 1, 2)))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
             .setState(MemberState.STABLE)
@@ -15698,7 +15698,7 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(List.of(barTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
-            .setAssignedPartitions(mkAssignment())
+            .setAssignedPartitions(mkAssignmentWithEpochs())
             .build();
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
