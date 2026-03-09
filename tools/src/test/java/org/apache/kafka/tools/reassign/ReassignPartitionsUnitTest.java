@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.reassign;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.PartitionReassignment;
@@ -38,6 +39,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.lang.reflect.Proxy;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,6 +57,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterPartitionReassignments;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.clearAllThrottles;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterReplicaLogDirs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateFollowerThrottles;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateLeaderThrottles;
@@ -756,12 +761,12 @@ public class ReassignPartitionsUnitTest {
     }
 
     /**
-     * Test that executeAssignment with throttle succeeds when some brokers are down.
-     * Uses MockAdminClient with 3 brokers; reassignment only involves live brokers (0, 1, 2).
-     * The throttle is applied only to live brokers via modifyInterBrokerThrottle/modifyLogDirThrottle.
+     * Test that executeAssignment with throttle succeeds when reassignment involves only live brokers.
+     * With verifyBrokerIds, target brokers must exist; this fix handles down source brokers
+     * (replicas we're moving FROM) by only applying throttle to live brokers.
      */
     @Test
-    public void testExecuteAssignmentWithThrottleWhenBrokerDown() throws Exception {
+    public void testExecuteAssignmentWithThrottleSucceedsWithOnlyLiveBrokers() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(3).build()) {
             addTopicsForThreeBrokers(adminClient);
             String assignment = "{\"version\":1,\"partitions\":" +
@@ -784,12 +789,64 @@ public class ReassignPartitionsUnitTest {
 
     /**
      * Test that modifyInterBrokerThrottle succeeds when all reassigning brokers are down.
-     * Should return early without calling incrementalAlterConfigs.
+     * Verifies incrementalAlterConfigs is not called (returns early).
      */
     @Test
     public void testModifyInterBrokerThrottleWhenAllBrokersDown() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(3).build()) {
-            modifyInterBrokerThrottle(adminClient, Set.of(3), 1000);
+            Admin adminThatFailsIfConfigAltered = (Admin) Proxy.newProxyInstance(
+                Admin.class.getClassLoader(),
+                new Class<?>[]{Admin.class},
+                (proxy, method, args) -> {
+                    if ("incrementalAlterConfigs".equals(method.getName())) {
+                        throw new AssertionError("incrementalAlterConfigs should not be called when all brokers are down");
+                    }
+                    return method.invoke(adminClient, args);
+                });
+            // Should return early without calling incrementalAlterConfigs - no exception means success
+            modifyInterBrokerThrottle(adminThatFailsIfConfigAltered, Set.of(3), 1000);
+        }
+    }
+
+    /**
+     * Test that clearAllThrottles only clears throttles on live brokers when some brokers are down.
+     * Called by --verify when reassignment completes.
+     */
+    @Test
+    public void testClearAllThrottlesSkipsDownBrokers() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(3).build()) {
+            addTopicsForThreeBrokers(adminClient);
+            // Set throttle on live brokers first
+            modifyInterBrokerThrottle(adminClient, Set.of(0, 1, 2), 1000);
+            // targetParts includes broker 3 (down) - from assignment that had broker 3
+            List<Entry<TopicPartition, List<Integer>>> targetParts = List.of(
+                new SimpleImmutableEntry<>(new TopicPartition("foo", 0), List.of(0, 1, 2)),
+                new SimpleImmutableEntry<>(new TopicPartition("foo", 1), List.of(1, 2, 3))
+            );
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            PrintStream originalOut = System.out;
+            try {
+                System.setOut(new PrintStream(out));
+                clearAllThrottles(adminClient, targetParts);
+            } finally {
+                System.setOut(originalOut);
+            }
+
+            String output = out.toString();
+            assertTrue(output.contains("Warning: Could not clear broker-level throttles on down broker 3"),
+                "Expected warning about down broker 3, got: " + output);
+            assertTrue(output.contains("Clearing broker-level throttles") && output.contains("0,1,2"),
+                "Expected clearing on live brokers 0,1,2, got: " + output);
+
+            // Verify throttles were cleared on live brokers
+            List<ConfigResource> brokers = new ArrayList<>();
+            for (int i = 0; i < 3; i++)
+                brokers.add(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(i)));
+            Map<ConfigResource, Config> results = adminClient.describeConfigs(brokers).all().get();
+            verifyBrokerThrottleResults(results.get(brokers.get(0)), -1, -1);
+            verifyBrokerThrottleResults(results.get(brokers.get(1)), -1, -1);
+            verifyBrokerThrottleResults(results.get(brokers.get(2)), -1, -1);
         }
     }
 

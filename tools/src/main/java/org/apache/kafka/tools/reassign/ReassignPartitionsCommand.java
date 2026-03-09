@@ -503,21 +503,35 @@ public class ReassignPartitionsCommand {
 
     /**
      * Clear all topic-level and broker-level throttles.
+     * Only clears throttles on live brokers to avoid TimeoutException when some brokers are down.
+     * Called by --verify when reassignment is complete.
      *
      * @param adminClient     The AdminClient to use.
      * @param targetParts     The target partitions loaded from the JSON file.
      */
-    private static void clearAllThrottles(Admin adminClient,
+    static void clearAllThrottles(Admin adminClient,
                                           List<Entry<TopicPartition, List<Integer>>> targetParts
     ) throws ExecutionException, InterruptedException {
         Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
-        Set<Integer> brokers = new HashSet<>(liveBrokers);
-        targetParts.forEach(t -> brokers.addAll(t.getValue()));
-        brokers.retainAll(liveBrokers);
+        Set<Integer> brokersFromAssignment = new HashSet<>();
+        targetParts.forEach(t -> brokersFromAssignment.addAll(t.getValue()));
+        Set<Integer> downBrokers = brokersFromAssignment.stream()
+            .filter(b -> !liveBrokers.contains(b))
+            .collect(Collectors.toSet());
 
-        System.out.printf("Clearing broker-level throttles on broker%s %s%n",
-            brokers.size() == 1 ? "" : "s", brokers.stream().map(Object::toString).collect(Collectors.joining(",")));
-        clearBrokerLevelThrottles(adminClient, brokers);
+        if (!downBrokers.isEmpty()) {
+            System.out.printf("Warning: Could not clear broker-level throttles on down broker%s %s. " +
+                "Throttles will be cleared when the broker comes back up.%n",
+                downBrokers.size() == 1 ? "" : "s",
+                downBrokers.stream().sorted().map(Object::toString).collect(Collectors.joining(",")));
+        }
+
+        if (!liveBrokers.isEmpty()) {
+            System.out.printf("Clearing broker-level throttles on broker%s %s%n",
+                liveBrokers.size() == 1 ? "" : "s",
+                liveBrokers.stream().sorted().map(Object::toString).collect(Collectors.joining(",")));
+            clearBrokerLevelThrottles(adminClient, liveBrokers);
+        }
 
         Set<String> topics = targetParts.stream().map(t -> t.getKey().topic()).collect(Collectors.toSet());
         System.out.printf("Clearing topic-level throttles on topic%s %s%n",
@@ -808,14 +822,16 @@ public class ReassignPartitionsCommand {
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
 
+            Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
+
             if (interBrokerThrottle >= 0) {
                 Map<String, Map<Integer, PartitionMove>> moveMap = calculateProposedMoveMap(currentReassignments, proposedParts, currentParts);
-                modifyReassignmentThrottle(adminClient, moveMap, interBrokerThrottle);
+                modifyReassignmentThrottle(adminClient, moveMap, interBrokerThrottle, liveBrokers);
             }
 
             if (logDirThrottle >= 0) {
                 Set<Integer> movingBrokers = calculateMovingBrokers(proposedReplicas.keySet());
-                modifyLogDirThrottle(adminClient, movingBrokers, logDirThrottle);
+                modifyLogDirThrottle(adminClient, movingBrokers, logDirThrottle, liveBrokers);
             }
         }
 
@@ -1184,33 +1200,59 @@ public class ReassignPartitionsCommand {
     private static void modifyReassignmentThrottle(
         Admin admin,
         Map<String, Map<Integer, PartitionMove>> moveMap,
-        long interBrokerThrottle
+        long interBrokerThrottle,
+        Set<Integer> liveBrokers
     ) throws ExecutionException, InterruptedException {
         Map<String, String> leaderThrottles = calculateLeaderThrottles(moveMap);
         Map<String, String> followerThrottles = calculateFollowerThrottles(moveMap);
         modifyTopicThrottles(admin, leaderThrottles, followerThrottles);
 
         Set<Integer> reassigningBrokers = calculateReassigningBrokers(moveMap);
-        modifyInterBrokerThrottle(admin, reassigningBrokers, interBrokerThrottle);
+        modifyInterBrokerThrottle(admin, reassigningBrokers, interBrokerThrottle, liveBrokers);
+    }
+
+    /**
+     * Modify the leader/follower replication throttles for a set of brokers.
+     * Only applies throttle to currently live brokers. Fetches live brokers from cluster.
+     * Use {@link #modifyInterBrokerThrottle(Admin, Set, long, Set)} to avoid redundant describeCluster calls.
+     */
+    static void modifyInterBrokerThrottle(Admin adminClient,
+                                          Set<Integer> reassigningBrokers,
+                                          long interBrokerThrottle) throws ExecutionException, InterruptedException {
+        modifyInterBrokerThrottle(adminClient, reassigningBrokers, interBrokerThrottle, getLiveBrokerIds(adminClient));
     }
 
     /**
      * Modify the leader/follower replication throttles for a set of brokers.
      * Only applies throttle to currently live brokers, so reassignment can proceed
-     * even when some brokers are down (avoids TimeoutException on incrementalAlterConfigs).
+     * even when some source brokers are down (avoids TimeoutException on incrementalAlterConfigs).
+     * Note: The live broker set is a snapshot; a broker could go down or come back up
+     * between the check and the incrementalAlterConfigs call.
      *
      * @param adminClient The Admin instance to use
-     * @param reassigningBrokers The set of brokers involved in the reassignment
+     * @param reassigningBrokers The set of brokers involved in the reassignment (sources and destinations)
      * @param interBrokerThrottle The new throttle (ignored if less than 0)
+     * @param liveBrokers The set of broker IDs currently live in the cluster
      */
     static void modifyInterBrokerThrottle(Admin adminClient,
                                           Set<Integer> reassigningBrokers,
-                                          long interBrokerThrottle) throws ExecutionException, InterruptedException {
+                                          long interBrokerThrottle,
+                                          Set<Integer> liveBrokers) throws ExecutionException, InterruptedException {
         if (interBrokerThrottle >= 0) {
-            Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
             Set<Integer> brokersToUpdate = reassigningBrokers.stream()
                 .filter(liveBrokers::contains)
                 .collect(Collectors.toSet());
+            Set<Integer> downBrokers = reassigningBrokers.stream()
+                .filter(b -> !liveBrokers.contains(b))
+                .collect(Collectors.toSet());
+
+            if (!downBrokers.isEmpty()) {
+                System.out.printf("Warning: Could not set inter-broker throttle on down broker%s %s. " +
+                    "Reassignment will proceed with throttle on live brokers only.%n",
+                    downBrokers.size() == 1 ? "" : "s",
+                    downBrokers.stream().sorted().map(Object::toString).collect(Collectors.joining(",")));
+            }
+
             if (brokersToUpdate.isEmpty()) {
                 return;
             }
@@ -1230,21 +1272,44 @@ public class ReassignPartitionsCommand {
 
     /**
      * Modify the log dir reassignment throttle for a set of brokers.
+     * Only applies throttle to currently live brokers. Fetches live brokers from cluster.
+     * Use {@link #modifyLogDirThrottle(Admin, Set, long, Set)} to avoid redundant describeCluster calls.
+     */
+    static void modifyLogDirThrottle(Admin admin,
+                                     Set<Integer> movingBrokers,
+                                     long logDirThrottle) throws ExecutionException, InterruptedException {
+        modifyLogDirThrottle(admin, movingBrokers, logDirThrottle, getLiveBrokerIds(admin));
+    }
+
+    /**
+     * Modify the log dir reassignment throttle for a set of brokers.
      * Only applies throttle to currently live brokers, so reassignment can proceed
      * even when some brokers are down (avoids TimeoutException on incrementalAlterConfigs).
      *
      * @param admin The Admin instance to use
      * @param movingBrokers The set of broker to alter the throttle of
      * @param logDirThrottle The new throttle (ignored if less than 0)
+     * @param liveBrokers The set of broker IDs currently live in the cluster
      */
     static void modifyLogDirThrottle(Admin admin,
                                      Set<Integer> movingBrokers,
-                                     long logDirThrottle) throws ExecutionException, InterruptedException {
+                                     long logDirThrottle,
+                                     Set<Integer> liveBrokers) throws ExecutionException, InterruptedException {
         if (logDirThrottle >= 0) {
-            Set<Integer> liveBrokers = getLiveBrokerIds(admin);
             Set<Integer> brokersToUpdate = movingBrokers.stream()
                 .filter(liveBrokers::contains)
                 .collect(Collectors.toSet());
+            Set<Integer> downBrokers = movingBrokers.stream()
+                .filter(b -> !liveBrokers.contains(b))
+                .collect(Collectors.toSet());
+
+            if (!downBrokers.isEmpty()) {
+                System.out.printf("Warning: Could not set replica-alter-dir throttle on down broker%s %s. " +
+                    "Reassignment will proceed with throttle on live brokers only.%n",
+                    downBrokers.size() == 1 ? "" : "s",
+                    downBrokers.stream().sorted().map(Object::toString).collect(Collectors.joining(",")));
+            }
+
             if (brokersToUpdate.isEmpty()) {
                 return;
             }
