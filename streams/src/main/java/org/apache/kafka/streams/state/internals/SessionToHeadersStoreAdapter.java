@@ -26,6 +26,8 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -174,7 +176,19 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-        final QueryResult<R> result = store.query(query, positionBound, config);
+        final QueryResult<R> result;
+        if (query instanceof WindowRangeQuery) {
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult = store.query(windowRangeQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator = new SessionToHeadersIteratorAdapter(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            result = store.query(query, positionBound, config);
+        }
         if (config.isCollectExecutionInfo()) {
             result.addExecutionInfo(
                 "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns");
