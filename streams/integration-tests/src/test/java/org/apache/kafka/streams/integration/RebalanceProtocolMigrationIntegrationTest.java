@@ -186,14 +186,11 @@ public class RebalanceProtocolMigrationIntegrationTest {
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         processExactlyOneRecord(streamsBuilder, props, "2", "B");
 
-        // Flood __consumer_offsets to fill up segments and trigger compaction
-        // across all partitions, then force compaction twice.
-        floodConsumerOffsetsForCompaction();
+        // Force compaction: the first pass sets deleteHorizonMs on tombstones.
+        // Then write a single offset commit to create dirty data so the second
+        // pass re-cleans the segment and removes the expired tombstones.
         CLUSTER.rollAndCompactConsumerOffsets();
-        // Flood again to create dirty data for the second compaction pass,
-        // which is needed to re-clean the segment and remove tombstones
-        // whose deleteHorizonMs was set during the first pass.
-        floodConsumerOffsetsForCompaction();
+        writeOneOffsetCommit();
         CLUSTER.rollAndCompactConsumerOffsets();
 
         // Restart the broker to force replay of __consumer_offsets.
@@ -227,32 +224,29 @@ public class RebalanceProtocolMigrationIntegrationTest {
                 ConfigResource.Type.TOPIC, "__consumer_offsets");
             adminClient.incrementalAlterConfigs(Map.of(resource, List.of(
                 new AlterConfigOp(new ConfigEntry(
-                    TopicConfig.DELETE_RETENTION_MS_CONFIG, "0"), AlterConfigOp.OpType.SET)
+                    TopicConfig.DELETE_RETENTION_MS_CONFIG, "0"), AlterConfigOp.OpType.SET),
+                new AlterConfigOp(new ConfigEntry(
+                    TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.0"), AlterConfigOp.OpType.SET)
             ))).all().get();
         }
     }
 
-    private void floodConsumerOffsetsForCompaction() {
+    private void writeOneOffsetCommit() {
+        // Write a single offset commit to create dirty data past the cleaner
+        // checkpoint so the cleaner will re-process previously compacted
+        // segments on the next compaction pass.
         final Properties consumerProps = new Properties();
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "compaction-trigger");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        // Commit offsets for many different groups to fill up __consumer_offsets
-        // segments and trigger log compaction. Use metadata strings close to
-        // the maximum allowed size (4096 bytes) to fill segments faster.
-        final String metadata = "x".repeat(4000);
-        for (int i = 0; i < 200; i++) {
-            consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "compaction-trigger-" + i);
-            try (final KafkaConsumer<String, String> consumer =
-                     new KafkaConsumer<>(consumerProps)) {
-                final TopicPartition tp = new TopicPartition(inputTopic, 0);
-                consumer.assign(List.of(tp));
-                for (int round = 0; round < 13; round++) {
-                    consumer.commitSync(Map.of(tp, new OffsetAndMetadata(round, metadata)));
-                }
-            }
+        try (final KafkaConsumer<String, String> consumer =
+                 new KafkaConsumer<>(consumerProps)) {
+            final TopicPartition tp = new TopicPartition(inputTopic, 0);
+            consumer.assign(List.of(tp));
+            consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0)));
         }
     }
 
