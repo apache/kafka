@@ -36,30 +36,13 @@ class TimestampedSegmentsWithHeaders extends AbstractSegments<TimestampedSegment
     }
 
     @Override
-    public TimestampedSegmentWithHeaders getOrCreateSegment(final long segmentId,
-                                                            final StateStoreContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            final TimestampedSegmentWithHeaders newSegment =
-                new TimestampedSegmentWithHeaders(segmentName(segmentId), name, segmentId, position, metricsRecorder);
-
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("TimestampedSegmentWithHeaders already exists. Possible concurrent access.");
-            }
-
-            newSegment.openDB(context.appConfigs(), context.stateDir());
-            return newSegment;
-        }
+    protected TimestampedSegmentWithHeaders createSegment(final long segmentId, final String segmentName) {
+        return new TimestampedSegmentWithHeaders(segmentName, name, segmentId, position, metricsRecorder);
     }
 
     @Override
-    public TimestampedSegmentWithHeaders getOrCreateSegmentIfLive(final long segmentId,
-                                                                   final StateStoreContext context,
-                                                                   final long streamTime) {
-        final TimestampedSegmentWithHeaders segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
-        cleanupExpiredSegments(streamTime);
-        return segment;
+    protected void openSegmentDB(final TimestampedSegmentWithHeaders segment, final StateStoreContext context) {
+        segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override

@@ -95,6 +95,7 @@ import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -1837,6 +1838,19 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldNotComputeOffsetSumForRunningStatelessTask() {
+        final StreamTask runningStatelessTask = statelessTask(taskId00).inState(State.RUNNING).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatelessTask)));
+
+        assertThat(
+                taskManager.taskOffsetSums(),
+                is(emptyMap())
+        );
+    }
+
+    @Test
     public void shouldComputeOffsetSumForNonRunningActiveTask() throws Exception {
         final StreamTask restoringStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING).build();
@@ -1852,6 +1866,7 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStatefulTask));
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
 
         assertThat(taskManager.taskOffsetSums(), is(expectedOffsetSums));
     }
@@ -1874,6 +1889,7 @@ public class TaskManagerTest {
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStatefulTask));
         taskManager.handleRebalanceStart(singleton("topic"));
 
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
         assertThat(taskManager.taskOffsetSums(), is(expectedOffsetSums));
     }
 
@@ -1885,12 +1901,11 @@ public class TaskManagerTest {
         when(restoringStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffset)));
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = mkMap(mkEntry(t1p0changelog, 24L));
-        writeCheckpointFile(taskId00, changelogOffsetInCheckpoint);
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStandbyTask));
         taskManager.handleRebalanceStart(singleton("topic"));
+        when(stateDirectory.taskOffsetSums(Collections.singleton(taskId00))).thenReturn(mkMap(mkEntry(taskId00, changelogOffset)));
 
         assertThat(taskManager.taskOffsetSums(), is(mkMap(mkEntry(taskId00, changelogOffset))));
     }
@@ -1916,6 +1931,12 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStandbyTask, restoringStatefulTask));
+        when(stateDirectory.taskOffsetSums(Set.of(taskId00, taskId01, taskId02)))
+                .thenReturn(mkMap(
+                        mkEntry(taskId00, changelogOffsetOfRunningTask),
+                        mkEntry(taskId01, changelogOffsetOfRestoringStatefulTask),
+                        mkEntry(taskId02, changelogOffsetOfRestoringStandbyTask)
+                ));
 
         assertThat(
             taskManager.taskOffsetSums(),
@@ -1942,12 +1963,12 @@ public class TaskManagerTest {
         when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId01, restoringStatefulTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStatefulTask));
 
-        assertThat(
-            taskManager.taskOffsetSums(),
-            is(mkMap(
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(
                 mkEntry(taskId01, changelogOffsetOfRestoringStandbyTask)
-            ))
         );
+
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
+        assertThat(taskManager.taskOffsetSums(), is(expectedOffsetSums));
     }
 
     @Test
@@ -1976,20 +1997,17 @@ public class TaskManagerTest {
         taskManager.handleRebalanceStart(singleton("topic"));
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
 
+        when(stateDirectory.taskOffsetSums(any())).thenReturn(expectedOffsetSums);
         assertThat(taskManager.taskOffsetSums(), is(expectedOffsetSums));
     }
 
     @Test
     public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), 5L),
-            mkEntry(new TopicPartition("changelog", 1), 10L)
-        );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        writeCheckpointFile(taskId00, changelogOffsets);
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
 
         taskManager.handleRebalanceStart(singleton("topic"));
 
@@ -1999,10 +2017,6 @@ public class TaskManagerTest {
     @ParameterizedTest
     @EnumSource(value = State.class, names = {"CREATED", "CLOSED"})
     public void shouldComputeOffsetSumFromCheckpointFileForCreatedAndClosedTasks(final State state) throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), 5L),
-            mkEntry(new TopicPartition("changelog", 1), 10L)
-        );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
@@ -2012,15 +2026,17 @@ public class TaskManagerTest {
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, task)));
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
 
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        writeCheckpointFile(taskId00, changelogOffsets);
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
 
         taskManager.handleRebalanceStart(singleton("topic"));
 
+        when(stateDirectory.taskOffsetSums(Collections.singleton(taskId00))).thenReturn(expectedOffsetSums);
         assertThat(taskManager.taskOffsetSums(), is(expectedOffsetSums));
     }
     
@@ -2039,7 +2055,6 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         expectDirectoryNotEmpty(taskId00);
-        when(stateDirectory.checkpointFileFor(taskId00)).thenReturn(getCheckpointFile(taskId00));
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertTrue(taskManager.taskOffsetSums().isEmpty());
@@ -2047,17 +2062,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws Exception {
-        final long largeOffset = Long.MAX_VALUE / 2;
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 1), largeOffset),
-            mkEntry(new TopicPartition("changelog", 2), largeOffset),
-            mkEntry(new TopicPartition("changelog", 3), largeOffset)
-        );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Long.MAX_VALUE));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        writeCheckpointFile(taskId00, changelogOffsets);
+        when(stateDirectory.taskOffsetSums(expectedOffsetSums.keySet())).thenReturn(expectedOffsetSums);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.taskOffsetSums(), is(expectedOffsetSums));

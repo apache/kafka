@@ -40,15 +40,12 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
 import org.slf4j.Logger;
 
 import java.io.File;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -1242,7 +1239,6 @@ public class TaskManager {
      * Does not include stateless or non-logged tasks.
      */
     public Map<TaskId, Long> taskOffsetSums() {
-        final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
         // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
@@ -1250,27 +1246,14 @@ public class TaskManager {
         final Map<TaskId, Task> tasks = allTasks();
         final Set<TaskId> lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks =
             union(HashSet::new, lockedTaskDirectories, tasks.keySet());
-        for (final Task task : tasks.values()) {
-            if (task.state() != State.CREATED && task.state() != State.CLOSED) {
-                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
-                if (changelogOffsets.isEmpty()) {
-                    log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}",
-                        task.id());
-                } else {
-                    taskOffsetSums.put(task.id(), sumOfChangelogOffsets(task.id(), changelogOffsets));
-                }
-                lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks.remove(task.id());
-            }
-        }
 
-        for (final TaskId id : lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks) {
-            final File checkpointFile = stateDirectory.checkpointFileFor(id);
-            try {
-                if (checkpointFile.exists()) {
-                    taskOffsetSums.put(id, sumOfChangelogOffsets(id, new OffsetCheckpoint(checkpointFile).read()));
-                }
-            } catch (final IOException e) {
-                log.warn(String.format("Exception caught while trying to read checkpoint for task %s:", id), e);
+        final Map<TaskId, Long> taskOffsetSums = stateDirectory.taskOffsetSums(lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks);
+
+        // overlay latest offsets from assigned tasks
+        for (final Task task : tasks.values()) {
+            // exclude stateless and non-logged tasks
+            if (task.isActive() && task.state() == State.RUNNING && !task.changelogPartitions().isEmpty()) {
+                taskOffsetSums.put(task.id(), Task.LATEST_OFFSET);
             }
         }
 
@@ -1289,7 +1272,7 @@ public class TaskManager {
         lockedTaskDirectories.clear();
 
         final Map<TaskId, Task> allTasks = allTasks();
-        for (final TaskDirectory taskDir : stateDirectory.listNonEmptyTaskDirectories()) {
+        for (final StateDirectory.TaskDirectory taskDir : stateDirectory.listNonEmptyTaskDirectories()) {
             final File dir = taskDir.file();
             final String namedTopology = taskDir.namedTopology();
             try {
@@ -1341,34 +1324,6 @@ public class TaskManager {
                 taskIdIterator.remove();
             }
         }
-    }
-
-    private long sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, Long> changelogOffsets) {
-        long offsetSum = 0L;
-        for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
-            final long offset = changelogEntry.getValue();
-
-
-            if (offset == Task.LATEST_OFFSET) {
-                // this condition can only be true for active tasks; never for standby
-                // for this case, the offset of all partitions is set to `LATEST_OFFSET`
-                // and we "forward" the sentinel value directly
-                return Task.LATEST_OFFSET;
-            } else if (offset != OffsetCheckpoint.OFFSET_UNKNOWN) {
-                if (offset < 0) {
-                    throw new StreamsException(
-                        new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
-                        id);
-                }
-                offsetSum += offset;
-                if (offsetSum < 0) {
-                    log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
-                    return Long.MAX_VALUE;
-                }
-            }
-        }
-
-        return offsetSum;
     }
 
     private void closeTaskDirty(final Task task, final boolean removeFromTasksRegistry) {

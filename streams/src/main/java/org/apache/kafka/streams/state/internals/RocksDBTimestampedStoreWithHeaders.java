@@ -18,6 +18,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
@@ -50,7 +54,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
         RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME;
 
-    private static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
+    static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
         "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBTimestampedStoreWithHeaders(final String name,
@@ -86,8 +90,29 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         }
     }
 
+    @SuppressWarnings("SynchronizeOnNonFinalField")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+
+        synchronized (position) {
+            result = QueryResult.forUnknownQueryType(query, this);
+
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + this.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                );
+            }
+            result.setPosition(position.copy());
+        }
+        return result;
+    }
+
     private void openInUpgradeMode(final DBOptions dbOptions,
-                                              final ColumnFamilyOptions columnFamilyOptions) {
+                                   final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
@@ -126,7 +151,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void openInRegularMode(final DBOptions dbOptions,
-                              final ColumnFamilyOptions columnFamilyOptions) {
+                                   final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
@@ -144,7 +169,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void verifyAndCloseEmptyDefaultColumnFamily(final ColumnFamilyHandle columnFamilyHandle) {
-        try (final RocksIterator defaultIter = db.newIterator(columnFamilyHandle)) {
+        try (columnFamilyHandle; final RocksIterator defaultIter = db.newIterator(columnFamilyHandle)) {
             defaultIter.seekToFirst();
             if (defaultIter.isValid()) {
                 throw new ProcessorStateException("Cannot upgrade directly from key-value store to headers-aware store for " + name + ". " +

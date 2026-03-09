@@ -120,6 +120,20 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
         return readHeaders(buffer);
     }
 
+    /**
+     * Extract the raw aggregation bytes from serialized AggregationWithHeaders,
+     * stripping the headers prefix.
+     */
+    static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
+        if (aggregationWithHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
+        readHeaders(buffer);
+        return readBytes(buffer, buffer.remaining());
+    }
+
     private static Headers readHeaders(final ByteBuffer buffer) {
         final int headersSize = ByteUtils.readVarint(buffer);
         final byte[] rawHeaders = readBytes(buffer, headersSize);
