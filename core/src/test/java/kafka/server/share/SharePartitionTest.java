@@ -119,11 +119,11 @@ public class SharePartitionTest {
 
     private static final String ACQUISITION_LOCK_NEVER_GOT_RELEASED = "Acquisition lock never got released.";
     private static final String GROUP_ID = "test-group";
-    private static final int MAX_DELIVERY_COUNT = 5;
+    private static final int DEFAULT_MAX_DELIVERY_COUNT = 5;
     private static final TopicIdPartition TOPIC_ID_PARTITION = new TopicIdPartition(Uuid.randomUuid(), 0, "test-topic");
     private static final String MEMBER_ID = "member-1";
     private static final Time MOCK_TIME = new MockTime();
-    private static final int MAX_IN_FLIGHT_RECORDS = 200;
+    private static final int DEFAULT_MAX_IN_FLIGHT_RECORDS = 200;
     private static final int ACQUISITION_LOCK_TIMEOUT_MS = 100;
     private static final int DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS = 120;
     private static final int BATCH_SIZE = 500;
@@ -12570,7 +12570,7 @@ public class SharePartitionTest {
         // Remove group config — should fall back to default.
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
 
-        assertEquals(MAX_IN_FLIGHT_RECORDS, sharePartition.maxInFlightRecords());
+        assertEquals(DEFAULT_MAX_IN_FLIGHT_RECORDS, sharePartition.maxInFlightRecords());
     }
 
     @Test
@@ -12607,16 +12607,16 @@ public class SharePartitionTest {
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
         Mockito.when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
         Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
-        Mockito.when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(MAX_IN_FLIGHT_RECORDS);
-        Mockito.when(groupConfig.shareDeliveryCountLimit()).thenReturn(MAX_DELIVERY_COUNT);
+        Mockito.when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(DEFAULT_MAX_IN_FLIGHT_RECORDS);
+        Mockito.when(groupConfig.shareDeliveryCountLimit()).thenReturn(DEFAULT_MAX_DELIVERY_COUNT);
         return groupConfigManager;
     }
 
     private static class SharePartitionBuilder {
 
         private int defaultAcquisitionLockTimeoutMs = 30000;
-        private int maxDeliveryCount = MAX_DELIVERY_COUNT;
-        private int maxInflightRecords = MAX_IN_FLIGHT_RECORDS;
+        private int defaultMaxDeliveryCount = DEFAULT_MAX_DELIVERY_COUNT;
+        private int defaultMaxInflightRecords = DEFAULT_MAX_IN_FLIGHT_RECORDS;
 
         private Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
@@ -12625,8 +12625,8 @@ public class SharePartitionTest {
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
 
-        private SharePartitionBuilder withMaxInflightRecords(int maxInflightRecords) {
-            this.maxInflightRecords = maxInflightRecords;
+        private SharePartitionBuilder withMaxInflightRecords(int defaultMaxInflightRecords) {
+            this.defaultMaxInflightRecords = defaultMaxInflightRecords;
             return this;
         }
 
@@ -12640,8 +12640,8 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withMaxDeliveryCount(int maxDeliveryCount) {
-            this.maxDeliveryCount = maxDeliveryCount;
+        private SharePartitionBuilder withMaxDeliveryCount(int defaultMaxDeliveryCount) {
+            this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
             return this;
         }
 
@@ -12675,7 +12675,7 @@ public class SharePartitionTest {
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightRecords, maxDeliveryCount,
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, defaultMaxInflightRecords, defaultMaxDeliveryCount,
                     defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, groupConfigManager,
                     state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics);
         }
