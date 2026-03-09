@@ -2176,13 +2176,11 @@ public class ConsumerGroupTest {
 
         ConsumerGroup group = createConsumerGroup("group-foo");
 
-        Map<Uuid, Map<Integer, Integer>> assignedPartitions = Map.of(
-            topicId, Map.of(partitionId, partitionEpoch)
-        );
         group.updateMember(new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(memberEpoch)
             .setSubscribedTopicNames(List.of(topicName))
-            .setAssignedPartitions(assignedPartitions)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(topicId, partitionEpoch, partitionId)))
             .build());
 
         // client epoch = broker epoch
@@ -2251,13 +2249,11 @@ public class ConsumerGroupTest {
 
         ConsumerGroup group = createConsumerGroup("group-foo");
 
-        Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation = Map.of(
-            topicId, Map.of(partitionId, partitionEpoch)
-        );
         group.updateMember(new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(memberEpoch)
             .setSubscribedTopicNames(List.of(topicName))
-            .setPartitionsPendingRevocation(partitionsPendingRevocation)
+            .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(topicId, partitionEpoch, partitionId)))
             .build());
 
         // client epoch = broker epoch
@@ -2328,13 +2324,10 @@ public class ConsumerGroupTest {
 
         ConsumerGroup group = createConsumerGroup("group-foo");
 
-        Map<Uuid, Map<Integer, Integer>> assignedPartitions = Map.of(
-            assignedTopicId, Map.of(partitionId, partitionEpoch)
-        );
-
         group.updateMember(new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(memberEpoch)
-            .setAssignedPartitions(assignedPartitions)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(assignedTopicId, partitionEpoch, partitionId)))
             .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
                     mkTopicAssignmentWithEpochs(assignedTopicId, partitionEpoch, partitionId + 1)))
             .build());
