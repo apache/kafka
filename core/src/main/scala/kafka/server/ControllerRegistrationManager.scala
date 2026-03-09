@@ -238,6 +238,16 @@ class ControllerRegistrationManager(
 
   private class RegistrationResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
+      eventQueue.append(new RequestCompleteEvent(response))
+    }
+
+    override def onTimeout(): Unit = {
+      eventQueue.append(new RequestTimeoutEvent())
+    }
+  }
+
+  private class RequestCompleteEvent(response: ClientResponse) extends EventQueue.Event {
+    override def run(): Unit = {
       pendingRpc = false
       if (response.authenticationException() != null) {
         error(s"RegistrationResponseHandler: authentication error", response.authenticationException())
@@ -265,11 +275,17 @@ class ControllerRegistrationManager(
         }
       }
     }
+  }
 
-    override def onTimeout(): Unit = {
-      pendingRpc = false
-      error(s"RegistrationResponseHandler: channel manager timed out before sending the request.")
-      scheduleNextCommunicationAfterFailure()
+  private class RequestTimeoutEvent extends EventQueue.Event {
+    override def run(): Unit = {
+      try {
+        pendingRpc = false
+        error(s"RequestTimeoutEvent: request timed out.")
+        scheduleNextCommunicationAfterFailure()
+      } catch {
+        case t: Throwable => error("RequestTimeoutEvent error", t)
+      }
     }
   }
 
