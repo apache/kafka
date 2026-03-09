@@ -52,10 +52,10 @@ public class SessionToHeadersIteratorAdapterTest {
     private KeyValueIterator<Windowed<Bytes>, byte[]> innerIterator;
 
     @Test
-    public void shouldStripHeadersOnNext() {
+    public void shouldAddHeadersOnNext() {
         when(innerIterator.hasNext()).thenReturn(true);
         when(innerIterator.next())
-            .thenReturn(KeyValue.pair(SESSION_KEY, VALUE_WITH_EMPTY_HEADERS));
+            .thenReturn(KeyValue.pair(SESSION_KEY, RAW_VALUE));
 
         final SessionToHeadersIteratorAdapter adapter =
             new SessionToHeadersIteratorAdapter(innerIterator);
@@ -63,7 +63,7 @@ public class SessionToHeadersIteratorAdapterTest {
         assertTrue(adapter.hasNext());
         final KeyValue<Windowed<Bytes>, byte[]> result = adapter.next();
         assertEquals(SESSION_KEY, result.key);
-        assertArrayEquals(RAW_VALUE, result.value);
+        assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, result.value);
     }
 
     @Test

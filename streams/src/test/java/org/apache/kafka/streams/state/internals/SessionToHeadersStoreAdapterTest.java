@@ -81,8 +81,8 @@ public class SessionToHeadersStoreAdapterTest {
 
     @Test
     public void shouldPutWithEmptyHeaders() {
-        adapter.put(SESSION_KEY, RAW_VALUE);
-        verify(innerStore).put(SESSION_KEY, VALUE_WITH_EMPTY_HEADERS);
+        adapter.put(SESSION_KEY, VALUE_WITH_EMPTY_HEADERS);
+        verify(innerStore).put(SESSION_KEY, RAW_VALUE);
     }
 
     @Test
@@ -93,9 +93,9 @@ public class SessionToHeadersStoreAdapterTest {
 
     @Test
     public void shouldFetchSessionAndStripHeaders() {
-        when(innerStore.fetchSession(KEY, 10L, 20L)).thenReturn(VALUE_WITH_EMPTY_HEADERS);
+        when(innerStore.fetchSession(KEY, 10L, 20L)).thenReturn(RAW_VALUE);
         final byte[] result = adapter.fetchSession(KEY, 10L, 20L);
-        assertArrayEquals(RAW_VALUE, result);
+        assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, result);
     }
 
     @Test

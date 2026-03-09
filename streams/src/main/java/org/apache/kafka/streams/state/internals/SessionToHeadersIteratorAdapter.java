@@ -21,14 +21,16 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
+
 /**
  * This class is used to ensure backward compatibility at DSL level between
  * {@link org.apache.kafka.streams.state.SessionStoreWithHeaders} and
  * {@link org.apache.kafka.streams.state.SessionStore}.
  * <p>
- * When iterating over session entries from a store that stores values with headers,
- * this adapter strips the headers prefix so the caller receives raw aggregation bytes
- * without headers.
+ * When iterating over session entries from a store that contains only values,
+ * this adapter adds the headers prefix so the caller receives aggregation bytes
+ * with headers.
  *
  * @see SessionToHeadersStoreAdapter
  */
@@ -57,6 +59,9 @@ class SessionToHeadersIteratorAdapter implements KeyValueIterator<Windowed<Bytes
     @Override
     public KeyValue<Windowed<Bytes>, byte[]> next() {
         final KeyValue<Windowed<Bytes>, byte[]> keyValue = innerIterator.next();
-        return KeyValue.pair(keyValue.key, AggregationWithHeadersDeserializer.rawAggregation(keyValue.value));
+        if (keyValue == null) {
+            return null;
+        }
+        return KeyValue.pair(keyValue.key, convertToHeaderFormat(keyValue.value));
     }
 }

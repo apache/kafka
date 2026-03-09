@@ -43,10 +43,10 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * a {@code SessionStoreWithHeaders}, this adapter is used to translate between
  * the raw aggregation {@code byte[]} format and the aggregation-with-headers {@code byte[]} format.
  * <p>
- * On writes (put), empty headers are prepended to the raw aggregation value before
- * delegating to the inner store.
- * On reads (get, fetch, findSessions), the headers prefix is stripped from the stored value
- * so the caller receives raw aggregation bytes without headers.
+ * On writes (put), the headers prefix is stripped from the aggregation-with-headers value
+ * before delegating to the inner plain store, which stores raw aggregation bytes only.
+ * On reads (get, fetch, findSessions), empty headers are prepended to the raw aggregation
+ * value read from the inner store so the caller receives aggregation-with-headers bytes.
  *
  * @see SessionToHeadersIteratorAdapter
  */
@@ -106,7 +106,7 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     public byte[] fetchSession(final Bytes key,
                                final long sessionStartTime,
                                final long sessionEndTime) {
-        return AggregationWithHeadersDeserializer.rawAggregation(store.fetchSession(key, sessionStartTime, sessionEndTime));
+        return convertToHeaderFormat(store.fetchSession(key, sessionStartTime, sessionEndTime));
     }
 
     @Override
@@ -135,8 +135,8 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     }
 
     @Override
-    public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
-        store.put(sessionKey, convertToHeaderFormat(aggregate));
+    public void put(final Windowed<Bytes> sessionKey, final byte[] aggregateWithHeader) {
+        store.put(sessionKey, AggregationWithHeadersDeserializer.rawAggregation(aggregateWithHeader));
     }
 
     @Override
