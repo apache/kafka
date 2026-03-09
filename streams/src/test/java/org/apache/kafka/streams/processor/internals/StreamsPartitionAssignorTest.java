@@ -163,10 +163,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1474,7 +1476,7 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void shouldPublishEmptyMetadataWhenAssignmentMissesStoreSourceTopicMetadata(final Map<String, Object> parameterizedConfig) {
+    public void shouldSkipMetadataUpdateWhenAssignmentMissesStoreSourceTopicMetadata(final Map<String, Object> parameterizedConfig) {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.table("topic1", Materialized.as("store"));
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
@@ -1499,11 +1501,7 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(assignment, null);
 
-        verify(streamsMetadataState).onChange(
-            eq(Collections.emptyMap()),
-            eq(Collections.emptyMap()),
-            eq(Collections.emptyMap())
-        );
+        verify(streamsMetadataState, never()).onChange(anyMap(), anyMap(), anyMap());
     }
 
     @ParameterizedTest
