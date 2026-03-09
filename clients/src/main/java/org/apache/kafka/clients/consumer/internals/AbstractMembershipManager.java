@@ -817,13 +817,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
      *
-     * @param invokedByPoll True if this reconciliation attempt is triggered by the application thread on consumer.poll().
-     *                      False if this is triggered by the background thread on regular manager poll.
-     *                      In both cases we want to resolve metadata to unresolved assignments,
-     *                      but the actual reconciliation (commit, callbacks, assignment updates)
-     *                      will only proceed if this is triggered from the application thread on consumer.poll
+     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled.
+     *                  Set to true only when the current offset positions are safe to commit.
+     *                  If false and auto-commit enabled, the reconciliation will be skipped.
      */
-    public void maybeReconcile(boolean invokedByPoll) {
+    public void maybeReconcile(boolean canCommit) {
         if (state != MemberState.RECONCILING) {
             return;
         }
@@ -853,11 +851,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        // Beyond this point is where commit, callbacks, and assignment updates will happen.
-        // In the case of the kafka consumer, this can only happen when the reconciliation is triggered from consumer.poll.
-        if (allowAssignmentUpdatesOnPollOnly() && !invokedByPoll) return;
-
-        // Start reconciliation process to commit, release removed partitions and accept new ones.
+        if (autoCommitEnabled && !canCommit) return;
         markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
@@ -932,8 +926,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         }
         return expiration;
     }
-
-    abstract boolean allowAssignmentUpdatesOnPollOnly();
 
     /**
      * Trigger onPartitionsRevoked callbacks if any partitions where revoked. If it succeeds,

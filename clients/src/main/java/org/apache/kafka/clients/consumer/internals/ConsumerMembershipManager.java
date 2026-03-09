@@ -440,17 +440,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * KafkaConsumer reconciliations may be triggered from the background and application thread,
-     * but it only allows completing the reconciliation (update the assignment) when triggered
-     * from the application thread, to ensure that new assignments show in the API only
-     * with calls to consumer.poll.
-     */
-    @Override
-    boolean allowAssignmentUpdatesOnPollOnly() {
-        return true;
-    }
-
-    /**
      * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
      * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
      * application thread.

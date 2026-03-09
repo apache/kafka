@@ -175,15 +175,6 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         }
     }
 
-    /**
-     * ShareConsumer reconciliations may be triggered from the background and application thread,
-     * and it allows assignment updates from both.
-     */
-    @Override
-    boolean allowAssignmentUpdatesOnPollOnly() {
-        return false;
-    }
-
     @Override
     public int joinGroupEpoch() {
         return ShareGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
