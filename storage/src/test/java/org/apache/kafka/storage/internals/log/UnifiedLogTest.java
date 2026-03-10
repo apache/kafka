@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.config.AbstractConfig;
-
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
