@@ -1048,6 +1048,8 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProviderTest:
 - testDeliveryCountLimitOrDefaultWithoutGroupConfig
 - testIsRenewAcknowledgeDisabledWithGroupConfig
 - testIsRenewAcknowledgeEnabledWithoutGroupConfig
+- testPartitionMaxRecordLocksOrDefaultWithGroupConfig
+- testPartitionMaxRecordLocksOrDefaultWithoutGroupConfig
 - testRecordLockDurationMsOrDefaultWithGroupConfig
 - testRecordLockDurationMsOrDefaultWithoutGroupConfig
 org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest:

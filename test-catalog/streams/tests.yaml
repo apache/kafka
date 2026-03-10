@@ -3748,8 +3748,12 @@ org.apache.kafka.streams.state.AggregationWithHeadersTest:
 - shouldNotCreateWithNullHeaders
 - shouldReturnNullForNullAggregation
 org.apache.kafka.streams.state.HeadersBytesStoreTest:
+- shouldConvertEmptyPlainValueToHeaderFormat
 - shouldConvertEmptyValueToHeaderFormat
 - shouldConvertLegacyValueToHeaderFormat
+- shouldConvertPlainValueToHeaderFormatWithTimestamp
+- shouldConvertPlainValueWithCorrectByteOrder
+- shouldReturnNullWhenConvertingNullPlainValue
 - shouldReturnNullWhenConvertingNullValue
 org.apache.kafka.streams.state.HostInfoTest:
 - shouldCreateHostInfo
@@ -4951,6 +4955,32 @@ org.apache.kafka.streams.state.internals.OffsetCheckpointTest:
 - shouldThrowIOExceptionWhenWritingToNotExistedFile
 - shouldThrowOnInvalidOffsetInWrite
 - testReadWrite
+org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapterTest:
+- shouldCollectExecutionInfoForKeyQuery
+- shouldCollectExecutionInfoForRangeQuery
+- shouldDelegateApproximateNumEntries
+- shouldDelegateGetPosition
+- shouldDelegateIsOpen
+- shouldDelegateName
+- shouldDelegateOtherQueryTypesToUnderlyingStore
+- shouldDeleteAndConvertResult
+- shouldGetAndConvertFromPlainToHeaderFormat
+- shouldHandleFailedKeyQuery
+- shouldHandleKeyQuery
+- shouldHandleKeyQueryWithNullResult
+- shouldHandleRangeQuery
+- shouldPutAllEntries
+- shouldPutIfAbsentAndConvertResult
+- shouldPutRawPlainValueToStore
+- shouldReturnNullWhenStoreReturnsNull
+- shouldReturnTrueForPersistent
+- shouldThrowIfStoreIsNotPersistent
+- shouldThrowIfStoreIsTimestamped
+- shouldWrapAllIterator
+- shouldWrapPrefixScanIterator
+- shouldWrapRangeIterator
+- shouldWrapReverseAllIterator
+- shouldWrapReverseRangeIterator
 org.apache.kafka.streams.state.internals.QueryableStoreProviderTest:
 - shouldFindGlobalStores
 - shouldReturnKVStoreWhenItExists
@@ -5624,12 +5654,13 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldCollectExecutionInfoWhenRequested
 - shouldDeleteFromStore
 - shouldDeleteIfSerializedValueIsNull
-- shouldFailToUpgradeDirectlyFromKeyValueStore
+- shouldFailWhenBothPlainAndTimestampedDataExist
 - shouldHandleDeletesAndPutBackOnRestoreAll
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
 - shouldMatchPositionAfterPut
+- shouldMigrateFromPlainToHeadersAwareColumnFamily
 - shouldMigrateFromTimestampedToHeadersAwareColumnFamily
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
 - shouldNotCollectExecutionInfoWhenNotRequested
@@ -5688,6 +5719,8 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir
 - shouldThrowProcessorStateExceptionOnPutDeletedDir
 - shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig
+- shouldTransitionFromPlainUpgradeModeToRegularMode
+- shouldUpgradeFromPlainKeyValueStore
 - shouldVerifyThatMetricsRecordedFromPropertiesGetMeasurementsFromRocksDB
 - shouldVerifyThatMetricsRecordedFromStatisticsGetMeasurementsFromRocksDB
 - shouldVerifyThatPropertyBasedMetricsUseValidPropertyName
@@ -6123,7 +6156,7 @@ org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHead
 - shouldThrowNullPointerIfInnerIsNull
 - shouldThrowNullPointerIfMetricsScopeIsNull
 - shouldThrowNullPointerIfTimeIsNull
-- shouldThrowWhenPlainKeyValueStoreIsProvided
+- shouldWrapPlainKeyValueStoreAsHeadersStore
 - shouldWrapTimestampKeyValueStoreAsHeadersStore
 org.apache.kafka.streams.state.internals.TimestampedSegmentTest:
 - shouldBeEqualIfIdIsEqual
@@ -6197,6 +6230,9 @@ org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilde
 - shouldNotWrapHeadersByteStore
 - shouldThrowNullPointerIfInnerIsNull
 - shouldWrapTimestampedStoreAsHeadersStore
+org.apache.kafka.streams.state.internals.UtilsTest:
+- shouldExtractRawPlainValue
+- shouldReturnNullForNullRawPlainValue
 org.apache.kafka.streams.state.internals.ValueAndTimestampSerializerTest:
 - shouldDropSerializedValueIfEqualWithGreaterTimestamp
 - shouldKeepSerializedValueIfOutOfOrder

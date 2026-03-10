@@ -347,6 +347,7 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testDescribeShareGroupOffsetsForEmptySharePartition
 - testDynamicDeliveryCountLimitDecreaseArchivesRecords
 - testDynamicDeliveryCountLimitIncreaseAllowsMoreDeliveries
+- testDynamicPartitionMaxRecordLocks
 - testExplicitAcknowledgeCommitSuccess
 - testExplicitAcknowledgeOffsetThrowsNotException
 - testExplicitAcknowledgeOffsetThrowsParametersError
