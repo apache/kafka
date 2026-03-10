@@ -277,14 +277,14 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicRegex(".*")
                 .setTopicPartitions(List.of()));
-        assertEquals(2, result.response().memberEpoch());
+        assertEquals(1, result.response().memberEpoch());
 
         // Updating the subscription to an invalid regular expression fails.
         assertThrows(InvalidRegularExpression.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberId(memberId)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicRegex("[")
                 .setTopicPartitions(List.of())));
@@ -295,11 +295,11 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberId(memberId)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(List.of("foo"))
                 .setTopicPartitions(List.of()));
-        assertEquals(3, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
     }
 
     @Test
@@ -11976,9 +11976,8 @@ public class GroupMetadataManagerTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = {1, 2})
-    public void testConsumerGroupHeartbeatToClassicGroupFromExistingStaticMember(int generationId) {
+    @Test
+    public void testConsumerGroupHeartbeatToClassicGroupFromExistingStaticMember() {
         String groupId = "group-id";
         String memberId = "member-id";
         String instanceId = "instance-id";
@@ -12030,11 +12029,9 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        for (int i = 0; i < generationId; i++) {
-            group.transitionTo(PREPARING_REBALANCE);
-            group.initNextGeneration();
-            group.transitionTo(STABLE);
-        }
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        group.transitionTo(STABLE);
 
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
         context.commit();
@@ -12092,13 +12089,13 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedFinalConsumerMember = new ConsumerGroupMember.Builder(expectedReplacingConsumerMember)
-            .setMemberEpoch(group.generationId() == 1 ? 2 : group.generationId())
+            .setMemberEpoch(group.generationId())
             .setServerAssignorName(NoOpPartitionAssignor.NAME)
             .setRebalanceTimeoutMs(5000)
             .setClassicMemberMetadata(null)
             .build();
 
-        List<CoordinatorRecord> expectedRecords = new ArrayList<>(List.of(
+        List<CoordinatorRecord> expectedRecords = List.of(
             // The existing classic group tombstone.
             GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
 
@@ -12122,32 +12119,17 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
 
             // The static member rejoins the new consumer group with the same instance id and
-            // takes the assignment of the previous member.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedFinalConsumerMember)
-        ));
+            // takes the assignment of the previous member. No new target assignment is computed.
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
 
-        if (generationId == 1) {
-            expectedRecords.addAll(List.of(
-                // Subscription metadata is refreshed.
-                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                ))),
+            // The newly created static member takes the assignment from the existing member.
+            // Bump its member epoch and transition to STABLE.
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
+        );
 
-                // A new target assignment is computed.
-                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, toAssignmentWithoutEpochs(expectedClassicMember.assignedPartitions())),
-                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
-
-                // The newly created static member takes the assignment from the existing member.
-                // Bump its member epoch and transition to STABLE.
-                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
-            ));
-        } else {
-            expectedRecords.addAll(List.of(
-                // The newly created static member takes the assignment from the existing member.
-                // Bump its member epoch and transition to STABLE.
-                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
-            ));
-        }
+        assertEquals(expectedRecords.size(), result.records().size());
+        assertRecordsEquals(expectedRecords.subList(0, 5), result.records().subList(0, 5));
+        assertRecordsEquals(expectedRecords.subList(5, 10), result.records().subList(5, 10));
 
         assertRecordsEquals(expectedRecords, result.records());
         context.assertSessionTimeout(groupId, newMemberId, 45000);
@@ -22617,7 +22599,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
@@ -22625,7 +22607,7 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
+            .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
@@ -22637,11 +22619,6 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             // The member subscription is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            // The group epoch is bumped.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0),
-            // The target assignment is created.
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             // The member current state is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
         );
@@ -22656,21 +22633,21 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setSubscribedTopicRegex("foo*|bar*"));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000),
             result.response()
         );
 
         expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(2)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRebalanceTimeoutMs(5000)
@@ -22707,13 +22684,13 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setSubscribedTopicRegex("foo*|bar*"));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000),
             result.response()
         );
@@ -22740,7 +22717,7 @@ public class GroupMetadataManagerTest {
                     )
                 ),
                 // The group epoch is bumped.
-                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, computeGroupHash(Map.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage),
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )))

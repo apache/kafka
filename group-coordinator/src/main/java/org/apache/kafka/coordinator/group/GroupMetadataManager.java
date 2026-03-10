@@ -2361,9 +2361,6 @@ public class GroupMetadataManager {
         SubscriptionType subscriptionType = group.subscriptionType();
 
         boolean bumpGroupEpoch =
-            // If the group is newly created, we must ensure that it is fully initialized.
-            // NB: We cannot distinguish between a newly created consumer group and an upgraded classic group with generation 1.
-            groupEpoch <= 1 ||
             // Bumping the group epoch signals that the target assignment should be updated. We bump
             // the group epoch when the member has changed its subscribed topic names or the member
             // has changed its subscribed topic regex to a regex that is already resolved. We avoid
