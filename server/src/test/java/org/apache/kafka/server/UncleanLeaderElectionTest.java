@@ -311,7 +311,8 @@ public class UncleanLeaderElectionTest {
         assertEquals(0L, getLeaderElectionCount());
 
         // message production and consumption should both fail while leader is down
-        Throwable e = assertThrows(ExecutionException.class, () -> produceMessage(cluster, TOPIC, "third", 1000, 1000));
+        Throwable e = assertThrows(ExecutionException.class, () ->
+                produceMessage(cluster, TOPIC, "third", 1000, 1000));
         assertInstanceOf(TimeoutException.class, e.getCause());
 
         assertEquals(List.of(), consumeAllMessages(0, groupProtocol));
@@ -424,7 +425,8 @@ public class UncleanLeaderElectionTest {
         assertEquals(0L, getLeaderElectionCount());
 
         // message production and consumption should both fail while leader is down
-        Throwable e = assertThrows(ExecutionException.class, () -> produceMessage(cluster, TOPIC, "third", 1000, 1000));
+        Throwable e = assertThrows(ExecutionException.class, () ->
+                produceMessage(cluster, TOPIC, "third", 1000, 1000));
         assertEquals(TimeoutException.class, e.getCause().getClass());
 
         assertEquals(List.of(), consumeAllMessages(0, groupProtocol));
@@ -445,20 +447,19 @@ public class UncleanLeaderElectionTest {
 
     private AlterConfigsResult alterTopicConfigs(Map<String, String> configs) {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);
-
         Collection<AlterConfigOp> configEntries = configs.entrySet().stream()
-                .map(e -> new ConfigEntry(e.getKey(), e.getValue()))
-                .map(e -> new AlterConfigOp(e, AlterConfigOp.OpType.SET))
+                .map(e ->
+                        new AlterConfigOp(new ConfigEntry(e.getKey(), e.getValue()), AlterConfigOp.OpType.SET))
                 .toList();
-
         return admin.incrementalAlterConfigs(Map.of(configResource, configEntries));
     }
 
     private void waitForNoLeaderAndIsrHasOldLeaderId(MetadataCache metadataCache, int leaderId) throws InterruptedException {
         waitForCondition(
-                () -> metadataCache.getLeaderAndIsr(TOPIC, PARTITION_ID).isPresent() &&
-                        metadataCache.getLeaderAndIsr(TOPIC, PARTITION_ID).get().leader() == LeaderConstants.NO_LEADER &&
-                        Set.of(leaderId).equals(metadataCache.getLeaderAndIsr(TOPIC, PARTITION_ID).get().isr()),
+                () -> metadataCache.getLeaderAndIsr(TOPIC, PARTITION_ID)
+                        .filter(leaderAndIsr -> leaderAndIsr.leader() == LeaderConstants.NO_LEADER)
+                        .filter(leaderAndIsr -> leaderAndIsr.isr().equals(Set.of(leaderId)))
+                        .isPresent(),
                 DEFAULT_MAX_WAIT_MS,
                 "Timed out waiting for broker metadata cache updates the info for topic partition:" + TOPIC_PARTITION);
     }

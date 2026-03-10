@@ -164,28 +164,17 @@ public class TestUtils {
      * @throws InterruptedException If waitForCondition is interrupted
      */
     public static int awaitLeaderChange(ClusterInstance cluster, TopicPartition tp, Optional<Integer> expectedLeaderOpt, long timeout) throws InterruptedException {
-        Supplier<Optional<Integer>> newLeaderExists = () -> {
-            if (expectedLeaderOpt.isPresent()) {
-                LOG.debug("Checking leader that has changed to {}", expectedLeaderOpt.get());
-                return cluster.brokers().values().stream()
-                        .filter(broker ->
-                                broker.config().brokerId() == expectedLeaderOpt.get() &&
-                                        broker.replicaManager().onlinePartition(tp)
-                                                .exists(partition -> partition.leaderLogIfLocal().isDefined())
-                        )
-                        .map(broker -> broker.config().brokerId())
-                        .findFirst();
-            } else {
-                LOG.debug("Checking the elected leader");
-                return cluster.brokers().values().stream()
-                        .filter(broker ->
-                                broker.replicaManager().onlinePartition(tp)
-                                        .exists(partition -> partition.leaderLogIfLocal().isDefined())
-                        )
-                        .map(broker -> broker.config().brokerId())
-                        .findFirst();
-            }
-        };
+        if (expectedLeaderOpt.isPresent()) {
+            LOG.debug("Checking leader that has changed to {}", expectedLeaderOpt.get());
+        } else {
+            LOG.debug("Checking the elected leader");
+        }
+
+        Supplier<Optional<Integer>> newLeaderExists = () -> cluster.brokers().values().stream()
+                .filter(broker -> expectedLeaderOpt.isEmpty() || broker.config().brokerId() == expectedLeaderOpt.get())
+                .filter(broker -> broker.replicaManager().onlinePartition(tp).exists(partition -> partition.leaderLogIfLocal().isDefined()))
+                .map(broker -> broker.config().brokerId())
+                .findFirst();
 
         waitForCondition(() -> newLeaderExists.get().isPresent(),
                 timeout, "Did not observe leader change for partition " + tp + " after " + timeout + " ms");
