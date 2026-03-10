@@ -898,7 +898,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
             if (receivedMemberEpoch < assignmentEpoch) {
                 throw new StaleMemberEpochException(
-                    String.format("The received member epoch %d is older than the assignment epoch %d for partition %s-%d.",
+                    String.format("Received member epoch %d is older than assignment epoch %d for partition %s-%d.",
                         receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
                 );
             }
