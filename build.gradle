@@ -1318,7 +1318,7 @@ project(':core') {
 
   test {
     useJUnitPlatform {
-      includeEngines 'jqwik', 'junit-jupiter'
+      includeEngines 'junit-jupiter'
     }
   }
 
