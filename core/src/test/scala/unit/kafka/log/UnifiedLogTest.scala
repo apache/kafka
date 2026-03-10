@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.AbortedTxn
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset
