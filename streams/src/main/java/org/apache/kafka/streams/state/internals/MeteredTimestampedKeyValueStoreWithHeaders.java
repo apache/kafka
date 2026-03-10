@@ -110,12 +110,34 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         Objects.requireNonNull(key, "key cannot be null");
         try {
             final Headers headers = value != null ? value.headers() : new RecordHeaders();
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers)), time, putSensor);
+            final byte[] rawValueBytes = serdes.rawValue(value, headers);
+
+            // DEBUG LOGGING - START
+            System.out.println("=== MeteredTimestampedKeyValueStoreWithHeaders.put ===");
+            System.out.println("Key: " + key);
+            System.out.println("Value (from wrapper): " + (value != null ? value.value() : "null"));
+            System.out.println("Timestamp: " + (value != null ? value.timestamp() : "N/A"));
+            System.out.println("Raw value bytes length: " + (rawValueBytes != null ? rawValueBytes.length : 0));
+            if (rawValueBytes != null) {
+                System.out.println("Raw value bytes (hex): " + bytesToHex(rawValueBytes));
+            }
+            System.out.println("=========================================");
+            // DEBUG LOGGING - END
+
+            maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), rawValueBytes), time, putSensor);
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
         }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        final StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString();
     }
 
     @Override

@@ -71,17 +71,50 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
             return null;
         }
 
+        // DEBUG LOGGING - START
+        System.out.println("=== ValueTimestampHeadersDeserializer.deserialize ===");
+        System.out.println("Topic: " + topic);
+        System.out.println("Raw bytes length: " + valueTimestampHeaders.length);
+        System.out.println("Raw bytes (hex): " + bytesToHex(valueTimestampHeaders));
+        // DEBUG LOGGING - END
+
         final ByteBuffer buffer = ByteBuffer.wrap(valueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
+
+        // DEBUG LOGGING - START
+        System.out.println("Headers size: " + headersSize);
+        System.out.println("Buffer position after headersSize: " + buffer.position());
+        // DEBUG LOGGING - END
 
         final byte[] rawHeaders = readBytes(buffer, headersSize);
         final Headers headers = HeadersDeserializer.deserialize(rawHeaders);
         final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
         final byte[] rawValue = readBytes(buffer, buffer.remaining());
+
+        // DEBUG LOGGING - START
+        System.out.println("Raw value bytes length: " + rawValue.length);
+        System.out.println("Raw value (hex): " + bytesToHex(rawValue));
+        // DEBUG LOGGING - END
+
         final V value = valueDeserializer.deserialize(topic, headers, rawValue);
 
+        // DEBUG LOGGING - START
+        System.out.println("Deserialized value: " + value);
+        System.out.println("Timestamp: " + timestamp);
+        System.out.println("Headers count: " + (headers != null ? headers.toArray().length : 0));
+        System.out.println("=========================================");
+        // DEBUG LOGGING - END
+
         return ValueTimestampHeaders.make(value, timestamp, headers);
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        final StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString();
     }
 
     @Override

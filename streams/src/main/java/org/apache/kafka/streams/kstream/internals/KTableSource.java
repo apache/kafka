@@ -120,6 +120,22 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
 
         @Override
         public void process(final Record<KIn, VIn> record) {
+            // DEBUG LOGGING - START
+            System.out.println("=== KTableSource.process ===");
+            System.out.println("Key: " + record.key());
+            System.out.println("Value: " + record.value());
+            System.out.println("Value class: " + (record.value() != null ? record.value().getClass().getName() : "null"));
+            if (record.value() instanceof String) {
+                String strValue = (String) record.value();
+                System.out.println("Value as String: '" + strValue + "'");
+                System.out.println("Value length: " + strValue.length());
+                byte[] bytes = strValue.getBytes();
+                System.out.println("Value bytes (hex): " + bytesToHex(bytes));
+            }
+            System.out.println("Timestamp: " + record.timestamp());
+            System.out.println("=========================================");
+            // DEBUG LOGGING - END
+
             // if the key is null, then ignore the record
             if (record.key() == null) {
                 if (context.recordMetadata().isPresent()) {
@@ -176,6 +192,14 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
             } else {
                 context.forward(record.withValue(new Change<>(record.value(), null, true)));
             }
+        }
+
+        private String bytesToHex(byte[] bytes) {
+            final StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) {
+                sb.append(String.format("%02X ", b));
+            }
+            return sb.toString();
         }
     }
 }

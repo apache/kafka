@@ -78,6 +78,14 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
             return null;
         }
 
+        // DEBUG LOGGING - START
+        System.out.println("=== ValueTimestampHeadersSerializer.serialize ===");
+        System.out.println("Topic: " + topic);
+        System.out.println("Plain value: " + plainValue);
+        System.out.println("Timestamp: " + timestamp);
+        System.out.println("Headers count: " + (headers != null ? headers.toArray().length : 0));
+        // DEBUG LOGGING - END
+
         final byte[] rawValue = valueSerializer.serialize(topic, headers, plainValue);
 
         // Since we can't control the result of the internal serializer, we make sure that the result
@@ -94,6 +102,13 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
         // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
         final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
+        // DEBUG LOGGING - START
+        System.out.println("Raw value length: " + rawValue.length);
+        System.out.println("Raw value (hex): " + bytesToHex(rawValue));
+        System.out.println("Raw headers length: " + rawHeaders.length);
+        System.out.println("Raw timestamp length: " + rawTimestamp.length);
+        // DEBUG LOGGING - END
+
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
@@ -103,10 +118,26 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
             out.write(rawTimestamp);                        // [timestamp(8)]
             out.write(rawValue);                            // [value]
 
-            return baos.toByteArray();
+            final byte[] result = baos.toByteArray();
+
+            // DEBUG LOGGING - START
+            System.out.println("Final serialized bytes length: " + result.length);
+            System.out.println("Final serialized (hex): " + bytesToHex(result));
+            System.out.println("=========================================");
+            // DEBUG LOGGING - END
+
+            return result;
         } catch (final IOException e) {
             throw new SerializationException("Failed to serialize ValueTimestampHeaders", e);
         }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        final StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString();
     }
 
     @Override

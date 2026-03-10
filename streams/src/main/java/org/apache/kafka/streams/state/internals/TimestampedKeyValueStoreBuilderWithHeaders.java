@@ -64,18 +64,35 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
     public TimestampedKeyValueStoreWithHeaders<K, V> build() {
         KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
 
+        // DEBUG LOGGING - START
+        System.out.println("=== TimestampedKeyValueStoreBuilderWithHeaders.build ===");
+        System.out.println("Store name: " + storeSupplier.name());
+        System.out.println("Store supplier class: " + storeSupplier.getClass().getName());
+        System.out.println("Store class: " + store.getClass().getName());
+        System.out.println("Store instanceof HeadersBytesStore: " + (store instanceof HeadersBytesStore));
+        System.out.println("Store instanceof TimestampedBytesStore: " + (store instanceof TimestampedBytesStore));
+        System.out.println("Store.persistent(): " + store.persistent());
+        // DEBUG LOGGING - END
+
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
                 // Persistent store: use adapter based on whether it's timestamped or plain
                 if (store instanceof TimestampedBytesStore) {
+                    System.out.println(">>> Using TimestampedToHeadersStoreAdapter <<<");
                     store = new TimestampedToHeadersStoreAdapter(store);
                 } else {
+                    System.out.println(">>> Using PlainToHeadersStoreAdapter <<<");
                     store = new PlainToHeadersStoreAdapter(store);
                 }
             } else {
+                System.out.println(">>> Using InMemoryTimestampedKeyValueStoreWithHeadersMarker <<<");
                 store = new InMemoryTimestampedKeyValueStoreWithHeadersMarker(store);
             }
+        } else {
+            System.out.println(">>> Store already implements HeadersBytesStore - no adapter needed <<<");
         }
+        System.out.println("=========================================");
+        // DEBUG LOGGING - END
 
         return new MeteredTimestampedKeyValueStoreWithHeaders<>(
             maybeWrapCaching(maybeWrapLogging(store)),

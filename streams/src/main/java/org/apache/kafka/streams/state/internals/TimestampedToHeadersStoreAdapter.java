@@ -97,7 +97,24 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestampAndHeaders) {
-        store.put(key, rawTimestampedValue(valueWithTimestampAndHeaders));
+        // DEBUG LOGGING - START
+        System.out.println("=== TimestampedToHeadersStoreAdapter.put ===");
+        if (valueWithTimestampAndHeaders != null) {
+            System.out.println("Input (full) length: " + valueWithTimestampAndHeaders.length);
+            System.out.println("Input (full) hex: " + bytesToHex(valueWithTimestampAndHeaders));
+        }
+
+        final byte[] stripped = rawTimestampedValue(valueWithTimestampAndHeaders);
+
+        if (stripped != null) {
+            System.out.println("After rawTimestampedValue length: " + stripped.length);
+            System.out.println("After rawTimestampedValue hex: " + bytesToHex(stripped));
+        }
+        System.out.println("Underlying store class: " + store.getClass().getName());
+        System.out.println("=========================================");
+        // DEBUG LOGGING - END
+
+        store.put(key, stripped);
     }
 
     @Override
@@ -203,7 +220,38 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
 
     @Override
     public byte[] get(final Bytes key) {
-        return convertToHeaderFormat(store.get(key));
+        final byte[] rawBytes = store.get(key);
+
+        // DEBUG LOGGING - START
+        System.out.println("=== TimestampedToHeadersStoreAdapter.get ===");
+        System.out.println("Key: " + key);
+        if (rawBytes != null) {
+            System.out.println("Raw from underlying store length: " + rawBytes.length);
+            System.out.println("Raw from underlying store (hex): " + bytesToHex(rawBytes));
+        } else {
+            System.out.println("Raw from underlying store: null");
+        }
+        // DEBUG LOGGING - END
+
+        final byte[] result = convertToHeaderFormat(rawBytes);
+
+        // DEBUG LOGGING - START
+        if (result != null) {
+            System.out.println("After convertToHeaderFormat length: " + result.length);
+            System.out.println("After convertToHeaderFormat (hex): " + bytesToHex(result));
+        }
+        System.out.println("=========================================");
+        // DEBUG LOGGING - END
+
+        return result;
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        final StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString();
     }
 
     @Override

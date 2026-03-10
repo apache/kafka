@@ -546,6 +546,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                     if (store == null)
                         return false;
 
+                    store.get(key);
                     final ValueTimestampHeaders<V> result = store.get(key);
                     return result != null
                         && result.value().equals(value)
