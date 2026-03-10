@@ -280,7 +280,7 @@ class ControllerRegistrationManager(
   private class RequestTimeoutEvent extends EventQueue.Event {
     override def run(): Unit = {
       pendingRpc = false
-      error(s"RequestTimeoutEvent: request timed out.")
+      error(s"RegistrationResponseHandler: channel manager timed out before sending the request.")
       scheduleNextCommunicationAfterFailure()
     }
   }
