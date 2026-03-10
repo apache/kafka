@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -333,20 +332,23 @@ public class GroupConfigTest {
     }
 
     @Test
-    public void testValidateUsesAllGroupTypeDefaults() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
+    public void testValidateWithAllGroupTypeConfigs() {
+        Map<String, Object> overrides = new HashMap<>();
+        // Consumer
+        overrides.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        overrides.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        // Streams
+        overrides.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        overrides.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        // Share
+        overrides.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        overrides.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
 
-        GroupCoordinatorConfig groupCoordinatorConfig = new GroupCoordinatorConfig(new AbstractConfig(
-            GroupCoordinatorConfig.CONFIG_DEF, configs, false));
-        ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(configs);
-
-        Properties newGroupConfig = new Properties();
-        newGroupConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
+        GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfig.fromProps(overrides);
+        ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
         assertDoesNotThrow(() ->
-            GroupConfig.validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig));
+            GroupConfig.validate(new Properties(), groupCoordinatorConfig, shareGroupConfig));
     }
 
     @Test
