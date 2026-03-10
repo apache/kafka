@@ -5860,6 +5860,36 @@ org.apache.kafka.streams.state.internals.SessionStoreBuilderTest:
 - shouldThrowNullPointerIfTimeIsNull
 org.apache.kafka.streams.state.internals.SessionStoreFetchTest:
 - testStoreConfig
+org.apache.kafka.streams.state.internals.SessionToHeadersIteratorAdapterTest:
+- shouldAddHeadersOnNext
+- shouldDelegateClose
+- shouldDelegateHasNext
+- shouldDelegatePeekNextKey
+- shouldHandleNullValueOnNext
+org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
+- shouldAddExecutionInfoOnQuery
+- shouldDelegateClose
+- shouldDelegateInit
+- shouldDelegateIsOpen
+- shouldDelegateName
+- shouldDelegateQueryToInnerStore
+- shouldDelegateRemove
+- shouldFetchSessionAndStripHeaders
+- shouldPutNullValue
+- shouldPutWithEmptyHeaders
+- shouldReturnNullForNullFetchSession
+- shouldReturnNullFromRawAggregationValueForNull
+- shouldReturnPersistentTrue
+- shouldStripHeadersFromRawAggregationValue
+- shouldThrowIfStoreIsNotPersistent
+- shouldWrapBackwardFetchIterator
+- shouldWrapBackwardFetchWithKeyRangeIterator
+- shouldWrapBackwardFindSessionsIterator
+- shouldWrapBackwardFindSessionsWithKeyRangeIterator
+- shouldWrapFetchIterator
+- shouldWrapFetchWithKeyRangeIterator
+- shouldWrapFindSessionsIterator
+- shouldWrapFindSessionsWithKeyRangeIterator
 org.apache.kafka.streams.state.internals.StoreQueryUtilsTest:
 - shouldReturnErrorOnBoundViolation
 - shouldReturnErrorOnNullContext
