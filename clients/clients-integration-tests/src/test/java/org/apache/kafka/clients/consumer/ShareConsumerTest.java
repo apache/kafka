@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
@@ -120,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -133,6 +135,7 @@ import static org.junit.jupiter.api.Assertions.fail;
     types = {Type.KRAFT},
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+        @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -2087,6 +2090,7 @@ public class ShareConsumerTest {
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
@@ -2299,6 +2303,7 @@ public class ShareConsumerTest {
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
@@ -2363,6 +2368,7 @@ public class ShareConsumerTest {
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
             @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -4029,6 +4035,39 @@ public class ShareConsumerTest {
         }
     }
 
+    @ClusterTest
+    public void testDynamicPartitionMaxRecordLocks() {
+        // Verify that the group-level share.partition.max.record.locks config can be
+        // dynamically set and read back via describe configs.
+        alterSharePartitionMaxRecordLocks("group1", "500");
+
+        // Verify the config is readable via describe configs.
+        try (Admin adminClient = createAdminClient()) {
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+            Map<ConfigResource, Config> configs = assertDoesNotThrow(() ->
+                adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS));
+            Config config = configs.get(configResource);
+            assertNotNull(config);
+            ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+            assertNotNull(entry);
+            assertEquals("500", entry.value());
+        }
+
+        // Verify the config can be updated dynamically.
+        alterSharePartitionMaxRecordLocks("group1", "1000");
+
+        try (Admin adminClient = createAdminClient()) {
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+            Map<ConfigResource, Config> configs = assertDoesNotThrow(() ->
+                adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS));
+            Config config = configs.get(configResource);
+            assertNotNull(config);
+            ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+            assertNotNull(entry);
+            assertEquals("1000", entry.value());
+        }
+    }
+
     /**
      * Util class to encapsulate state for a consumer/producer
      * being executed by an {@link ExecutorService}.
@@ -4314,56 +4353,33 @@ public class ShareConsumerTest {
         }
     }
 
-    private void alterShareAutoOffsetReset(String groupId, String newValue) {
+    private void alterShareGroupConfig(String groupId, String configKey, String newValue) {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+            configKey, newValue), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
                 .all()
                 .get(60, TimeUnit.SECONDS), "Failed to alter configs");
         }
+    }
+
+    private void alterShareAutoOffsetReset(String groupId, String newValue) {
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue);
     }
 
     private void alterShareDeliveryCountLimit(String groupId, String newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, newValue), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, newValue);
     }
 
     private void alterShareIsolationLevel(String groupId, String newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue);
     }
 
     private void alterShareRenewAcknowledgeEnable(String groupId, boolean newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, Boolean.toString(newValue)), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, Boolean.toString(newValue));
     }
 
     private List<Integer> topicPartitionLeader(Admin adminClient, String topicName, int partition) throws InterruptedException, ExecutionException {
@@ -4424,17 +4440,12 @@ public class ShareConsumerTest {
             new DeleteShareGroupOffsetsOptions().timeoutMs(30000)).topicResult(topic).get();
     }
 
+    private void alterSharePartitionMaxRecordLocks(String groupId, String newValue) {
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, newValue);
+    }
+
     private void alterShareRecordLockDurationMs(String groupId, int newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, Integer.toString(newValue)), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
+        alterShareGroupConfig(groupId, GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, Integer.toString(newValue));
     }
 
     /**

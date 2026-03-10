@@ -73,6 +73,26 @@ public class ShareGroupConfigProviderTest {
     }
 
     @Test
+    void testPartitionMaxRecordLocksOrDefaultWithGroupConfig() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig groupConfig = mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(5000);
+        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
+        provider = new ShareGroupConfigProvider(groupConfigManager);
+
+        assertEquals(5000, provider.partitionMaxRecordLocksOrDefault("test-group", 2000));
+    }
+
+    @Test
+    void testPartitionMaxRecordLocksOrDefaultWithoutGroupConfig() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
+        provider = new ShareGroupConfigProvider(groupConfigManager);
+
+        assertEquals(2000, provider.partitionMaxRecordLocksOrDefault("test-group", 2000));
+    }
+
+    @Test
     void testIsRenewAcknowledgeDisabledWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
