@@ -1738,7 +1738,7 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     @SuppressWarnings("unchecked")
-    public void testManualAssignmentChangeWithAutoCommitEnabled(GroupProtocol groupProtocol) {
+    public void testManualAssignmentChangeWithAutoCommitEnabled(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1788,7 +1788,7 @@ public class KafkaConsumerTest {
         // verify that assignment immediately changes
         assertEquals(Set.of(t2p0), consumer.assignment());
         // verify that the offset commits occurred as expected
-        assertTrue(commitReceived.get());
+        TestUtils.waitForCondition(commitReceived::get, "Offset commit was not received after assign()");
 
         client.requests().clear();
     }
