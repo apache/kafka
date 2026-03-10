@@ -55,7 +55,6 @@ import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,7 +64,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
@@ -1252,13 +1250,8 @@ public class InternalStreamsBuilderTest {
         p1.addChild(startSeekNode);
         p2.addChild(startSeekNode);
 
-        final Method method = InternalStreamsBuilder.class
-                .getDeclaredMethod("findParentNodeMatching", GraphNode.class, Predicate.class);
-        method.setAccessible(true);
-
         // When:
-        final GraphNode result = (GraphNode) method.invoke(
-                builder, startSeekNode, (Predicate<GraphNode>) GraphNode::isKeyChangingOperation);
+        final GraphNode result = builder.findParentNodeMatching(startSeekNode, GraphNode::isKeyChangingOperation);
 
         // Then:
         assertNotNull(result);

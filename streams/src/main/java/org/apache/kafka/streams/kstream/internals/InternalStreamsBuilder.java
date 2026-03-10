@@ -688,7 +688,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return isVersionedUpstream(startSeekingNode);
     }
 
-    private GraphNode findParentNodeMatching(final GraphNode startSeekingNode,
+    // Visible for testing.
+    GraphNode findParentNodeMatching(final GraphNode startSeekingNode,
                                              final Predicate<GraphNode> parentNodePredicate) {
         if (parentNodePredicate.test(startSeekingNode)) {
             return startSeekingNode;
