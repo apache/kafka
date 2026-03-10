@@ -285,9 +285,9 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetch(final K keyFrom,
-                                                                          final K keyTo,
-                                                                          final long timeFrom,
-                                                                          final long timeTo) {
+                                                                         final K keyTo,
+                                                                         final long timeFrom,
+                                                                         final long timeTo) {
         return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
             wrapped().fetch(
                 keyBytes(keyFrom, new RecordHeaders()),
@@ -299,9 +299,9 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetch(final K keyFrom,
-                                                                                  final K keyTo,
-                                                                                  final long timeFrom,
-                                                                                  final long timeTo) {
+                                                                                 final K keyTo,
+                                                                                 final long timeFrom,
+                                                                                 final long timeTo) {
         return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
             wrapped().backwardFetch(
                 keyBytes(keyFrom, new RecordHeaders()),
@@ -312,16 +312,14 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAll(final long timeFrom,
-                                                                             final long timeTo) {
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAll(final long timeFrom, final long timeTo) {
         return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
             wrapped().fetchAll(timeFrom, timeTo)
         );
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAll(final long timeFrom,
-                                                                                     final long timeTo) {
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAll(final long timeFrom, final long timeTo) {
         return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
             wrapped().backwardFetchAll(timeFrom, timeTo)
         );
