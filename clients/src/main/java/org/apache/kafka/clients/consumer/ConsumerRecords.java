@@ -49,7 +49,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      * Constructs a new ConsumerRecords with the given records and next offsets.
      *
      * @param records The records for each partition
-     * @param nextOffsets The next offsets for each partition
+     * @param nextOffsets The next offset and metadata for each partition whose position was advanced
+     *                    during the poll call. These represent the offsets that the consumer will
+     *                    start reading from on the next poll.
      */
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
         this.records = records;

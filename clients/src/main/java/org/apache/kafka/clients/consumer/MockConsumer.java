@@ -504,9 +504,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Sets the client instance id for this mock consumer.
+     * Sets the client instance ID for this mock consumer.
      *
-     * @param instanceId the client instance id
+     * @param instanceId the client instance ID
      */
     public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;

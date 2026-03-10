@@ -117,10 +117,10 @@ public interface ConsumerPartitionAssignor {
          * Constructs a subscription with full details.
          *
          * @param topics The list of topics to subscribe to
-         * @param userData Optional user data to include in the subscription
+         * @param userData Nullable user data to include in the subscription
          * @param ownedPartitions The partitions currently owned by this consumer
-         * @param generationId The generation id of the consumer group
-         * @param rackId Optional rack id for rack-aware assignment
+         * @param generationId The generation ID of the consumer group
+         * @param rackId Optional rack ID for rack-aware assignment
          */
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId, Optional<String> rackId) {
             this.topics = topics;
@@ -132,10 +132,10 @@ public interface ConsumerPartitionAssignor {
         }
 
         /**
-         * Constructs a subscription without generation id and rack id.
+         * Constructs a subscription without generation ID and rack ID.
          *
          * @param topics The list of topics to subscribe to
-         * @param userData Optional user data to include in the subscription
+         * @param userData Nullable user data to include in the subscription
          * @param ownedPartitions The partitions currently owned by this consumer
          */
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
@@ -146,7 +146,7 @@ public interface ConsumerPartitionAssignor {
          * Constructs a subscription without owned partitions.
          *
          * @param topics The list of topics to subscribe to
-         * @param userData Optional user data to include in the subscription
+         * @param userData Nullable user data to include in the subscription
          */
         public Subscription(List<String> topics, ByteBuffer userData) {
             this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
@@ -189,36 +189,36 @@ public interface ConsumerPartitionAssignor {
         }
 
         /**
-         * Returns the rack id for rack-aware assignment.
+         * Returns the rack ID for rack-aware assignment.
          *
-         * @return The rack id, or empty if not provided
+         * @return The rack ID, or empty if not provided
          */
         public Optional<String> rackId() {
             return rackId;
         }
 
         /**
-         * Sets the group instance id for static membership.
+         * Sets the group instance ID for static membership.
          *
-         * @param groupInstanceId The group instance id
+         * @param groupInstanceId The group instance ID
          */
         public void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
         }
 
         /**
-         * Returns the group instance id if this is a static member.
+         * Returns the group instance ID if this is a static member.
          *
-         * @return The group instance id, or empty if this is a dynamic member
+         * @return The group instance ID, or empty if this is a dynamic member
          */
         public Optional<String> groupInstanceId() {
             return groupInstanceId;
         }
 
         /**
-         * Returns the generation id of the consumer group.
+         * Returns the generation ID of the consumer group.
          *
-         * @return The generation id, or empty if not provided
+         * @return The generation ID, or empty if not provided
          */
         public Optional<Integer> generationId() {
             return generationId;
@@ -248,7 +248,7 @@ public interface ConsumerPartitionAssignor {
          * Constructs an assignment with partitions and user data.
          *
          * @param partitions The list of partitions assigned to the consumer
-         * @param userData Optional user data to include in the assignment
+         * @param userData Nullable user data to include in the assignment
          */
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
             this.partitions = partitions;
@@ -300,7 +300,7 @@ public interface ConsumerPartitionAssignor {
         /**
          * Constructs a group subscription with member subscriptions.
          *
-         * @param subscriptions A map from member id to their subscription
+         * @param subscriptions A map from member ID to their subscription
          */
         public GroupSubscription(Map<String, Subscription> subscriptions) {
             this.subscriptions = subscriptions;
@@ -309,7 +309,7 @@ public interface ConsumerPartitionAssignor {
         /**
          * Returns the subscriptions of all members in the group.
          *
-         * @return A map from member id to their subscription
+         * @return A map from member ID to their subscription
          */
         public Map<String, Subscription> groupSubscription() {
             return subscriptions;
@@ -332,7 +332,7 @@ public interface ConsumerPartitionAssignor {
         /**
          * Constructs a group assignment with member assignments.
          *
-         * @param assignments A map from member id to their partition assignment
+         * @param assignments A map from member ID to their partition assignment
          */
         public GroupAssignment(Map<String, Assignment> assignments) {
             this.assignments = assignments;
@@ -341,7 +341,7 @@ public interface ConsumerPartitionAssignor {
         /**
          * Returns the partition assignments for all members in the group.
          *
-         * @return A map from member id to their partition assignment
+         * @return A map from member ID to their partition assignment
          */
         public Map<String, Assignment> groupAssignment() {
             return assignments;
