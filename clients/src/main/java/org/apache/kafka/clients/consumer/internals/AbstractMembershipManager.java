@@ -1192,12 +1192,21 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             TopicIdPartitionSet assignedPartitions,
             SortedSet<TopicPartition> addedPartitions) {
 
-        // Update assignment in the subscription state, and ensure that no fetching or positions
-        // initialization happens for the newly added partitions while the callback runs.
-        updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
+        Set<TopicPartition> fullAssignment = assignedPartitions.topicPartitions();
+        CompletableFuture<Void> result;
 
-        // Invoke user call back.
-        CompletableFuture<Void> result = signalPartitionsAssigned(addedPartitions);
+        if (allowAssignmentChangeOutsidePoll()) {
+            // Update assignment in the subscription state immediately, and ensure that no fetching
+            // or positions initialization happens for the newly added partitions while the callback runs.
+            updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
+        }
+
+        // Signal to the app thread that new partitions have been reconciled so it can take the necessary actions.
+        // In the case of the share consumer/manager, no further action is needed (signal completes right away).
+        // In the case of the async consumer, the app thread will apply the assignment change
+        // within a call to consumer.poll(), and run the onPartitionsAssigned callback if present.
+        result = signalPartitionsAssigned(fullAssignment, addedPartitions);
+
         // Enable newly added partitions to start fetching and updating positions for them.
         result.whenComplete((__, exception) -> {
             if (exception == null) {
@@ -1228,10 +1237,25 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
+     * Returns true if assignment changes can happen outside of consumer.poll().
+     * When false, the assignment update will be deferred to the application thread and applied
+     * during poll, ensuring that consumer.assignment() only changes within a call to consumer.poll().
+     *
+     * @return true if assignment changes can happen outside poll, false to defer to poll
+     */
+    protected boolean allowAssignmentChangeOutsidePoll() {
+        return true;
+    }
+
+    /**
      * Signals to the membership manager that partitions are being assigned so that actions
      * specific to the group type can be taken.
+     *
+     * @param fullAssignment The full assignment to apply (null if assignment already applied)
+     * @param addedPartitions The newly added partitions (used for callback and subscription update)
      */
-    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> partitionsAssigned) {
+    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> fullAssignment,
+                                                            SortedSet<TopicPartition> addedPartitions) {
         return CompletableFuture.completedFuture(null);
     }
 
