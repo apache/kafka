@@ -47,9 +47,9 @@ public class UtilsTest {
     private static final byte[] VALUE = VALUE_STR.getBytes(StandardCharsets.UTF_8);
     private static final long TIMESTAMP = 123456789L;
     private static final byte[] HEADERS = "test-headers".getBytes(StandardCharsets.UTF_8);
-    // Header size's varint encoding cannot exceeds 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
-    // So 2 + Java's integer byte size (4 bytes) guarantees to overflow header size's varint
-    private static final int OVERFLOW_HEADERS_SIZE = (2 + Integer.BYTES) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
+    // Header size's varint encoding cannot exceed 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
+    private static final int MAX_VARINT_SIZE = 5;
+    private static final int OVERFLOW_HEADERS_SIZE = (1 + MAX_VARINT_SIZE) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
 
     @ParameterizedTest
     @ValueSource(strings = { VALUE_STR, "" })
@@ -57,17 +57,17 @@ public class UtilsTest {
         final byte[] value = valueStr.getBytes(StandardCharsets.UTF_8);
         final byte[] headers = headersOf(HEADERS);
 
-        final byte[] inputBytes = headersTimestampValueOf(headers, TIMESTAMP, value);
+        final byte[] inputBytes = headersTimestampValueOf(headers, value);
         final byte[] outputBytes = rawTimestampedValue(inputBytes);
 
-        assertArrayEquals(timestampedValueOf(TIMESTAMP, value), outputBytes);
+        assertArrayEquals(timestampedValueOf(value), outputBytes);
     }
 
     @ParameterizedTest
     @MethodSource("invalidHeaderSizes")
     public void testRawTimestampedValueWithInvalidHeadersSize(final int invalidHeaderSize) {
-        final byte[] invalidHeaders = headersOf(HEADERS, -1);
-        final byte[] inputBytes = headersTimestampValueOf(invalidHeaders, TIMESTAMP, VALUE);
+        final byte[] invalidHeaders = headersOf(HEADERS, invalidHeaderSize);
+        final byte[] inputBytes = headersTimestampValueOf(invalidHeaders, VALUE);
         assertThrows(SerializationException.class, () -> rawTimestampedValue(inputBytes));
     }
 
@@ -124,7 +124,7 @@ public class UtilsTest {
     }
 
     private static byte[] headersOf(final byte[] headerBytes, final int injectedHeadersSize) {
-        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + headerBytes.length);
+        final ByteBuffer buf = ByteBuffer.allocate(MAX_VARINT_SIZE + headerBytes.length);
         ByteUtils.writeVarint(injectedHeadersSize, buf);
         buf.put(headerBytes);
         buf.flip();
@@ -133,7 +133,7 @@ public class UtilsTest {
         return res;
     }
 
-    private static byte[] headersTimestampValueOf(final byte[] headers, final long timestamp, final byte[] value) {
+    private static byte[] headersTimestampValueOf(final byte[] headers, final byte[] value) {
         final byte[] res = new byte[headers.length + StateSerdes.TIMESTAMP_SIZE + value.length];
         final ByteBuffer buf = ByteBuffer.wrap(res);
         buf.put(headers);
@@ -142,7 +142,7 @@ public class UtilsTest {
         return res;
     }
 
-    private static byte[] timestampedValueOf(final long timestamp, final byte[] value) {
+    private static byte[] timestampedValueOf(final byte[] value) {
         final byte[] res = new byte[StateSerdes.TIMESTAMP_SIZE + value.length];
         final ByteBuffer buf = ByteBuffer.wrap(res);
         buf.putLong(TIMESTAMP);
