@@ -1,15 +1,22 @@
 org.apache.kafka.coordinator.group.GroupConfigManagerTest:
+- testClampWithCustomBrokerBounds
 - testGetNonExistentGroupConfig
 - testUpdateConfigWithInvalidGroupId
+- testUpdateConfigWithNullGroupId
 - testUpdateGroupConfig
-- testValidateUsesAllGroupTypeDefaults
 org.apache.kafka.coordinator.group.GroupConfigTest:
+- testEvaluateDoesNotModifyInput
+- testEvaluateEmptyPropsReturnsEmpty
+- testEvaluateMaxBoundedValueAboveMaxIsCapped
+- testEvaluateValueAboveMaxIsCapped
+- testEvaluateValueBelowMinIsCapped
 - testFromPropsInvalid
 - testFromPropsWithDefaultValue
 - testInvalidConfigName
 - testInvalidProps
 - testValidShareAutoOffsetResetValues
 - testValidShareIsolationLevelValues
+- testValidateWithAllGroupTypeConfigs
 org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testAppendLingerMs
 - testConfigs
@@ -297,6 +304,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testConsumerGroupDescribeOnStreamsGroup
 - testConsumerGroupDescribeWithErrors
 - testConsumerGroupDynamicConfigs
+- testConsumerGroupEvaluatedConfigs
 - testConsumerGroupHeartbeatFromExistingClassicStaticMember
 - testConsumerGroupHeartbeatFullResponse
 - testConsumerGroupHeartbeatOnShareGroup
@@ -514,6 +522,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testShareGroupDescribeOnStreamsGroup
 - testShareGroupDescribeRequest
 - testShareGroupDynamicConfigs
+- testShareGroupEvaluatedConfigs
 - testShareGroupHeartbeatInitializeOnPartitionUpdate
 - testShareGroupHeartbeatOnConsumerGroup
 - testShareGroupHeartbeatOnStreamsGroup
@@ -586,6 +595,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupEndpointInformationIncludesNewMember
 - testStreamsGroupEndpointInformationOnlyWhenEpochGreater
 - testStreamsGroupEpochIncreaseWithAssignmentConfigChanges
+- testStreamsGroupEvaluatedConfigs
 - testStreamsGroupHeartbeatAlwaysSetsStatus
 - testStreamsGroupHeartbeatOnConsumerGroup
 - testStreamsGroupHeartbeatOnShareGroup

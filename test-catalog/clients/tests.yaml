@@ -2702,6 +2702,7 @@ org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessorTest
 - testResetOffsetEvent
 - testSeekUnvalidatedEvent
 - testSeekUnvalidatedEventWithException
+- testSharePollEventCallsShareManagers
 - testStreamsOnAllTasksLostCallbackCompletedEvent
 - testStreamsOnAllTasksLostCallbackCompletedEventWithoutStreamsMembershipManager
 - testStreamsOnTasksAssignedCallbackCompletedEvent
