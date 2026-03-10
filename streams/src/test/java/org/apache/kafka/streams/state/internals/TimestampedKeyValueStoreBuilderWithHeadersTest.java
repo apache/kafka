@@ -211,24 +211,15 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     }
 
     @Test
-    public void shouldThrowWhenPlainKeyValueStoreIsProvided() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBStore("test-store", "metrics-scope"));
+    public void shouldWrapPlainKeyValueStoreAsHeadersStore() {
+        setUp();
+        when(supplier.get()).thenReturn(new RocksDBStore("name", "metrics-scope"));
 
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
-        );
-
-        final IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> builder.withLoggingDisabled().withCachingDisabled().build()
-        );
-
-        assertTrue(exception.getMessage().contains("Provided store must be a timestamped store"));
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+        assertInstanceOf(PlainToHeadersStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
     @Test
