@@ -535,7 +535,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             );
 
             // Should only have DEFAULT, OFFSETS and keyValueWithTimestampAndHeaders, not the legacy keyValueWithTimestamp
-            assertEquals(3, existingCFs.size(), "Expected only 2 column families after legacy CF is dropped");
+            assertEquals(3, existingCFs.size(), "Expected only 3 column families after legacy CF is dropped");
 
             boolean hasDefault = false;
             boolean hasHeadersAware = false;
