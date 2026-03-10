@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -30,6 +31,7 @@ import java.util.Map;
 public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, StateStore {
     private final String name;
     private final boolean rocksdbStore;
+    private final StateRestoreCallback stateRestoreCallback;
     private boolean open = true;
     public boolean initialized;
     public boolean committed;
@@ -44,8 +46,15 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
 
     public NoOpReadOnlyStore(final String name,
                              final boolean rocksdbStore) {
+        this(name, rocksdbStore, null);
+    }
+
+    public NoOpReadOnlyStore(final String name,
+                             final boolean rocksdbStore,
+                             final StateRestoreCallback stateRestoreCallback) {
         this.name = name;
         this.rocksdbStore = rocksdbStore;
+        this.stateRestoreCallback = stateRestoreCallback;
     }
 
     @Override
@@ -87,7 +96,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
             new File(stateStoreContext.stateDir() + File.separator + name).mkdir();
         }
         this.initialized = true;
-        stateStoreContext.register(root, (k, v) -> { });
+        stateStoreContext.register(root, stateRestoreCallback != null ? stateRestoreCallback : (k, v) -> { });
     }
 
     @Override

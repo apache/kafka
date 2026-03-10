@@ -35,10 +35,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UtilsTest {
@@ -50,6 +52,31 @@ public class UtilsTest {
     // Header size's varint encoding cannot exceed 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
     private static final int MAX_VARINT_SIZE = 5;
     private static final int OVERFLOW_HEADERS_SIZE = (1 + MAX_VARINT_SIZE) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
+
+    @Test
+    public void shouldExtractRawPlainValue() {
+        // Format: [headersSize(varint)][headers][timestamp(8)][value]
+        // Create a value with headers size=0, timestamp=-1, value="test"
+        final byte[] value = "test".getBytes();
+        final ByteBuffer buffer = ByteBuffer.allocate(1 + 8 + value.length);
+        buffer.put((byte) 0x00); // headers size = 0
+        buffer.putLong(-1L); // timestamp = -1
+        buffer.put(value);
+
+        final byte[] result = rawPlainValue(buffer.array());
+
+        assertArrayEquals(value, result);
+    }
+
+    @Test
+    public void shouldReturnNullForNullRawPlainValue() {
+        assertNull(rawPlainValue(null));
+    }
+
+    @Test
+    public void shouldReturnNullForNullRawTimestampedValue() {
+        assertNull(rawPlainValue(null));
+    }
 
     @ParameterizedTest
     @ValueSource(strings = { VALUE_STR, "" })
@@ -149,5 +176,4 @@ public class UtilsTest {
         buf.put(value);
         return res;
     }
-
 }

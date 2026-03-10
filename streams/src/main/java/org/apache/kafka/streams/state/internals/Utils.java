@@ -28,6 +28,29 @@ import java.nio.ByteBuffer;
 
 public class Utils {
     /**
+     * Extract raw plain value from serialized ValueTimestampHeaders.
+     * This strips both the headers and timestamp portions.
+     *
+     * Format conversion:
+     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
+     * Output: [value]
+     */
+    static byte[] rawPlainValue(final byte[] rawValueTimestampHeaders) {
+        if (rawValueTimestampHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        // Skip headers and timestamp (8 bytes)
+        buffer.position(buffer.position() + headersSize + 8);
+
+        final byte[] result = new byte[buffer.remaining()];
+        buffer.get(result);
+        return result;
+    }
+
+    /**
      * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
      * This strips the headers portion but keeps timestamp and value intact.
      *

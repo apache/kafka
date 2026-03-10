@@ -17,7 +17,7 @@
 
 package org.apache.kafka.message;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.function.Function;
 
 public final class Target {
@@ -63,7 +63,7 @@ public final class Target {
         FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
         FieldSpec elementField = new FieldSpec(field.name() + "Element",
                 field.versions().toString(),
-                Collections.emptyList(),
+                List.of(),
                 arrayType.elementType().toString(),
                 false,
                 Versions.NONE.toString(),

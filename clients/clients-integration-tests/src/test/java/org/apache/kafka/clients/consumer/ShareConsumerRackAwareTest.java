@@ -49,7 +49,6 @@ public class ShareConsumerRackAwareTest {
             @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
             @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
             @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic, share"),
             @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
         }
     )
