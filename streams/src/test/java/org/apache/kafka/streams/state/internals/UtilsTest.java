@@ -20,13 +20,20 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
@@ -36,34 +43,62 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UtilsTest {
     private static final String TOPIC = "test-topic";
-    private static final String VALUE = "test-value";
+    private static final String VALUE_STR = "test-value";
+    private static final byte[] VALUE = VALUE_STR.getBytes(StandardCharsets.UTF_8);
+    private static final long TIMESTAMP = 123456789L;
+    private static final byte[] HEADERS = "test-headers".getBytes(StandardCharsets.UTF_8);
+    // Header size's varint encoding cannot exceeds 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
+    // So 2 + Java's integer byte size (4 bytes) guarantees to overflow header size's varint
+    private static final int OVERFLOW_HEADERS_SIZE = (2 + Integer.BYTES) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
+
+    @ParameterizedTest
+    @ValueSource(strings = { VALUE_STR, "" })
+    public void testRawTimestampedValue(final String valueStr) {
+        final byte[] value = valueStr.getBytes(StandardCharsets.UTF_8);
+        final byte[] headers = headersOf(HEADERS);
+
+        final byte[] inputBytes = headersTimestampValueOf(headers, TIMESTAMP, value);
+        final byte[] outputBytes = rawTimestampedValue(inputBytes);
+
+        assertArrayEquals(timestampedValueOf(TIMESTAMP, value), outputBytes);
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidHeaderSizes")
+    public void testRawTimestampedValueWithInvalidHeadersSize(final int invalidHeaderSize) {
+        final byte[] invalidHeaders = headersOf(HEADERS, -1);
+        final byte[] inputBytes = headersTimestampValueOf(invalidHeaders, TIMESTAMP, VALUE);
+        assertThrows(SerializationException.class, () -> rawTimestampedValue(inputBytes));
+    }
 
     @Test
-    public void testRawTimestampedValue() {
-        final long timestamp = 123456789L;
+    public void testRawTimestampedValueWithoutTimestamp() {
+        assertThrows(SerializationException.class, () -> rawTimestampedValue(VALUE));
+    }
 
+    @Test
+    public void testRawTimestampedValueWithSerdes() {
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes(StandardCharsets.UTF_8));
-        final ValueTimestampHeaders<String> input = ValueTimestampHeaders.make(VALUE, timestamp, headers);
+        final ValueTimestampHeaders<String> input = ValueTimestampHeaders.make(VALUE_STR, TIMESTAMP, headers);
         try (
-                final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
-                final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String())
-            ) {
+            final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+            final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String())
+        ) {
             final byte[] inputBytes = serializer.serialize(TOPIC, input);
             final byte[] outputBytes = rawTimestampedValue(inputBytes);
             final ValueAndTimestamp<String> output = stringSerde.deserializer().deserialize(TOPIC, outputBytes);
 
-            assertEquals(timestamp, output.timestamp());
-            assertEquals(VALUE, output.value());
+            assertEquals(TIMESTAMP, output.timestamp());
+            assertEquals(VALUE_STR, output.value());
         }
     }
 
     @Test
     public void testReadBytes() {
-        final byte[] valueBytes = VALUE.getBytes(StandardCharsets.UTF_8);
-        final ByteBuffer buf = ByteBuffer.wrap(valueBytes);
+        final ByteBuffer buf = ByteBuffer.wrap(VALUE);
 
         assertThrows(SerializationException.class, () -> readBytes(buf, -1));
-        assertThrows(SerializationException.class, () -> readBytes(buf, valueBytes.length + 1));
+        assertThrows(SerializationException.class, () -> readBytes(buf, VALUE.length + 1));
         
         assertEquals('t', readBytes(buf, 1)[0]);
         assertEquals('e', readBytes(buf, 1)[0]);
@@ -79,4 +114,40 @@ public class UtilsTest {
 
         assertThrows(SerializationException.class, () -> readBytes(buf, 1));
     }
+
+    private static Stream<Arguments> invalidHeaderSizes() {
+        return Stream.of(-1, Integer.MAX_VALUE, Integer.MIN_VALUE, OVERFLOW_HEADERS_SIZE).map(Arguments::of);
+    }
+
+    private static byte[] headersOf(final byte[] headersBytes) {
+        return headersOf(headersBytes, headersBytes.length);
+    }
+
+    private static byte[] headersOf(final byte[] headerBytes, final int injectedHeadersSize) {
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + headerBytes.length);
+        ByteUtils.writeVarint(injectedHeadersSize, buf);
+        buf.put(headerBytes);
+        buf.flip();
+        final byte[] res = new byte[buf.limit()];
+        buf.get(res);
+        return res;
+    }
+
+    private static byte[] headersTimestampValueOf(final byte[] headers, final long timestamp, final byte[] value) {
+        final byte[] res = new byte[headers.length + StateSerdes.TIMESTAMP_SIZE + value.length];
+        final ByteBuffer buf = ByteBuffer.wrap(res);
+        buf.put(headers);
+        buf.putLong(TIMESTAMP);
+        buf.put(value);
+        return res;
+    }
+
+    private static byte[] timestampedValueOf(final long timestamp, final byte[] value) {
+        final byte[] res = new byte[StateSerdes.TIMESTAMP_SIZE + value.length];
+        final ByteBuffer buf = ByteBuffer.wrap(res);
+        buf.putLong(TIMESTAMP);
+        buf.put(value);
+        return res;
+    }
+
 }
