@@ -82,6 +82,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -121,6 +122,7 @@ public class UnifiedLog implements AutoCloseable {
     /* A lock that guards all modifications to the log */
     private final Object lock = new Object();
     private final Map<String, Map<String, String>> metricNames = new HashMap<>();
+    private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
 
     // localLog The LocalLog instance containing non-empty log segments recovered from disk
     private final LocalLog localLog;
@@ -714,10 +716,29 @@ public class UnifiedLog implements AutoCloseable {
         metricsGroup.newGauge(LogMetricNames.LOG_START_OFFSET, this::logStartOffset, tags);
         metricsGroup.newGauge(LogMetricNames.LOG_END_OFFSET, this::logEndOffset, tags);
         metricsGroup.newGauge(LogMetricNames.SIZE, this::size, tags);
+        metricsGroup.newGauge(LogMetricNames.RETENTION_SIZE_IN_PERCENT, retentionSizeInPercentValue::get, tags);
         metricNames.put(LogMetricNames.NUM_LOG_SEGMENTS, tags);
         metricNames.put(LogMetricNames.LOG_START_OFFSET, tags);
         metricNames.put(LogMetricNames.LOG_END_OFFSET, tags);
         metricNames.put(LogMetricNames.SIZE, tags);
+        metricNames.put(LogMetricNames.RETENTION_SIZE_IN_PERCENT, tags);
+    }
+
+    /**
+     * Calculates the partition size as a percentage of the configured retention size.
+     * This metric is only meaningful for non-tiered topics with size-based retention configured.
+     *
+     * @return The partition size as a percentage of retention.bytes, or 0 if:
+     *         - Remote storage is enabled with remote copy enabled (metric handled by RemoteLogManager)
+     *         - Retention size is not configured (0 or negative)
+     */
+    // Visible for testing
+    int calculateRetentionSizeInPercent() {
+        long retentionSize = localRetentionSize(config(), remoteLogEnabledAndRemoteCopyEnabled());
+        if (!remoteLogEnabledAndRemoteCopyEnabled() && retentionSize > 0) {
+            return (int) ((size() * 100) / retentionSize);
+        }
+        return 0;
     }
 
     public void removeExpiredProducers(long currentTimeMs) {
@@ -1944,25 +1965,34 @@ public class UnifiedLog implements AutoCloseable {
      * not deletion is enabled, delete any local log segments that are before the log start offset
      */
     public int deleteOldSegments() throws IOException {
-        if (config().delete) {
-            return deleteLogStartOffsetBreachedSegments() +
-                    deleteRetentionSizeBreachedSegments() +
-                    deleteRetentionMsBreachedSegments();
-        } else if (config().compact) {
-            return deleteLogStartOffsetBreachedSegments();
-        } else {
-            // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
-            // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
-            if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                return deleteLogStartOffsetBreachedSegments() +
+        int deletedSegments;
+        try {
+            if (config().delete) {
+                deletedSegments = deleteLogStartOffsetBreachedSegments() +
                         deleteRetentionSizeBreachedSegments() +
                         deleteRetentionMsBreachedSegments();
+            } else if (config().compact) {
+                deletedSegments = deleteLogStartOffsetBreachedSegments();
             } else {
-                // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
-                // unless the log start offset advances through deleteRecords
-                return deleteLogStartOffsetBreachedSegments();
+                // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
+                // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
+                if (remoteLogEnabledAndRemoteCopyEnabled()) {
+                    deletedSegments = deleteLogStartOffsetBreachedSegments() +
+                            deleteRetentionSizeBreachedSegments() +
+                            deleteRetentionMsBreachedSegments();
+                } else {
+                    // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
+                    // unless the log start offset advances through deleteRecords
+                    deletedSegments = deleteLogStartOffsetBreachedSegments();
+                }
             }
+        } finally {
+            // Calculate retentionSizeInPercent in finally block to ensure the metric is updated
+            // even when log deletion encounters errors. This also saves CPU cycles by only
+            // calculating when the log-cleaner thread runs.
+            retentionSizeInPercentValue.set(calculateRetentionSizeInPercent());
         }
+        return deletedSegments;
     }
 
     public interface DeletionCondition {

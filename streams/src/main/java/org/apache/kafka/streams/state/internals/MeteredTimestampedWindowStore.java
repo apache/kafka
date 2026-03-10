@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * @param <K>
  * @param <V>
  */
-class MeteredTimestampedWindowStore<K, V>
+public class MeteredTimestampedWindowStore<K, V>
     extends MeteredWindowStore<K, ValueAndTimestamp<V>>
     implements TimestampedWindowStore<K, V> {
 

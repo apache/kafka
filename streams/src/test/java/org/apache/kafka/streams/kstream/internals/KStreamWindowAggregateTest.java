@@ -1011,6 +1011,7 @@ public class KStreamWindowAggregateTest {
                 Duration.ofDays(1),
                 Duration.ofMillis(windowSize),
                 false,
+                false,
                 false
             );
         } else {

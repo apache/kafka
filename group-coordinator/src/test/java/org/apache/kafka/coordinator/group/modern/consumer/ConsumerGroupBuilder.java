@@ -31,6 +31,7 @@ public class ConsumerGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;
+    private long assignmentTimestamp;
     private final Map<String, ConsumerGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private long metadataHash = 0L;
@@ -40,6 +41,7 @@ public class ConsumerGroupBuilder {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
         this.assignmentEpoch = 0;
+        this.assignmentTimestamp = 0L;
     }
 
     public ConsumerGroupBuilder withMember(ConsumerGroupMember member) {
@@ -70,6 +72,11 @@ public class ConsumerGroupBuilder {
         return this;
     }
 
+    public ConsumerGroupBuilder withAssignmentTimestamp(long assignmentTimestamp) {
+        this.assignmentTimestamp = assignmentTimestamp;
+        return this;
+    }
+
     public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
@@ -92,7 +99,7 @@ public class ConsumerGroupBuilder {
         );
 
         // Add target assignment epoch.
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, assignmentEpoch, assignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->

@@ -69,6 +69,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -299,6 +300,39 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         try {
             final List<byte[]> allExisting = RocksDB.listColumnFamilies(userSpecifiedOptions, absolutePath);
 
+            // Check for unexpected column families
+            for (final byte[] existingFamily : allExisting) {
+                final boolean isExpected = allDescriptors.stream()
+                        .anyMatch(descriptor -> Arrays.equals(descriptor.getName(), existingFamily));
+                if (!isExpected) {
+                    if (Arrays.equals(existingFamily, RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME)) {
+                        throw new ProcessorStateException(
+                                "Store " + name + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
+                                "Downgrade from timestamped to regular store is not supported directly. " +
+                                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog.");
+                    }
+                    if (Arrays.equals(existingFamily, RocksDBTimestampedStoreWithHeaders.TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME)) {
+                        final boolean openingAsTimestampedStore = allDescriptors.stream()
+                                .anyMatch(descriptor -> Arrays.equals(descriptor.getName(), RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME));
+                        if (openingAsTimestampedStore) {
+                            throw new ProcessorStateException(
+                                    "Store " + name + " is a headers-aware store and cannot be opened as a timestamped store. " +
+                                    "Downgrade from headers-aware to timestamped store is not supported. " +
+                                    "To downgrade, you can delete the local state in the state directory, and rebuild the store as timestamped store from the changelog.");
+                        } else {
+                            throw new ProcessorStateException(
+                                    "Store " + name + " is a headers-aware store and cannot be opened as a regular key-value store. " +
+                                    "Downgrade from headers-aware to regular store is not supported.");
+                        }
+                    }
+
+                    final String unexpectedFamily = new String(existingFamily, StandardCharsets.UTF_8);
+                    throw new ProcessorStateException(
+                            "Unexpected column family '" + unexpectedFamily + "' found in store " + name + ". " +
+                            "The store may have been created with incompatible settings.");
+                }
+            }
+
             final List<ColumnFamilyDescriptor> existingDescriptors = new LinkedList<>();
             existingDescriptors.add(defaultColumnFamilyDescriptor);
             existingDescriptors.addAll(extraDescriptors.stream()
@@ -391,7 +425,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                            final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         final byte[] originalValue = get(key);
-        if (originalValue == null) {
+        if (originalValue == null && value != null) {
             put(key, value);
         }
         return originalValue;

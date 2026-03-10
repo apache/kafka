@@ -406,7 +406,7 @@ public class ShareGroupTest {
         assertEquals(ShareGroupState.STABLE, shareGroup.state());
         assertThrows(GroupNotEmptyException.class, shareGroup::validateDeleteGroup);
 
-        shareGroup.setTargetAssignmentEpoch(1);
+        shareGroup.setTargetAssignmentMetadata(1, 12345L);
 
         assertEquals(ShareGroupState.STABLE, shareGroup.state());
         assertThrows(GroupNotEmptyException.class, shareGroup::validateDeleteGroup);

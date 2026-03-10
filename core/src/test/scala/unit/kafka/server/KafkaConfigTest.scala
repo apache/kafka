@@ -1036,6 +1036,7 @@ class KafkaConfigTest {
 
         /** New group coordinator configs */
         case GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
         case GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, 512 * 1024 - 1)
 
@@ -1824,6 +1825,55 @@ class KafkaConfigTest {
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     val config3 = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols)
+  }
+
+  @Test
+  def testGroupCoordinatorRebalanceProtocolsDeprecationWarning(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    val configName = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG
+    val defaultDeprecationWarning =
+      s"The config `$configName` is deprecated and will be removed in Kafka 5.0. " +
+      "Please remove the configuration to prepare for the upgrade."
+    def deprecationWarning(disabled: String): String =
+      s"The config `$configName` is deprecated and will be removed in Kafka 5.0. " +
+      s"The following protocol(s) are currently disabled: $disabled. " +
+      "In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+      "(group.version, streams.version, share.version) via kafka-features.sh. " +
+      "Please remove the configuration, which will restore all protocols to the default enabled state, to prepare for the upgrade."
+    val shareDeprecationWarning = s"'share' in `$configName` is deprecated. " +
+      "Share groups are controlled by the 'share.version' feature. " +
+      "This config will be removed in Kafka 5.0."
+
+    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+      appender.setClassLogger(classOf[KafkaConfig], Level.WARN)
+
+      // Config not set: no warning.
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.isEmpty)
+
+      // Explicitly set to default value: simple deprecation warning.
+      props.put(configName, "classic,consumer,streams")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(defaultDeprecationWarning))
+      appender.getMessages.clear()
+
+      // Missing streams.
+      props.put(configName, "classic,consumer")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(deprecationWarning("streams")))
+
+      // Missing consumer.
+      props.put(configName, "classic,streams")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(deprecationWarning("consumer")))
+
+      // Including "share": no-op warning.
+      props.put(configName, "classic,consumer,streams,share")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(shareDeprecationWarning))
+    }
   }
 
   @Test

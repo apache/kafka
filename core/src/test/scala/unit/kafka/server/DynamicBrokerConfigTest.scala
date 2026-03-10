@@ -1070,42 +1070,42 @@ class DynamicBrokerConfigTest {
     // Cordoning 1 new log dir, so 1 new handleCordoned invocation
     val props = new Properties()
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, logDirs.get(0))
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
     verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
     // When using *, no other entries must be specified, so no new invocations
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*,/invalid/log/dir")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
     verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
     // Invalid log dir, so no new invocations
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "/invalid/log/dir")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
     verify(ctx.directoryEventHandler, times(0)).handleUncordoned(anySet)
 
     // * cordons the 2nd log dir, so 1 new handleCordoned invocation
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(logDirs, ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
     verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
     // clearing all cordoned log dirs, so 1 new handleUncordoned invocation
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertTrue(ctx.config.cordonedLogDirs.isEmpty)
     verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
     verify(ctx.directoryEventHandler, times(1)).handleUncordoned(anySet)
 
     // * cordons all log dirs, so 1 new handleCordoned invocation
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, String.join(",", logDirs))
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(logDirs, ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(3)).handleCordoned(anySet)
     verify(ctx.directoryEventHandler, times(1)).handleUncordoned(anySet)

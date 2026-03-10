@@ -1158,6 +1158,52 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testGroupConfigEvaluatedAfterBrokerRestart(): Unit = {
+    client = createAdminClient
+    val groupId = "evaluated-config-test-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+    // Set a valid group config (55000 is within default [45000, 60000])
+    val alterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000"), AlterConfigOp.OpType.SET)
+    )
+    val alterResult = client.incrementalAlterConfigs(util.Map.of(groupResource, alterOps))
+    alterResult.all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    // Verify stored value and effective value before restart
+    var describeResult = client.describeConfigs(util.List.of(groupResource))
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
+    assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    // Before restart, 55000 is within [45000, 60000], so no adjustment needed
+    assertEquals(55000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+
+    // Kill all brokers
+    client.close()
+    for (i <- 0 until brokerCount) {
+      killBroker(i)
+    }
+
+    // Change broker-level max to 50000 (making stored 55000 exceed the new max)
+    serverConfig.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+    // Restart brokers with new config (should not block startup)
+    restartDeadBrokers(reconfigure = true)
+    client = createAdminClient
+    ensureConsistentKRaftMetadata()
+
+    // Verify stored value is preserved (describeConfigs returns raw value)
+    describeResult = client.describeConfigs(util.List.of(groupResource))
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
+    assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG,
+      configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+
+    // Verify effective value is adjusted (55000 evaluated to new max 50000)
+    assertEquals(50000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+  }
+
+  @Test
   def testCreatePartitions(): Unit = {
     client = createAdminClient
 

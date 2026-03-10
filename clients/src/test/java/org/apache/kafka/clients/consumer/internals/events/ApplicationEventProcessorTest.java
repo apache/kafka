@@ -305,6 +305,19 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
+    public void testSharePollEventCallsShareManagers() {
+        SharePollEvent event = new SharePollEvent(12345);
+
+        setupShareProcessor();
+        processor.process(event);
+
+        verify(shareMembershipManager).maybeReconcile(true);
+        verify(shareMembershipManager).onConsumerPoll();
+
+        verify(shareHeartbeatRequestManager).resetPollTimer(event.pollTimeMs());
+    }
+
+    @Test
     public void testTopicSubscriptionChangeEvent() {
         Set<String> topics = Set.of("topic1", "topic2");
         Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());

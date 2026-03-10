@@ -61,7 +61,8 @@ public class DynamicBrokerConfig {
 
     private static final Set<String> PER_BROKER_CONFIGS = Stream.of(
             DYNAMIC_SECURITY_CONFIGS,
-            DynamicListenerConfig.RECONFIGURABLE_CONFIGS)
+            DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
+            Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
         .flatMap(Collection::stream)
         .filter(c -> !CLUSTER_LEVEL_LISTENER_CONFIGS.contains(c))
         .collect(Collectors.toUnmodifiableSet());
