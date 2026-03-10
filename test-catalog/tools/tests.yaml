@@ -473,6 +473,7 @@ org.apache.kafka.tools.ProducerPerformanceTest:
 - testGenerateRandomPayloadByRecordSize
 - testGenerateRandomPayloadException
 - testInvalidConfigPostProcessor
+- testMultipleProducerProperty
 - testMutuallyExclusiveGroup
 - testNoTransactionRelatedConfigs
 - testNumberOfCallsForSendAndClose
