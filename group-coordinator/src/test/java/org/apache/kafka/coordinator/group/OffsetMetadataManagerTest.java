@@ -49,6 +49,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
@@ -93,6 +94,7 @@ import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSE
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -130,6 +132,11 @@ public class OffsetMetadataManagerTest {
 
             Builder withGroupMetadataManager(GroupMetadataManager groupMetadataManager) {
                 this.groupMetadataManager = groupMetadataManager;
+                return this;
+            }
+
+            Builder withMetadataImage(MetadataImage metadataImage) {
+                this.metadataImage = metadataImage;
                 return this;
             }
 
@@ -1276,6 +1283,57 @@ public class OffsetMetadataManagerTest {
         );
 
         verifyOffsetCommitFromAdminClient(context);
+    }
+
+    @Test
+    public void testConsumerGroupOffsetCommitWithZeroUuidResolvesTopicId() {
+        // Verifies that when a consumer group member commits with ZERO_UUID topic ID
+        // the topic ID is resolved from metadata for assignment epoch validation.
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(barTopicId, barTopicName, 3)
+            .build();
+
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // Create an empty group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
+            "foo",
+            true
+        );
+
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(Map.of(barTopicId, Map.of(0, 5)))
+            .build()
+        );
+
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("foo")
+            .setMemberId("member")
+            .setGenerationIdOrMemberEpoch(3) // stale member epoch
+            .setTopics(List.of(
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(barTopicName)
+                    .setTopicId(Uuid.ZERO_UUID) // ZERO_UUID topic_id
+                    .setPartitions(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100L)
+                    ))
+            ));
+
+        // Should fail because member epoch (3) < assignment epoch (5).
+        assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
+
+        // Now try with member epoch >= assignment epoch, should succeed.
+        request.setGenerationIdOrMemberEpoch(5);
+        assertDoesNotThrow(() -> context.commitOffset(request));
     }
 
     private static void verifyOffsetCommitFromAdminClient(OffsetMetadataManagerTestContext context) {

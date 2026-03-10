@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
@@ -630,15 +631,23 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
+                    // Resolve topic ID if it's ZERO_UUID
+                    Uuid resolvedTopicId = topic.topicId();
+                    if (resolvedTopicId.equals(Uuid.ZERO_UUID)) {
+                        resolvedTopicId = groupMetadataManager.image()
+                            .topicMetadata(topic.name())
+                            .map(CoordinatorMetadataImage.TopicMetadata::id)
+                            .orElse(Uuid.ZERO_UUID);
+                    }
                     // Validate commit per-partition
                     validator.validate(
                         topic.name(),
-                        topic.topicId(),
+                        resolvedTopicId,
                         partition.partitionIndex()
                     );
 
                     log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
-                        request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
+                        request.groupId(), partition.committedOffset(), resolvedTopicId, topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -646,7 +655,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
-                        topic.topicId(),
+                        resolvedTopicId,
                         partition,
                         currentTimeMs,
                         expireTimestampMs

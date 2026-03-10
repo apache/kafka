@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
@@ -1384,8 +1383,7 @@ public class ClassicGroupTest {
         ConsumerGroup consumerGroup = new ConsumerGroup(
             logContext,
             new SnapshotRegistry(logContext),
-            groupId,
-            () -> CoordinatorMetadataImage.EMPTY
+            groupId
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());
@@ -1538,8 +1536,7 @@ public class ClassicGroupTest {
         ConsumerGroup consumerGroup = new ConsumerGroup(
             logContext,
             new SnapshotRegistry(logContext),
-            groupId,
-            () -> CoordinatorMetadataImage.EMPTY
+            groupId
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());

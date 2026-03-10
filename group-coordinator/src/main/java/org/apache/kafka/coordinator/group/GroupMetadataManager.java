@@ -806,10 +806,10 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId, this::image);
+            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId, this::image);
+            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -973,7 +973,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, this::image);
+            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
@@ -983,7 +983,7 @@ public class GroupMetadataManager {
             // offsets if no group existed. Simple classic groups are not backed by any records
             // in the __consumer_offsets topic hence we can safely replace it here. Without this,
             // replaying consumer group records after offset commit records would not work.
-            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, this::image);
+            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
@@ -1372,8 +1372,7 @@ public class GroupMetadataManager {
                 snapshotRegistry,
                 classicGroup,
                 topicHashCache,
-                metadataImage,
-                this::image
+                metadataImage
             );
         } catch (SchemaException e) {
             log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",

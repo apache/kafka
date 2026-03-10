@@ -93,8 +93,7 @@ public class ConsumerGroupTest {
         return new ConsumerGroup(
             new LogContext(),
             snapshotRegistry,
-            groupId,
-            () -> CoordinatorMetadataImage.EMPTY
+            groupId
         );
     }
 
@@ -722,7 +721,7 @@ public class ConsumerGroupTest {
     @Test
     public void testUpdateInvertedAssignment() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "test-group", () -> CoordinatorMetadataImage.EMPTY);
+        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "test-group");
         Uuid topicId = Uuid.randomUuid();
         String memberId1 = "member1";
         String memberId2 = "member2";
@@ -937,7 +936,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsListedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", () -> CoordinatorMetadataImage.EMPTY);
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo");
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -954,8 +953,7 @@ public class ConsumerGroupTest {
         ConsumerGroup group = new ConsumerGroup(
             new LogContext(),
             snapshotRegistry,
-            "group-foo",
-            () -> CoordinatorMetadataImage.EMPTY
+            "group-foo"
         );
 
         // Simulate a call from the admin client without member id and member epoch.
@@ -1014,7 +1012,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), new SnapshotRegistry(new LogContext()), "group-id", () -> CoordinatorMetadataImage.EMPTY);
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), new SnapshotRegistry(new LogContext()), "group-id");
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -1051,7 +1049,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1", () -> CoordinatorMetadataImage.EMPTY);
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1");
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
@@ -1088,7 +1086,7 @@ public class ConsumerGroupTest {
     @Test
     public void testIsInStatesCaseInsensitive() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", () -> CoordinatorMetadataImage.EMPTY);
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo");
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(group.isInStates(Set.of("empty"), 0));
         assertFalse(group.isInStates(Set.of("Empty"), 0));
@@ -1322,15 +1320,13 @@ public class ConsumerGroupTest {
             new SnapshotRegistry(logContext),
             classicGroup,
             new HashMap<>(),
-            metadataImage,
-            () -> CoordinatorMetadataImage.EMPTY
+            metadataImage
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
             new LogContext(),
             new SnapshotRegistry(logContext),
-            groupId,
-            () -> CoordinatorMetadataImage.EMPTY
+            groupId
         );
         expectedConsumerGroup.setGroupEpoch(10);
         expectedConsumerGroup.setTargetAssignmentMetadata(10, 0L);
@@ -2485,93 +2481,5 @@ public class ConsumerGroupTest {
             assertThrows(UnsupportedVersionException.class, () ->
                 group.validateOffsetCommit("member-id", "", 5, isTransactional, version));
         }
-    }
-
-    @Test
-    public void testValidateOffsetCommitWithZeroUuidResolvesTopicId() {
-        Uuid topicId = Uuid.randomUuid();
-        String topicName = "foo";
-        int memberEpoch = 10;
-        int assignmentEpoch = 5;
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(topicId, topicName, 3)
-            .buildCoordinatorMetadataImage();
-
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(
-            new LogContext(),
-            snapshotRegistry,
-            "group-foo",
-            () -> metadataImage
-        );
-
-        group.updateMember(new ConsumerGroupMember.Builder("member-id")
-            .setMemberEpoch(memberEpoch)
-            .setSubscribedTopicNames(List.of(topicName))
-            .setAssignedPartitions(Map.of(topicId, Map.of(0, assignmentEpoch)))
-            .build());
-
-        int clientEpoch = 4;
-        CommitPartitionValidator validator = group.validateOffsetCommit(
-            "member-id", "", clientEpoch, false, (short) 9
-        );
-
-        // Validate with ZERO_UUID - should resolve to actual topic ID and reject
-        StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-            validator.validate(topicName, Uuid.ZERO_UUID, 0));
-        assertEquals(
-            String.format("Received member epoch %d is older than assignment epoch %d for partition %s-%d.",
-                clientEpoch, assignmentEpoch, topicName, 0),
-            ex.getMessage()
-        );
-
-        //  assignmentEpoch (5) <= client epoch (6) <= broker epoch (1), accept,
-        //  resolve ZERO_UUID to actual topic ID
-        CommitPartitionValidator validValidator = group.validateOffsetCommit(
-            "member-id", "", 6, false, (short) 9
-        );
-        assertDoesNotThrow(() -> validValidator.validate(topicName, Uuid.ZERO_UUID, 0));
-    }
-
-    @Test
-    public void testValidateOffsetCommitWithZeroUuidUnresolvableTopic() {
-        // This test verifies that when ZERO_UUID cannot be resolved (topic not in metadata),
-        // the validation fails with partition not assigned error.
-        String topicName = "unknown-topic";
-        int memberEpoch = 10;
-
-        // Create empty metadata image (topic not present)
-        CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
-
-        // Create group with metadata image supplier
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(
-            new LogContext(),
-            snapshotRegistry,
-            "group-foo",
-            () -> metadataImage
-        );
-
-        // Add member with some subscribed topics but no assignments
-        group.updateMember(new ConsumerGroupMember.Builder("member-id")
-            .setMemberEpoch(memberEpoch)
-            .setSubscribedTopicNames(List.of(topicName))
-            .build());
-
-        // Get validator with stale member epoch
-        int clientEpoch = 5;
-        CommitPartitionValidator validator = group.validateOffsetCommit(
-            "member-id", "", clientEpoch, false, (short) 9
-        );
-
-        // Validate with ZERO_UUID for unknown topic - should fail because partition is not assigned
-        StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-            validator.validate(topicName, Uuid.ZERO_UUID, 0));
-        assertEquals(
-            String.format("Partition %s-%d is not assigned or pending revocation for member.",
-                topicName, 0),
-            ex.getMessage()
-        );
     }
 }
