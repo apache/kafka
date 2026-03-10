@@ -29,25 +29,6 @@ on:
       - trunk
 
 jobs:
-  add-labeler-labels:
-    name: Labeler
-    permissions:
-      contents: read
-      pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
-    - uses: actions/labeler@v6
-      with:
-        configuration-path: .github/configs/labeler.yml
-    - name: check small label
-      env:
-        GH_TOKEN: ${{ github.token }}
-        PR_NUM: ${{github.event.number}}
-      run: |
-        ./.github/scripts/label_small.sh
-
   add-triage-label:
     if: github.event.action == 'opened' || github.event.action == 'reopened'
     name: Add triage label
