@@ -73,4 +73,13 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplierTest {
         assertThat(wrapped, instanceOf(RocksDBTimeOrderedWindowSegmentedBytesStore.class));
         assertFalse(((RocksDBTimeOrderedWindowSegmentedBytesStore) wrapped).hasIndex());
     }
+
+    @Test
+    public void shouldCreateRocksDbTimeOrderedWindowStoreWithHeaders() {
+        final WindowStore store = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("store", ofMillis(1L), ofMillis(1L), false, true, true).get();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertThat(store, instanceOf(RocksDBTimeOrderedWindowStoreWithHeaders.class));
+        assertThat(wrapped, instanceOf(RocksDBTimeOrderedWindowSegmentedBytesStore.class));
+        assertTrue(((RocksDBTimeOrderedWindowSegmentedBytesStore) wrapped).hasIndex());
+    }
 }
