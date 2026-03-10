@@ -18,10 +18,10 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MultiRecordsSend;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MultiRecordsSend;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.ByteUtils;

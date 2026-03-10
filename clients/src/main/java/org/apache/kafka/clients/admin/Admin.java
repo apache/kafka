@@ -71,7 +71,7 @@ import java.util.Set;
  *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
  *     {@code values()} method provided access to each item in a request batch.
  *     Other methods may also be provided.
- *     <li>For synchronous behaviour use {@link KafkaFuture#get()}
+ *     <li>For synchronous behavior, use {@link KafkaFuture#get()}.
  * </ul>
  * <p>
  * Here is a simple example of using an Admin client instance to create a new topic:
@@ -665,6 +665,8 @@ public interface Admin extends AutoCloseable {
      * replicas with the topics replication factor.</li>
      * <li>Subclasses of {@link org.apache.kafka.common.KafkaException}
      * if the request is invalid in some way.</li>
+     * <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
+     * if the requested partition count is less than or equal to the current partition count.</li>
      * </ul>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
@@ -1542,6 +1544,19 @@ public interface Admin extends AutoCloseable {
     DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
 
     /**
+     * Applies specified updates to finalized features.
+     * <p>
+     * This is a convenience method for {@link #updateFeatures(Map, UpdateFeaturesOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param featureUpdates the map of finalized feature name to {@link FeatureUpdate}
+     * @return the {@link UpdateFeaturesResult} containing the result
+     */
+    default UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates) {
+        return updateFeatures(featureUpdates, new UpdateFeaturesOptions());
+    }
+
+    /**
      * Applies specified updates to finalized features. This operation is not transactional so some
      * updates may succeed while the rest may fail.
      * <p>
@@ -1909,6 +1924,10 @@ public interface Admin extends AutoCloseable {
      * will fail with {@link InconsistentClusterIdException}.
      * If not provided, the cluster id check is skipped.
      *
+     * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
+     * must be shutdown before removing the controller from the voter set to prevent the removed
+     * controller from automatically joining again.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param options           Additional options for the operation, including optional cluster ID.
@@ -2143,5 +2162,5 @@ public interface Admin extends AutoCloseable {
      * @return The TerminateTransactionResult.
      */
     TerminateTransactionResult forceTerminateTransaction(String transactionalId, 
-                                                        TerminateTransactionOptions options);
+                                                         TerminateTransactionOptions options);
 }

@@ -35,13 +35,14 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
@@ -94,7 +95,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
-import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -193,28 +193,30 @@ public class SharePartition {
     private final AtomicReference<Uuid> fetchLock;
 
     /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The max in-flight records is used to limit the number of records that can be in-flight at any
      * given time. The max in-flight records is used to prevent the consumer from fetching too many
      * records from the leader and running out of memory.
      */
-    private final int maxInFlightRecords;
+    private final int defaultMaxInFlightRecords;
 
     /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The max delivery count is used to limit the number of times a record can be delivered to the
      * consumer. The max delivery count is used to prevent the consumer re-delivering the same record
      * indefinitely.
      */
-    private final int maxDeliveryCount;
+    private final int defaultMaxDeliveryCount;
 
-    /**
-     * Records whose delivery count exceeds this are deemed abnormal and the batching of these records
-     * should be reduced. The limit is set to half of maxDeliveryCount rounded up, with a minimum of 2.
-     */
-    private final int throttleRecordsDeliveryLimit;
     /**
      * The group config manager is used to retrieve the values for dynamic group configurations
      */
     private final GroupConfigManager groupConfigManager;
+
+    /**
+     * The provider used to retrieve share group dynamic configuration values.
+     */
+    private final ShareGroupConfigProvider configProvider;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -334,8 +336,8 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
-        int maxDeliveryCount,
+        int defaultMaxInFlightRecords,
+        int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
@@ -344,7 +346,7 @@ public class SharePartition {
         GroupConfigManager groupConfigManager,
         SharePartitionListener listener
     ) {
-        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, maxDeliveryCount, defaultRecordLockDurationMs,
+        this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
             timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
             new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
@@ -355,8 +357,8 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
-        int maxDeliveryCount,
+        int defaultMaxInFlightRecords,
+        int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
@@ -370,9 +372,8 @@ public class SharePartition {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.leaderEpoch = leaderEpoch;
-        this.maxInFlightRecords = maxInFlightRecords;
-        this.maxDeliveryCount = maxDeliveryCount;
-        this.throttleRecordsDeliveryLimit = Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
+        this.defaultMaxInFlightRecords = defaultMaxInFlightRecords;
+        this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = false;
@@ -385,6 +386,7 @@ public class SharePartition {
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
+        this.configProvider = new ShareGroupConfigProvider(groupConfigManager);
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
@@ -927,7 +929,7 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount, memberId);
+                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount(), memberId);
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
@@ -1117,7 +1119,7 @@ public class SharePartition {
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                         offsetState.getKey() < startOffset ? RecordState.ARCHIVED : recordState,
                         DeliveryCountOps.NO_OP,
-                        this.maxDeliveryCount,
+                        this.maxDeliveryCount(),
                         EMPTY_MEMBER_ID
                 );
                 if (updateResult == null) {
@@ -1159,7 +1161,7 @@ public class SharePartition {
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : recordState,
                     DeliveryCountOps.NO_OP,
-                    this.maxDeliveryCount,
+                    this.maxDeliveryCount(),
                     EMPTY_MEMBER_ID
             );
             if (updateResult == null) {
@@ -1486,7 +1488,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-        return numInFlightRecords() < maxInFlightRecords;
+        return numInFlightRecords() < maxInFlightRecords();
     }
 
     /**
@@ -1679,6 +1681,7 @@ public class SharePartition {
         // and only acquire limited records.
         int maxRecordsToAcquire;
         long lastOffsetToAcquire = lastOffset;
+        int maxInFlightRecords = maxInFlightRecords();
         lock.readLock().lock();
         try {
             int inFlightRecordsCount = numInFlightRecords();
@@ -1855,7 +1858,7 @@ public class SharePartition {
                         null,
                         timeoutHandler,
                         sharePartitionMetrics);
-                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    int delayMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
                     inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
                     updateFindNextFetchOffset(true);
@@ -1924,6 +1927,8 @@ public class SharePartition {
         int acquiredCount = 0;
         long maxFetchRecordsWhileThrottledRecords = -1;
         boolean hasThrottledRecord = false;
+        int maxDeliveryCount = maxDeliveryCount();
+        int throttleRecordsDeliveryLimit = throttleRecordsDeliveryLimit(maxDeliveryCount);
         List<AcquiredRecords> offsetAcquiredRecords = new ArrayList<>();
         lock.writeLock().lock();
         try {
@@ -1952,6 +1957,8 @@ public class SharePartition {
                 // the delivery limit and already have some records to return in response then skip processing
                 // the current record, which shall be delivered alone in next fetch.
                 if (maxDeliveryCount > 2 && recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
+                    log.warn("The offset {} is on last delivery attempt in share partition: {}-{}, should be delivered alone in next fetch",
+                        offsetState.getKey(), groupId, topicIdPartition);
                     break;
                 }
 
@@ -1995,6 +2002,8 @@ public class SharePartition {
 
                 // Delivered alone.
                 if (offsetState.getValue().deliveryCount() == maxDeliveryCount && maxDeliveryCount > 2) {
+                    log.warn("The offset {} is on last delivery attempt in share partition: {}-{}, should be delivered alone in this fetch",
+                        offsetState.getKey(), groupId, topicIdPartition);
                     break;
                 }
                 if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
@@ -2002,6 +2011,8 @@ public class SharePartition {
                     break;
                 }
                 if (hasThrottledRecord && acquiredCount == maxFetchRecordsWhileThrottledRecords) {
+                    log.debug("Breaking early due to throttling for share partition: {}-{}, acquired {} records.",
+                        groupId, topicIdPartition, acquiredCount);
                     break;
                 }
             }
@@ -2050,6 +2061,7 @@ public class SharePartition {
      * @return True if the batch should be throttled (delivery count >= threshold), false otherwise.
      */
     private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch, long requestFirstOffset, long requestLastOffset) {
+        int throttleRecordsDeliveryLimit = throttleRecordsDeliveryLimit(maxDeliveryCount());
         if (inFlightBatch.offsetState() == null) {
             // If offsetState is null, it means the batch is not split and represents a single batch.
             // Check if the batch is in AVAILABLE state and has no ongoing transition.
@@ -2080,7 +2092,7 @@ public class SharePartition {
         Map<Long, Byte> ackTypeMap = new HashMap<>();
         for (int index = 0; index < batch.acknowledgeTypes().size(); index++) {
             byte ackType = batch.acknowledgeTypes().get(index);
-            // Validate
+            // Validate ackType except values 0, since 0 stands for gap.
             if (ackType != 0) {
                 AcknowledgeType.forId(ackType);
             }
@@ -2293,12 +2305,17 @@ public class SharePartition {
                 byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
 
                 if (ackType == AcknowledgeType.RENEW.id) {
+                    if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                        log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                        return Optional.of(new InvalidRecordStateException(
+                            "Renewing acquisition locks is not enabled for the group."));
+                    }
                     // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
                     // We do not care about recordState map here.
                     // Only valid for ACQUIRED offsets; the check above ensures this.
                     long key = offsetState.getKey();
                     InFlightState state = offsetState.getValue();
-                    log.debug("Renewing acq lock for {}-{} with offset {} in batch {} for member {}.",
+                    log.debug("Renewing acquisition lock for {}-{} with offset {} in batch {} for member {}.",
                         groupId, topicIdPartition, key, inFlightBatch, memberId);
                     state.cancelAndClearAcquisitionLockTimeoutTask();
                     AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId, key, key);
@@ -2309,12 +2326,14 @@ public class SharePartition {
                     // mapping between bytes and record state type. All ack types have been added except for RENEW which
                     // has been handled above.
                     RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
-                    Objects.requireNonNull(recordState);
+                    if (recordState == null) {
+                        return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
+                    }
 
                     InFlightState updateResult = offsetState.getValue().startStateTransition(
                         recordState,
                         DeliveryCountOps.NO_OP,
-                        this.maxDeliveryCount,
+                        this.maxDeliveryCount(),
                         EMPTY_MEMBER_ID
                     );
 
@@ -2364,9 +2383,14 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
+                if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                    log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                    return Optional.of(new InvalidRecordStateException(
+                        "Renewing acquisition locks is not enabled for the group."));
+                }
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
-                log.debug("Renewing acq lock for {}-{} with batch {}-{} for member {}.",
+                log.debug("Renewing acquisition lock for {}-{} with batch {}-{} for member {}.",
                     groupId, topicIdPartition, inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), memberId);
                 inFlightBatch.cancelAndClearAcquisitionLockTimeoutTask();
                 AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId,
@@ -2381,12 +2405,14 @@ public class SharePartition {
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
             RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
-            Objects.requireNonNull(recordState);
+            if (recordState == null) {
+                return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
+            }
 
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
                 DeliveryCountOps.NO_OP,
-                this.maxDeliveryCount,
+                this.maxDeliveryCount(),
                 EMPTY_MEMBER_ID
             );
             if (updateResult == null) {
@@ -2822,7 +2848,7 @@ public class SharePartition {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
-        int recordLockDurationMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+        int recordLockDurationMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
@@ -2923,7 +2949,7 @@ public class SharePartition {
             InFlightState updateResult = inFlightBatch.tryUpdateBatchState(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
                     DeliveryCountOps.NO_OP,
-                    maxDeliveryCount,
+                    maxDeliveryCount(),
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
                 log.error("Unable to release acquisition lock on timeout for the batch: {}"
@@ -2977,7 +3003,7 @@ public class SharePartition {
             InFlightState updateResult = offsetState.getValue().tryUpdateState(
                     offsetState.getKey() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
                     DeliveryCountOps.NO_OP,
-                    maxDeliveryCount,
+                    maxDeliveryCount(),
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
                 log.error("Unable to release acquisition lock on timeout for the offset: {} in batch: {}"
@@ -3297,6 +3323,30 @@ public class SharePartition {
     // Visible for testing.
     int deliveryCompleteCount() {
         return deliveryCompleteCount.get();
+    }
+
+    /**
+     * Returns the effective max delivery count for this share partition, using the per-group dynamic
+     * config if available, otherwise the broker default.
+     */
+    int maxDeliveryCount() {
+        return configProvider.deliveryCountLimitOrDefault(groupId, defaultMaxDeliveryCount);
+    }
+
+    /**
+     * Returns the throttle records delivery limit, computed as half of the effective max delivery
+     * count rounded up, with a minimum of {@link #MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT}.
+     */
+    private static int throttleRecordsDeliveryLimit(int maxDeliveryCount) {
+        return Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
+    }
+
+    /**
+     * Returns the effective max in-flight records for this share partition, using the per-group dynamic
+     * config if available, otherwise the broker default.
+     */
+    int maxInFlightRecords() {
+        return configProvider.partitionMaxRecordLocksOrDefault(groupId, defaultMaxInFlightRecords);
     }
 
     /**

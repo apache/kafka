@@ -48,6 +48,7 @@ import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.Response
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ForeignTableJoinProcessorSupplierTests {
 
@@ -113,6 +114,9 @@ public class ForeignTableJoinProcessorSupplierTests {
             context.forwarded().get(1).record(),
             is(new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -125,6 +129,9 @@ public class ForeignTableJoinProcessorSupplierTests {
         processor.process(record);
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -145,6 +152,9 @@ public class ForeignTableJoinProcessorSupplierTests {
             context.forwarded().get(1).record(),
             is(new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, null, null), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -162,6 +172,9 @@ public class ForeignTableJoinProcessorSupplierTests {
             context.forwarded().get(0).record(),
             is(new Record<>(pk2, new SubscriptionResponseWrapper<>(hash, "new_value", null), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -175,7 +188,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         assertThat(context.forwarded(), empty());
 
         // test dropped-records sensors
-        Assertions.assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
         Assertions.assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
     }
 

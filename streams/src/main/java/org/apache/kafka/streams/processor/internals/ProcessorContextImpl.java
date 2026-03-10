@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -124,20 +123,14 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
 
-        final Headers headers;
-        if (!consistencyEnabled) {
-            headers = null;
-        } else {
-            // Add the vector clock to the header part of every record
-            headers = new RecordHeaders();
-            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-            headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                    PositionSerde.serialize(position).array()));
+        if (consistencyEnabled) {
+            addVectorClockToHeaders(headers, position);
         }
 
         collector.send(
@@ -151,6 +144,12 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    private void addVectorClockToHeaders(final Headers headers, final Position position) {
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
     }
 
     /**

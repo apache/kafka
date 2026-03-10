@@ -101,5 +101,5 @@ python find-unfinished-test.py ~/Downloads/logs_28218821016/5_build\ _\ JUnit\ t
 
 Found tests that were started, but not finished:
 
-2024-09-10T20:31:26.6830206Z Gradle Test Run :streams:test > Gradle Test Executor 47 > StreamThreadTest > shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean) > "shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean).stateUpdaterEnabled=true, processingThreadsEnabled=true" STARTED
+2024-09-10T20:31:26.6830206Z Gradle Test Run :streams:test > Gradle Test Executor 47 > StreamThreadTest > shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean) > "shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean).processingThreadsEnabled=true" STARTED
 ```

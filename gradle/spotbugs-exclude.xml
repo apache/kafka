@@ -482,7 +482,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warning about SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR in multiple class -->
         <Or>
             <Class name="org.apache.kafka.common.Node"/>
-            <Class name="org.apache.kafka.common.record.UnalignedMemoryRecords"/>
+            <Class name="org.apache.kafka.common.record.internal.UnalignedMemoryRecords"/>
             <Class name="org.apache.kafka.clients.Metadata$LeaderAndEpoch"/>
             <Class name="org.apache.kafka.server.share.fetch.ShareAcquiredRecords"/>
         </Or>
