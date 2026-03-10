@@ -26531,6 +26531,35 @@ public class GroupMetadataManagerTest {
         test.assertions.run();
     }
 
+    @Test
+    public void testCanComputeNextTargetAssignmentWithNoPreviousAssignmentTimestamp() {
+        // The next target assignment can always be computed when there is no previous assignment timestamp.
+        assertTrue(GroupMetadataManager.canComputeNextTargetAssignment(0, 1000, 0));
+    }
+
+    @Test
+    public void testCanComputeNextTargetAssignmentWithZeroAssignmentIntervalMs() {
+        // The next target assignment can always be computed when the assignment interval is zero.
+        assertTrue(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 0, 0));
+        assertTrue(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 0, 999999));
+        assertTrue(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 0, 1000000));
+    }
+
+    @Test
+    public void testCanComputeNextTargetAssignment() {
+        // The next target assignment cannot be computed before the timestamp of the end of the previous assignment computation.
+        assertFalse(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 5000, 0));
+        assertFalse(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 5000, 999999));
+
+        // The next target assignment cannot be computed before the assignment interval has elapsed.
+        assertFalse(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 5000, 1000000));
+        assertFalse(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 5000, 1004999));
+
+        // The next target assignment can be computed after the assignment interval has elapsed.
+        assertTrue(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 5000, 1005000));
+        assertTrue(GroupMetadataManager.canComputeNextTargetAssignment(1000000, 5000, 1007500));
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,

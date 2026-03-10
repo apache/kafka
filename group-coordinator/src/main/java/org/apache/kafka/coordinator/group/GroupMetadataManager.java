@@ -3786,6 +3786,39 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Checks whether the next target assignment can be computed right now.
+     *
+     * @param assignmentTimestampMs The time at which the last target assignment calculation finished,
+     *                              or 0 if there is no previous assignment.
+     * @param assignmentIntervalMs  The interval between assignment updates
+     * @param currentTimeMs         The current time in milliseconds.
+     * @return {@code true} if the next target assignment can be computed right now, {@code false} otherwise.
+     */
+    // package private for testing
+    static boolean canComputeNextTargetAssignment(
+        long assignmentTimestampMs,
+        int assignmentIntervalMs,
+        long currentTimeMs
+    ) {
+        // The next target assignment can be computed immediately
+        //  * when there is no existing target assignment,
+        //  * or we do not know when the existing target assignment was computed.
+        if (assignmentTimestampMs == 0) {
+            return true;
+        }
+
+        // The next target assignment can be computed immediately when the assignment interval is
+        // zero. This provides an escape hatch if the wall clock undergoes a large backwards
+        // correction.
+        if (assignmentIntervalMs == 0) {
+            return true;
+        }
+
+        // Otherwise, we wait for the assignment interval to elapse.
+        return currentTimeMs >= assignmentTimestampMs + assignmentIntervalMs;
+    }
+
+    /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
      * @param group            The ConsumerGroup.
