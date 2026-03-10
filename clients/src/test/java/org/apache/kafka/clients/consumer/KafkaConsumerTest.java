@@ -216,7 +216,7 @@ public class KafkaConsumerTest {
 
     private final Collection<TopicPartition> singleTopicPartition = Collections.singleton(new TopicPartition(topic, 0));
     private final Time time = new MockTime();
-    private final SubscriptionState subscription = spy(new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST));
+    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
     private final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
     private KafkaConsumer<?, ?> consumer;
@@ -2518,7 +2518,7 @@ public class KafkaConsumerTest {
     public void testCurrentLagPreventsMultipleInFlightRequests(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
-        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata);
+        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata, subscription);
 
         // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
         // then set immediately afterward.
@@ -2549,16 +2549,17 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCurrentLagClearsFlagOnFatalPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
-        final ConsumerMetadata metadata = createMetadata(subscription);
+        final SubscriptionState subscriptionSpy = spy(new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST));
+        final ConsumerMetadata metadata = createMetadata(subscriptionSpy);
         final MockClient client = new MockClient(time, metadata);
-        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata);
+        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata, subscriptionSpy);
 
         // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
         // then set immediately afterward.
-        assertFalse(subscription.partitionEndOffsetRequested(tp0));
+        assertFalse(subscriptionSpy.partitionEndOffsetRequested(tp0));
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
-        assertTrue(subscription.partitionEndOffsetRequested(tp0));
-        verify(subscription).requestPartitionEndOffset(tp0);
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy).requestPartitionEndOffset(tp0);
 
         if (groupProtocol == GroupProtocol.CLASSIC) {
             // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
@@ -2572,15 +2573,15 @@ public class KafkaConsumerTest {
             "No LIST_OFFSETS request sent within allotted timeout"
         );
 
-        clearInvocations(subscription);
+        clearInvocations(subscriptionSpy);
 
         // Validate the state of the endOffsetRequested flag. It should still be set before the call to
         // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
         // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
-        assertTrue(subscription.partitionEndOffsetRequested(tp0));
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
-        assertTrue(subscription.partitionEndOffsetRequested(tp0));
-        verify(subscription, never()).requestPartitionEndOffset(tp0);
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy, never()).requestPartitionEndOffset(tp0);
 
         // Now respond to the LIST_OFFSETS request with an error in the partition.
         ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
@@ -2596,7 +2597,7 @@ public class KafkaConsumerTest {
         // AsyncKafkaConsumer may take a moment to poll and process the LIST_OFFSETS response, so a repeated
         // wait is appropriate here.
         TestUtils.waitForCondition(
-            () -> !subscription.partitionEndOffsetRequested(tp0),
+            () -> !subscriptionSpy.partitionEndOffsetRequested(tp0),
             "endOffsetRequested flag was not cleared within allotted timeout"
         );
     }
@@ -2607,16 +2608,17 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCurrentLagClearsFlagOnRetriablePartitionError(GroupProtocol groupProtocol) throws InterruptedException {
-        final ConsumerMetadata metadata = createMetadata(subscription);
+        final SubscriptionState subscriptionSpy = spy(new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST));
+        final ConsumerMetadata metadata = createMetadata(subscriptionSpy);
         final MockClient client = new MockClient(time, metadata);
-        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata);
+        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata, subscriptionSpy);
 
         // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
         // then set immediately afterward.
-        assertFalse(subscription.partitionEndOffsetRequested(tp0));
+        assertFalse(subscriptionSpy.partitionEndOffsetRequested(tp0));
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
-        assertTrue(subscription.partitionEndOffsetRequested(tp0));
-        verify(subscription).requestPartitionEndOffset(tp0);
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy).requestPartitionEndOffset(tp0);
 
         if (groupProtocol == GroupProtocol.CLASSIC) {
             // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
@@ -2630,15 +2632,15 @@ public class KafkaConsumerTest {
             "No LIST_OFFSETS request sent within allotted timeout"
         );
 
-        clearInvocations(subscription);
+        clearInvocations(subscriptionSpy);
 
         // Validate the state of the endOffsetRequested flag. It should still be set before the call to
         // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
         // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
-        assertTrue(subscription.partitionEndOffsetRequested(tp0));
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
-        assertTrue(subscription.partitionEndOffsetRequested(tp0));
-        verify(subscription, never()).requestPartitionEndOffset(tp0);
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy, never()).requestPartitionEndOffset(tp0);
 
         // Now respond to the LIST_OFFSETS request with an error in the partition.
         ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
@@ -2654,7 +2656,7 @@ public class KafkaConsumerTest {
         // AsyncKafkaConsumer may take a moment to poll and process the LIST_OFFSETS response, so a repeated
         // wait is appropriate here.
         TestUtils.waitForCondition(
-            () -> !subscription.partitionEndOffsetRequested(tp0),
+            () -> !subscriptionSpy.partitionEndOffsetRequested(tp0),
             "endOffsetRequested flag was not cleared within allotted timeout"
         );
     }
@@ -2687,10 +2689,11 @@ public class KafkaConsumerTest {
 
     private KafkaConsumer<String, String> setUpConsumerForCurrentLag(GroupProtocol groupProtocol,
                                                                      MockClient client,
-                                                                     ConsumerMetadata metadata) throws InterruptedException {
+                                                                     ConsumerMetadata metadata,
+                                                                     SubscriptionState subscriptionState) throws InterruptedException {
         initMetadata(client, Collections.singletonMap(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscriptionState, metadata, assignor, false,
             groupId, groupInstanceId, false);
 
         // throws for unassigned partition
