@@ -34,11 +34,13 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.test.TestUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -59,8 +61,9 @@ public class ConsumerIntegrationTest {
     @ClusterTests({
         @ClusterTest(serverProperties = {
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic")
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+        }, features = {
+            @ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
         })
     })
     public void testAsyncConsumerWithConsumerProtocolDisabled(ClusterInstance clusterInstance) throws Exception {
