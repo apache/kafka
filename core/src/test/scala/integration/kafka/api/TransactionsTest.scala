@@ -716,31 +716,10 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.abortTransaction()
     producer.close()
 
-    // Find the transaction coordinator partition for this transactional ID
-    val adminClient = createAdminClient()
-    try {
-      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get()
-      val coordinatorId = txnDescription.coordinatorId()
-
-      // Access the transaction coordinator and update the epoch to Short.MaxValue - 2
-      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
-      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
-
-      // Get the transaction metadata and update the epoch close to Short.MaxValue
-      // to trigger the overflow scenario. We'll set it high enough that subsequent
-      // operations will cause it to reach Short.MaxValue - 1 before the timeout.
-      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          epochAndMetadata.transactionMetadata.inLock(() => {
-            epochAndMetadata.transactionMetadata.setProducerEpoch((Short.MaxValue - 2).toShort)
-            null // inLock expects a Supplier that returns a value
-          })
-        }
-      }
-    } finally {
-      adminClient.close()
-    }
+    // Update the epoch close to Short.MaxValue to trigger the overflow scenario.
+    // Set it high enough that subsequent operations will cause it to reach
+    // Short.MaxValue - 1 before the timeout.
+    setProducerEpoch(transactionalId, (Short.MaxValue - 2).toShort)
 
     // Re-initialize the producer which will bump epoch
     producer = createTransactionalProducer(transactionalId, transactionTimeoutMs = 500)
@@ -753,22 +732,13 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.flush()
 
     // Check and assert that epoch of the transaction is Short.MaxValue - 1 (before timeout)
+    val currentEpoch = getProducerEpoch(transactionalId)
+    assertEquals((Short.MaxValue - 1).toShort, currentEpoch,
+      s"Expected epoch to be ${Short.MaxValue - 1}, but got $currentEpoch")
+
+    // Wait until state is complete abort
     val adminClient2 = createAdminClient()
     try {
-      val coordinatorId2 = adminClient2.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get().coordinatorId()
-      val coordinatorBroker2 = brokers.find(_.config.brokerId == coordinatorId2).get
-      val txnCoordinator2 = coordinatorBroker2.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
-
-      txnCoordinator2.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          val currentEpoch = epochAndMetadata.transactionMetadata.producerEpoch()
-          assertEquals((Short.MaxValue - 1).toShort, currentEpoch,
-            s"Expected epoch to be ${Short.MaxValue - 1}, but got $currentEpoch")
-        }
-      }
-
-      // Wait until state is complete abort
       waitUntilTrue(() => {
         val listResult = adminClient2.listTransactions()
         val txns = listResult.all().get().asScala
@@ -1278,5 +1248,268 @@ class TransactionsTest extends IntegrationTestHarness {
 
     // Test multiple crashes before final commit (validates epoch progression)
     test2PCRecovery(numCrashes = 3, shouldCommit = true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testProducerIdRotationWithEpochExhaustion(groupProtocol: String): Unit = {
+    // Test producer ID rotation when client epoch is exhausted.  This tests both scenarios:
+    // 1. Rotation during initTransactions(keepPreparedTxn=true)
+    // 2. Rotation during commitTransaction()
+
+    def testRotation(startEpoch: Short, doubleRotation: Boolean = false): Unit = {
+      val transactionalId = s"test-rotation-${System.nanoTime()}"
+      val testTopic = s"test-rotation-topic-${System.nanoTime()}"
+      createTopic(testTopic, 1, brokerCount, topicConfig())
+
+      val consumer = transactionalConsumers.head
+      consumer.subscribe(Seq(testTopic).asJava)
+      consumer.poll(Duration.ofMillis(100))
+
+      // Establish transactional ID
+      var producer = createTransactionalProducer(transactionalId)
+      producer.initTransactions()
+      producer.close()
+
+      // Set epoch to trigger rotation at desired point
+      setProducerEpoch(transactionalId, startEpoch)
+
+      // Create producer and start a prepared transaction
+      producer = createTransactionalProducer(transactionalId)
+      producer.initTransactions()
+      producer.beginTransaction()
+      val numRecords = 3
+      for (i <- 0 until numRecords) {
+        producer.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes, s"value-$i".getBytes))
+      }
+      producer.flush()
+      // Don't commit - leave transaction prepared (simulates crash)
+
+      val originalProducerId = getProducerId(transactionalId)
+
+      if (doubleRotation) {
+        // First rotation: loop calling initTransactions(true) until rotation occurs
+        var rotationCount = 0
+        var currentClientId = originalProducerId
+        var iteration = 0
+        while (rotationCount == 0 && iteration < 20) {
+          iteration += 1
+          val recoveryProducer = createTransactionalProducer(transactionalId)
+          recoveryProducer.initTransactions(true)  // keepPreparedTxn
+
+          val (clientId, _) = getClientProducerIdAndEpoch(transactionalId)
+          if (clientId != currentClientId) {
+            rotationCount = 1
+            currentClientId = clientId
+          }
+          recoveryProducer.close(Duration.ZERO)
+        }
+
+        assertTrue(rotationCount >= 1, s"First rotation should have occurred after $iteration iterations")
+        assertEquals(0.toShort, getClientProducerIdAndEpoch(transactionalId)._2,
+          "After first rotation, client epoch should be exactly 0")
+
+        // Set client epoch high again to trigger second rotation
+        setClientProducerEpoch(transactionalId, startEpoch)
+
+        // Do a compensating epoch bump so that we get at the same epoch as w/o double rotation
+        val recoveryProducer = createTransactionalProducer(transactionalId)
+        recoveryProducer.initTransactions(true)
+        recoveryProducer.close(Duration.ZERO)
+      }
+
+      // We do 3 total epoch increments from the initial startEpoch:
+      //   1. First initTransactions(): startEpoch → startEpoch + 1
+      //   2. Second initTransactions(true): startEpoch + 1 → startEpoch + 2
+      //   3. commitTransaction(): startEpoch + 2 → startEpoch + 3
+      // Rotation may happen during step 2 or 3 depending on startEpoch.
+      val finalProducer = createTransactionalProducer(transactionalId)
+      finalProducer.initTransactions(true)  // keepPreparedTxn - may rotate here
+
+      // Complete the transaction - may rotate here
+      finalProducer.commitTransaction()
+
+      // Wait for transaction to reach COMPLETE_COMMIT state
+      val adminClient = createAdminClient()
+      try {
+        waitUntilTrue(() => {
+          val listResult = adminClient.listTransactions()
+          val txns = listResult.all().get().asScala
+          txns.exists(txn =>
+            txn.transactionalId() == transactionalId &&
+            txn.state() == TransactionState.COMPLETE_COMMIT
+          )
+        }, "Transaction did not reach COMPLETE_COMMIT state")
+      } finally {
+        adminClient.close()
+      }
+
+      // Verify that rotation happened (regardless of whether it occurred during
+      // initTransactions() or commitTransaction()). After transaction completes, verify:
+      //  - Producer ID changed (rotation occurred)
+      //  - Total epoch increments = 3 (accounting for overflow)
+      val finalProducerId = getProducerId(transactionalId)
+      assertNotEquals(originalProducerId, finalProducerId,
+        s"Producer ID should have rotated by transaction completion (original=$originalProducerId, final=$finalProducerId)")
+
+      // Verify epoch overflow occurred and total epoch increments.
+      val finalEpoch = getProducerEpoch(transactionalId)
+
+      // Final epoch is less than startEpoch (overflow occurred)
+      assertTrue(finalEpoch < startEpoch,
+        s"Overflow should have occurred: finalEpoch=$finalEpoch < startEpoch=$startEpoch")
+
+      // Total epoch increments = 3 (accounting for overflow)
+      // Formula: finalEpoch + (MaxValue - startEpoch) = total increments
+      // This accounts for increments from startEpoch to MaxValue boundary, then
+      // wrap to 0 and increments to finalEpoch.
+      val totalIncrements = finalEpoch + Short.MaxValue - startEpoch
+      assertEquals(3, totalIncrements,
+        s"Should have 3 total epoch increments: finalEpoch=$finalEpoch + " +
+        s"(MaxValue=${Short.MaxValue} - startEpoch=$startEpoch) = $totalIncrements")
+
+      // Verify consumer sees all records
+      consumer.seekToBeginning(consumer.assignment())
+      val consumedRecords = consumeRecordsFor(consumer)
+      assertEquals(numRecords, consumedRecords.size,
+        "Consumer should see all records despite rotation")
+
+      finalProducer.close()
+      producer.close()
+      consumer.unsubscribe()
+    }
+
+    // Scenario 1: Rotation happens during initTransactions(keepPreparedTxn=true) call
+    // Example flow:
+    //  1. After setProducerEpoch: epoch=32765
+    //  2. First initTransactions() + beginTransaction(): epoch=32766, transaction ONGOING
+    //  3. initTransactions(keepPreparedTxn=true): tries 32766+1=32767 → rotation triggered
+    //     → Creates dual identity: producerId unchanged, nextProducerId=<new>, nextProducerEpoch=0
+    //  4. commitTransaction(): Completes transition with nextProducerEpoch bumped 0→1
+    //     → Final state: producerId=<new>, epoch=1
+    testRotation((Short.MaxValue - 2).toShort)  // 32765
+
+    // Scenario 1 with double rotation: First rotation during iteration, second during final init/commit
+    testRotation((Short.MaxValue - 2).toShort, doubleRotation = true)
+
+    // Scenario 2: Rotation happens during commitTransaction() call
+    // Example flow:
+    //  1. After setProducerEpoch: epoch=32764
+    //  2. First initTransactions() + beginTransaction(): epoch=32765, transaction ONGOING
+    //  3. initTransactions(keepPreparedTxn=true): bumps to 32766 (not exhausted yet)
+    //     → Creates dual identity: producerId unchanged, nextProducerId=<producerId>, nextProducerEpoch=32766
+    //  4. commitTransaction(): tries 32766+1=32767 → rotation triggered
+    //     → Final state: producerId=<new>, epoch=0
+    testRotation((Short.MaxValue - 3).toShort)  // 32764
+
+    // Scenario 2 with double rotation: First rotation during iteration, second during final init/commit
+    testRotation((Short.MaxValue - 3).toShort, doubleRotation = true)
+  }
+
+  /**
+   * Helper method to manually set producer epoch to a high value for testing epoch exhaustion.
+   */
+  private def setProducerEpoch(transactionalId: String, epoch: Short): Unit = {
+    val adminClient = createAdminClient()
+    try {
+      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+        .description(transactionalId).get()
+      val coordinatorId = txnDescription.coordinatorId()
+      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
+      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+
+      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
+        txnMetadataOpt.foreach { epochAndMetadata =>
+          epochAndMetadata.transactionMetadata.inLock(() => {
+            epochAndMetadata.transactionMetadata.setProducerEpoch(epoch)
+            null // inLock expects a Supplier that returns a value
+          })
+        }
+      }
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  /**
+   * Helper method to manually set client producer epoch (nextProducerEpoch) for testing 2PC epoch exhaustion.
+   * This is used when testing epoch exhaustion during prepared transactions where client credentials
+   * are stored in nextProducerId/nextProducerEpoch.
+   */
+  private def setClientProducerEpoch(transactionalId: String, epoch: Short): Unit = {
+    val adminClient = createAdminClient()
+    try {
+      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+        .description(transactionalId).get()
+      val coordinatorId = txnDescription.coordinatorId()
+      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
+      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+
+      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
+        txnMetadataOpt.foreach { epochAndMetadata =>
+          epochAndMetadata.transactionMetadata.inLock(() => {
+            epochAndMetadata.transactionMetadata.setNextProducerEpoch(epoch)
+            null // inLock expects a Supplier that returns a value
+          })
+        }
+      }
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  /**
+   * Helper method to get current producer ID from DescribeTransactions API.
+   */
+  private def getProducerId(transactionalId: String): Long = {
+    val adminClient = createAdminClient()
+    try {
+      adminClient.describeTransactions(java.util.List.of(transactionalId))
+        .description(transactionalId).get().producerId()
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  /**
+   * Helper method to get current producer epoch from DescribeTransactions API.
+   */
+  private def getProducerEpoch(transactionalId: String): Short = {
+    val adminClient = createAdminClient()
+    try {
+      adminClient.describeTransactions(java.util.List.of(transactionalId))
+        .description(transactionalId).get().producerEpoch().toShort
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  /**
+   * Helper method to get client-facing producer ID and epoch (for 2PC dual identity scenarios).
+   * When a transaction is prepared, the ongoing transaction keeps its original ID/epoch,
+   * but the client gets new credentials (nextProducerId/nextProducerEpoch).
+   * Returns (clientProducerId, clientProducerEpoch)
+   */
+  private def getClientProducerIdAndEpoch(transactionalId: String): (Long, Short) = {
+    val adminClient = createAdminClient()
+    try {
+      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+        .description(transactionalId).get()
+      val coordinatorId = txnDescription.coordinatorId()
+      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
+      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+
+      var clientId: Long = -1
+      var clientEpoch: Short = -1
+      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
+        txnMetadataOpt.foreach { epochAndMetadata =>
+          clientId = epochAndMetadata.transactionMetadata.clientProducerId()
+          clientEpoch = epochAndMetadata.transactionMetadata.clientProducerEpoch()
+        }
+      }
+      (clientId, clientEpoch)
+    } finally {
+      adminClient.close()
+    }
   }
 }
