@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -690,7 +689,7 @@ public class PluginsTest {
         }
     }
 
-    public static class TestConverter implements Converter, Configurable, Versioned {
+    public static class TestConverter implements Converter, Configurable {
         public Map<String, ?> configs;
 
         public ConfigDef config() {
@@ -721,11 +720,6 @@ public class PluginsTest {
 
     public static class TestHeaderConverter implements HeaderConverter {
         public Map<String, ?> configs;
-
-        @Override
-        public String version() {
-            return "test";
-        }
 
         @Override
         public ConfigDef config() {

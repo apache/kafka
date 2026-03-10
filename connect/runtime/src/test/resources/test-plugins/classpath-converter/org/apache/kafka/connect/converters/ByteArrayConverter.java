@@ -32,7 +32,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
-public class ByteArrayConverter implements Converter, HeaderConverter, Versioned {
+public class ByteArrayConverter implements Converter, HeaderConverter {
 
     private static final ConfigDef CONFIG_DEF = ConverterConfig.newConfigDef();
     @Override

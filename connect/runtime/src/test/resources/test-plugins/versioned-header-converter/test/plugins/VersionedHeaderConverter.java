@@ -29,7 +29,7 @@ import java.util.Map;
  * Header Converter to test multiverioning of plugins.
  * Any instance of the string PLACEHOLDER_FOR_VERSION will be replaced with the actual version during plugin compilation.
  */
-public class VersionedHeaderConverter implements HeaderConverter, Versioned {
+public class VersionedHeaderConverter implements HeaderConverter {
 
     public VersionedHeaderConverter() {
         super();

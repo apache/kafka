@@ -30,7 +30,7 @@ import java.util.Map;
  * Predicate to test multiverioning of plugins.
  * Any instance of the string PLACEHOLDER_FOR_VERSION will be replaced with the actual version during plugin compilation.
  */
-public class VersionedPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
+public class VersionedPredicate<R extends ConnectRecord<R>> implements Predicate<R> {
 
     @Override
     public String version() {
