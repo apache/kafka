@@ -647,6 +647,46 @@ public class StateDirectory implements AutoCloseable {
     }
 
     /**
+     * Purges local state directories and checkpoint files during application startup.
+     *
+     * @param dirMaxAgeMs the time-based threshold in milliseconds. Only state directories
+     * and checkpoint files that have not been modified for at least
+     * this amount of time (corresponding to the
+     * {@code state.cleanup.dir.max.age.ms} property) will be removed.
+     */
+    public synchronized void cleanOutdatedDirsOnStartup(final long dirMaxAgeMs) {
+        try {
+            cleanStateAndTaskDirectoriesOnStartup(dirMaxAgeMs);
+        } catch (final Exception e) {
+            throw new StreamsException(e);
+        }
+    }
+
+    private void cleanStateAndTaskDirectoriesOnStartup(final long dirMaxAgeMs) throws Exception {
+        final AtomicReference<Exception> firstException = new AtomicReference<>();
+        for (final TaskDirectory taskDir : listAllTaskDirectories()) {
+            final String dirName = taskDir.file().getName();
+            try {
+                final long now = time.milliseconds();
+                final long lastModifiedMs = taskDir.file().lastModified();
+                if (now - dirMaxAgeMs > lastModifiedMs) {
+                    log.info("Deleting outdated state directory {} as {}ms has elapsed from last update (max directory age is {}ms).",
+                            dirName, now - lastModifiedMs, dirMaxAgeMs);
+                    Utils.delete(taskDir.file());
+                }
+            } catch (final IOException exception) {
+                log.error("Failed to delete task directory {} with exception:", dirName, exception);
+                firstException.compareAndSet(null, exception);
+            }
+        }
+
+        final Exception exception = firstException.get();
+        if (exception != null) {
+            throw exception;
+        }
+    }
+
+    /**
      * Cleans up any leftover named topology directories that are empty, if any exist
      * @param logExceptionAsWarn if true, an exception will be logged as a warning
      *                       if false, an exception will be logged as error

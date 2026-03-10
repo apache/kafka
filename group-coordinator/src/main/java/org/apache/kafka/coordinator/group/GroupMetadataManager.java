@@ -5734,7 +5734,7 @@ public class GroupMetadataManager {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             StreamsGroupMember oldMember = streamsGroup.getOrCreateUninitializedMember(memberId);
             StreamsGroupMember newMember = new StreamsGroupMember.Builder(oldMember)
-                .updateWith(value)
+                .updateWith(log, groupId, value)
                 .build();
             streamsGroup.updateMember(newMember);
         } else {

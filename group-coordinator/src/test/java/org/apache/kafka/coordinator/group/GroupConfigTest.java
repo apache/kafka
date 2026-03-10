@@ -40,6 +40,8 @@ public class GroupConfigTest {
 
     private static final boolean SHARE_GROUP_ENABLE = true;
     private static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS = 200;
+    private static final int SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS = 100;
+    private static final int SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS = 10000;
     private static final int SHARE_GROUP_DELIVERY_COUNT_LIMIT = 5;
     private static final int SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT = 2;
     private static final int SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT = 10;
@@ -59,6 +61,10 @@ public class GroupConfigTest {
             } else if (GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
+            } else if (GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
+            } else if (GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "hello", "1.0");
@@ -185,6 +191,16 @@ public class GroupConfigTest {
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
+        // Check for invalid sharePartitionMaxRecordLocks, < MIN
+        props.put(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "50");
+        doTestInvalidProps(props, ConfigException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid sharePartitionMaxRecordLocks, > MAX
+        props.put(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "11000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
         // Check for invalid shareAutoOffsetReset
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "hello");
         doTestInvalidProps(props, ConfigException.class);
@@ -254,6 +270,7 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "2000");
         defaultValue.put(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "2");
+        defaultValue.put(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "500");
         defaultValue.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
         defaultValue.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
         defaultValue.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
@@ -272,6 +289,7 @@ public class GroupConfigTest {
         assertEquals(10, config.getInt(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(2000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG));
         assertEquals(2, config.getInt(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG));
+        assertEquals(500, config.getInt(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG));
         assertEquals("latest", config.getString(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG));
         assertEquals("read_uncommitted", config.getString(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG));
         assertEquals(10, config.getInt(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG));
@@ -297,6 +315,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
         props.put(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "5");
         props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "30000");
+        props.put(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "2000");
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
         props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
         props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "50000");
@@ -313,7 +332,8 @@ public class GroupConfigTest {
 
     private ShareGroupConfig createShareGroupConfig() {
         return ShareGroupConfigTest.createShareGroupConfig(SHARE_GROUP_ENABLE, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS,
+                SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS,
                 SHARE_GROUP_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT,
-            SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
+                SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
     }
 }

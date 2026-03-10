@@ -22,14 +22,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -69,7 +66,12 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
 
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
-                store = new TimestampedToHeadersStoreAdapter(store);
+                // Persistent store: use adapter based on whether it's timestamped or plain
+                if (store instanceof TimestampedBytesStore) {
+                    store = new TimestampedToHeadersStoreAdapter(store);
+                } else {
+                    store = new PlainToHeadersStoreAdapter(store);
+                }
             } else {
                 store = new InMemoryTimestampedKeyValueStoreWithHeadersMarker(store);
             }
@@ -167,14 +169,6 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
         @Override
         public long approximateNumEntries() {
             return wrapped().approximateNumEntries();
-        }
-
-        @Override
-        public <R> QueryResult<R> query(final Query<R> query,
-                                        final PositionBound positionBound,
-                                        final QueryConfig config) {
-
-            throw new UnsupportedOperationException("Queries (IQv2) are not supported by timestamped key-value stores with headers yet.");
         }
 
         @Override

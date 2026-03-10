@@ -259,6 +259,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void close() {
         boolean interrupted = false;
         try {
+            printJson(new ShutdownRequested());
             consumer.wakeup();
             while (true) {
                 try {
@@ -292,6 +293,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @Override
         public String name() {
             return "startup_complete";
+        }
+    }
+
+    private static class ShutdownRequested extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_requested";
         }
     }
 

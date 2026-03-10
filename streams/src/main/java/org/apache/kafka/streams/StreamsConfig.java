@@ -173,6 +173,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final int DUMMY_THREAD_INDEX = 1;
 
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
+    public static final long STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED = -1;
 
     // We impose these limitations because client tags are encoded into the subscription info,
     // which is part of the group metadata message that is persisted into the internal topic.
@@ -767,6 +768,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
     private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated. Only state directories that have not been modified for at least <code>state.cleanup.delay.ms</code> will be removed";
 
+    /** {@code state.cleanup.dir.max.age} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG = "state.cleanup.dir.max.age.ms";
+    private static final String STATE_CLEANUP_DIR_MAX_AGE_MS_DOC = "Time-based threshold for purging local state directories and checkpoint files during application startup. State directories that have not been modified for at least <code>" + STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG + "</code> will be removed.";
+
     /** {@code state.dir} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
@@ -1266,6 +1272,11 @@ public class StreamsConfig extends AbstractConfig {
                     10 * 60 * 1000L,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
+            .define(STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG,
+                    Type.LONG,
+                    STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED,
+                    Importance.LOW,
+                    STATE_CLEANUP_DIR_MAX_AGE_MS_DOC)
             .define(UPGRADE_FROM_CONFIG,
                     Type.STRING,
                     null,
