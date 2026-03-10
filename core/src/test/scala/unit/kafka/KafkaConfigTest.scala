@@ -28,8 +28,8 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 

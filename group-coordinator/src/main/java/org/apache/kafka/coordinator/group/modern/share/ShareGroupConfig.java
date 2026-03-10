@@ -43,9 +43,25 @@ public class ShareGroupConfig {
     public static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 2000;
     public static final String SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC = "Share-group record lock limit per share-partition.";
 
+    public static final String SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.max.partition.max.record.locks";
+    public static final int SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 4000;
+    public static final String SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DOC = "The maximum value of a group configuration for the record lock limit per share-partition.";
+
+    public static final String SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.min.partition.max.record.locks";
+    public static final int SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 100;
+    public static final String SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DOC = "The minimum value of a group configuration for the record lock limit per share-partition.";
+
     public static final String SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG = "group.share.delivery.count.limit";
     public static final int SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT = 5;
     public static final String SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC = "The maximum number of delivery attempts for a record delivered to a share group.";
+
+    public static final String SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG = "group.share.max.delivery.count.limit";
+    public static final int SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DEFAULT = 10;
+    public static final String SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DOC = "The maximum value of a group configuration for the maximum number of delivery attempts for a record delivered to a share group.";
+
+    public static final String SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG = "group.share.min.delivery.count.limit";
+    public static final int SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DEFAULT = 2;
+    public static final String SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DOC = "The minimum value of a group configuration for the maximum number of delivery attempts for a record delivered to a share group.";
 
     public static final String SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG = "group.share.record.lock.duration.ms";
     public static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT = 30000;
@@ -53,11 +69,11 @@ public class ShareGroupConfig {
 
     public static final String SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG = "group.share.min.record.lock.duration.ms";
     public static final int SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT = 15000;
-    public static final String SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC = "The record acquisition lock minimum duration in milliseconds for share groups.";
+    public static final String SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC = "The minimum value of a group configuration for record acquisition lock duration in milliseconds.";
 
     public static final String SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG = "group.share.max.record.lock.duration.ms";
     public static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT = 60000;
-    public static final String SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC = "The record acquisition lock maximum duration in milliseconds for share groups.";
+    public static final String SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC = "The maximum value of a group configuration for record acquisition lock duration in milliseconds.";
 
     public static final String SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG = "share.fetch.purgatory.purge.interval.requests";
     public static final int SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT = 1000;
@@ -75,17 +91,25 @@ public class ShareGroupConfig {
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .defineInternal(SHARE_GROUP_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ENABLE_DEFAULT, null, MEDIUM, SHARE_GROUP_ENABLE_DOC)
             .define(SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
+            .define(SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DEFAULT, between(5, 25), MEDIUM, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DOC)
+            .define(SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 5), MEDIUM, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DOC)
             .define(SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 3600000), MEDIUM, SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 30000), MEDIUM, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, between(30000, 3600000), MEDIUM, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 10000), MEDIUM, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC)
+            .define(SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(2000, 10000), MEDIUM, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DOC)
+            .define(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 2000), MEDIUM, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DOC)
             .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, INT, SHARE_GROUP_MAX_SHARE_SESSIONS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_SHARE_SESSIONS_DOC)
             .defineInternal(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC);
 
     private final boolean isShareGroupEnabled;
     private final int shareGroupPartitionMaxRecordLocks;
+    private final int shareGroupMaxPartitionMaxRecordLocks;
+    private final int shareGroupMinPartitionMaxRecordLocks;
     private final int shareGroupDeliveryCountLimit;
+    private final int shareGroupMaxDeliveryCountLimit;
+    private final int shareGroupMinDeliveryCountLimit;
     private final int shareGroupRecordLockDurationMs;
     private final int shareGroupMaxRecordLockDurationMs;
     private final int shareGroupMinRecordLockDurationMs;
@@ -99,7 +123,11 @@ public class ShareGroupConfig {
         // The proper way to enable share groups is to use the share.version feature with v1 or later.
         isShareGroupEnabled = config.getBoolean(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG);
         shareGroupPartitionMaxRecordLocks = config.getInt(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+        shareGroupMaxPartitionMaxRecordLocks = config.getInt(SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+        shareGroupMinPartitionMaxRecordLocks = config.getInt(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         shareGroupDeliveryCountLimit = config.getInt(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG);
+        shareGroupMaxDeliveryCountLimit = config.getInt(SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
+        shareGroupMinDeliveryCountLimit = config.getInt(SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
         shareGroupRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG);
         shareGroupMaxRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         shareGroupMinRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
@@ -118,8 +146,24 @@ public class ShareGroupConfig {
         return shareGroupPartitionMaxRecordLocks;
     }
 
+    public int shareGroupMaxPartitionMaxRecordLocks() {
+        return shareGroupMaxPartitionMaxRecordLocks;
+    }
+
+    public int shareGroupMinPartitionMaxRecordLocks() {
+        return shareGroupMinPartitionMaxRecordLocks;
+    }
+
     public int shareGroupDeliveryCountLimit() {
         return shareGroupDeliveryCountLimit;
+    }
+
+    public int shareGroupMaxDeliveryCountLimit() {
+        return shareGroupMaxDeliveryCountLimit;
+    }
+
+    public int shareGroupMinDeliveryCountLimit() {
+        return shareGroupMinDeliveryCountLimit;
     }
 
     public int shareGroupRecordLockDurationMs() {
@@ -147,6 +191,18 @@ public class ShareGroupConfig {
     }
 
     private void validate() {
+        Utils.require(shareGroupMaxDeliveryCountLimit >= shareGroupDeliveryCountLimit,
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG));
+        Utils.require(shareGroupDeliveryCountLimit >= shareGroupMinDeliveryCountLimit,
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG));
+        Utils.require(shareGroupMaxPartitionMaxRecordLocks >= shareGroupPartitionMaxRecordLocks,
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG));
+        Utils.require(shareGroupPartitionMaxRecordLocks >= shareGroupMinPartitionMaxRecordLocks,
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG));
         Utils.require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG));
@@ -168,7 +224,9 @@ public class ShareGroupConfig {
         return Map.of(
             GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
             GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.shareGroupHeartbeatIntervalMs(),
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs()
+            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs(),
+            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit(),
+            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupPartitionMaxRecordLocks()
         );
     }
 }

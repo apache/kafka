@@ -84,7 +84,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         store.put(bytesKey, valueAndTimestamp, context.recordContext().timestamp());
 
         verify(inner).put(bytesKey, valueAndTimestamp, 0);
-        verify(context).logChange(store.name(), key, value, 42, Position.emptyPosition());
+        verify(context).logChange(store.name(), key, value, 42, new RecordHeaders(), Position.emptyPosition());
     }
 
     @Test
@@ -96,7 +96,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         store.put(bytesKey, valueAndTimestamp, context.recordContext().timestamp());
 
         verify(inner).put(bytesKey, valueAndTimestamp, 0);
-        verify(context).logChange(store.name(), key, value, 42, POSITION);
+        verify(context).logChange(store.name(), key, value, 42, new RecordHeaders(), POSITION);
     }
 
     @SuppressWarnings({"resource", "unused"})
@@ -128,8 +128,8 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         store.put(bytesKey, valueAndTimestamp, context.recordContext().timestamp());
 
         verify(inner, times(2)).put(bytesKey, valueAndTimestamp, 0);
-        verify(context).logChange(store.name(), key1, value, 42L, Position.emptyPosition());
-        verify(context).logChange(store.name(), key2, value, 42L, Position.emptyPosition());
+        verify(context).logChange(store.name(), key1, value, 42L, new RecordHeaders(), Position.emptyPosition());
+        verify(context).logChange(store.name(), key2, value, 42L, new RecordHeaders(), Position.emptyPosition());
     }
 
 }

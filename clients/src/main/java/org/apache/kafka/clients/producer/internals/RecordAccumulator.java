@@ -28,13 +28,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
@@ -1027,14 +1027,39 @@ public class RecordAccumulator {
     }
 
     /**
-     * Deallocate the record batch
+     * Complete and deallocate the record batch
+     */
+    public void completeAndDeallocateBatch(ProducerBatch batch) {
+        completeBatch(batch);
+        deallocate(batch);
+    }
+
+    /**
+     * Only perform deallocation (and not removal from the incomplete set)
      */
     public void deallocate(ProducerBatch batch) {
-        incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
-        if (!batch.isSplitBatch())
-            free.deallocate(batch.buffer(), batch.initialCapacity());
+        if (!batch.isSplitBatch()) {
+            if (batch.isBufferDeallocated()) {
+                log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
+            } else {
+                batch.markBufferDeallocated();
+                if (batch.isInflight()) {
+                    // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
+                    free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
+                    throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
+                }
+                free.deallocate(batch.buffer(), batch.initialCapacity());
+            }
+        }
+    }
+
+    /**
+     * Remove from the incomplete list but do not free memory yet
+     */
+    public void completeBatch(ProducerBatch batch) {
+        incomplete.remove(batch);
     }
 
     /**
@@ -1132,7 +1157,14 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            deallocate(batch);
+            if (batch.isInflight()) {
+                // KAFKA-19012: if the batch has been sent it might still be in use by the network client so we cannot allow it to be reused yet.
+                // We skip deallocating it now. When the request in network client completes with a response, either Sender.completeBatch() or
+                // Sender.failBatch() will be called with deallocateBatch=true. The buffer associated with the batch will be deallocated then.
+                completeBatch(batch);
+            } else {
+                completeAndDeallocateBatch(batch);
+            }
         }
     }
 
@@ -1152,7 +1184,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                deallocate(batch);
+                completeAndDeallocateBatch(batch);
             }
         }
     }

@@ -42,6 +42,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
  * @param inner The underlying Java abstraction for KGroupedStream
  * @see `org.apache.kafka.streams.kstream.KGroupedStream`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.KGroupedStream` instead", "4.3.0")
 class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
 
   /**

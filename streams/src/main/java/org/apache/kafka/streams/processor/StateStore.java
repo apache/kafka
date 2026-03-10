@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -25,6 +26,8 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+
+import java.util.Map;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
@@ -73,8 +76,55 @@ public interface StateStore {
 
     /**
      * Flush any cached data
+     *
+     * @deprecated Use {@link org.apache.kafka.streams.processor.api.ProcessingContext#commit() ProcessorContext#commit()}
+     *             instead.
      */
-    void flush();
+    @Deprecated
+    default void flush() {
+        // no-op
+    }
+
+    /**
+     * Commit all written records to this StateStore.
+     * <p>
+     * This method <b>CANNOT</b> be called by users from {@link org.apache.kafka.streams.processor.api.Processor
+     * processors}. Doing so will throw an {@link java.lang.UnsupportedOperationException}.
+     * <p>
+     * Instead, users should call {@link org.apache.kafka.streams.processor.api.ProcessingContext#commit()
+     * ProcessorContext#commit()} to request a Task commit.
+     * <p>
+     * If {@link #managesOffsets()} returns {@code true}, the given {@code changelogOffsets} will be guaranteed to be
+     * persisted to disk along with the written records.
+     * <p>
+     * {@code changelogOffsets} will usually contain a single partition, in the case of a regular StateStore. However,
+     * they may contain multiple partitions in the case of a Global StateStore with multiple partitions. All provided
+     * partitions <em>MUST</em> be persisted to disk.
+     * <p>
+     * Implementations <em>SHOULD</em> ensure that {@code changelogOffsets} are committed to disk atomically with the
+     * records they represent, if possible.
+     *
+     * @param changelogOffsets The changelog offset(s) corresponding to the most recently written records.
+     */
+    default void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        flush();
+    }
+
+    /**
+     * Returns the most recently {@link #commit(Map) committed} offset for the given {@link TopicPartition}.
+     * <p>
+     * If {@link #managesOffsets()} and {@link #persistent()} both return {@code true}, this method will return the
+     * offset that corresponds to the changelog record most recently written to this store, for the given {@code
+     * partition}.
+     *
+     * @param partition The partition to get the committed offset for.
+     * @return The last {@link #commit(Map) committed} offset for the {@code partition}; or {@code null} if no offset
+     *         has been committed for the partition, or if either {@link #persistent()} or {@link #managesOffsets()}
+     *         return {@code false}.
+     */
+    default Long committedOffset(final TopicPartition partition) {
+        return null;
+    }
 
     /**
      * Close the storage engine.
@@ -92,6 +142,32 @@ public interface StateStore {
      * @return  {@code true} if the storage is persistent&mdash;{@code false} otherwise
      */
     boolean persistent();
+
+    /**
+     * Determines if this StateStore manages its own offsets.
+     * <p>
+     * If this method returns {@code true}, then offsets provided to {@link #commit(Map)} will be retrievable using
+     * {@link #committedOffset(TopicPartition)}.
+     * <p>
+     * If this method returns {@code false}, offsets provided to {@link #commit(Map)} will be ignored, and {@link
+     * #committedOffset(TopicPartition)} will be expected to always return {@code null}.
+     * <p>
+     * This method is provided to enable custom StateStores to opt-in to managing their own offsets. This is required,
+     * to ensure that custom StateStores provide the consistency guarantees that Kafka Streams expects when operating
+     * under an {@code exactly-once} {@code processing.guarantee}.
+     * <p>
+     * New implementations are required to implement this method and return {@code true}. Existing implementations
+     * should upgrade to managing their own offsets as soon as possible, as the legacy offset management is deprecated
+     * and will be removed in a future version.
+     *
+     * @deprecated New implementations should always return {@code true} and manage their own offsets. In the future,
+     *             this method will be removed and it will be assumed to always return {@code true}.
+     * @return Whether this StateStore manages its own offsets.
+     */
+    @Deprecated
+    default boolean managesOffsets() {
+        return false;
+    }
 
     /**
      * Is this store open for reading and writing

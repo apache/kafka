@@ -1011,7 +1011,7 @@ public class QuorumControllerTest {
                 createTopicsRequestData, Set.of("foo")).get().
                     topics().find("foo").errorCode());
             assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
-                "are currently fenced.", active.createTopics(ANONYMOUS_CONTEXT,
+                "are currently fenced, or have all their log directories cordoned.", active.createTopics(ANONYMOUS_CONTEXT,
                     createTopicsRequestData, Set.of("foo")).
                         get().topics().find("foo").errorMessage());
             assertEquals(new BrokerHeartbeatReply(true, false, false, false),
@@ -1401,6 +1401,32 @@ public class QuorumControllerTest {
                 () -> checker.accept(new ConfigResource(TOPIC, "bar")));
 
             testToImages(clientEnv.allRecords());
+        }
+    }
+
+    @Test
+    public void testIsNodeIdRegisteredWithDynamicQuorum() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).build()
+        ) {
+            QuorumController active = controlEnv.activeController();
+            ConfigResourceExistenceChecker checker = active.new ConfigResourceExistenceChecker();
+            
+            // Register dynamic controller with ID 100
+            active.registerController(ANONYMOUS_CONTEXT,
+                new ControllerRegistrationRequestData()
+                    .setControllerId(100)
+                    .setIncarnationId(Uuid.randomUuid())
+                    .setZkMigrationReady(false)
+                    .setListeners(new ControllerRegistrationRequestData.ListenerCollection())
+                    .setFeatures(new ControllerRegistrationRequestData.FeatureCollection())).get();
+            
+            checker.accept(new ConfigResource(BROKER, "100"));
+            
+            // Unregistered node should throw exception
+            assertThrows(BrokerIdNotRegisteredException.class,
+                () -> checker.accept(new ConfigResource(BROKER, "999")));
         }
     }
 

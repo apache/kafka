@@ -29,7 +29,9 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.server.{ControllerInformation, NodeToControllerChannelManagerImpl}
 
+import java.util.function.Supplier
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.OptionConverters.RichOptional
@@ -66,7 +68,7 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     scheduler: Scheduler,
-    controllerNodeProvider: ControllerNodeProvider,
+    controllerNodeProvider: Supplier[ControllerInformation],
     time: Time,
     metrics: Metrics,
     threadNamePrefix: String,
@@ -74,12 +76,12 @@ object AlterPartitionManager {
   ): AlterPartitionManager = {
     val channelManager = new NodeToControllerChannelManagerImpl(
       controllerNodeProvider,
-      time = time,
-      metrics = metrics,
-      config = config,
-      channelName = "alter-partition",
-      threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = Long.MaxValue
+      time,
+      metrics,
+      config,
+      "alter-partition",
+      threadNamePrefix,
+      Long.MaxValue
     )
     new DefaultAlterPartitionManager(
       controllerChannelManager = channelManager,
@@ -150,7 +152,7 @@ class DefaultAlterPartitionManager(
     val request = buildRequest(inflightAlterPartitionItems, brokerEpoch)
     debug(s"Sending AlterPartition to controller $request")
 
-    // We will not timeout AlterPartition request, instead letting it retry indefinitely
+    // We will not time out AlterPartition request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
     // which causes the response for those partitions to be ignored.
     controllerChannelManager.sendRequest(request,
@@ -159,7 +161,7 @@ class DefaultAlterPartitionManager(
           debug(s"Received AlterPartition response $response")
           val error = try {
             if (response.authenticationException != null) {
-              // For now we treat authentication errors as retriable. We use the
+              // For now, we treat authentication errors as retriable. We use the
               // `NETWORK_EXCEPTION` error code for lack of a good alternative.
               // Note that `NodeToControllerChannelManager` will still log the
               // authentication errors so that users have a chance to fix the problem.

@@ -21,7 +21,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
-import kafka.server.share.{ShareFetchUtils, SharePartitionManager}
+import kafka.server.share.SharePartitionManager
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.EndpointType
@@ -44,7 +44,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
@@ -57,11 +57,12 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, FetchManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.share.context.ShareFetchContext
@@ -69,10 +70,9 @@ import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareParti
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.AppendOrigin
+import org.apache.kafka.storage.internals.log.{AppendOrigin, RecordValidationStats}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
-import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
@@ -121,6 +121,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
   val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(
     metadataCache, authHelper, config)
+  val shareGroupConfigProvider = new ShareGroupConfigProvider(groupConfigManager)
 
   def close(): Unit = {
     aclApis.close()
@@ -1792,8 +1793,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.producerEpoch,
               marker.coordinatorEpoch,
               marker.transactionResult,
-              markerTransactionVersion,
-              Duration.ofMillis(config.requestTimeoutMs.toLong)
+              markerTransactionVersion
             ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
                 Errors.NONE
@@ -1830,7 +1830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             entriesPerPartition = controlRecords,
             requestLocal = requestLocal,
             responseCallback = errors => {
-              errors.foreachEntry { (topicIdPartition, partitionResponse) =>
+              errors.forEach { (topicIdPartition, partitionResponse) =>
                 addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
             },
@@ -2825,19 +2825,25 @@ class KafkaApis(val requestChannel: RequestChannel,
               val timeoutMs = heartbeatIntervalMs * 2
 
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
-              
+
               // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
-              val hasMissingInternalTopicsStatus = responseData.status() != null && 
+              val hasMissingInternalTopicsStatus = responseData.status() != null &&
                 responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-              
+
               if (hasMissingInternalTopicsStatus) {
                 val currentTimeMs = time.milliseconds()
                 val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
                 if (cachedErrors.nonEmpty) {
                   val missingInternalTopicStatus =
                     responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
-                  val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
                   if (missingInternalTopicStatus.isPresent) {
+                    val maxErrorsToInclude = 3
+                    val errorList = cachedErrors.take(maxErrorsToInclude).map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
+                    val creationErrorDetails = if (cachedErrors.size > maxErrorsToInclude) {
+                      s"$errorList and ${cachedErrors.size - maxErrorsToInclude} more"
+                    } else {
+                      errorList
+                    }
                     val existingDetail = Option(missingInternalTopicStatus.get().statusDetail()).getOrElse("")
                     missingInternalTopicStatus.get().setStatusDetail(
                       existingDetail + s"; Creation failed: $creationErrorDetails."
@@ -3167,6 +3173,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val groupId = shareFetchRequest.data.groupId
+
+    if (groupId == null) {
+      requestHelper.sendMaybeThrottle(request,
+        shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception("Invalid group id in the request.")))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     // Share Fetch needs permission to perform the READ action on the named group resource (groupId)
     if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
@@ -3534,6 +3546,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val groupId = shareAcknowledgeRequest.data.groupId
+
+    if (groupId == null) {
+      requestHelper.sendMaybeThrottle(request,
+        shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception("Invalid group id in the request.")))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     // Share Acknowledge needs permission to perform READ action on the named group resource (groupId)
     if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
@@ -4045,7 +4063,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       0,
       partitions,
       nodeEndpoints.values.toList.asJava,
-      ShareFetchUtils.recordLockDurationMsOrDefault(groupConfigManager, groupId, config.shareGroupConfig.shareGroupRecordLockDurationMs)
+      shareGroupConfigProvider.recordLockDurationMsOrDefault(groupId, config.shareGroupConfig.shareGroupRecordLockDurationMs)
     )
   }
 
@@ -4143,7 +4161,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Prepare share fetch response
       val response =
         ShareFetchResponse.of(shareFetchResponse.error, throttleTimeMs, responseData, nodeEndpoints.values.toList.asJava,
-          ShareFetchUtils.recordLockDurationMsOrDefault(groupConfigManager, groupId, config.shareGroupConfig.shareGroupRecordLockDurationMs))
+          shareGroupConfigProvider.recordLockDurationMsOrDefault(groupId, config.shareGroupConfig.shareGroupRecordLockDurationMs))
       // record the bytes out metrics only when the response is being sent.
       response.data.responses.forEach { topicResponse =>
         topicResponse.partitions.forEach { data =>
@@ -4218,7 +4236,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * @return boolean if the member id in the RPC is valid or not.
    */
   def isMemberIdValid(memberId: String): Boolean = {
-    memberId.nonEmpty && memberId.length <= 36
+    memberId != null && memberId.nonEmpty && memberId.length <= 36
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
@@ -4236,9 +4254,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ =>
           throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
       }
-      request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
+      request.messageConversionsTimeNanos += conversionStats.conversionTimeNanos
     }
-    request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
+    request.temporaryMemoryBytes += conversionStats.temporaryMemoryBytes
   }
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Boolean = {

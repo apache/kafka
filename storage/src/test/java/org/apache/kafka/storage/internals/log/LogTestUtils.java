@@ -16,11 +16,33 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.RequestLocal;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class LogTestUtils {
     public static LogSegment createSegment(long offset, File logDir, int indexIntervalBytes, Time time) throws IOException {
@@ -32,5 +54,277 @@ public class LogTestUtils {
 
         // Create and return the LogSegment instance
         return new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time);
+    }
+
+
+    /**
+     * Append an end transaction marker (commit or abort) to the log as a leader.
+     *
+     * @param transactionVersion the transaction version (1 = TV1, 2 = TV2) etc. Must be explicitly specified.
+     *                          TV2 markers require strict epoch validation (markerEpoch > currentEpoch),
+     *                          while legacy markers use relaxed validation (markerEpoch >= currentEpoch).
+     */
+    public static LogAppendInfo appendEndTxnMarkerAsLeader(UnifiedLog log,
+                                                           long producerId,
+                                                           short producerEpoch,
+                                                           ControlRecordType controlType,
+                                                           long timestamp,
+                                                           int coordinatorEpoch,
+                                                           int leaderEpoch,
+                                                           short transactionVersion) {
+        MemoryRecords records = endTxnRecords(controlType, producerId, producerEpoch, 0L, coordinatorEpoch, leaderEpoch, timestamp);
+
+        return log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
+    }
+
+    public static MemoryRecords endTxnRecords(ControlRecordType controlRecordType,
+                                              long producerId,
+                                              short epoch,
+                                              long offset,
+                                              int coordinatorEpoch,
+                                              int partitionLeaderEpoch,
+                                              long timestamp) {
+        EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch);
+        return MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker);
+    }
+
+    /**
+     * Wrap a single record log buffer.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, byte[] key) {
+        return records(
+            List.of(new SimpleRecord(RecordBatch.NO_TIMESTAMP, key, value)),
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Compression.NONE,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Create a single record batch with the specified compression and timestamp.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key, long timestamp) {
+        return records(
+            List.of(new SimpleRecord(timestamp, key, value)),
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            codec,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Create a single record batch with the specified compression, timestamp, and magic value.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key,
+                                                  long timestamp, byte magicValue) {
+        return records(
+            List.of(new SimpleRecord(timestamp, key, value)),
+            magicValue,
+            codec,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Read a string from a ByteBuffer using the default charset.
+     */
+    public static String readString(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        return new String(bytes);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        byte magicValue,
+                                        Compression codec,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int sequence,
+                                        long baseOffset,
+                                        int partitionLeaderEpoch,
+                                        long timestamp) {
+        ByteBuffer buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records));
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
+            timestamp, producerId, producerEpoch, sequence, false, partitionLeaderEpoch);
+
+        records.forEach(builder::append);
+
+        return builder.build();
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        byte magicValue,
+                                        Compression codec,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int sequence,
+                                        long baseOffset,
+                                        int partitionLeaderEpoch) {
+        return records(records, magicValue, codec, producerId, producerEpoch, sequence, baseOffset, partitionLeaderEpoch, System.currentTimeMillis());
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int sequence,
+                                        long baseOffset) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, producerId, producerEpoch, sequence, baseOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, long timestamp) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH, timestamp);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, long baseOffset, int partitionLeaderEpoch) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, partitionLeaderEpoch);
+    }
+
+    public static void deleteProducerSnapshotFiles(File logDir) {
+        Stream.of(logDir.listFiles())
+                .filter(f -> f.isFile() && f.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX))
+                .forEach(f -> assertDoesNotThrow(() -> Utils.delete(f)));
+    }
+
+    public static List<Long> listProducerSnapshotOffsets(File logDir) throws IOException {
+        return ProducerStateManager.listSnapshotFiles(logDir).stream().map(f -> f.offset).sorted().toList();
+    }
+
+    public static void appendNonTransactionalAsLeader(UnifiedLog log, int numRecords) throws IOException {
+        List<SimpleRecord> simpleRecords = new ArrayList<>();
+        for (int i = 0; i < numRecords; i++) {
+            simpleRecords.add(new SimpleRecord(String.valueOf(i).getBytes()));
+        }
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, simpleRecords.toArray(new SimpleRecord[0]));
+        log.appendAsLeader(records, 0);
+    }
+
+    public static Consumer<Integer> appendTransactionalAsLeader(UnifiedLog log,
+                                                                long producerId,
+                                                                short producerEpoch,
+                                                                Time time) {
+        return appendIdempotentAsLeader(log, producerId, producerEpoch, time, true);
+    }
+
+    public static Consumer<Integer> appendIdempotentAsLeader(UnifiedLog log,
+                                                             long producerId,
+                                                             short producerEpoch,
+                                                             Time time,
+                                                             boolean isTransactional) {
+        final AtomicInteger sequence = new AtomicInteger(0);
+        return numRecords -> {
+            int baseSequence = sequence.get();
+            List<SimpleRecord> simpleRecords = new ArrayList<>();
+            for (int i = baseSequence; i < baseSequence + numRecords; i++) {
+                simpleRecords.add(new SimpleRecord(time.milliseconds(), String.valueOf(i).getBytes()));
+            }
+
+            MemoryRecords records = isTransactional
+                ? MemoryRecords.withTransactionalRecords(Compression.NONE, producerId,
+                        producerEpoch, baseSequence, simpleRecords.toArray(new SimpleRecord[0]))
+                : MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
+                        producerEpoch, baseSequence, simpleRecords.toArray(new SimpleRecord[0]));
+
+            assertDoesNotThrow(() -> log.appendAsLeader(records, 0));
+            sequence.addAndGet(numRecords);
+        };
+    }
+
+    public static class LogConfigBuilder {
+        private final Map<String, Object> configs = new HashMap<>();
+
+        public LogConfigBuilder segmentMs(long segmentMs) {
+            configs.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs);
+            return this;
+        }
+
+        public LogConfigBuilder segmentBytes(int segmentBytes) {
+            configs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes);
+            return this;
+        }
+
+        public LogConfigBuilder retentionMs(long retentionMs) {
+            configs.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+            return this;
+        }
+
+        public LogConfigBuilder localRetentionMs(long localRetentionMs) {
+            configs.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs);
+            return this;
+        }
+
+        public LogConfigBuilder retentionBytes(long retentionBytes) {
+            configs.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+            return this;
+        }
+
+        public LogConfigBuilder localRetentionBytes(long localRetentionBytes) {
+            configs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes);
+            return this;
+        }
+
+        public LogConfigBuilder segmentJitterMs(long segmentJitterMs) {
+            configs.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs);
+            return this;
+        }
+
+        public LogConfigBuilder cleanupPolicy(String cleanupPolicy) {
+            configs.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy);
+            return this;
+        }
+
+        public LogConfigBuilder maxMessageBytes(int maxMessageBytes) {
+            configs.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes);
+            return this;
+        }
+
+        public LogConfigBuilder indexIntervalBytes(int indexIntervalBytes) {
+            configs.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes);
+            return this;
+        }
+
+        public LogConfigBuilder segmentIndexBytes(int segmentIndexBytes) {
+            configs.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes);
+            return this;
+        }
+
+        public LogConfigBuilder fileDeleteDelayMs(long fileDeleteDelayMs) {
+            configs.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs);
+            return this;
+        }
+
+        public LogConfigBuilder remoteLogStorageEnable(boolean remoteLogStorageEnable) {
+            configs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable);
+            return this;
+        }
+
+        public LogConfigBuilder remoteLogCopyDisable(boolean remoteLogCopyDisable) {
+            configs.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, remoteLogCopyDisable);
+            return this;
+        }
+
+        public LogConfigBuilder remoteLogDeleteOnDisable(boolean remoteLogDeleteOnDisable) {
+            configs.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, remoteLogDeleteOnDisable);
+            return this;
+        }
+
+        public LogConfig build() {
+            return new LogConfig(configs);
+        }
     }
 }

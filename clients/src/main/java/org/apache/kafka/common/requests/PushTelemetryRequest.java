@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 import java.nio.ByteBuffer;

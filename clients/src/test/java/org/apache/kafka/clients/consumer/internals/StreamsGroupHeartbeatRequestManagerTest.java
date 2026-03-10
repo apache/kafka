@@ -821,7 +821,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 3),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 4),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 5)
-                )
+                ),
+                true
             )
         );
 
@@ -870,7 +871,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 2)
                 ),
                 Set.of(
-                )
+                ),
+                true
             )
         );
 
@@ -923,7 +925,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 3),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 4),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 5)
-                )
+                ),
+                true
             )
         );
         StreamsGroupHeartbeatRequestData requestDataBeforeReset = heartbeatState.buildRequestData();
