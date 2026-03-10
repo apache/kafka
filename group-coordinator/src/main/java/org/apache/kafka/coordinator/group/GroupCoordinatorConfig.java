@@ -691,7 +691,8 @@ public class GroupCoordinatorConfig {
             GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, this.shareGroupSessionTimeoutMs(),
             GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, this.shareGroupHeartbeatIntervalMs(),
             GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupConfig.shareGroupRecordLockDurationMs(),
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupConfig.shareGroupDeliveryCountLimit()
+            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupConfig.shareGroupDeliveryCountLimit(),
+            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupConfig.shareGroupPartitionMaxRecordLocks()
         );
     }
 

@@ -415,6 +415,9 @@ public final class GroupConfig extends AbstractConfig {
         clampToRange(props, groupId, SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
             shareGroupConfig.shareGroupMinDeliveryCountLimit(),
             shareGroupConfig.shareGroupMaxDeliveryCountLimit());
+        clampToRange(props, groupId, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
+            shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
+            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks());
 
         // Streams group configs
         clampToRange(props, groupId, STREAMS_SESSION_TIMEOUT_MS_CONFIG,
