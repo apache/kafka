@@ -193,11 +193,12 @@ public class SharePartition {
     private final AtomicReference<Uuid> fetchLock;
 
     /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The max in-flight records is used to limit the number of records that can be in-flight at any
      * given time. The max in-flight records is used to prevent the consumer from fetching too many
      * records from the leader and running out of memory.
      */
-    private final int maxInFlightRecords;
+    private final int defaultMaxInFlightRecords;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -335,7 +336,7 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
+        int defaultMaxInFlightRecords,
         int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
@@ -345,7 +346,7 @@ public class SharePartition {
         GroupConfigManager groupConfigManager,
         SharePartitionListener listener
     ) {
-        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
+        this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
             timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
             new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
@@ -356,7 +357,7 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
+        int defaultMaxInFlightRecords,
         int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
@@ -371,7 +372,7 @@ public class SharePartition {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.leaderEpoch = leaderEpoch;
-        this.maxInFlightRecords = maxInFlightRecords;
+        this.defaultMaxInFlightRecords = defaultMaxInFlightRecords;
         this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
@@ -1487,7 +1488,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-        return numInFlightRecords() < maxInFlightRecords;
+        return numInFlightRecords() < maxInFlightRecords();
     }
 
     /**
@@ -1680,6 +1681,7 @@ public class SharePartition {
         // and only acquire limited records.
         int maxRecordsToAcquire;
         long lastOffsetToAcquire = lastOffset;
+        int maxInFlightRecords = maxInFlightRecords();
         lock.readLock().lock();
         try {
             int inFlightRecordsCount = numInFlightRecords();
@@ -3339,7 +3341,13 @@ public class SharePartition {
         return Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
     }
 
-
+    /**
+     * Returns the effective max in-flight records for this share partition, using the per-group dynamic
+     * config if available, otherwise the broker default.
+     */
+    int maxInFlightRecords() {
+        return configProvider.partitionMaxRecordLocksOrDefault(groupId, defaultMaxInFlightRecords);
+    }
 
     /**
      * The GapWindow class is used to record the gap start and end offset of the probable gaps

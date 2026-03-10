@@ -74,6 +74,30 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
+
+    private static class StateStoreMetadata {
+        final StateStore stateStore;
+        final List<TopicPartition> changelogPartitions;
+        final StateRestoreCallback restoreCallback;
+        final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory;
+        final RecordConverter recordConverter;
+        final Map<TopicPartition, Long> highWatermarks;
+
+        StateStoreMetadata(final StateStore stateStore,
+                           final List<TopicPartition> changelogPartitions,
+                           final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory,
+                           final StateRestoreCallback restoreCallback,
+                           final RecordConverter recordConverter,
+                           final Map<TopicPartition, Long> highWatermarks) {
+            this.stateStore = stateStore;
+            this.changelogPartitions = changelogPartitions;
+            this.reprocessFactory = reprocessFactory;
+            this.restoreCallback = reprocessFactory.isPresent() ? null : restoreCallback;
+            this.recordConverter = reprocessFactory.isPresent() ? null : recordConverter;
+            this.highWatermarks = highWatermarks;
+        }
+    }
+
     private static final long NO_DEADLINE = -1L;
 
     private final Time time;
@@ -90,6 +114,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalStoreNames = new HashSet<>();
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
+    private final Map<String, StateStoreMetadata> storeMetadata = new HashMap<>();
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
@@ -177,6 +202,19 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             }
         });
 
+        // restore or reprocess each registered store using the now-populated currentOffsets
+        for (final StateStoreMetadata metadata : storeMetadata.values()) {
+            try {
+                if (metadata.reprocessFactory.isPresent()) {
+                    reprocessState(metadata);
+                } else {
+                    restoreState(metadata);
+                }
+            } finally {
+                globalConsumer.unsubscribe();
+            }
+        }
+
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
@@ -197,7 +235,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     public void registerStore(final StateStore store,
                               final StateRestoreCallback stateRestoreCallback,
                               final CommitCallback ignored) {
-        log.info("Restoring state for global store {}", store.name());
+        log.info("Registering global store {}", store.name());
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
         // fail-crash; in this case we would not need to immediately close the state store before throwing
@@ -228,27 +266,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             )
         );
 
-        try {
-            final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
-                .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
-            if (reprocessFactory.isPresent()) {
-                reprocessState(
-                    topicPartitions,
-                    highWatermarks,
-                    reprocessFactory.get(),
-                    store.name());
-            } else {
-                restoreState(
-                    stateRestoreCallback,
-                    topicPartitions,
-                    highWatermarks,
-                    store.name(),
-                    converterForStore(store)
-                );
-            }
-        } finally {
-            globalConsumer.unsubscribe();
-        }
+        final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
+            .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
+        storeMetadata.put(store.name(), new StateStoreMetadata(
+            store, topicPartitions, reprocessFactory, stateRestoreCallback, converterForStore(store), highWatermarks));
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -279,14 +300,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked", "resource"})
-    private void reprocessState(final List<TopicPartition> topicPartitions,
-                                final Map<TopicPartition, Long> highWatermarks,
-                                final InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?> reprocessFactory,
-                                final String storeName) {
+    private void reprocessState(final StateStoreMetadata storeMetadata) {
+        final InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?> reprocessFactory = storeMetadata.reprocessFactory.get();
         final Processor<?, ?, ?, ?> source = reprocessFactory.processorSupplier().get();
         source.init((ProcessorContext) globalProcessorContext);
 
-        for (final TopicPartition topicPartition : topicPartitions) {
+        for (final TopicPartition topicPartition : storeMetadata.changelogPartitions) {
             long currentDeadline = NO_DEADLINE;
 
             globalConsumer.assign(Collections.singletonList(topicPartition));
@@ -299,8 +318,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
                 offset = getGlobalConsumerOffset(topicPartition);
             }
-            final Long highWatermark = highWatermarks.get(topicPartition);
-            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+            final Long highWatermark = storeMetadata.highWatermarks.get(topicPartition);
+            stateRestoreListener.onRestoreStart(topicPartition, storeMetadata.stateStore.name(), offset, highWatermark);
 
             long restoreCount = 0L;
 
@@ -419,20 +438,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
                 offset = getGlobalConsumerOffset(topicPartition);
 
-                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, batchRestoreCount);
+                stateRestoreListener.onBatchRestored(topicPartition, storeMetadata.stateStore.name(), offset, batchRestoreCount);
             }
-            stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
+            stateRestoreListener.onRestoreEnd(topicPartition, storeMetadata.stateStore.name(), restoreCount);
             checkpointFileCache.put(topicPartition, offset);
 
         }
     }
 
-    private void restoreState(final StateRestoreCallback stateRestoreCallback,
-                              final List<TopicPartition> topicPartitions,
-                              final Map<TopicPartition, Long> highWatermarks,
-                              final String storeName,
-                              final RecordConverter recordConverter) {
-        for (final TopicPartition topicPartition : topicPartitions) {
+    private void restoreState(final StateStoreMetadata storeMetadata) {
+        for (final TopicPartition topicPartition : storeMetadata.changelogPartitions) {
             long currentDeadline = NO_DEADLINE;
 
             globalConsumer.assign(Collections.singletonList(topicPartition));
@@ -446,11 +461,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 offset = getGlobalConsumerOffset(topicPartition);
             }
 
-            final Long highWatermark = highWatermarks.get(topicPartition);
+            final Long highWatermark = storeMetadata.highWatermarks.get(topicPartition);
             final RecordBatchingStateRestoreCallback stateRestoreAdapter =
-                StateRestoreCallbackAdapter.adapt(stateRestoreCallback);
+                StateRestoreCallbackAdapter.adapt(storeMetadata.restoreCallback);
 
-            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+            stateRestoreListener.onRestoreStart(topicPartition, storeMetadata.stateStore.name(), offset, highWatermark);
             long restoreCount = 0L;
 
             while (offset < highWatermark) {
@@ -471,17 +486,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
                 for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                     if (record.key() != null) {
-                        restoreRecords.add(recordConverter.convert(record));
+                        restoreRecords.add(storeMetadata.recordConverter.convert(record));
                     }
                 }
 
                 offset = getGlobalConsumerOffset(topicPartition);
 
                 stateRestoreAdapter.restoreBatch(restoreRecords);
-                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
+                stateRestoreListener.onBatchRestored(topicPartition, storeMetadata.stateStore.name(), offset, restoreRecords.size());
                 restoreCount += restoreRecords.size();
             }
-            stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
+            stateRestoreListener.onRestoreEnd(topicPartition, storeMetadata.stateStore.name(), restoreCount);
             checkpointFileCache.put(topicPartition, offset);
         }
     }

@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
@@ -134,8 +133,8 @@ public class GlobalStateManagerImplTest {
         storeToTopic.put(storeName4, t4.topic());
         storeToTopic.put(storeName5, t5.topic());
 
-        store1 = new NoOpReadOnlyStore<>(storeName1, true);
-        store2 = new ConverterStore<>(storeName2, true);
+        store1 = new NoOpReadOnlyStore<>(storeName1, true, stateRestoreCallback);
+        store2 = new ConverterStore<>(storeName2, true, stateRestoreCallback);
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
         store5 = new NoOpReadOnlyStore<>(storeName5);
@@ -289,10 +288,11 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldNotConvertValuesIfStoreDoesNotImplementTimestampedBytesStore() {
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(1, 0, t1);
+        processorContext.setStateManger(stateManager);
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback, null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -301,14 +301,11 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldNotConvertValuesIfInnerStoreDoesNotImplementTimestampedBytesStore() {
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(1, 0, t1);
+        processorContext.setStateManger(stateManager);
 
         stateManager.initialize();
-        stateManager.registerStore(
-            new WrappedStateStore<>(store1) {
-            },
-            stateRestoreCallback,
-                null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -317,10 +314,11 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldConvertValuesIfStoreImplementsTimestampedBytesStore() {
+        initializeConsumer(0, 0, t1, t3, t4, t5);
         initializeConsumer(1, 0, t2);
+        processorContext.setStateManger(stateManager);
 
         stateManager.initialize();
-        stateManager.registerStore(store2, stateRestoreCallback, null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -329,14 +327,11 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldConvertValuesIfInnerStoreImplementsTimestampedBytesStore() {
+        initializeConsumer(0, 0, t1, t3, t4, t5);
         initializeConsumer(1, 0, t2);
+        processorContext.setStateManger(stateManager);
 
         stateManager.initialize();
-        stateManager.registerStore(
-            new WrappedStateStore<>(store2) {
-            },
-            stateRestoreCallback,
-            null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -345,11 +340,12 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldRestoreRecordsUpToHighwatermark() {
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(2, 0, t1);
+        processorContext.setStateManger(stateManager);
 
         stateManager.initialize();
 
-        stateManager.registerStore(store1, stateRestoreCallback, null);
         assertEquals(2, stateRestoreCallback.restored.size());
     }
 
@@ -357,11 +353,12 @@ public class GlobalStateManagerImplTest {
     public void shouldListenForRestoreEventsWhenReprocessing() {
         setUpReprocessing();
 
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(6, 1, t1);
+        processorContext.setStateManger(stateManager);
         consumer.setMaxPollRecords(2L);
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback, null);
 
         assertThat(stateRestoreListener.numBatchRestored, equalTo(2L));
         assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
@@ -371,12 +368,12 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldListenForRestoreEvents() {
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(6, 1, t1);
+        processorContext.setStateManger(stateManager);
         consumer.setMaxPollRecords(2L);
 
         stateManager.initialize();
-
-        stateManager.registerStore(store1, stateRestoreCallback, null);
 
         assertThat(stateRestoreListener.numBatchRestored, equalTo(2L));
         assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
@@ -391,14 +388,15 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldRestoreRecordsFromCheckpointToHighWatermark() throws IOException {
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(5, 5, t1);
+        processorContext.setStateManger(stateManager);
 
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
         offsetCheckpoint.write(Collections.singletonMap(t1, 5L));
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback, null);
         assertEquals(5, stateRestoreCallback.restored.size());
     }
 
@@ -545,6 +543,8 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldSkipNullKeysWhenRestoring() {
+        initializeConsumer(0, 0, t2, t3, t4, t5);
+        processorContext.setStateManger(stateManager);
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
         startOffsets.put(t1, 1L);
         final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -559,29 +559,41 @@ public class GlobalStateManagerImplTest {
         consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 2, expectedKey, expectedValue));
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback, null);
         final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
         assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
     }
 
     @Test
     public void shouldCheckpointRestoredOffsetsToFile() throws IOException {
-        stateManager.initialize();
+        initializeConsumer(0, 0, t2, t3, t4, t5);
         initializeConsumer(10, 0, t1);
-        stateManager.registerStore(store1, stateRestoreCallback, null);
+        processorContext.setStateManger(stateManager);
+        stateManager.initialize();
         stateManager.checkpoint();
         stateManager.close();
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();
-        assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, 10L)));
-        assertThat(readOffsetsCheckpoint(), equalTo(checkpointMap));
+        // changelogOffsets() returns offsets for *all* stores
+        assertThat(checkpointMap, equalTo(mkMap(
+                mkEntry(t1, 10L),
+                mkEntry(t2, 0L),
+                mkEntry(t3, 0L),
+                mkEntry(t4, 0L),
+                mkEntry(t5, 0L)
+        )));
+
+        // checkpoint file only contains persistent store offsets
+        assertThat(readOffsetsCheckpoint(), equalTo(mkMap(
+                mkEntry(t1, 10L),
+                mkEntry(t2, 0L)
+        )));
     }
 
     @Test
     public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
-        stateManager.initialize();
+        initializeConsumer(0, 0, t1, t3, t4, t5);
         initializeConsumer(10, 0, t3);
-        stateManager.registerStore(store3, stateRestoreCallback, null);
+        stateManager.initialize();
         stateManager.close();
 
         assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
@@ -935,7 +947,7 @@ public class GlobalStateManagerImplTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
@@ -978,7 +990,7 @@ public class GlobalStateManagerImplTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
@@ -1019,7 +1031,7 @@ public class GlobalStateManagerImplTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
@@ -1095,6 +1107,7 @@ public class GlobalStateManagerImplTest {
                 return super.poll(timeout);
             }
         };
+        initializeConsumer(0, 0, t2, t3, t4, t5);
 
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
         startOffsets.put(t1, 1L);
@@ -1156,11 +1169,11 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldFailOnDeserializationErrorsWhenReprocessing() {
         setUpReprocessing();
+        initializeConsumer(0, 0, t1, t2, t3, t4);
         initializeConsumer(2, 0, t5);
+        processorContext.setStateManger(stateManager);
 
-        stateManager.initialize();
-
-        assertThrows(StreamsException.class, () -> stateManager.registerStore(store5, stateRestoreCallback, null));
+        assertThrows(StreamsException.class, () -> stateManager.initialize());
     }
 
     @Test
@@ -1217,8 +1230,9 @@ public class GlobalStateManagerImplTest {
 
     private static class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
-                       final boolean rocksdbStore) {
-            super(name, rocksdbStore);
+                       final boolean rocksdbStore,
+                       final StateRestoreCallback stateRestoreCallback) {
+            super(name, rocksdbStore, stateRestoreCallback);
         }
     }
 
