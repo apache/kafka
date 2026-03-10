@@ -16,7 +16,7 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Typ
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, OffsetAndMetadata}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{GroupIdNotFoundException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.{ConsumerGroupState, GroupState, GroupType, KafkaFuture, TopicCollection, TopicPartition}
 import org.apache.kafka.common.serialization.Serdes
@@ -356,6 +356,65 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
+  def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedSimpleConsumerGroup(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a simple classic group by committing offsets directly
+      // without subscribing. This only writes offset commit records
+      // without any GroupMetadata records.
+      withConsumer(groupId = "grp6", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
+        val tp = new TopicPartition("foo", 0)
+        consumer.assign(java.util.List.of(tp))
+        consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(0)))
+      }
+
+      // Upgrade the group to the consumer protocol. Don't commit offsets
+      // so the simple classic group's offset commits survive compaction.
+      withConsumer(groupId = "grp6", groupProtocol = GroupProtocol.CONSUMER, enableAutoCommit = false) { consumer =>
+        consumer.subscribe(java.util.List.of("foo"))
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+      }
+    }
+
+    // Force a compaction. Since a simple classic group has no
+    // GroupMetadata records, there are no tombstones — the offset
+    // commit records always survive compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. Without the fix for KAFKA-20254, the offset
+    // commit records create a simple classic group during replay and the
+    // consumer group records fail to load.
+    withAdmin { admin =>
+      val groups = admin
+        .describeConsumerGroups(java.util.List.of("grp6"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      assertDescribedGroup(groups, "grp6", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedStreamsGroup(): Unit = {
     withAdmin { admin =>
       TestUtils.createTopicWithAdminRaw(
@@ -467,6 +526,60 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
+  def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedSimpleStreamsGroup(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a simple classic group by committing offsets directly
+      // without subscribing. This only writes offset commit records
+      // without any GroupMetadata records.
+      withConsumer(groupId = "grp7", groupProtocol = GroupProtocol.CLASSIC, enableAutoCommit = false) { consumer =>
+        val tp = new TopicPartition("foo", 0)
+        consumer.assign(java.util.List.of(tp))
+        consumer.commitSync(java.util.Map.of(tp, new OffsetAndMetadata(0)))
+      }
+
+      // Upgrade the group to the streams protocol.
+      withStreamsApp(applicationId = "grp7", inputTopic = "foo")
+    }
+
+    // Force a compaction. Since a simple classic group has no
+    // GroupMetadata records, there are no tombstones — the offset
+    // commit records always survive compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. Without the fix for KAFKA-20254, the offset
+    // commit records create a simple classic group during replay and the
+    // streams group records fail to load.
+    withAdmin { admin =>
+      val groups = admin
+        .describeStreamsGroups(java.util.List.of("grp7"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      val group = groups("grp7").get(10, TimeUnit.SECONDS)
+      assertEquals("grp7", group.groupId)
+      assertEquals(GroupState.EMPTY, group.groupState)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testRecreatingConsumerOffsetsTopic(): Unit = {
     withAdmin { admin =>
       TestUtils.createTopicWithAdminRaw(
@@ -525,16 +638,16 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
 
   private def configureDeleteRetention(): Unit = {
     withAdmin { admin =>
-      val resource = new ConfigResource(ConfigResource.Type.TOPIC, "__consumer_offsets")
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME)
       admin.incrementalAlterConfigs(java.util.Map.of(resource, java.util.List.of(
-        new AlterConfigOp(new ConfigEntry("delete.retention.ms", "0"), AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry("min.cleanable.dirty.ratio", "0.0"), AlterConfigOp.OpType.SET)
+        new AlterConfigOp(new ConfigEntry(TopicConfig.DELETE_RETENTION_MS_CONFIG, "0"), AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.0"), AlterConfigOp.OpType.SET)
       ))).all().get()
     }
   }
 
   private def rollAndCompactConsumerOffsets(): Unit = {
-    val tp = new TopicPartition("__consumer_offsets", 0)
+    val tp = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val broker = cluster.brokers.asScala.head._2
     val log = broker.logManager.getLog(tp).get
     val endOffset = log.logEndOffset
