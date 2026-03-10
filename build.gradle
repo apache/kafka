@@ -1114,6 +1114,7 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
+    testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
