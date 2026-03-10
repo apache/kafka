@@ -403,7 +403,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         open = false;
     }
 
-    long approximateNumEntries() {
+    long numEntries() {
         return segmentMap.values().stream()
             .mapToLong(Map::size)
             .sum();

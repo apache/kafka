@@ -158,12 +158,11 @@ public class MeteredWindowStore<K, V>
                 }
             }
         );
-        // Only register this metric if it is an in-memory store
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                     (config, now) -> {
                         final InMemoryWindowStore inMemoryStore = findInMemoryWindowStore(wrapped());
-                        return inMemoryStore != null ? inMemoryStore.approximateNumEntries() : -1L;
+                        return inMemoryStore != null ? inMemoryStore.numEntries() : -1L;
                     }
             );
         }

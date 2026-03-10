@@ -37,24 +37,24 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldCountApproximateNumEntries() {
+    public void shouldCountNumEntries() {
         final InMemorySessionStore store = new InMemorySessionStore("test", RETENTION_PERIOD, "scope");
         store.init(context, store);
 
-        assertEquals(0L, store.approximateNumEntries());
+        assertEquals(0L, store.numEntries());
 
         store.put(new Windowed<>(Bytes.wrap("a".getBytes()), new SessionWindow(0, 0)), "1".getBytes());
-        assertEquals(1L, store.approximateNumEntries());
+        assertEquals(1L, store.numEntries());
 
         store.put(new Windowed<>(Bytes.wrap("b".getBytes()), new SessionWindow(0, 10)), "2".getBytes());
-        assertEquals(2L, store.approximateNumEntries());
+        assertEquals(2L, store.numEntries());
 
         store.put(new Windowed<>(Bytes.wrap("a".getBytes()), new SessionWindow(5, 15)), "3".getBytes());
-        assertEquals(3L, store.approximateNumEntries());
+        assertEquals(3L, store.numEntries());
 
         // remove one entry
         store.remove(new Windowed<>(Bytes.wrap("a".getBytes()), new SessionWindow(0, 0)));
-        assertEquals(2L, store.approximateNumEntries());
+        assertEquals(2L, store.numEntries());
 
         store.close();
     }

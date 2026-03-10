@@ -381,7 +381,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         open = false;
     }
 
-    long approximateNumEntries() {
+    long numEntries() {
         return endTimeMap.values().stream()
             .flatMap(keyMap -> keyMap.values().stream())
             .mapToLong(Map::size)

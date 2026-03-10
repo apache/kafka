@@ -521,10 +521,10 @@ public class StateStoreMetrics {
     }
 
     public static void addNumKeysGauge(final String taskId,
-                                          final String storeType,
-                                          final String storeName,
-                                          final StreamsMetricsImpl streamsMetrics,
-                                          final Gauge<Long> numKeysGauge) {
+                                       final String storeType,
+                                       final String storeName,
+                                       final StreamsMetricsImpl streamsMetrics,
+                                       final Gauge<Long> numKeysGauge) {
         streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,
