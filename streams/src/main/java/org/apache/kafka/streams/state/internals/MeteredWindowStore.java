@@ -79,7 +79,6 @@ public class MeteredWindowStore<K, V>
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
-
     private InternalProcessorContext<?, ?> internalContext;
     private TaskId taskId;
     private Sensor restoreSensor;
@@ -148,7 +147,7 @@ public class MeteredWindowStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                (config, now) -> numOpenIterators.sum());
+            (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
             (config, now) -> {
                 try {

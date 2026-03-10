@@ -178,6 +178,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         }
     }
 
+    @SuppressWarnings("SynchronizeOnNonFinalField")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,

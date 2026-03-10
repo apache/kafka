@@ -1786,9 +1786,37 @@ public class StreamsConfigTest {
             "Please set group.protocol=classic or remove group.instance.id from the configuration."));
     }
 
+    @Test
     public void shouldSetDefaultDeadLetterQueue() {
         final StreamsConfig config = new StreamsConfig(props);
         assertNull(config.getString(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
+    }
+
+    @Test
+    public void shouldLogWarningWhenProcessingExceptionHandlerIsNotEnabledOnGlobalThread() {
+        try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
+            streamsConfig = new StreamsConfig(props);
+
+            assertEquals(1, streamsConfigLogs.getMessages().size());
+            assertTrue(streamsConfigLogs
+                .getMessages(Level.WARN.name())
+                .get(0)
+                .startsWith("Processing exception handler is not enabled for the GlobalThread.")
+            );
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotLogWarningWhenProcessingExceptionHandlerIsEnabledOnGlobalThread() {
+        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+        try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
+            streamsConfig = new StreamsConfig(props);
+
+            assertEquals(0, streamsConfigLogs.getMessages().size());
+        }
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

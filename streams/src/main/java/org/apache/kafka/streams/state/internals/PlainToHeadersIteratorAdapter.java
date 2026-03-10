@@ -24,8 +24,9 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainT
 /**
  * This class is used to ensure backward compatibility at DSL level between
  * {@link org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders} and
- * {@link org.apache.kafka.streams.state.KeyValueStore}.
+ * plain {@link org.apache.kafka.streams.state.KeyValueStore}.
  *
+ * @see PlainToHeadersStoreAdapter
  */
 
 class PlainToHeadersIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
@@ -52,10 +53,10 @@ class PlainToHeadersIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
 
     @Override
     public KeyValue<K, byte[]> next() {
-        final KeyValue<K, byte[]> timestampedKeyValue = innerIterator.next();
-        if (timestampedKeyValue == null) {
+        final KeyValue<K, byte[]> plainKeyValue = innerIterator.next();
+        if (plainKeyValue == null) {
             return null;
         }
-        return KeyValue.pair(timestampedKeyValue.key, convertFromPlainToHeaderFormat(timestampedKeyValue.value));
+        return KeyValue.pair(plainKeyValue.key, convertFromPlainToHeaderFormat(plainKeyValue.value));
     }
 }

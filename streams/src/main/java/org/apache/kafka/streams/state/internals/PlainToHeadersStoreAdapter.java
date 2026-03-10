@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -35,24 +34,23 @@ import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
- * {@link TimestampedKeyValueStoreWithHeaders} and
- * {@link TimestampedKeyValueStore}.
+ * {@link TimestampedKeyValueStoreWithHeaders} and plain {@link KeyValueStore}.
  * <p>
- * If a user provides a supplier for {@code TimestampedKeyValueStore} (without headers) via
+ * If a user provides a supplier for plain {@code KeyValueStore} (without timestamp or headers) via
  * {@link Materialized#as(KeyValueBytesStoreSupplier)} when building
  * a {@code TimestampedKeyValueStoreWithHeaders}, this adapter is used to translate between
- * the timestamped {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
+ * the plain {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  *
  * @see PlainToHeadersIteratorAdapter
  */
@@ -64,36 +62,16 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
-        this.store = store;
-    }
-
-    /**
-     * Extract raw value from serialized ValueTimestampHeaders.
-     * This strips the headers portion but keeps timestamp and value intact.
-     *
-     * Format conversion:
-     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
-     * Output: [timestamp(8)][value]
-     */
-    static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
+        if (store instanceof TimestampedBytesStore) {
+            throw new IllegalArgumentException("Provided store must be a plain (non-timestamped) key value store, but it is timestamped.");
         }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // Skip headers and time stamp, keep only the value
-        buffer.position(buffer.position() + headersSize + 8);
-
-        final byte[] result = new byte[buffer.remaining()];
-        buffer.get(result);
-        return result;
+        this.store = store;
     }
 
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestampAndHeaders) {
-        store.put(key, rawValue(valueWithTimestampAndHeaders));
+        store.put(key, rawPlainValue(valueWithTimestampAndHeaders));
     }
 
     @Override
@@ -101,14 +79,14 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
                               final byte[] valueWithTimestampAndHeaders) {
         return convertFromPlainToHeaderFormat(store.putIfAbsent(
             key,
-            rawValue(valueWithTimestampAndHeaders)));
+            rawPlainValue(valueWithTimestampAndHeaders)));
     }
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueWithTimestampAndHeaders = entry.value;
-            store.put(entry.key, rawValue(valueWithTimestampAndHeaders));
+            store.put(entry.key, rawPlainValue(valueWithTimestampAndHeaders));
         }
     }
 
@@ -147,11 +125,13 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
         return store.isOpen();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+
         // Handle KeyQuery: convert byte[] result from plain to headers format
         if (query instanceof KeyQuery) {
             final KeyQuery<Bytes, byte[]> keyQuery = (KeyQuery<Bytes, byte[]>) query;
@@ -159,16 +139,12 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
 
             if (rawResult.isSuccess()) {
                 final byte[] convertedValue = convertFromPlainToHeaderFormat(rawResult.getResult());
-                final QueryResult<byte[]> convertedResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedValue);
-                return (QueryResult<R>) convertedResult;
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedValue);
             } else {
-                return (QueryResult<R>) rawResult;
+                result = (QueryResult<R>) rawResult;
             }
-        }
-
-        // Handle RangeQuery: wrap iterator to convert values
-        if (query instanceof RangeQuery) {
+        } else if (query instanceof RangeQuery) {
+            // Handle RangeQuery: wrap iterator to convert values
             final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
             final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
                 store.query(rangeQuery, positionBound, config);
@@ -176,16 +152,22 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
                     new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
-                final QueryResult<KeyValueIterator<Bytes, byte[]>> convertedResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
-                return (QueryResult<R>) convertedResult;
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
-                return (QueryResult<R>) rawResult;
+                result = (QueryResult<R>) rawResult;
             }
+        } else {
+            // For other query types, delegate to the underlying store
+            result = store.query(query, positionBound, config);
         }
 
-        // For other query types, delegate to the underlying store
-        return store.query(query, positionBound, config);
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns"
+            );
+        }
+
+        return result;
     }
 
     @Override

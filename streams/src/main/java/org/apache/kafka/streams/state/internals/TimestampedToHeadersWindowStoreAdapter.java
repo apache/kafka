@@ -65,7 +65,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
         if (!(store instanceof TimestampedBytesStore)) {
-            throw new IllegalArgumentException("yyProvided store must be a timestamped store, but it is not.");
+            throw new IllegalArgumentException("Provided store must be a timestamped store, but it is not.");
         }
         this.store = store;
     }
@@ -209,6 +209,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     }
 
     @SuppressWarnings("unchecked")
+    @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
@@ -250,6 +251,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
                 "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns"
             );
         }
+
         return result;
     }
 
