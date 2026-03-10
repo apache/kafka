@@ -277,6 +277,47 @@ class OffsetFetcherUtils {
                     log.trace("Updating high watermark for partition {} to {}", partition, offset);
                     subscriptionState.updateHighWatermark(partition, offset);
                 }
+            } else {
+                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                    log.warn("Not updating last stable offset for partition {} as it is no longer assigned", partition);
+                } else {
+                    log.warn("Not updating high watermark for partition {} as it is no longer assigned", partition);
+                }
+            }
+        }
+    }
+
+    /**
+     * The {@code LIST_OFFSETS} lag lookup is serialized, so if there's an inflight request it must finish before
+     * another request can be issued. This serialization mechanism is controlled by the 'end offset requested'
+     * flag in {@link SubscriptionState}.
+     *
+     * @return {@code true} if the partition's end offset can be requested, {@code false} if there's already an
+     *         in-flight request
+     */
+    boolean maybeSetPartitionEndOffsetRequest(TopicPartition partition) {
+        if (subscriptionState.partitionEndOffsetRequested(partition)) {
+            log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", partition);
+            return false;
+        } else {
+            log.info("Requesting the log end offset for {} in order to compute lag", partition);
+            subscriptionState.requestPartitionEndOffset(partition);
+            return true;
+        }
+    }
+
+    /**
+     * If any of the given partitions are assigned, this will clear the partition's 'end offset requested' flag so
+     * that the next attempt to look up the lag will properly issue another <code>LIST_OFFSETS</code> request. This
+     * is only intended to be called when <code>LIST_OFFSETS</code> fails. Successful <code>LIST_OFFSETS</code> calls
+     * should use {@link #updateSubscriptionState(Map, IsolationLevel)}.
+     *
+     * @param partitions Partitions for which the 'end offset requested' flag should be cleared (if still assigned)
+     */
+    void clearPartitionEndOffsetRequests(Collection<TopicPartition> partitions) {
+        for (final TopicPartition partition : partitions) {
+            if (subscriptionState.maybeClearPartitionEndOffsetRequested(partition)) {
+                log.trace("Clearing end offset requested for partition {}", partition);
             }
         }
     }

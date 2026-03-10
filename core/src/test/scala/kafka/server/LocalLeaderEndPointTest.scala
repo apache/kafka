@@ -427,10 +427,10 @@ class LocalLeaderEndPointTest extends Logging {
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: scala.collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: JMap[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
-      assertTrue(response.isDefined)
-      result.fire(response.get)
+      assertNotNull(response)
+      result.fire(response)
     }
 
     replicaManager.appendRecords(

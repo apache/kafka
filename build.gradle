@@ -39,7 +39,7 @@ plugins {
 
   id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '8.3.9' apply false
+  id 'com.gradleup.shadow' version '9.3.1' apply false
   id 'com.diffplug.spotless' version "8.0.0"
 }
 
@@ -1847,12 +1847,9 @@ project(':generator') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonJakartarsJsonProvider
-
-    implementation 'org.eclipse.jgit:org.eclipse.jgit:7.2.0.202503040940-r'
-    // SSH support for JGit based on Apache MINA sshd
-    implementation 'org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.2.0.202503040940-r'
-    // GPG support for JGit based on BouncyCastle (commit signing)
-    implementation 'org.eclipse.jgit:org.eclipse.jgit.gpg.bc:7.2.0.202503040940-r'
+    implementation libs.jgit
+    implementation libs.jgitSshApache
+    implementation libs.jgitGpgBc
 
     testImplementation libs.junitJupiter
 
