@@ -1,0 +1,15 @@
+##### Labeler ##########################################################################################################
+# Enable "labeler" for your PR that would add labels to PRs based on the paths that are modified in the PR.
+labelPRBasedOnFilePath:
+  # Add 'label1' to any changes within 'example' folder or any subfolders
+  build:
+    - .github/**
+    - gradle/**
+    - *gradlew*
+    - build.gradle
+    - settings.gradle
+  
+  kraft:
+    - metadata/**
+    - raft/**
+
