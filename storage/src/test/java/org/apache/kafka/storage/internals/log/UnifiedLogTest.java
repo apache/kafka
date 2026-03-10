@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import kafka.server.KafkaConfig;
+import org.apache.kafka.common.config.AbstractConfig;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.Uuid;
@@ -39,6 +39,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
@@ -84,6 +85,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
+import java.util.Random;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
@@ -1946,41 +1948,41 @@ public class UnifiedLogTest {
     
     @Test
     public void testReadWithMinMessage() throws IOException {
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(72)
                 .build();
         log = createLog(logDir, logConfig);
-        var messageIds = IntStream.concat(
+        int[] messageIds = IntStream.concat(
                 IntStream.range(0, 50),
                 IntStream.iterate(50, i -> i < 200, i -> i + 7)
         ).toArray();
-        var records = Arrays.stream(messageIds)
+        SimpleRecord[] records = Arrays.stream(messageIds)
                 .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
                 .toArray(SimpleRecord[]::new);
 
         // now test the case that we give the offsets and use non-sequential offsets
-        for (var i = 0; i < records.length; i++) {
+        for (int i = 0; i < records.length; i++) {
             log.appendAsFollower(
                     MemoryRecords.withRecords(messageIds[i], Compression.NONE, 0, records[i]),
                     Integer.MAX_VALUE
             );
         }
 
-        var maxMessageId = Arrays.stream(messageIds).max().getAsInt();
-        for (var i = 50; i < maxMessageId; i++) {
-            var offset = i;
-            var idx = IntStream.range(0, messageIds.length)
+        int maxMessageId = Arrays.stream(messageIds).max().getAsInt();
+        for (int i = 50; i < maxMessageId; i++) {
+            int offset = i;
+            int idx = IntStream.range(0, messageIds.length)
                     .filter(j -> messageIds[j] >= offset)
                     .findFirst()
                     .getAsInt();
 
-            var fetchResults = List.of(
+            List<FetchDataInfo> fetchResults = List.of(
                     log.read(i, 1, FetchIsolation.LOG_END, true),
                     log.read(i, 100000, FetchIsolation.LOG_END, true),
                     log.read(i, 100, FetchIsolation.LOG_END, true)
             );
-            for (var fetchDataInfo : fetchResults) {
-                var read = fetchDataInfo.records.records().iterator().next();
+            for (FetchDataInfo fetchDataInfo : fetchResults) {
+                Record read = fetchDataInfo.records.records().iterator().next();
                 assertEquals(messageIds[idx], read.offset(), "Offset read should match message id.");
                 assertEquals(records[idx], new SimpleRecord(read), "Message should match appended.");
             }
@@ -1989,28 +1991,28 @@ public class UnifiedLogTest {
 
     @Test
     public void testReadWithTooSmallMaxLength() throws IOException {
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(72)
                 .build();
         log = createLog(logDir, logConfig);
-        var messageIds = IntStream.concat(
+        int[] messageIds = IntStream.concat(
                 IntStream.range(0, 50),
                 IntStream.iterate(50, i -> i < 200, i -> i + 7)
         ).toArray();
-        var records = Arrays.stream(messageIds)
+        SimpleRecord[] records = Arrays.stream(messageIds)
                 .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
                 .toArray(SimpleRecord[]::new);
 
         // now test the case that we give the offsets and use non-sequential offsets
-        for (var i = 0; i < records.length; i++) {
+        for (int i = 0; i < records.length; i++) {
             log.appendAsFollower(
                     MemoryRecords.withRecords(messageIds[i], Compression.NONE, 0, records[i]),
                     Integer.MAX_VALUE
             );
         }
 
-        var maxMessageId = Arrays.stream(messageIds).max().getAsInt();
-        for (var i = 50; i < maxMessageId; i++) {
+        int maxMessageId = Arrays.stream(messageIds).max().getAsInt();
+        for (int i = 50; i < maxMessageId; i++) {
             assertEquals(MemoryRecords.EMPTY, log.read(i, 0, FetchIsolation.LOG_END, false).records);
 
             // we return an incomplete message instead of an empty one for the case below
@@ -2018,7 +2020,7 @@ public class UnifiedLogTest {
             // larger than the fetch size
             // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
             // partition
-            var fetchInfo = log.read(i, 1, FetchIsolation.LOG_END, false);
+            FetchDataInfo fetchInfo = log.read(i, 1, FetchIsolation.LOG_END, false);
             assertTrue(fetchInfo.firstEntryIncomplete);
             assertInstanceOf(FileRecords.class, fetchInfo.records);
             assertEquals(1, fetchInfo.records.sizeInBytes());
@@ -2038,7 +2040,7 @@ public class UnifiedLogTest {
         Files.createFile(LogFileUtils.offsetIndexFile(logDir, 1024).toPath());
 
         // set up replica log starting with offset 1024 and with one message (at offset 1024)
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(1024)
                 .build();
         log = createLog(logDir, logConfig);
@@ -2057,7 +2059,7 @@ public class UnifiedLogTest {
     @Test
     public void testFlushingEmptyActiveSegments() throws IOException {
         log = createLog(logDir, new LogConfig(new Properties()));
-        var message = MemoryRecords.withRecords(
+        MemoryRecords message = MemoryRecords.withRecords(
                 Compression.NONE,
                 new SimpleRecord(mockTime.milliseconds(), null, "Test".getBytes())
         );
@@ -2079,36 +2081,36 @@ public class UnifiedLogTest {
     @Test
     public void testLogRolls() throws IOException, InterruptedException {
         // create a multipart log with 100 messages
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(100)
                 .build();
         log = createLog(logDir, logConfig);
-        var numMessages = 100;
-        var messageSets = IntStream.range(0, numMessages)
+        int numMessages = 100;
+        MemoryRecords[] messageSets = IntStream.range(0, numMessages)
                 .mapToObj(i -> MemoryRecords.withRecords(
                         Compression.NONE,
                         new SimpleRecord(mockTime.milliseconds(), null, String.valueOf(i).getBytes()))
                 ).toArray(MemoryRecords[]::new);
-        for (var messageSet : messageSets) {
+        for (MemoryRecords messageSet : messageSets) {
             log.appendAsLeader(messageSet, 0);
         }
         log.flush(false);
 
         // do successive reads to ensure all our messages are there
-        var offset = 0L;
-        for (var i = 0; i < numMessages; i++) {
-            var batches = log.read(offset, 1024 * 1024, FetchIsolation.LOG_END, true).records.batches();
-            var head = batches.iterator().next();
+        long offset = 0L;
+        for (int i = 0; i < numMessages; i++) {
+            Iterable<? extends RecordBatch> batches = log.read(offset, 1024 * 1024, FetchIsolation.LOG_END, true).records.batches();
+            RecordBatch head = batches.iterator().next();
             assertEquals(offset, head.lastOffset(), "Offsets not equal");
 
-            var expected = messageSets[i].records().iterator().next();
-            var actual = head.iterator().next();
+            Record expected = messageSets[i].records().iterator().next();
+            Record actual = head.iterator().next();
             assertEquals(expected.key(), actual.key(), "Keys not equal at offset " + offset);
             assertEquals(expected.value(), actual.value(), "Values not equal at offset " + offset);
             assertEquals(expected.timestamp(), actual.timestamp(), "Timestamps not equal at offset " + offset);
             offset = head.lastOffset() + 1;
         }
-        var lastRead = log.read(numMessages, 1024 * 1024, FetchIsolation.LOG_END, true).records;
+        Records lastRead = log.read(numMessages, 1024 * 1024, FetchIsolation.LOG_END, true).records;
         assertFalse(lastRead.records().iterator().hasNext(), "Should be no more messages");
 
         // check that rolling the log forced a flush, the flush is async so retry in case of failure
@@ -2123,7 +2125,7 @@ public class UnifiedLogTest {
     @Test
     public void testCompressedMessages() throws IOException {
         // this log should roll after every message set
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(110)
                 .build();
         log = createLog(logDir, logConfig);
@@ -2153,17 +2155,17 @@ public class UnifiedLogTest {
         for (int messagesToAppend : List.of(0, 1, 25)) {
             logDir.mkdirs();
             // first test a log segment starting at 0
-            var logConfig = new LogTestUtils.LogConfigBuilder()
+            LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                     .segmentBytes(100)
                     .retentionMs(0)
                     .build();
-            var testLog = createLog(logDir, logConfig);
+            UnifiedLog testLog = createLog(logDir, logConfig);
             for (int i = 0; i < messagesToAppend; i++) {
                 testLog.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
                         new SimpleRecord(mockTime.milliseconds() - 10, null, String.valueOf(i).getBytes())), 0);
             }
 
-            var currOffset = testLog.logEndOffset();
+            long currOffset = testLog.logEndOffset();
             assertEquals(currOffset, messagesToAppend);
 
             // time goes by; the log file is deleted
@@ -2191,11 +2193,11 @@ public class UnifiedLogTest {
      */
     @Test
     public void testMessageSetSizeCheck() throws IOException {
-        var messageSet = MemoryRecords.withRecords(Compression.NONE,
+        MemoryRecords messageSet = MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
         // append messages to log
-        var configSegmentSize = messageSet.sizeInBytes() - 1;
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        int configSegmentSize = messageSet.sizeInBytes() - 1;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(configSegmentSize)
                 .build();
         log = createLog(logDir, logConfig);
@@ -2205,25 +2207,25 @@ public class UnifiedLogTest {
 
     @Test
     public void testCompactedTopicConstraints() throws IOException {
-        var keyedMessage = new SimpleRecord("and here it is".getBytes(), "this message has a key".getBytes());
-        var anotherKeyedMessage = new SimpleRecord("another key".getBytes(), "this message also has a key".getBytes());
-        var unkeyedMessage = new SimpleRecord("this message does not have a key".getBytes());
+        SimpleRecord keyedMessage = new SimpleRecord("and here it is".getBytes(), "this message has a key".getBytes());
+        SimpleRecord anotherKeyedMessage = new SimpleRecord("another key".getBytes(), "this message also has a key".getBytes());
+        SimpleRecord unkeyedMessage = new SimpleRecord("this message does not have a key".getBytes());
 
-        var messageSetWithUnkeyedMessage = MemoryRecords.withRecords(Compression.NONE, unkeyedMessage, keyedMessage);
-        var messageSetWithOneUnkeyedMessage = MemoryRecords.withRecords(Compression.NONE, unkeyedMessage);
-        var messageSetWithCompressedKeyedMessage = MemoryRecords.withRecords(Compression.gzip().build(), keyedMessage);
-        var messageSetWithCompressedUnkeyedMessage = MemoryRecords.withRecords(Compression.gzip().build(), keyedMessage, unkeyedMessage);
-        var messageSetWithKeyedMessage = MemoryRecords.withRecords(Compression.NONE, keyedMessage);
-        var messageSetWithKeyedMessages = MemoryRecords.withRecords(Compression.NONE, keyedMessage, anotherKeyedMessage);
+        MemoryRecords messageSetWithUnkeyedMessage = MemoryRecords.withRecords(Compression.NONE, unkeyedMessage, keyedMessage);
+        MemoryRecords messageSetWithOneUnkeyedMessage = MemoryRecords.withRecords(Compression.NONE, unkeyedMessage);
+        MemoryRecords messageSetWithCompressedKeyedMessage = MemoryRecords.withRecords(Compression.gzip().build(), keyedMessage);
+        MemoryRecords messageSetWithCompressedUnkeyedMessage = MemoryRecords.withRecords(Compression.gzip().build(), keyedMessage, unkeyedMessage);
+        MemoryRecords messageSetWithKeyedMessage = MemoryRecords.withRecords(Compression.NONE, keyedMessage);
+        MemoryRecords messageSetWithKeyedMessages = MemoryRecords.withRecords(Compression.NONE, keyedMessage, anotherKeyedMessage);
 
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .cleanupPolicy(TopicConfig.CLEANUP_POLICY_COMPACT)
                 .build();
         log = createLog(logDir, logConfig);
 
-        var errorMsgPrefix = "Compacted topic cannot accept message without key";
+        String errorMsgPrefix = "Compacted topic cannot accept message without key";
 
-        var e = assertThrows(RecordValidationException.class,
+        RecordValidationException e = assertThrows(RecordValidationException.class,
                 () -> log.appendAsLeader(messageSetWithUnkeyedMessage, 0));
         assertInstanceOf(InvalidRecordException.class, e.invalidException());
         assertEquals(1, e.recordErrors().size());
@@ -2262,15 +2264,15 @@ public class UnifiedLogTest {
      */
     @Test
     public void testMessageSizeCheck() throws IOException {
-        var first = MemoryRecords.withRecords(Compression.NONE,
+        MemoryRecords first = MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
-        var second = MemoryRecords.withRecords(Compression.NONE,
+        MemoryRecords second = MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes()),
                 new SimpleRecord("More padding boo hoo".getBytes()));
 
         // append messages to log
-        var maxMessageSize = second.sizeInBytes() - 1;
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        int maxMessageSize = second.sizeInBytes() - 1;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .maxMessageBytes(maxMessageSize)
                 .build();
         log = createLog(logDir, logConfig);
@@ -2287,9 +2289,9 @@ public class UnifiedLogTest {
 
     @Test
     public void testMessageSizeCheckInAppendAsFollower() throws IOException {
-        var first = MemoryRecords.withRecords(0, Compression.NONE, 0,
+        MemoryRecords first = MemoryRecords.withRecords(0, Compression.NONE, 0,
                 new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
-        var second = MemoryRecords.withRecords(5, Compression.NONE, 0,
+        MemoryRecords second = MemoryRecords.withRecords(5, Compression.NONE, 0,
                 new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes()),
                 new SimpleRecord("More padding boo hoo".getBytes()));
 
@@ -2306,7 +2308,7 @@ public class UnifiedLogTest {
     @ArgumentsSource(InvalidMemoryRecordsProvider.class)
     public void testInvalidMemoryRecords(MemoryRecords records, Optional<Class<Exception>> expectedException) throws IOException {
         log = createLog(logDir, new LogConfig(new Properties()));
-        var previousEndOffset = log.logEndOffsetMetadata().messageOffset;
+        long previousEndOffset = log.logEndOffsetMetadata().messageOffset;
 
         if (expectedException.isPresent()) {
             assertThrows(expectedException.get(), () -> log.appendAsFollower(records, Integer.MAX_VALUE));
@@ -2319,23 +2321,23 @@ public class UnifiedLogTest {
 
     @Test
     public void testRandomRecords() throws IOException {
-        var random = new java.util.Random();
+        Random random = new Random();
         for (int i = 0; i < 100; i++) {
-            var size = random.nextInt(128) + 1;
-            var bytes = new byte[size];
+            int size = random.nextInt(128) + 1;
+            byte[] bytes = new byte[size];
             random.nextBytes(bytes);
-            var records = MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
+            MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
 
-            var tempDir = TestUtils.tempDirectory();
-            var randomLogDir = TestUtils.randomPartitionLogDir(tempDir);
-            var testLog = createLog(randomLogDir, new LogConfig(new Properties()));
+            File tempDir = TestUtils.tempDirectory();
+            File randomLogDir = TestUtils.randomPartitionLogDir(tempDir);
+            UnifiedLog testLog = createLog(randomLogDir, new LogConfig(new Properties()));
             try {
-                var previousEndOffset = testLog.logEndOffsetMetadata().messageOffset;
+                long previousEndOffset = testLog.logEndOffsetMetadata().messageOffset;
 
                 // Depending on the corruption, unified log sometimes throws and sometimes returns an
                 // empty set of batches
                 assertThrows(CorruptRecordException.class, () -> {
-                    var info = testLog.appendAsFollower(records, Integer.MAX_VALUE);
+                    LogAppendInfo info = testLog.appendAsFollower(records, Integer.MAX_VALUE);
                     if (info.firstOffset() == UnifiedLog.UNKNOWN_OFFSET) {
                         throw new CorruptRecordException("Unknown offset is test");
                     }
@@ -2353,26 +2355,26 @@ public class UnifiedLogTest {
     @Test
     public void testInvalidLeaderEpoch() throws IOException {
         log = createLog(logDir, new LogConfig(new Properties()));
-        var previousEndOffset = log.logEndOffsetMetadata().messageOffset;
-        var epoch = log.latestEpoch().orElse(0) + 1;
-        var numberOfRecords = 10;
+        long previousEndOffset = log.logEndOffsetMetadata().messageOffset;
+        int epoch = log.latestEpoch().orElse(0) + 1;
+        int numberOfRecords = 10;
 
-        var recordsForBatch = IntStream.range(0, numberOfRecords)
+        SimpleRecord[] recordsForBatch = IntStream.range(0, numberOfRecords)
                 .mapToObj(n -> new SimpleRecord(String.valueOf(n).getBytes()))
                 .toArray(SimpleRecord[]::new);
 
-        var batchWithValidEpoch = MemoryRecords.withRecords(
+        MemoryRecords batchWithValidEpoch = MemoryRecords.withRecords(
                 previousEndOffset, Compression.NONE, epoch, recordsForBatch);
 
-        var batchWithInvalidEpoch = MemoryRecords.withRecords(
+        MemoryRecords batchWithInvalidEpoch = MemoryRecords.withRecords(
                 previousEndOffset + numberOfRecords, Compression.NONE, epoch + 1, recordsForBatch);
 
-        var buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
         buffer.put(batchWithValidEpoch.buffer());
         buffer.put(batchWithInvalidEpoch.buffer());
         buffer.flip();
 
-        var combinedRecords = MemoryRecords.readableRecords(buffer);
+        MemoryRecords combinedRecords = MemoryRecords.readableRecords(buffer);
         log.appendAsFollower(combinedRecords, epoch);
 
         // Check that only the first batch was appended
@@ -2384,9 +2386,9 @@ public class UnifiedLogTest {
     @Test
     public void testLogFlushesPartitionMetadataOnAppend() throws IOException {
         log = createLog(logDir, new LogConfig(new Properties()));
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("simpleValue".getBytes()));
+        MemoryRecords record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("simpleValue".getBytes()));
 
-        var topicId = Uuid.randomUuid();
+        Uuid topicId = Uuid.randomUuid();
         log.partitionMetadataFile().get().record(topicId);
 
         // Should trigger a synchronous flush
@@ -2397,9 +2399,9 @@ public class UnifiedLogTest {
 
     @Test
     public void testLogFlushesPartitionMetadataOnClose() throws IOException {
-        var logConfig = new LogConfig(new Properties());
-        var firstLog = createLog(logDir, logConfig);
-        var topicId = Uuid.randomUuid();
+        LogConfig logConfig = new LogConfig(new Properties());
+        UnifiedLog firstLog = createLog(logDir, logConfig);
+        Uuid topicId = Uuid.randomUuid();
         firstLog.partitionMetadataFile().get().record(topicId);
 
         // Should trigger a synchronous flush
@@ -2413,9 +2415,9 @@ public class UnifiedLogTest {
 
     @Test
     public void testLogRecoversTopicId() throws IOException {
-        var logConfig = new LogConfig(new Properties());
-        var firstLog = createLog(logDir, logConfig);
-        var topicId = Uuid.randomUuid();
+        LogConfig logConfig = new LogConfig(new Properties());
+        UnifiedLog firstLog = createLog(logDir, logConfig);
+        Uuid topicId = Uuid.randomUuid();
         firstLog.assignTopicId(topicId);
         firstLog.close();
 
@@ -2427,9 +2429,9 @@ public class UnifiedLogTest {
 
     @Test
     public void testLogFailsWhenInconsistentTopicIdSet() throws IOException {
-        var logConfig = new LogConfig(new Properties());
-        var firstLog = createLog(logDir, logConfig);
-        var topicId = Uuid.randomUuid();
+        LogConfig logConfig = new LogConfig(new Properties());
+        UnifiedLog firstLog = createLog(logDir, logConfig);
+        Uuid topicId = Uuid.randomUuid();
         firstLog.assignTopicId(topicId);
         firstLog.close();
 
@@ -2444,8 +2446,8 @@ public class UnifiedLogTest {
      */
     @Test
     public void testBuildTimeIndexWhenNotAssigningOffsets() throws IOException {
-        var numMessages = 100;
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        int numMessages = 100;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(10000)
                 .indexIntervalBytes(1)
                 .build();
@@ -2458,7 +2460,7 @@ public class UnifiedLogTest {
                     Integer.MAX_VALUE);
         }
 
-        var timeIndexEntries = log.logSegments().stream()
+        int timeIndexEntries = log.logSegments().stream()
                 .mapToInt(segment -> {
                     try {
                         return segment.timeIndex().entries();
@@ -2475,7 +2477,7 @@ public class UnifiedLogTest {
 
     @Test
     public void testFetchOffsetByTimestampIncludesLeaderEpoch() throws IOException {
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
                 .indexIntervalBytes(1)
                 .build();
@@ -2484,12 +2486,12 @@ public class UnifiedLogTest {
         assertEquals(new OffsetResultHolder(Optional.empty()),
                 log.fetchOffsetByTimestamp(0L, Optional.empty()));
 
-        var firstTimestamp = mockTime.milliseconds();
-        var firstLeaderEpoch = 0;
+        long firstTimestamp = mockTime.milliseconds();
+        int firstLeaderEpoch = 0;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), firstLeaderEpoch);
 
-        var secondTimestamp = firstTimestamp + 1;
-        var secondLeaderEpoch = 1;
+        long secondTimestamp = firstTimestamp + 1;
+        int secondLeaderEpoch = 1;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), secondLeaderEpoch);
 
         assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))),
@@ -2514,7 +2516,7 @@ public class UnifiedLogTest {
 
     @Test
     public void testFetchOffsetByTimestampWithMaxTimestampIncludesTimestamp() throws IOException {
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
                 .indexIntervalBytes(1)
                 .build();
@@ -2523,11 +2525,11 @@ public class UnifiedLogTest {
         assertEquals(new OffsetResultHolder(Optional.empty()),
                 log.fetchOffsetByTimestamp(0L, Optional.empty()));
 
-        var firstTimestamp = mockTime.milliseconds();
-        var leaderEpoch = 0;
+        long firstTimestamp = mockTime.milliseconds();
+        int leaderEpoch = 0;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), leaderEpoch);
 
-        var secondTimestamp = firstTimestamp + 1;
+        long secondTimestamp = firstTimestamp + 1;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), leaderEpoch);
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), leaderEpoch);
 
@@ -2537,9 +2539,8 @@ public class UnifiedLogTest {
 
     @Test
     public void testFetchOffsetByTimestampFromRemoteStorage() throws Exception {
-        var config = createKafkaConfigWithRLM();
-        var purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", config.brokerId());
-        var remoteLogManager = spy(new RemoteLogManager(config.remoteLogManagerConfig(),
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
+        RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
                 0,
                 logDir.getAbsolutePath(),
                 "clusterId",
@@ -2551,7 +2552,7 @@ public class UnifiedLogTest {
                 Optional.empty()));
         remoteLogManager.setDelayedOperationPurgatory(purgatory);
 
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
                 .indexIntervalBytes(1)
                 .remoteLogStorageEnable(true)
@@ -2562,12 +2563,12 @@ public class UnifiedLogTest {
         assertEquals(new OffsetResultHolder(Optional.empty()),
                 log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)));
 
-        var firstTimestamp = mockTime.milliseconds();
-        var firstLeaderEpoch = 0;
+        long firstTimestamp = mockTime.milliseconds();
+        int firstLeaderEpoch = 0;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), firstLeaderEpoch);
 
-        var secondTimestamp = firstTimestamp + 1;
-        var secondLeaderEpoch = 1;
+        long secondTimestamp = firstTimestamp + 1;
+        int secondLeaderEpoch = 1;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), secondLeaderEpoch);
 
         doAnswer(ans -> {
@@ -2597,7 +2598,7 @@ public class UnifiedLogTest {
 
     @Test
     public void testFetchLatestTieredTimestampNoRemoteStorage() throws IOException {
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
                 .indexIntervalBytes(1)
                 .build();
@@ -2606,8 +2607,8 @@ public class UnifiedLogTest {
         assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
                 log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Optional.empty()));
 
-        var firstTimestamp = mockTime.milliseconds();
-        var leaderEpoch = 0;
+        long firstTimestamp = mockTime.milliseconds();
+        int leaderEpoch = 0;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), leaderEpoch);
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp + 1), leaderEpoch);
 
@@ -2617,9 +2618,8 @@ public class UnifiedLogTest {
 
     @Test
     public void testFetchLatestTieredTimestampWithRemoteStorage() throws Exception {
-        var config = createKafkaConfigWithRLM();
-        var purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", config.brokerId());
-        var remoteLogManager = spy(new RemoteLogManager(config.remoteLogManagerConfig(),
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
+        RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
                 0,
                 logDir.getAbsolutePath(),
                 "clusterId",
@@ -2631,7 +2631,7 @@ public class UnifiedLogTest {
                 Optional.empty()));
         remoteLogManager.setDelayedOperationPurgatory(purgatory);
 
-        var logConfig = new LogTestUtils.LogConfigBuilder()
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
                 .indexIntervalBytes(1)
                 .remoteLogStorageEnable(true)
@@ -2644,12 +2644,12 @@ public class UnifiedLogTest {
         assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty())),
                 log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)));
 
-        var firstTimestamp = mockTime.milliseconds();
-        var firstLeaderEpoch = 0;
+        long firstTimestamp = mockTime.milliseconds();
+        int firstLeaderEpoch = 0;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), firstLeaderEpoch);
 
-        var secondTimestamp = firstTimestamp + 1;
-        var secondLeaderEpoch = 1;
+        long secondTimestamp = firstTimestamp + 1;
+        int secondLeaderEpoch = 1;
         log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), secondLeaderEpoch);
 
         doAnswer(ans -> {
@@ -2692,19 +2692,13 @@ public class UnifiedLogTest {
         assertEquals(expected, offsetResultHolder.futureHolderOpt().get().taskFuture().get().timestampAndOffset().orElse(null));
     }
 
-    private KafkaConfig createKafkaConfigWithRLM() {
+    private RemoteLogManagerConfig createRemoteLogManagerConfig() {
         Properties props = new Properties();
-        props.setProperty("process.roles", "controller");
-        props.setProperty("node.id", "0");
-        props.setProperty("controller.listener.names", "CONTROLLER");
-        props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093");
-        props.setProperty("listeners", "CONTROLLER://:9093");
-        props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093");
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "2");
-        return KafkaConfig.fromProps(props);
+        return new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), props));
     }
 
     private long meterCount(String metricName) {
