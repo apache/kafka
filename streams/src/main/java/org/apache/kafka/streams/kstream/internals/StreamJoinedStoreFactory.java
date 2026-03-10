@@ -82,6 +82,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
 
     @Override
     public StoreBuilder<?> builder() {
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = storeSupplier == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         this.name,
@@ -90,7 +91,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                         true,
                         EmitStrategy.onWindowUpdate(),
                         false,
-                        DslStoreFormat.PLAIN
+                        storeFormat
                 ))
                 : storeSupplier;
 
