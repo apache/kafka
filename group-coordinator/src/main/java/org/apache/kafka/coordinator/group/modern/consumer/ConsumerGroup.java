@@ -63,6 +63,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -156,10 +157,16 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
 
+    /**
+     * The supplier for the metadata image, used to resolve topic names to IDs.
+     */
+    private final Supplier<CoordinatorMetadataImage> metadataImageSupplier;
+
     public ConsumerGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
-        String groupId
+        String groupId,
+        Supplier<CoordinatorMetadataImage> metadataImageSupplier
     ) {
         super(snapshotRegistry, groupId);
         this.log = logContext.logger(ConsumerGroup.class);
@@ -172,6 +179,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
+        this.metadataImageSupplier = metadataImageSupplier;
     }
 
     /**
@@ -867,10 +875,19 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         int receivedMemberEpoch
     ) {
         return (topicName, topicId, partitionId) -> {
+            // Resolve topic ID if it's ZERO_UUID (for older API versions without topic ID).
+            Uuid resolvedTopicId = topicId;
+            if (topicId.equals(Uuid.ZERO_UUID) && metadataImageSupplier != null) {
+                resolvedTopicId = metadataImageSupplier.get()
+                    .topicMetadata(topicName)
+                    .map(CoordinatorMetadataImage.TopicMetadata::id)
+                    .orElse(Uuid.ZERO_UUID);
+            }
+
             // Search for the partition in the assigned partitions, then in partitions pending revocation.
-            Integer assignmentEpoch = member.assignmentEpoch(topicId, partitionId);
+            Integer assignmentEpoch = member.assignmentEpoch(resolvedTopicId, partitionId);
             if (assignmentEpoch == null) {
-                assignmentEpoch = member.pendingRevocationEpoch(topicId, partitionId);
+                assignmentEpoch = member.pendingRevocationEpoch(resolvedTopicId, partitionId);
             }
 
             if (assignmentEpoch == null) {
@@ -1187,11 +1204,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Create a new consumer group according to the given classic group.
      *
-     * @param logContext        The log context.
-     * @param snapshotRegistry  The SnapshotRegistry.
-     * @param classicGroup      The converted classic group.
-     * @param topicHashCache    The cache for topic hashes.
-     * @param metadataImage     The current metadata image for the Kafka cluster.
+     * @param logContext              The log context.
+     * @param snapshotRegistry        The SnapshotRegistry.
+     * @param classicGroup            The converted classic group.
+     * @param topicHashCache          The cache for topic hashes.
+     * @param metadataImage           The current metadata image for the Kafka cluster.
+     * @param metadataImageSupplier   The supplier for the metadata image.
      * @return  The created ConsumerGroup.
      *
      * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
@@ -1202,10 +1220,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         SnapshotRegistry snapshotRegistry,
         ClassicGroup classicGroup,
         Map<String, Long> topicHashCache,
-        CoordinatorMetadataImage metadataImage
+        CoordinatorMetadataImage metadataImage,
+        Supplier<CoordinatorMetadataImage> metadataImageSupplier
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+        ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, metadataImageSupplier);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 

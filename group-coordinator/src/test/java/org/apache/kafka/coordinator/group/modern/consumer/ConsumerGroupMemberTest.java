@@ -446,7 +446,6 @@ public class ConsumerGroupMemberTest {
         assertNull(member.pendingRevocationEpoch(unassignedTopicId, 0));
     }
 
-
     private List<ConsumerGroupMemberMetadataValue.ClassicProtocol> toClassicProtocolCollection(String name) {
         List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
         protocols.add(
