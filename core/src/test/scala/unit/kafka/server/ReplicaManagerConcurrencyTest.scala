@@ -296,10 +296,14 @@ class ReplicaManagerConcurrencyTest extends Logging {
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
       val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
 
-      def produceCallback(results: collection.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
+      def produceCallback(results: util.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {
           assertEquals(1, results.size)
-          val (topicPartition, result) = results.head
+
+          val entry = results.entrySet().iterator().next()
+          val topicPartition = entry.getKey
+          val result = entry.getValue
+
           assertEquals(topicIdPartition, topicPartition)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)

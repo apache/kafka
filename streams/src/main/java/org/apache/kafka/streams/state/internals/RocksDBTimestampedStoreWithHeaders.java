@@ -90,6 +90,27 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         }
     }
 
+    @SuppressWarnings("SynchronizeOnNonFinalField")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+
+        synchronized (position) {
+            result = QueryResult.forUnknownQueryType(query, this);
+
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + this.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                );
+            }
+            result.setPosition(position.copy());
+        }
+        return result;
+    }
+
     private void openInUpgradeMode(final DBOptions dbOptions,
                                    final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
@@ -150,13 +171,6 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     "Please first upgrade to RocksDBTimestampedStore, then upgrade to RocksDBTimestampedStoreWithHeaders.");
             }
         }
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped key-value stores with headers yet.");
     }
 
 }
