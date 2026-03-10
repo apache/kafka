@@ -65,15 +65,8 @@ public class BuiltInDslStoreSuppliers {
                         withHeaders);
             }
 
-            if (storeFormat == null || storeFormat == DslStoreFormat.TIMESTAMPED) {
-                return Stores.persistentTimestampedWindowStore(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates());
-            }
-
-            switch (storeFormat) {
+            final DslStoreFormat format = (storeFormat == null) ? DslStoreFormat.TIMESTAMPED : storeFormat;
+            switch (format) {
                 case HEADERS:
                     return Stores.persistentTimestampedWindowStoreWithHeaders(
                         params.name(),
@@ -81,6 +74,12 @@ public class BuiltInDslStoreSuppliers {
                         params.windowSize(),
                         params.retainDuplicates()
                     );
+                case TIMESTAMPED:
+                    return Stores.persistentTimestampedWindowStore(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
                 case PLAIN:
                     return Stores.persistentWindowStore(
                         params.name(),
@@ -88,7 +87,7 @@ public class BuiltInDslStoreSuppliers {
                         params.windowSize(),
                         params.retainDuplicates());
                 default:
-                    throw new IllegalStateException("Unsupported DslStoreFormat: " + storeFormat +
+                    throw new IllegalStateException("Unsupported DslStoreFormat: " + format +
                         ". Expected one of: HEADERS, TIMESTAMPED, or PLAIN");
             }
         }
