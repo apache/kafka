@@ -84,7 +84,7 @@ This release marks the General Availability for the core functionality detailed 
 For more information about the feature set, design, usage and migration, 
 please refer to the [developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol).
 
-**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. Users planning to migrate should upgrade their brokers to a later release that includes the fix.
+**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. Users planning to migrate a classic group to the new protocol should wait for a future release that includes the fix.
 
 ### Other changes
 
