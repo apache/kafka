@@ -244,12 +244,6 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             forward);
     }
 
-
-    @Override
-    public void remove(final Bytes key, final long timestamp) {
-        throw new UnsupportedOperationException("Not supported operation");
-    }
-
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {

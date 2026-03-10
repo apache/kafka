@@ -62,7 +62,7 @@ LABEL ducker.creator=$ducker_creator
 # Update Linux and install necessary utilities.
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
 RUN python3 -m pip install -U pip==21.1.1;
-# NOTE: ducktape 0.12.0 supports py 3.9, 3.10, 3.11 and 3.12
+# NOTE: ducktape 0.13.0 supports py 3.9, 3.10, 3.11, 3.12 and 3.13
 COPY requirements.txt requirements.txt
 RUN pip3 install --upgrade -r requirements.txt
 
@@ -93,7 +93,7 @@ RUN mkdir -p "/opt/kafka-3.5.2" && chmod a+rw /opt/kafka-3.5.2 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-3.6.2" && chmod a+rw /opt/kafka-3.6.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.6.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.6.2"
 RUN mkdir -p "/opt/kafka-3.7.2" && chmod a+rw /opt/kafka-3.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.7.2"
 RUN mkdir -p "/opt/kafka-3.8.1" && chmod a+rw /opt/kafka-3.8.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.8.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.8.1"
-RUN mkdir -p "/opt/kafka-3.9.1" && chmod a+rw /opt/kafka-3.9.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.9.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.1"
+RUN mkdir -p "/opt/kafka-3.9.2" && chmod a+rw /opt/kafka-3.9.2 && curl -s "$KAFKA_MIRROR/kafka_2.13-3.9.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.2"
 RUN mkdir -p "/opt/kafka-4.0.1" && chmod a+rw /opt/kafka-4.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.0.1"
 RUN mkdir -p "/opt/kafka-4.1.1" && chmod a+rw /opt/kafka-4.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.1.1"
 
@@ -116,7 +116,7 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.5.2-test.jar" -o /opt/kafka-3.5.2/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.6.2-test.jar" -o /opt/kafka-3.6.2/libs/kafka-streams-3.6.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.7.2-test.jar" -o /opt/kafka-3.7.2/libs/kafka-streams-3.7.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.8.1-test.jar" -o /opt/kafka-3.8.1/libs/kafka-streams-3.8.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.1-test.jar" -o /opt/kafka-3.9.1/libs/kafka-streams-3.9.1-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.2-test.jar" -o /opt/kafka-3.9.2/libs/kafka-streams-3.9.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.1-test.jar" -o /opt/kafka-4.0.1/libs/kafka-streams-4.0.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.1.1-test.jar" -o /opt/kafka-4.1.1/libs/kafka-streams-4.1.1-test.jar
 

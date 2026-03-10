@@ -22,9 +22,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,7 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -638,20 +641,6 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         }
     }
 
-    @Test
-    public void shouldThrowUnsupportedOperationExceptionOnQuery() {
-        rocksDBStore.init(context, rocksDBStore);
-
-        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test".getBytes()));
-
-        final UnsupportedOperationException exception = assertThrows(
-                UnsupportedOperationException.class,
-                () -> rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false))
-        );
-
-        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
-    }
-
     private byte[] wrapTimestampedValue(final byte[] value) {
         // Format: [timestamp(8 bytes)][value]
         // Use the numeric value as timestamp
@@ -670,5 +659,72 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         System.arraycopy(value, 0, result, 8, value.length);
         return result;
+    }
+
+    @Test
+    public void shouldReturnUnknownQueryTypeForQuery() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Create a query
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+
+        // Execute query
+        final QueryResult<byte[]> result = rocksDBStore.query(query, positionBound, config);
+
+        // Verify result indicates unknown query type
+        assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
+        assertEquals(
+            FailureReason.UNKNOWN_QUERY_TYPE,
+            result.getFailureReason(),
+            "Expected UNKNOWN_QUERY_TYPE failure reason"
+        );
+
+        // Verify position is set
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoWhenRequested() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Create a query with execution info collection enabled
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(true); // Enable execution info
+
+        // Execute query
+        final QueryResult<byte[]> result = rocksDBStore.query(query, positionBound, config);
+
+        // Verify execution info was collected
+        assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
+        assertTrue(
+            result.getExecutionInfo().get(0).contains("Handled in"),
+            "Expected execution info to contain handling information"
+        );
+        assertTrue(
+            result.getExecutionInfo().get(0).contains(RocksDBTimestampedStoreWithHeaders.class.getName()),
+            "Expected execution info to mention the class name"
+        );
+    }
+
+    @Test
+    public void shouldNotCollectExecutionInfoWhenNotRequested() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Create a query with execution info collection disabled
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
+        final PositionBound positionBound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false); // Disable execution info
+
+        // Execute query
+        final QueryResult<byte[]> result = rocksDBStore.query(query, positionBound, config);
+
+        // Verify no execution info was collected
+        assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
     }
 }

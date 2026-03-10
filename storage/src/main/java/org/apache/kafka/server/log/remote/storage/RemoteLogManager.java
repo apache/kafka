@@ -121,6 +121,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
@@ -133,8 +134,10 @@ import java.util.stream.Stream;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.LOCAL_RETENTION_SIZE_IN_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RETENTION_SIZE_IN_PERCENT_METRIC;
 
 /**
  * This class is responsible for
@@ -1138,20 +1141,55 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     class RLMExpirationTask extends RLMTask {
         private final Logger logger;
         private volatile boolean isAllSegmentsValid = false;
+        private volatile boolean metricsRegistered = false;
+        private final Map<String, String> metricTags = new HashMap<>();
+        private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
+        private final AtomicInteger localRetentionSizeInPercentValue = new AtomicInteger(0);
+
+        int retentionSizeInPercent() {
+            return retentionSizeInPercentValue.get();
+        }
+
+        int localRetentionSizeInPercent() {
+            return localRetentionSizeInPercentValue.get();
+        }
 
         public RLMExpirationTask(TopicIdPartition topicIdPartition) {
             super(topicIdPartition);
             this.logger = getLogContext().logger(RLMExpirationTask.class);
+            metricTags.put("topic", topicIdPartition.topic());
+            metricTags.put("partition", Integer.toString(topicIdPartition.partition()));
+        }
+
+        // Visible for testing
+        void registerMetrics() {
+            if (!metricsRegistered && !isCancelled()) {
+                metricsGroup.newGauge(RETENTION_SIZE_IN_PERCENT_METRIC.getName(), retentionSizeInPercentValue::get, metricTags);
+                metricsGroup.newGauge(LOCAL_RETENTION_SIZE_IN_PERCENT_METRIC.getName(), localRetentionSizeInPercentValue::get, metricTags);
+                metricsRegistered = true;
+            }
         }
 
         @Override
         protected void execute(UnifiedLog log) throws InterruptedException, RemoteStorageException, ExecutionException {
+            // Register metrics on first execution (after task is safely scheduled)
+            registerMetrics();
             cleanupExpiredRemoteLogSegments();
         }
 
         @Override
         public void cancel() {
             isAllSegmentsValid = false;
+            // Reset metrics to 0 immediately when task is cancelled to prevent stale values
+            retentionSizeInPercentValue.set(0);
+            localRetentionSizeInPercentValue.set(0);
+
+            // Remove metrics if they were registered
+            if (metricsRegistered) {
+                metricsGroup.removeMetric(RETENTION_SIZE_IN_PERCENT_METRIC.getName(), metricTags);
+                metricsGroup.removeMetric(LOCAL_RETENTION_SIZE_IN_PERCENT_METRIC.getName(), metricTags);
+                metricsRegistered = false;
+            }
             super.cancel();
         }
 
@@ -1332,6 +1370,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (stats.metadataCount == 0) {
                 updateMetadataCountAndLogSizeWith(0, 0);
                 logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
+                calculateSizeInPercent(log.size(), log.config().retentionSize, log.size(), log.config().localRetentionBytes());
                 return;
             }
             updateMetadataCountAndLogSizeWith(stats.metadataCount, stats.sizeInBytes);
@@ -1347,7 +1386,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             long logStartOffset = log.logStartOffset();
             long logEndOffset = log.logEndOffset();
             Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize,
-                    log.onlyLocalLogSegmentsSize(), logEndOffset, epochWithOffsets, stats.copyFinishedSegmentsSizeInBytes);
+                    log.onlyLocalLogSegmentsSize(), log.size(), logEndOffset, epochWithOffsets, log.config().localRetentionBytes(),
+                    stats.copyFinishedSegmentsSizeInBytes);
             Optional<RetentionTimeData> retentionTimeData = buildRetentionTimeData(log.config().retentionMs);
 
             RemoteLogRetentionHandler remoteLogRetentionHandler = new RemoteLogRetentionHandler(retentionSizeData, retentionTimeData);
@@ -1482,12 +1522,31 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     : Optional.empty();
         }
 
+        private void calculateSizeInPercent(long totalSize,
+                                            long retentionSize,
+                                            long localLogSegmentsSize,
+                                            long localRetentionBytes) {
+            int sizePercentage = retentionSize > 0 ? (int) ((totalSize * 100) / retentionSize) : 0;
+            retentionSizeInPercentValue.set(sizePercentage);
+
+            // Calculate local size percentage only if local retention is configured
+            int localSizePercentage = localRetentionBytes > 0 ? (int) ((localLogSegmentsSize * 100) / localRetentionBytes) : 0;
+            localRetentionSizeInPercentValue.set(localSizePercentage);
+        }
+
         Optional<RetentionSizeData> buildRetentionSizeData(long retentionSize,
                                                            long onlyLocalLogSegmentsSize,
+                                                           long localLogSegmentsSize,
                                                            long logEndOffset,
                                                            NavigableMap<Integer, Long> epochEntries,
+                                                           long localRetentionBytes,
                                                            long fullCopyFinishedSegmentsSizeInBytes) throws RemoteStorageException {
-            if (retentionSize < 0 || (onlyLocalLogSegmentsSize + fullCopyFinishedSegmentsSizeInBytes) <= retentionSize) {
+            if (retentionSize < 0) {
+                return Optional.empty();
+            }
+            long totalEstimateSize = onlyLocalLogSegmentsSize + fullCopyFinishedSegmentsSizeInBytes;
+            if (totalEstimateSize <= retentionSize) {
+                calculateSizeInPercent(totalEstimateSize, retentionSize, localLogSegmentsSize, localRetentionBytes);
                 return Optional.empty();
             }
             // compute valid remote-log size in bytes for the current partition if the size of the partition exceeds
@@ -1533,6 +1592,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // This is the total size of segments in local log that have their base-offset > local-log-start-offset
             // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
             long totalSize = onlyLocalLogSegmentsSize + remoteLogSizeBytes;
+            calculateSizeInPercent(totalSize, retentionSize, localLogSegmentsSize, localRetentionBytes);
             if (totalSize > retentionSize) {
                 long remainingBreachedSize = totalSize - retentionSize;
                 RetentionSizeData retentionSizeData = new RetentionSizeData(retentionSize, remainingBreachedSize);
