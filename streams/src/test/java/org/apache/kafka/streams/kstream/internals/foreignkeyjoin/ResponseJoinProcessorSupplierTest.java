@@ -164,6 +164,9 @@ public class ResponseJoinProcessorSupplierTest {
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,rhsValue)", 0)));
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -190,6 +193,9 @@ public class ResponseJoinProcessorSupplierTest {
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -216,6 +222,9 @@ public class ResponseJoinProcessorSupplierTest {
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,null)", 0)));
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -242,6 +251,9 @@ public class ResponseJoinProcessorSupplierTest {
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     static Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, ?> context) {

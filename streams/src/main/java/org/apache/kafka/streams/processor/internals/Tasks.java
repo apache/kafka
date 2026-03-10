@@ -46,11 +46,10 @@ import static org.apache.kafka.common.utils.Utils.union;
 class Tasks implements TasksRegistry {
     private final Logger log;
 
-    // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     // note that these two maps may be accessed by concurrent threads and hence
     // should be synchronized when accessed
-    private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
-    private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
+    private final Map<TaskId, StreamTask> activeTasksPerId = new TreeMap<>();
+    private final Map<TaskId, StandbyTask> standbyTasksPerId = new TreeMap<>();
 
     // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
     // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
@@ -58,10 +57,10 @@ class Tasks implements TasksRegistry {
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
+    private final Set<Task> pendingTasksToClose = new HashSet<>();
     private final Set<TaskId> failedTaskIds = new HashSet<>();
 
-    // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
-    private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
+    private final Map<TopicPartition, StreamTask> activeTasksPerPartition = new HashMap<>();
 
     Tasks(final LogContext logContext) {
         this.log = logContext.logger(getClass());
@@ -111,13 +110,27 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Set<Task> drainPendingActiveTasksToInit() {
-        final Set<Task> result = new HashSet<>();
+    public Set<StreamTask> drainPendingActiveTasksToInit() {
+        final Set<StreamTask> result = new HashSet<>();
         final Iterator<Task> iterator = pendingTasksToInit.iterator();
         while (iterator.hasNext()) {
             final Task task = iterator.next();
             if (task.isActive()) {
-                result.add(task);
+                result.add((StreamTask) task);
+                iterator.remove();
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public Set<StandbyTask> drainPendingStandbyTasksToInit() {
+        final Set<StandbyTask> result = new HashSet<>();
+        final Iterator<Task> iterator = pendingTasksToInit.iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (!task.isActive()) {
+                result.add((StandbyTask) task);
                 iterator.remove();
             }
         }
@@ -130,7 +143,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addPendingTasksToInit(final Collection<Task> tasks) {
+    public void addPendingTasksToInit(final Collection<? extends Task> tasks) {
         pendingTasksToInit.addAll(tasks);
     }
 
@@ -140,26 +153,51 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addActiveTasks(final Collection<Task> newTasks) {
+    public Set<Task> pendingTasksToClose() {
+        return Collections.unmodifiableSet(pendingTasksToClose);
+    }
+
+    @Override
+    public void addPendingTasksToClose(final Collection<? extends Task> tasks) {
+        pendingTasksToClose.addAll(tasks);
+    }
+
+    @Override
+    public boolean hasPendingTasksToClose() {
+        return !pendingTasksToClose.isEmpty();
+    }
+
+    @Override
+    public void addActiveTasks(final Collection<StreamTask> newTasks) {
         if (!newTasks.isEmpty()) {
-            for (final Task activeTask : newTasks) {
-                addTask(activeTask);
+            for (final StreamTask activeTask : newTasks) {
+                addActiveTask(activeTask);
             }
         }
     }
 
     @Override
-    public void addStandbyTasks(final Collection<Task> newTasks) {
+    public void addStandbyTasks(final Collection<StandbyTask> newTasks) {
         if (!newTasks.isEmpty()) {
-            for (final Task standbyTask : newTasks) {
-                addTask(standbyTask);
+            for (final StandbyTask standbyTask : newTasks) {
+                addStandbyTask(standbyTask);
             }
         }
     }
 
     @Override
-    public synchronized void addTask(final Task task) {
+    public void addTask(final Task task) {
+        if (task.isActive()) {
+            addActiveTask((StreamTask) task);
+        } else {
+            addStandbyTask((StandbyTask) task);
+        }
+    }
+
+    @Override
+    public synchronized void addActiveTask(final StreamTask task) {
         final TaskId taskId = task.id();
+
         if (activeTasksPerId.containsKey(taskId)) {
             throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
         }
@@ -168,15 +206,26 @@ class Tasks implements TasksRegistry {
             throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
         }
 
-        if (task.isActive()) {
-            activeTasksPerId.put(task.id(), task);
-            pendingActiveTasksToCreate.remove(task.id());
-            for (final TopicPartition topicPartition : task.inputPartitions()) {
-                activeTasksPerPartition.put(topicPartition, task);
-            }
-        } else {
-            standbyTasksPerId.put(task.id(), task);
+        activeTasksPerId.put(taskId, task);
+        pendingActiveTasksToCreate.remove(taskId);
+        for (final TopicPartition topicPartition : task.inputPartitions()) {
+            activeTasksPerPartition.put(topicPartition, task);
         }
+    }
+
+    @Override
+    public synchronized void addStandbyTask(final StandbyTask task) {
+        final TaskId taskId = task.id();
+
+        if (standbyTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an standby task that we already own: " + taskId);
+        }
+
+        if (activeTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an standby task while we already own its active: " + taskId);
+        }
+
+        standbyTasksPerId.put(taskId, task);
     }
 
     @Override
@@ -193,7 +242,9 @@ class Tasks implements TasksRegistry {
             throw new IllegalStateException("Attempted to remove a task that is not closed or suspended: " + taskId);
         }
 
-        if (taskToRemove.isActive()) {
+        if (pendingTasksToClose.contains(taskToRemove)) {
+            pendingTasksToClose.remove(taskToRemove);
+        } else if (taskToRemove.isActive()) {
             if (activeTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
@@ -203,18 +254,7 @@ class Tasks implements TasksRegistry {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
         }
-        failedTaskIds.remove(taskToRemove.id());
-    }
-
-    @Override
-    public synchronized void replaceActiveWithStandby(final StandbyTask standbyTask) {
-        final TaskId taskId = standbyTask.id();
-        if (activeTasksPerId.remove(taskId) == null) {
-            throw new IllegalStateException("Attempted to replace unknown active task with standby task: " + taskId);
-        }
-        removePartitionsForActiveTask(taskId);
-
-        standbyTasksPerId.put(standbyTask.id(), standbyTask);
+        failedTaskIds.remove(taskId);
     }
 
     @Override
@@ -231,17 +271,15 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions) {
+    public boolean updateActiveTaskInputPartitions(final StreamTask task, final Set<TopicPartition> topicPartitions) {
         final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
         if (requiresUpdate) {
             log.debug("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
-            if (task.isActive()) {
-                for (final TopicPartition inputPartition : task.inputPartitions()) {
-                    activeTasksPerPartition.remove(inputPartition);
-                }
-                for (final TopicPartition topicPartition : topicPartitions) {
-                    activeTasksPerPartition.put(topicPartition, task);
-                }
+            for (final TopicPartition inputPartition : task.inputPartitions()) {
+                activeTasksPerPartition.remove(inputPartition);
+            }
+            for (final TopicPartition topicPartition : topicPartitions) {
+                activeTasksPerPartition.put(topicPartition, task);
             }
         }
 
@@ -259,6 +297,7 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized void clear() {
         pendingTasksToInit.clear();
+        pendingTasksToClose.clear();
         pendingActiveTasksToCreate.clear();
         pendingStandbyTasksToCreate.clear();
         activeTasksPerId.clear();
@@ -267,9 +306,8 @@ class Tasks implements TasksRegistry {
         failedTaskIds.clear();
     }
 
-    // TODO: change return type to `StreamTask`
     @Override
-    public Task activeTasksForInputPartition(final TopicPartition partition) {
+    public StreamTask activeInitializedTasksForInputPartition(final TopicPartition partition) {
         return activeTasksPerPartition.get(partition);
     }
 
@@ -284,7 +322,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Task task(final TaskId taskId) {
+    public Task initializedTask(final TaskId taskId) {
         final Task task = getTask(taskId);
 
         if (task != null)
@@ -294,22 +332,27 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Collection<Task> tasks(final Collection<TaskId> taskIds) {
+    public Collection<Task> initializedTasks(final Collection<TaskId> taskIds) {
         final Set<Task> tasks = new HashSet<>();
         for (final TaskId taskId : taskIds) {
-            tasks.add(task(taskId));
+            tasks.add(initializedTask(taskId));
         }
         return tasks;
     }
 
     @Override
-    public synchronized Collection<TaskId> activeTaskIds() {
+    public synchronized Collection<TaskId> activeInitializedTaskIds() {
         return Collections.unmodifiableCollection(activeTasksPerId.keySet());
     }
 
     @Override
-    public synchronized Collection<Task> activeTasks() {
+    public synchronized Collection<StreamTask> activeInitializedTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
+    }
+
+    @Override
+    public synchronized Collection<StandbyTask> standbyInitializedTasks() {
+        return Collections.unmodifiableCollection(standbyTasksPerId.values());
     }
 
     /**
@@ -317,12 +360,12 @@ class Tasks implements TasksRegistry {
      * and the returned task could be modified by other threads concurrently
      */
     @Override
-    public synchronized Set<Task> allTasks() {
+    public synchronized Set<Task> allInitializedTasks() {
         return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
     }
 
     @Override
-    public synchronized Set<Task> allNonFailedTasks() {
+    public synchronized Set<Task> allNonFailedInitializedTasks() {
         final Set<Task> nonFailedActiveTasks = activeTasksPerId.values().stream()
             .filter(task -> !failedTaskIds.contains(task.id()))
             .collect(Collectors.toSet());
@@ -333,12 +376,12 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public synchronized Set<TaskId> allTaskIds() {
+    public synchronized Set<TaskId> allInitializedTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
 
     @Override
-    public synchronized Map<TaskId, Task> allTasksPerId() {
+    public synchronized Map<TaskId, Task> allInitializedTasksPerId() {
         final Map<TaskId, Task> ret = new HashMap<>();
         ret.putAll(activeTasksPerId);
         ret.putAll(standbyTasksPerId);
@@ -346,7 +389,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean contains(final TaskId taskId) {
+    public boolean containsInitialized(final TaskId taskId) {
         return getTask(taskId) != null;
     }
 

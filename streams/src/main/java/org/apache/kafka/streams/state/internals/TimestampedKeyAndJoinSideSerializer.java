@@ -27,7 +27,8 @@ import java.util.Map;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
 
 /**
- * The serializer that is used for {@link TimestampedKeyAndJoinSide}, which is a combo key format of <timestamp, left/right flag, raw-key>
+ * The serializer that is used for {@link TimestampedKeyAndJoinSide}, which is a combo key format of
+ * {@code <timestamp, left/right flag, raw-key>}.
  * @param <K> the raw key type
  */
 public class TimestampedKeyAndJoinSideSerializer<K> implements WrappingNullableSerializer<TimestampedKeyAndJoinSide<K>, K, Void> {

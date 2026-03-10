@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState, TxnTransitMetadata}
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
@@ -497,7 +497,14 @@ class TransactionMetadataTest {
       time.milliseconds(),
       TV_0)
     assertTrue(txnMetadata.isProducerEpochExhausted)
-    assertThrows(classOf[IllegalStateException], () => txnMetadata.prepareFenceProducerEpoch())
+
+    // When epoch is at max, prepareFenceProducerEpoch logs an error but doesn't throw
+    // This allows graceful recovery through producer ID rotation
+    val preparedMetadata = txnMetadata.prepareFenceProducerEpoch()
+
+    // Epoch should remain at Short.MaxValue (not overflow to negative)
+    assertEquals(Short.MaxValue, preparedMetadata.producerEpoch)
+    assertEquals(TransactionState.PREPARE_EPOCH_FENCE, preparedMetadata.txnState)
   }
 
   @Test

@@ -82,11 +82,15 @@ public class ExceptionHandlerUtilsTest {
         assertEquals(1, dlqRecord.timestamp());
         assertEquals(key, new String(dlqRecord.key()));
         assertEquals(value, new String(dlqRecord.value()));
-        assertEquals(exception.toString(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_NAME).value()));
+        assertEquals(exception.getClass().getName(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_NAME).value()));
         assertEquals(exception.getMessage(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_MESSAGE_NAME).value()));
         assertEquals("source", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME).value()));
         assertEquals("3", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_PARTITION_NAME).value()));
         assertEquals("2", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_OFFSET_NAME).value()));
+        // Verify original source headers are preserved
+        assertEquals("hello world",
+            stringDeserializer.deserialize(null,
+                headers.lastHeader("sourceHeader").value()));
     }
 
     @Test

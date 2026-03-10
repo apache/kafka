@@ -20,7 +20,8 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -63,8 +65,14 @@ public class GroupCoordinatorConfig {
     ///
     /// Group coordinator configs
     ///
+    @Deprecated(since = "4.3", forRemoval = true)
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
-    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols.";
+    @Deprecated(since = "4.3", forRemoval = true)
+    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "This configuration is deprecated and will be removed in Kafka 5.0. " +
+        "The list of enabled rebalance protocols. " +
+        "In Kafka 5.0, all protocols will always be enabled and cannot be disabled via this configuration. " +
+        "Use feature versions (group.version, streams.version, share.version) managed by kafka-features.sh instead.";
+    @Deprecated(since = "4.3", forRemoval = true)
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = List.of(
         Group.GroupType.CLASSIC.toString(),
         Group.GroupType.CONSUMER.toString(),
@@ -78,8 +86,13 @@ public class GroupCoordinatorConfig {
     public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = -1;
 
     public static final String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";
-    public static final String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator.";
+    public static final String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator for processing requests.";
     public static final int GROUP_COORDINATOR_NUM_THREADS_DEFAULT = 4;
+
+    public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG = "group.coordinator.background.threads";
+    public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DOC = "The number of threads used by the group coordinator for " +
+        "processing background tasks (e.g. updating regular expression subscriptions and offloaded assignments).";
+    public static final int GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DEFAULT = 2;
 
     public static final String OFFSETS_LOAD_BUFFER_SIZE_CONFIG = "offsets.load.buffer.size";
     public static final int OFFSETS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
@@ -108,6 +121,12 @@ public class GroupCoordinatorConfig {
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG = "offsets.topic.compression.codec";
     public static final CompressionType OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT = CompressionType.NONE;
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits.";
+
+    public static final String CACHED_BUFFER_MAX_BYTES_CONFIG = "group.coordinator.cached.buffer.max.bytes";
+    public static final int CACHED_BUFFER_MAX_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final String CACHED_BUFFER_MAX_BYTES_DOC = "The maximum buffer size that the GroupCoordinator will retain for reuse. " +
+        "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
+        "for recycling, which renders this configuration ineffective as a size limit.";
 
     ///
     /// Offset configs
@@ -252,6 +271,12 @@ public class GroupCoordinatorConfig {
         SHARE_GROUP_BUILTIN_ASSIGNOR.name() + ".";
     public static final String SHARE_GROUP_ASSIGNORS_DEFAULT = SHARE_GROUP_BUILTIN_ASSIGNOR.name();
 
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG = "group.share.initialize.retry.interval.ms";
+    // Because persister retries with exp backoff 5 times and upper cap of 30 secs.
+    public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. " +
+        "If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
+
     ///
     /// Streams group configs
     ///
@@ -295,16 +320,16 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT = 3000;
     public static final String STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC = "The amount of time the group coordinator will wait for more streams clients to join a new group before performing the first rebalance. A longer delay means potentially fewer rebalances.";
 
-    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG = "group.share.initialize.retry.interval.ms";
-    // Because persister retries with exp backoff 5 times and upper cap of 30 secs.
-    public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
-    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
-
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+        CACHED_BUFFER_MAX_BYTES_CONFIG
+    );
+    
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs
         .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT, 
             ConfigDef.ValidList.in(false, Group.GroupType.documentValidValues()), MEDIUM, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC)
         .define(GROUP_COORDINATOR_NUM_THREADS_CONFIG, INT, GROUP_COORDINATOR_NUM_THREADS_DEFAULT, atLeast(1), HIGH, GROUP_COORDINATOR_NUM_THREADS_DOC)
+        .define(GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG, INT, GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DOC)
         .define(GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, INT, GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT, atLeast(-1), MEDIUM, GROUP_COORDINATOR_APPEND_LINGER_MS_DOC)
         .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, INT, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, OFFSET_COMMIT_TIMEOUT_MS_DOC)
         .define(OFFSETS_LOAD_BUFFER_SIZE_CONFIG, INT, OFFSETS_LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), HIGH, OFFSETS_LOAD_BUFFER_SIZE_DOC)
@@ -312,6 +337,9 @@ public class GroupCoordinatorConfig {
         .define(OFFSETS_TOPIC_PARTITIONS_CONFIG, INT, OFFSETS_TOPIC_PARTITIONS_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_PARTITIONS_DOC)
         .define(OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, INT, OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_SEGMENT_BYTES_DOC)
         .define(OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, INT, (int) OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT.id, HIGH, OFFSETS_TOPIC_COMPRESSION_CODEC_DOC)
+        // The minimum size is set equal to `INITIAL_BUFFER_SIZE` to prevent CACHED_BUFFER_MAX_BYTES from being configured too small,
+        // which could otherwise negatively impact performance.
+        .define(CACHED_BUFFER_MAX_BYTES_CONFIG, INT, CACHED_BUFFER_MAX_BYTES_DEFAULT, atLeast(512 * 1024), MEDIUM, CACHED_BUFFER_MAX_BYTES_DOC)
 
         // Offset configs
         .define(OFFSET_METADATA_MAX_SIZE_CONFIG, INT, OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, OFFSET_METADATA_MAX_SIZE_DOC)
@@ -367,6 +395,7 @@ public class GroupCoordinatorConfig {
     public static final int CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
 
     private final int numThreads;
+    private final int numBackgroundThreads;
     private final int appendLingerMs;
     private final int consumerGroupSessionTimeoutMs;
     private final int consumerGroupHeartbeatIntervalMs;
@@ -413,9 +442,12 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxStandbyReplicas;
     private final int streamsGroupInitialRebalanceDelayMs;
 
+    private final AbstractConfig config;
+
     @SuppressWarnings("this-escape")
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
+        this.numBackgroundThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG);
         this.appendLingerMs = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG);
         this.consumerGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -465,6 +497,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupMaxStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        this.config = config;
 
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -628,12 +661,13 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * Copy the subset of properties that are relevant to consumer group and share group.
+     * Copy the subset of properties that are relevant to consumer group, share group and streams group.
      */
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
         defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
+        defaultConfigs.putAll(extractStreamsGroupConfigMap());
         return Collections.unmodifiableMap(defaultConfigs);
     }
 
@@ -647,10 +681,28 @@ public class GroupCoordinatorConfig {
     }
 
     /**
+     * Copy the subset of properties that are relevant to streams group.
+     */
+    public Map<String, Integer> extractStreamsGroupConfigMap() {
+        return Map.of(
+            GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
+            GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
+            GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
+            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs());
+    }
+
+    /**
      * The number of threads or event loops running.
      */
     public int numThreads() {
         return numThreads;
+    }
+
+    /**
+     * The number of background threads.
+     */
+    public int numBackgroundThreads() {
+        return numBackgroundThreads;
     }
 
     /**
@@ -706,6 +758,15 @@ public class GroupCoordinatorConfig {
      */
     public int offsetMetadataMaxSize() {
         return offsetMetadataMaxSize;
+    }
+
+    /**
+     * The maximum buffer size that the coordinator can cache.
+     *
+     * Note: On hot paths, frequent calls to this method may cause performance bottlenecks due to synchronization overhead.
+     */
+    public int cachedBufferMaxBytes() {
+        return config.getInt(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG);
     }
 
     /**

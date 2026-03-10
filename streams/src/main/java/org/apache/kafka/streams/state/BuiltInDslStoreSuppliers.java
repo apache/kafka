@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
@@ -36,9 +37,18 @@ public class BuiltInDslStoreSuppliers {
 
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
-            return params.isTimestamped()
-                    ? Stores.persistentTimestampedKeyValueStore(params.name())
-                    : Stores.persistentKeyValueStore(params.name());
+            final DslStoreFormat storeFormat = params.dslStoreFormat();
+            switch (storeFormat) {
+                case HEADERS:
+                    return Stores.persistentTimestampedKeyValueStoreWithHeaders(params.name());
+                case TIMESTAMPED:
+                    return Stores.persistentTimestampedKeyValueStore(params.name());
+                case PLAIN:
+                    return Stores.persistentKeyValueStore(params.name());
+                default:
+                    throw new IllegalArgumentException("Unsupported DslStoreFormat: " + storeFormat +
+                        ". Expected one of: HEADERS, TIMESTAMPED, or PLAIN");
+            }
         }
 
         @Override

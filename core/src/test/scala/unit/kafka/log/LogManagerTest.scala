@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
+import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify, when}
 
 import java.io._
 import java.lang.{Long => JLong}
@@ -43,7 +43,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -65,6 +65,7 @@ class LogManagerTest {
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
   val logConfig = new LogConfig(logProps)
   var logDir: File = _
+  var logDir2: File = _
   var logManager: LogManager = _
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
@@ -73,6 +74,7 @@ class LogManagerTest {
   @BeforeEach
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
+    logDir2 = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup(Set.empty)
     assertEquals(initialTaskDelayMs, logManager.initialTaskDelayMs)
@@ -83,6 +85,7 @@ class LogManagerTest {
     if (logManager != null)
       logManager.shutdown()
     Utils.delete(logDir)
+    Utils.delete(logDir2)
     // Some tests assign a new LogManager
     if (logManager != null)
       logManager.liveLogDirs.foreach(Utils.delete)
@@ -1054,6 +1057,58 @@ class LogManagerTest {
   }
 
   @Test
+  def testLogManagerMetrics(): Unit = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.forEach((metricName: MetricName) =>
+      KafkaYammerMetrics.defaultRegistry.removeMetric(metricName))
+    logManager.shutdown()
+    logManager = createLogManager(Seq(logDir, logDir2))
+    def allMetrics(): Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
+      .filter(metric => metric.getType.contains("LogManager"))
+      .toSet
+    def metric(filter: String): Gauge[Int] = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter(entry => entry._1.getName.contains(filter))
+      .values.head.asInstanceOf[Gauge[Int]]
+    def logDirMetric(filter: String, logDir: File): Gauge[Int] = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter(entry => entry._1.getName.contains(filter))
+      .filter(entry => entry._1.getScope.contains(logDir.getAbsolutePath))
+      .values.head.asInstanceOf[Gauge[Int]]
+    // expecting 6 metrics:
+    // - OfflineLogDirectoryCount
+    // - CordonedLogDirectoryCount
+    // - LogDirectoryOffline per log dir
+    // - LogDirectoryCordoned per log dir
+    assertEquals(6, allMetrics().size)
+    assertEquals(0, metric("OfflineLogDirectoryCount").value)
+    assertEquals(0, metric("CordonedLogDirectoryCount").value)
+    assertEquals(0, logDirMetric("LogDirectoryOffline", logDir).value)
+    assertEquals(0, logDirMetric("LogDirectoryOffline", logDir2).value)
+    assertEquals(0, logDirMetric("LogDirectoryCordoned", logDir).value)
+    assertEquals(0, logDirMetric("LogDirectoryCordoned", logDir2).value)
+
+    logManager.updateCordonedLogDirs(Set(logDir.getAbsolutePath))
+    assertEquals(1, metric("CordonedLogDirectoryCount").value)
+    assertEquals(1, logDirMetric("LogDirectoryCordoned", logDir).value)
+    assertEquals(0, logDirMetric("LogDirectoryCordoned", logDir2).value)
+    logManager.updateCordonedLogDirs(Set(logDir.getAbsolutePath, logDir2.getAbsolutePath))
+    assertEquals(2, metric("CordonedLogDirectoryCount").value)
+    assertEquals(1, logDirMetric("LogDirectoryCordoned", logDir).value)
+    assertEquals(1, logDirMetric("LogDirectoryCordoned", logDir2).value)
+
+    logManager.handleLogDirFailure(logDir.getAbsolutePath)
+    assertEquals(1, metric("OfflineLogDirectoryCount").value)
+    assertEquals(1, logDirMetric("LogDirectoryOffline", logDir).value)
+    assertEquals(0, logDirMetric("LogDirectoryOffline", logDir2).value)
+
+    try {
+      logManager.shutdown()
+    } catch {
+      case _: Throwable => // ignore
+    } finally {
+      logManager = null
+    }
+  }
+
+  @Test
   def testMetricsAreRemovedWhenMovingCurrentToFutureLog(): Unit = {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
@@ -1110,6 +1165,47 @@ class LogManagerTest {
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
     assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
     assertEquals(2, logManager.directoryIdsSet.size)
+  }
+
+  /**
+   * Test that replaceCurrentWithFutureLog does not close the source log, preventing race conditions
+   * where a concurrent read/flush could fail with ClosedChannelException.
+   */
+  @Test
+  def testReplaceCurrentWithFutureLogDoesNotCloseSourceLog(): Unit = {
+    val logDir1 = TestUtils.tempDir()
+    val logDir2 = TestUtils.tempDir()
+    logManager = createLogManager(Seq(logDir1, logDir2))
+    logManager.startup(Set.empty)
+
+    val topicName = "replace-log"
+    val tp = new TopicPartition(topicName, 0)
+    val currentLog = logManager.getOrCreateLog(tp, topicId = Optional.empty)
+    // Create a future log in a different directory
+    logManager.maybeUpdatePreferredLogDir(tp, logDir2.getAbsolutePath)
+    logManager.getOrCreateLog(tp, isFuture = true, topicId = Optional.empty)
+
+    // Spy on the source log to verify close() is not called
+    val spyCurrentLog = spy(currentLog)
+    // Inject the spy into the map
+    val field = classOf[LogManager].getDeclaredField("currentLogs")
+    field.setAccessible(true)
+    val currentLogs = field.get(logManager).asInstanceOf[ConcurrentHashMap[TopicPartition, UnifiedLog]]
+    currentLogs.put(tp, spyCurrentLog)
+
+    logManager.replaceCurrentWithFutureLog(tp)
+
+    // Verify close() was NOT called on the source log
+    verify(spyCurrentLog, never()).close()
+
+    // Verify the source log was renamed to .delete
+    assertTrue(spyCurrentLog.dir.getName.endsWith(LogFileUtils.DELETE_DIR_SUFFIX))
+
+    // Verify that flush() can be called without error (no ClosedChannelException)
+    // Mock logEndOffset > 0 to trigger actual flush (flush only happens when flushOffset > recoveryPoint)
+    when(spyCurrentLog.logEndOffset()).thenReturn(100L)
+    val flushLog: Executable = () => spyCurrentLog.flush(false)
+    assertDoesNotThrow(flushLog)
   }
 
   @Test
@@ -1283,5 +1379,34 @@ class LogManagerTest {
       permissions.add(PosixFilePermission.OTHERS_WRITE)
       Files.setPosixFilePermissions(logDir.toPath, permissions)
     }
+  }
+
+  @Test
+  def testUpdateCordonedLogDirs(): Unit = {
+    logManager.shutdown()
+    logManager = createLogManager(Seq(this.logDir, this.logDir2))
+    assertTrue(logManager.cordonedLogDirs().isEmpty)
+
+    val cordonedDirs = Set(logDir.getAbsolutePath)
+    logManager.updateCordonedLogDirs(Set(logDir.getAbsolutePath))
+    assertEquals(cordonedDirs, logManager.cordonedLogDirs())
+  }
+
+  @Test
+  def testNextLogDirs(): Unit = {
+    logManager.shutdown()
+    logManager = createLogManager(Seq(this.logDir, this.logDir2))
+    val nextLogDirs = logManager.nextLogDirs()
+    assertTrue(nextLogDirs.contains(logDir))
+    assertTrue(nextLogDirs.contains(logDir2))
+
+    logManager.updateCordonedLogDirs(Set(logDir.getAbsolutePath))
+    val nextLogDirs2 = logManager.nextLogDirs()
+    assertFalse(nextLogDirs2.contains(logDir))
+    assertTrue(nextLogDirs2.contains(logDir2))
+
+    logManager.updateCordonedLogDirs(Set(logDir.getAbsolutePath, logDir2.getAbsolutePath))
+    val nextLogDirs3 = logManager.nextLogDirs()
+    assertFalse(nextLogDirs3.isEmpty)
   }
 }

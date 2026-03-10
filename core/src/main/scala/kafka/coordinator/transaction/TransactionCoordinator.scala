@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
@@ -1005,6 +1005,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
+
+  // Package-private for testing
+  private[kafka] def transactionManager: TransactionStateManager = txnManager
 
   private def onEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
     error match {

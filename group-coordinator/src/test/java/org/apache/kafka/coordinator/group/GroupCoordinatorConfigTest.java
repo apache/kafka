@@ -20,7 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -175,6 +175,7 @@ public class GroupCoordinatorConfigTest {
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 10);
+        configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG, 3);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 555);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 200);
@@ -200,10 +201,12 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 15 * 60 * 1000);
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 5000);
+        configs.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, 2 * 1024 * 1024);
 
         GroupCoordinatorConfig config = createConfig(configs);
 
         assertEquals(10, config.numThreads());
+        assertEquals(3, config.numBackgroundThreads());
         assertEquals(555, config.consumerGroupSessionTimeoutMs());
         assertEquals(200, config.consumerGroupHeartbeatIntervalMs());
         assertEquals(55, config.consumerGroupMaxSize());
@@ -230,6 +233,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
         assertEquals(15 * 60 * 1000, config.consumerGroupRegexRefreshIntervalMs());
         assertEquals(5000, config.streamsGroupInitialRebalanceDelayMs());
+        assertEquals(2 * 1024 * 1024, config.cachedBufferMaxBytes());
     }
 
     @Test
@@ -375,6 +379,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 1000);
+        configs.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, 1024 * 1024);
 
         return createConfig(configs);
     }

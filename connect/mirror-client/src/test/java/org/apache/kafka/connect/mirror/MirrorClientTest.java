@@ -16,24 +16,36 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.TopicPartition;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorClientTest {
 
+    private static final String SOURCE = "source";
+
     private static class FakeMirrorClient extends MirrorClient {
 
         List<String> topics;
+        public MockConsumer<byte[], byte[]> consumer;
 
         FakeMirrorClient(List<String> topics) {
             this(new DefaultReplicationPolicy(), topics);
@@ -51,6 +63,15 @@ public class MirrorClientTest {
         @Override
         protected Set<String> listTopics() {
             return new HashSet<>(topics);
+        }
+
+        @Override
+        Consumer<byte[], byte[]> consumer() {
+            if (consumer == null) {
+                return super.consumer();
+            } else {
+                return consumer;
+            }
         }
     }
 
@@ -208,9 +229,91 @@ public class MirrorClientTest {
             .topicSource("backup.heartbeats"));
     }
 
+    @Test
+    public void testRemoteConsumerOffsetsIllegalArgs() {
+        FakeMirrorClient client = new FakeMirrorClient();
+        assertThrows(IllegalArgumentException.class, () -> client.remoteConsumerOffsets((Pattern) null, "", Duration.ofSeconds(1L)));
+        assertThrows(IllegalArgumentException.class, () -> client.remoteConsumerOffsets(Pattern.compile(""), null, Duration.ofSeconds(1L)));
+        assertThrows(IllegalArgumentException.class, () -> client.remoteConsumerOffsets(Pattern.compile(""), "", null));
+    }
+
+    @Test
+    public void testRemoteConsumerOffsets() {
+        String grp0 = "mygroup0";
+        String grp1 = "mygroup1";
+        FakeMirrorClient client = new FakeMirrorClient();
+        String checkpointTopic = client.replicationPolicy().checkpointsTopic(SOURCE);
+        TopicPartition checkpointTp = new TopicPartition(checkpointTopic, 0);
+
+        TopicPartition t0p0 = new TopicPartition("topic0", 0);
+        TopicPartition t0p1 = new TopicPartition("topic0", 1);
+
+        Checkpoint cp0 = new Checkpoint(grp0, t0p0, 1L, 1L, "cp0");
+        Checkpoint cp1 = new Checkpoint(grp0, t0p0, 2L, 2L, "cp1");
+        Checkpoint cp2 = new Checkpoint(grp0, t0p1, 3L, 3L, "cp2");
+        Checkpoint cp3 = new Checkpoint(grp1, t0p1, 4L, 4L, "cp3");
+
+        // Batch translation matches only mygroup0
+        client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets = client.remoteConsumerOffsets(
+                Pattern.compile(grp0), SOURCE, Duration.ofSeconds(10L));
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedOffsets = Map.of(
+                grp0, Map.of(
+                        t0p0, cp1.offsetAndMetadata(),
+                        t0p1, cp2.offsetAndMetadata()
+                )
+        );
+        assertEquals(expectedOffsets, offsets);
+
+        // Batch translation matches all groups
+        client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
+        offsets = client.remoteConsumerOffsets(Pattern.compile(".*"), SOURCE, Duration.ofSeconds(10L));
+        expectedOffsets = Map.of(
+                grp0, Map.of(
+                        t0p0, cp1.offsetAndMetadata(),
+                        t0p1, cp2.offsetAndMetadata()
+                ),
+                grp1, Map.of(
+                        t0p1, cp3.offsetAndMetadata()
+                )
+        );
+        assertEquals(expectedOffsets, offsets);
+
+        // Batch translation matches nothing
+        client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
+        offsets = client.remoteConsumerOffsets(Pattern.compile("unknown-group"), SOURCE, Duration.ofSeconds(10L));
+        assertTrue(offsets.isEmpty());
+
+        // Translation for mygroup0
+        client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
+        Map<TopicPartition, OffsetAndMetadata> offsets2 = client.remoteConsumerOffsets(grp0, SOURCE, Duration.ofSeconds(10L));
+        Map<TopicPartition, OffsetAndMetadata> expectedOffsets2 = Map.of(
+                t0p0, cp1.offsetAndMetadata(),
+                t0p1, cp2.offsetAndMetadata()
+        );
+        assertEquals(expectedOffsets2, offsets2);
+
+        // Translation for unknown group
+        client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
+        offsets2 = client.remoteConsumerOffsets("unknown-group", SOURCE, Duration.ofSeconds(10L));
+        assertTrue(offsets2.isEmpty());
+    }
+
     private ReplicationPolicy identityReplicationPolicy(String source) {
         IdentityReplicationPolicy policy = new IdentityReplicationPolicy();
         policy.configure(Map.of(IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
         return policy;
+    }
+
+    private MockConsumer<byte[], byte[]> buildConsumer(TopicPartition checkpointTp, Checkpoint... checkpoints) {
+        MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name());
+        consumer.updateBeginningOffsets(Map.of(checkpointTp, 0L));
+        consumer.assign(Set.of(checkpointTp));
+        for (int i = 0; i < checkpoints.length; i++) {
+            Checkpoint checkpoint = checkpoints[i];
+            consumer.addRecord(new ConsumerRecord<>(checkpointTp.topic(), 0, i, checkpoint.recordKey(), checkpoint.recordValue()));
+        }
+        consumer.updateEndOffsets(Map.of(checkpointTp, checkpoints.length - 1L));
+        return consumer;
     }
 }

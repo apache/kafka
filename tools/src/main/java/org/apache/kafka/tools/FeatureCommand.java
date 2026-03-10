@@ -77,7 +77,7 @@ public class FeatureCommand {
                 .newArgumentParser("kafka-features")
                 .defaultHelp(true)
                 .description("This tool manages feature flags in Kafka.");
-        MutuallyExclusiveGroup bootstrapGroup = parser.addMutuallyExclusiveGroup().required(true);
+        MutuallyExclusiveGroup bootstrapGroup = parser.addMutuallyExclusiveGroup();
         bootstrapGroup.addArgument("--bootstrap-server")
                 .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.");
         bootstrapGroup.addArgument("--bootstrap-controller")
@@ -93,14 +93,27 @@ public class FeatureCommand {
         addVersionMappingParser(subparsers);
         addFeatureDependenciesParser(subparsers);
 
-        Namespace namespace = parser.parseArgsOrFail(args);
+        Namespace namespace = parser.parseArgs(args);
         String command = namespace.getString("command");
+        if (command.equals("version-mapping")) {
+            handleVersionMapping(namespace, Feature.PRODUCTION_FEATURES);
+            return;
+        } else if (command.equals("feature-dependencies")) {
+            handleFeatureDependencies(namespace, Feature.PRODUCTION_FEATURES);
+            return;
+        }
         String configPath = namespace.getString("command_config");
         Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
 
-        CommandLineUtils.initializeBootstrapProperties(properties,
-            Optional.ofNullable(namespace.getString("bootstrap_server")),
-            Optional.ofNullable(namespace.getString("bootstrap_controller")));
+        try {
+            CommandLineUtils.initializeBootstrapProperties(properties,
+                    Optional.ofNullable(namespace.getString("bootstrap_server")),
+                    Optional.ofNullable(namespace.getString("bootstrap_controller")));
+        } catch (Exception e) {
+            // bootstrap_server and bootstrap_controller are in a mutually exclusive group,
+            // so the exception happens only when both of them are missing
+            throw new ArgumentParserException(e.getMessage(), parser);
+        }
 
         try (Admin adminClient = Admin.create(properties)) {
             switch (command) {
@@ -115,12 +128,6 @@ public class FeatureCommand {
                     break;
                 case "disable":
                     handleDisable(namespace, adminClient);
-                    break;
-                case "version-mapping":
-                    handleVersionMapping(namespace, Feature.PRODUCTION_FEATURES);
-                    break;
-                case "feature-dependencies":
-                    handleFeatureDependencies(namespace, Feature.PRODUCTION_FEATURES);
                     break;
                 default:
                     throw new TerseException("Unknown command " + command);

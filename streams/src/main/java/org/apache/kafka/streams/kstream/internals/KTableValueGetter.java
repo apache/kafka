@@ -30,7 +30,7 @@ public interface KTableValueGetter<K, V> {
      * not exceeding the provided timestamp bound. This method may only be called if
      * {@link #isVersioned()} is true.
      */
-    default ValueAndTimestamp<V> get(K key, long asOfTimestamp) {
+    default ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
         throw new UnsupportedOperationException("get(key, timestamp) is only supported for versioned stores");
     }
 
