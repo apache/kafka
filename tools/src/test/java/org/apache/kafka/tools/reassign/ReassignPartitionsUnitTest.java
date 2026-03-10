@@ -57,7 +57,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterPartitionReassignments;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.clearAllThrottles;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterReplicaLogDirs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateFollowerThrottles;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateLeaderThrottles;
@@ -68,6 +67,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelPa
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.compareTopicPartitionReplicas;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.compareTopicPartitions;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.curReassignmentsToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.currentPartitionReplicaAssignmentToString;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findLogDirMoveStates;
@@ -849,8 +849,8 @@ public class ReassignPartitionsUnitTest {
     }
 
     /**
-     * Test that clearAllThrottles only clears throttles on live brokers when some brokers are down.
-     * Called by --verify when reassignment completes.
+     * Test that clearAllThrottles (invoked via verifyAssignment when reassignment completes) only clears
+     * throttles on live brokers when some brokers are down.
      */
     @Test
     public void testClearAllThrottlesSkipsDownBrokers() throws Exception {
@@ -858,17 +858,17 @@ public class ReassignPartitionsUnitTest {
             addTopicsForThreeBrokers(adminClient);
             // Set throttle on live brokers first
             modifyInterBrokerThrottle(adminClient, Set.of(0, 1, 2), 1000);
-            // targetParts includes broker 3 (down) - from assignment that had broker 3
-            List<Entry<TopicPartition, List<Integer>>> targetParts = List.of(
-                new SimpleImmutableEntry<>(new TopicPartition("foo", 0), List.of(0, 1, 2)),
-                new SimpleImmutableEntry<>(new TopicPartition("foo", 1), List.of(1, 2, 3))
-            );
+            // Assignment includes broker 3 (down) - verifyAssignment will call clearAllThrottles when done
+            String assignment = "{\"version\":1,\"partitions\":[" +
+                "{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
+                "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+                "]}";
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintStream originalOut = System.out;
             try {
                 System.setOut(new PrintStream(out));
-                clearAllThrottles(adminClient, targetParts);
+                verifyAssignment(adminClient, assignment, false);
             } finally {
                 System.setOut(originalOut);
             }

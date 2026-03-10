@@ -510,8 +510,8 @@ public class ReassignPartitionsCommand {
      * @param adminClient     The AdminClient to use.
      * @param targetParts     The target partitions loaded from the JSON file.
      */
-    static void clearAllThrottles(Admin adminClient,
-                                  List<Entry<TopicPartition, List<Integer>>> targetParts
+    private static void clearAllThrottles(Admin adminClient,
+                                          List<Entry<TopicPartition, List<Integer>>> targetParts
     ) throws ExecutionException, InterruptedException {
         Set<Integer> liveBrokers = getLiveBrokerIds(adminClient);
         Set<Integer> brokersFromAssignment = new HashSet<>();
@@ -529,7 +529,7 @@ public class ReassignPartitionsCommand {
 
         if (!downBrokers.isEmpty()) {
             System.out.printf("Warning: Could not clear broker-level throttles on down broker%s %s. " +
-                "Throttles will be cleared when the broker comes back up.%n",
+                "Re-run --verify after the brokers are back up to clear its throttles.%n",
                 downBrokers.size() == 1 ? "" : "s",
                 downBrokers.stream().sorted().map(Object::toString).collect(Collectors.joining(",")));
         }
