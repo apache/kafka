@@ -896,15 +896,16 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                        stateSerdes.valueDeserializer().deserialize("dummy", new RecordHeaders(), next.value)
                     );
                     results.add(deserialized);
                 } else if (schema instanceof SessionKeySchema) {
                     final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
                         SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), new RecordHeaders(), "dummy"),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                        stateSerdes.valueDeserializer().deserialize("dummy", new RecordHeaders(), next.value)
                     );
                     results.add(deserialized);
                 } else {

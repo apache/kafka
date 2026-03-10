@@ -65,8 +65,14 @@ public class GroupCoordinatorConfig {
     ///
     /// Group coordinator configs
     ///
+    @Deprecated(since = "4.3", forRemoval = true)
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
-    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols.";
+    @Deprecated(since = "4.3", forRemoval = true)
+    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "This configuration is deprecated and will be removed in Kafka 5.0. " +
+        "The list of enabled rebalance protocols. " +
+        "In Kafka 5.0, all protocols will always be enabled and cannot be disabled via this configuration. " +
+        "Use feature versions (group.version, streams.version, share.version) managed by kafka-features.sh instead.";
+    @Deprecated(since = "4.3", forRemoval = true)
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = List.of(
         Group.GroupType.CLASSIC.toString(),
         Group.GroupType.CONSUMER.toString(),

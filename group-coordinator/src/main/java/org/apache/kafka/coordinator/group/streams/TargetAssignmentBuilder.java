@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
@@ -45,6 +46,11 @@ import java.util.stream.Collectors;
  * words, this class does not yield a tombstone for removed members.
  */
 public class TargetAssignmentBuilder {
+
+    /**
+     * The time.
+     */
+    private Time time;
 
     /**
      * The group ID.
@@ -132,6 +138,17 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Sets the time.
+     *
+     * @param time The time.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTime(Time time) {
+        this.time = time;
+        return this;
+    }
+
+    /**
      * Adds all the existing members.
      *
      * @param members The existing members in the streams group.
@@ -195,7 +212,6 @@ public class TargetAssignmentBuilder {
         this.topology = topology;
         return this;
     }
-
 
     /**
      * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
@@ -313,7 +329,11 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
+            groupId,
+            groupEpoch,
+            time.milliseconds()
+        ));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }

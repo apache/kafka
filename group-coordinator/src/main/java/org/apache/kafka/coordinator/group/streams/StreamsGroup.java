@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -161,10 +162,9 @@ public class StreamsGroup implements Group {
     protected final TimelineLong metadataHash;
 
     /**
-     * The target assignment epoch. An assignment epoch smaller than the group epoch means that a new assignment is required. The assignment
-     * epoch is updated when a new assignment is installed.
+     * The target assignment metadata.
      */
-    private final TimelineInteger targetAssignmentEpoch;
+    private final TimelineObject<TargetAssignmentMetadata> targetAssignmentMetadata;
 
     /**
      * The target assignment per member ID.
@@ -241,7 +241,7 @@ public class StreamsGroup implements Group {
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.metadataHash = new TimelineLong(snapshotRegistry);
-        this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
+        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.ZERO);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -340,16 +340,24 @@ public class StreamsGroup implements Group {
      * @return The target assignment epoch.
      */
     public int assignmentEpoch() {
-        return targetAssignmentEpoch.get();
+        return targetAssignmentMetadata.get().assignmentEpoch();
     }
 
     /**
-     * Sets the assignment epoch.
+     * @return The time at which the target assignment calculation finished.
+     */
+    public long assignmentTimestamp() {
+        return targetAssignmentMetadata.get().assignmentTimestamp();
+    }
+
+    /**
+     * Sets the assignment metadata.
      *
      * @param targetAssignmentEpoch The new assignment epoch.
+     * @param targetAssignmentTimestamp The time at which the assignment calculation finished.
      */
-    public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
-        this.targetAssignmentEpoch.set(targetAssignmentEpoch);
+    public void setTargetAssignmentMetadata(int targetAssignmentEpoch, long targetAssignmentTimestamp) {
+        this.targetAssignmentMetadata.set(new TargetAssignmentMetadata(targetAssignmentEpoch, targetAssignmentTimestamp));
         maybeUpdateGroupState();
     }
 
@@ -896,11 +904,11 @@ public class StreamsGroup implements Group {
             clearShutdownRequestMemberId();
         } else if (topology().filter(t -> t.topologyEpoch() == validatedTopologyEpoch.get()).isEmpty()) {
             newState = NOT_READY;
-        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
+        } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
             for (StreamsGroupMember member : members.values()) {
-                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
+                if (!member.isReconciledTo(assignmentEpoch())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -1094,7 +1102,7 @@ public class StreamsGroup implements Group {
             .setGroupId(groupId)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
             .setTopology(
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)
