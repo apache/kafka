@@ -55,7 +55,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
  * @see ConfigurationUtils
  * @see JaasOptionsUtils
  */
-public class ConfigOrJaas {
+class ConfigOrJaas {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfigOrJaas.class);
 
@@ -68,7 +68,7 @@ public class ConfigOrJaas {
      * @param cu  Utilities for accessing configuration properties
      * @param jou Utilities for accessing JAAS options
      */
-    public ConfigOrJaas(ConfigurationUtils cu, JaasOptionsUtils jou) {
+    ConfigOrJaas(ConfigurationUtils cu, JaasOptionsUtils jou) {
         this.cu = cu;
         this.jou = jou;
     }

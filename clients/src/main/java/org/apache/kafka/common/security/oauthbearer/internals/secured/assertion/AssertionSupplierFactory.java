@@ -96,7 +96,7 @@ public class AssertionSupplierFactory {
             Optional<String> passphrase = cu.containsKey(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE) ?
                 Optional.of(cu.validatePassword(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE)) :
                 Optional.empty();
-            LOG.info("Configuring dynamic assertion creation using algorithm: {} and private key file: {}",
+            LOG.debug("Configuring dynamic assertion creation using algorithm: {} and private key file: {}",
                 algorithm, privateKeyFile.getAbsolutePath());
             assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, passphrase);
             assertionJwtTemplate = layeredAssertionJwtTemplate(cu, time);

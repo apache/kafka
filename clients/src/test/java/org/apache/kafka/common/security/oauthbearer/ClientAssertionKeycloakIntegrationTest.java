@@ -77,6 +77,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -118,6 +119,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static KeycloakContainer keycloak;
+    private static boolean apiVersionSetByTest;
 
     private static String tokenEndpointUrl;
     private static String shortLivedTokenEndpointUrl;
@@ -133,6 +135,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
         // with HTTP 400. Set to 1.44 for compatibility with Docker Desktop 29.x+.
         if (System.getProperty("api.version") == null) {
             System.setProperty("api.version", "1.44");
+            apiVersionSetByTest = true;
         }
 
         // Skip the entire test class if Docker is not available
@@ -176,6 +179,9 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     public static void tearDown() {
         System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         System.clearProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
+        if (apiVersionSetByTest) {
+            System.clearProperty("api.version");
+        }
         if (rsaPrivateKeyFile != null) rsaPrivateKeyFile.delete();
         if (ecPrivateKeyFile != null) ecPrivateKeyFile.delete();
         if (keycloak != null) {
@@ -446,7 +452,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
         String body = formatter.formatBody();
         assertTrue(body.contains("grant_type=client_credentials"),
             "Body should contain grant_type");
-        assertTrue(!body.contains("client_assertion"),
+        assertFalse(body.contains("client_assertion"),
             "Client secret body should not contain client_assertion");
     }
 
@@ -1071,7 +1077,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
 
     private void assertValidJwt(String jwt) {
         assertNotNull(jwt, "JWT should not be null");
-        assertTrue(!jwt.isEmpty(), "JWT should not be empty");
+        assertFalse(jwt.isEmpty(), "JWT should not be empty");
         String[] parts = jwt.split("\\.");
         assertEquals(3, parts.length,
             "JWT should have 3 parts (header.payload.signature), got: " + parts.length);
@@ -1234,7 +1240,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
         String content = headerB64 + "." + payloadB64;
 
         java.security.Signature sig = "ES256".equals(algorithm)
-            ? java.security.Signature.getInstance("SHA256withECDSA")
+            ? java.security.Signature.getInstance("SHA256withECDSAinP1363Format")
             : java.security.Signature.getInstance("SHA256withRSA");
         sig.initSign(keyPair.getPrivate());
         sig.update(content.getBytes(StandardCharsets.UTF_8));

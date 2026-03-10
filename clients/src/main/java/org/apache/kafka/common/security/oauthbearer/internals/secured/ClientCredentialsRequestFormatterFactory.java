@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionSupplierFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.CloseableSupplier;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,27 +72,37 @@ public class ClientCredentialsRequestFormatterFactory {
      * @throws org.apache.kafka.common.config.ConfigException if required configuration is missing or invalid
      */
     public static HttpRequestFormatter create(ConfigurationUtils cu, JaasOptionsUtils jou) {
+        return create(cu, jou, Time.SYSTEM);
+    }
+
+    public static HttpRequestFormatter create(ConfigurationUtils cu, JaasOptionsUtils jou, Time time) {
         ConfigOrJaas configOrJaas = new ConfigOrJaas(cu, jou);
         String scope = configOrJaas.scope();
         boolean urlEncodeHeader = validateUrlEncodeHeader(cu);
-        
-        if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS) || cu.containsKey(SASL_OAUTHBEARER_ASSERTION_FILE)) {
+
+        String assertionFile = cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false);
+        if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS) || assertionFile != null) {
             // Check for config conflicts and warn if both file and local generation configs are present
-            if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_FILE) && cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS)) {
+            if (assertionFile != null && cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS)) {
                 LOG.warn("Both {} and {} are configured. Using file-based assertion (first preference); " +
                          "locally-generated assertion configs will be ignored.",
                     SASL_OAUTHBEARER_ASSERTION_FILE, SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS);
             }
-            
+
             // Log which assertion path is being used
-            if (cu.containsKey(SASL_OAUTHBEARER_ASSERTION_FILE)) {
+            if (assertionFile != null) {
                 LOG.info("Using client assertion authentication with file-based assertion (first preference)");
             } else {
-                LOG.info("Using client assertion authentication with locally-generated assertion (second preference)");
+                LOG.info("Using client assertion authentication with dynamically-generated assertion (second preference)");
             }
 
-            CloseableSupplier<String> assertionSupplier = AssertionSupplierFactory.create(cu, Time.SYSTEM);
-            return new ClientAssertionRequestFormatter(configOrJaas.clientId(false), scope, assertionSupplier);
+            CloseableSupplier<String> assertionSupplier = AssertionSupplierFactory.create(cu, time);
+            try {
+                return new ClientAssertionRequestFormatter(configOrJaas.clientId(false), scope, assertionSupplier);
+            } catch (Exception e) {
+                Utils.closeQuietly(assertionSupplier, "assertion supplier");
+                throw e;
+            }
         } else {
             LOG.info("Using client secret authentication (third preference/fallback)");
             return new ClientSecretRequestFormatter(configOrJaas.clientId(), configOrJaas.clientSecret(), scope, urlEncodeHeader);
@@ -103,8 +114,6 @@ public class ClientCredentialsRequestFormatterFactory {
     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
     * will cause a {@link NullPointerException} when it is later unboxed.
     * <p>
-    * <p/>
-    *
     * This utility method ensures that we have a non-{@code null} value to use in the
     * {@link ClientSecretRequestFormatter} constructor.
     */

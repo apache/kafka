@@ -88,8 +88,9 @@ public class ClientAssertionRequestFormatter implements HttpRequestFormatter, Cl
         StringBuilder requestParameters = new StringBuilder();
         // client_assertion_type: Pre-encoded URN (colons encoded as %3A per RFC 6749)
         requestParameters.append("client_assertion_type=").append("urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer");
-        // client_assertion: JWT is Base64url-encoded (URL-safe by definition per RFC 7515), no encoding needed
-        requestParameters.append("&client_assertion=").append(assertionSupplier.get());
+        // client_assertion: JWT is Base64url-encoded (URL-safe per RFC 7515); encoding is a no-op but
+        // applied defensively for consistency with JwtBearerRequestFormatter
+        requestParameters.append("&client_assertion=").append(URLEncoder.encode(assertionSupplier.get(), StandardCharsets.UTF_8));
         // grant_type: Encoded per RFC 6749 Section 4.4.2
         requestParameters.append("&grant_type=").append(URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8));
         if (!Utils.isBlank(clientId)) {

@@ -22,6 +22,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.Configurat
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -95,14 +96,23 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientCredentialsJwtRetriever.class);
 
+    private final Time time;
     private HttpJwtRetriever delegate;
+
+    public ClientCredentialsJwtRetriever() {
+        this(Time.SYSTEM);
+    }
+
+    public ClientCredentialsJwtRetriever(Time time) {
+        this.time = time;
+    }
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
 
-        HttpRequestFormatter requestFormatter = ClientCredentialsRequestFormatterFactory.create(cu, jou);
+        HttpRequestFormatter requestFormatter = ClientCredentialsRequestFormatterFactory.create(cu, jou, time);
         delegate = new HttpJwtRetriever(requestFormatter);
 
         LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());
