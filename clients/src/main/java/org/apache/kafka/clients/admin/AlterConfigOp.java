@@ -80,7 +80,7 @@ public class AlterConfigOp {
         }
 
         /**
-         * Returns the byte id associated with this operation type. This id is used for serialization 
+         * Returns the byte id associated with this operation type. This id is used for serialization
          * and protocol communication.
          */
         public byte id() {
@@ -110,8 +110,8 @@ public class AlterConfigOp {
     }
 
     /**
-     * Returns the configuration entry associated with this alteration operation. 
-     * The name field of the configuration entry must be non-null and non-empty. 
+     * Returns the configuration entry associated with this alteration operation.
+     * The name field of the configuration entry must be non-null and non-empty.
      * The value field may be null, depending on the operation type.
      */
     public ConfigEntry configEntry() {

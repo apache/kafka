@@ -356,7 +356,7 @@ public class AdminClientConfig extends AbstractConfig {
 
     /**
      * Get the set of configuration names supported by this configuration class.
-     * @return the set of configuration names.
+     * @return The set of configuration names.
      */
     public static Set<String> configNames() {
         return CONFIG.names();
@@ -364,7 +364,7 @@ public class AdminClientConfig extends AbstractConfig {
 
     /**
      * Get the ConfigDef for this configuration class.
-     * @return the ConfigDef for this configuration class.
+     * @return The ConfigDef for this configuration class.
      */
     public static ConfigDef configDef() {
         return  new ConfigDef(CONFIG);
