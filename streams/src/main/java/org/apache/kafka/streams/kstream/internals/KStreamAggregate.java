@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -134,7 +135,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
 
             newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
-            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, record.headers());
+            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, new RecordHeaders());
             // if not put to store, do not forward downstream either
             if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                 tupleForwarder.maybeForward(

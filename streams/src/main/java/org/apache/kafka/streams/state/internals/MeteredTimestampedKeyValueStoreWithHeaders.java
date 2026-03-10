@@ -26,7 +26,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.KeyQuery;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -65,27 +64,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     extends MeteredKeyValueStore<K, ValueTimestampHeaders<V>>
     implements TimestampedKeyValueStoreWithHeaders<K, V> {
 
-    @SuppressWarnings("rawtypes")
-    private final Map<Class, StoreQueryUtils.QueryHandler> queryHandlers =
-            mkMap(
-                    mkEntry(
-                            RangeQuery.class,
-                            (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
-                    ),
-                    mkEntry(
-                            TimestampedRangeQuery.class,
-                            (query, positionBound, config, store) -> runTimestampedRangeQuery(query, positionBound, config)
-                    ),
-                    mkEntry(
-                            KeyQuery.class,
-                            (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
-                    ),
-                    mkEntry(
-                            TimestampedKeyQuery.class,
-                            (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
-                    )
-            );
-
     MeteredTimestampedKeyValueStoreWithHeaders(final KeyValueStore<Bytes, byte[]> inner,
                                                final String metricScope,
                                                final Time time,
@@ -93,6 +71,27 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                                                final Serde<ValueTimestampHeaders<V>> valueSerde) {
         super(inner, metricScope, time, keySerde, valueSerde);
     }
+
+    @SuppressWarnings("rawtypes")
+    private final Map<Class, StoreQueryUtils.QueryHandler> queryHandlers =
+        mkMap(
+            mkEntry(
+                KeyQuery.class,
+                (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                TimestampedKeyQuery.class,
+                (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                RangeQuery.class,
+                (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                TimestampedRangeQuery.class,
+                (query, positionBound, config, store) -> runTimestampedRangeQuery(query, positionBound, config)
+            )
+        );
 
     @SuppressWarnings("unchecked")
     @Override
@@ -121,7 +120,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public ValueTimestampHeaders<V> putIfAbsent(final K key,
-                         final ValueTimestampHeaders<V> value) {
+                                                final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
         final Headers headers = value != null ? value.headers() : new RecordHeaders();
         final ValueTimestampHeaders<V> currentValue = maybeMeasureLatency(
@@ -132,6 +131,19 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         maybeRecordE2ELatency();
         return currentValue;
     }
+
+    /**
+     * Executes a query against this store.
+     *
+     * <p>Note: Query results do NOT include headers, even though headers are
+     * preserved in the underlying store. This behavior provides compatibility
+     * with existing IQv2 APIs that operate on timestamped stores.
+     *
+     * @param query the query to execute
+     * @param positionBound the position bound
+     * @param config the query configuration
+     * @return the query result
+     */
 
     @SuppressWarnings("unchecked")
     @Override
@@ -147,27 +159,21 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             result = wrapped().query(query, positionBound, config);
             if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
-                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
             result = (QueryResult<R>) handler.apply(
-                    query,
-                    positionBound,
-                    config,
-                    this
+                query,
+                positionBound,
+                config,
+                this
             );
             if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                        "Handled in " + getClass() + " with serdes "
-                                + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                result.addExecutionInfo("Handled in " + getClass() + " with serdes "
+                    + serdes + " in " + (time.nanoseconds() - start) + "ns");
             }
         }
         return result;
-    }
-
-    @Override
-    public Position getPosition() {
-        return wrapped().getPosition();
     }
 
     @SuppressWarnings("unchecked")
@@ -177,15 +183,15 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.getKey(), new RecordHeaders()));
+            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey(), new RecordHeaders()));
         final QueryResult<byte[]> rawResult =
-                wrapped().query(rawKeyQuery, positionBound, config);
+            wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
             final V plainValue = valueTimestampHeaders == null ? null : valueTimestampHeaders.value();
             final QueryResult<V> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, plainValue);
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, plainValue);
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
@@ -201,18 +207,18 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.key(), new RecordHeaders()));
+            KeyQuery.withKey(keyBytes(typedKeyQuery.key(), new RecordHeaders()));
         final QueryResult<byte[]> rawResult =
-                wrapped().query(rawKeyQuery, positionBound, config);
+            wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
             // Convert ValueTimestampHeaders to ValueAndTimestamp for the result
             final ValueAndTimestamp<V> valueAndTimestamp = valueTimestampHeaders == null
-                    ? null
-                    : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
+                ? null
+                : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
             final QueryResult<ValueAndTimestamp<V>> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueAndTimestamp);
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueAndTimestamp);
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
@@ -231,8 +237,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().orElse(null), new RecordHeaders()),
-                keyBytes(typedQuery.getUpperBound().orElse(null), new RecordHeaders())
+            keyBytes(typedQuery.getLowerBound().orElse(null), new RecordHeaders()),
+            keyBytes(typedQuery.getUpperBound().orElse(null), new RecordHeaders())
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -241,20 +247,20 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             rawRangeQuery = rawRangeQuery.withAscendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-                wrapped().query(rawRangeQuery, positionBound, config);
+            wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
             final KeyValueIterator<K, V> resultIterator = new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-                    iterator,
-                    getSensor,
-                    StoreQueryUtils.deserializeValue(serdes, wrapped()),
-                    true
+                iterator,
+                getSensor,
+                StoreQueryUtils.deserializeValue(serdes, wrapped()),
+                true
             );
             final QueryResult<KeyValueIterator<K, V>> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
-                            rawResult,
-                            resultIterator
-                    );
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
+                    rawResult,
+                    resultIterator
+                );
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
@@ -273,8 +279,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.lowerBound().orElse(null), new RecordHeaders()),
-                keyBytes(typedQuery.upperBound().orElse(null), new RecordHeaders())
+            keyBytes(typedQuery.lowerBound().orElse(null), new RecordHeaders()),
+            keyBytes(typedQuery.upperBound().orElse(null), new RecordHeaders())
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -283,20 +289,21 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             rawRangeQuery = rawRangeQuery.withAscendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-                wrapped().query(rawRangeQuery, positionBound, config);
+            wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
-            final KeyValueIterator<K, ValueAndTimestamp<V>> resultIterator = (KeyValueIterator<K, ValueAndTimestamp<V>>) new MeteredTimestampedKeyValueStoreWithHeadersIterator(
+            final KeyValueIterator<K, ValueAndTimestamp<V>> resultIterator =
+                (KeyValueIterator<K, ValueAndTimestamp<V>>) new MeteredTimestampedKeyValueStoreWithHeadersIterator(
                     iterator,
                     getSensor,
                     StoreQueryUtils.deserializeValue(serdes, wrapped()),
                     false
-            );
+                );
             final QueryResult<KeyValueIterator<K, ValueAndTimestamp<V>>> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
-                            rawResult,
-                            resultIterator
-                    );
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
+                    rawResult,
+                    resultIterator
+                );
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
@@ -347,17 +354,17 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             if (returnPlainValue) {
                 final V plainValue = valueTimestampHeaders == null ? null : valueTimestampHeaders.value();
                 return KeyValue.pair(
-                        serdes.keyFrom(keyValue.key.get(), headers),
-                        plainValue
+                    serdes.keyFrom(keyValue.key.get(), headers),
+                    plainValue
                 );
             } else {
                 // Return as ValueAndTimestamp
                 final ValueAndTimestamp<V> valueAndTimestamp = valueTimestampHeaders == null
-                        ? null
-                        : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
+                    ? null
+                    : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
                 return KeyValue.pair(
-                        serdes.keyFrom(keyValue.key.get(), headers),
-                        (V) valueAndTimestamp
+                    serdes.keyFrom(keyValue.key.get(), headers),
+                    (V) valueAndTimestamp
                 );
             }
         }

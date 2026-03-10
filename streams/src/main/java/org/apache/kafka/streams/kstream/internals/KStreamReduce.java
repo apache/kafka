@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -129,7 +130,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
                 newTimestamp = Math.max(record.timestamp(), oldAggAndTimestamp.timestamp());
             }
 
-            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, record.headers());
+            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, new RecordHeaders());
             // if not put to store, do not forward downstream either
             if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                 tupleForwarder.maybeForward(

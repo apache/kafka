@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.Collections;
@@ -44,7 +45,9 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
         if (!store.isOpen()) {
             throw new InvalidStateStoreException("the state store, " + storeName + ", is not open.");
         }
-        if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+        if (store instanceof TimestampedKeyValueStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+            return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store));
+        } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
             return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store));
         } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
             return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store));

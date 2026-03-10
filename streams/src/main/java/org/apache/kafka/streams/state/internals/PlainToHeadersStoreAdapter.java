@@ -24,15 +24,17 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
@@ -145,10 +147,44 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
         return store.isOpen();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        // Handle KeyQuery: convert byte[] result from plain to headers format
+        if (query instanceof KeyQuery) {
+            final KeyQuery<Bytes, byte[]> keyQuery = (KeyQuery<Bytes, byte[]>) query;
+            final QueryResult<byte[]> rawResult = store.query(keyQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final byte[] convertedValue = convertFromPlainToHeaderFormat(rawResult.getResult());
+                final QueryResult<byte[]> convertedResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedValue);
+                return (QueryResult<R>) convertedResult;
+            } else {
+                return (QueryResult<R>) rawResult;
+            }
+        }
+
+        // Handle RangeQuery: wrap iterator to convert values
+        if (query instanceof RangeQuery) {
+            final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
+            final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
+                store.query(rangeQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final KeyValueIterator<Bytes, byte[]> convertedIterator =
+                    new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+                final QueryResult<KeyValueIterator<Bytes, byte[]>> convertedResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
+                return (QueryResult<R>) convertedResult;
+            } else {
+                return (QueryResult<R>) rawResult;
+            }
+        }
+
+        // For other query types, delegate to the underlying store
         return store.query(query, positionBound, config);
     }
 

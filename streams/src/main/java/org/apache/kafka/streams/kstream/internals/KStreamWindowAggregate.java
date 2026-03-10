@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
@@ -149,7 +150,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
                     // update the store with the new value
-                    windowStore.put(record.key(), ValueTimestampHeaders.make(newAgg, newTimestamp, record.headers()), windowStart);
+                    windowStore.put(record.key(), ValueTimestampHeaders.make(newAgg, newTimestamp, new RecordHeaders()), windowStart);
                     maybeForwardUpdate(record, entry.getValue(), oldAgg, newAgg, newTimestamp);
                 } else {
                     final String windowString = "[" + windowStart + "," + windowEnd + ")";

@@ -27,6 +27,9 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
@@ -205,8 +208,26 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        final QueryResult<R> result = store.query(query, positionBound, config);
 
-        return store.query(query, positionBound, config);
+        if (!result.isSuccess()) {
+            return result;
+        }
+
+        // Wrap iterators to convert from plain format to header format
+        if (query instanceof WindowKeyQuery) {
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = (QueryResult<WindowStoreIterator<byte[]>>) result;
+            final WindowStoreIterator<byte[]> wrappedIterator = new PlainWindowToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
+            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+        } else if (query instanceof WindowRangeQuery) {
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                (QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>>) result;
+            final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
+                new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+        }
+
+        return result;
     }
 
     @Override

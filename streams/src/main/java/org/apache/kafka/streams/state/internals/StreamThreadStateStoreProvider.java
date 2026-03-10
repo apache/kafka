@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyS
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.ArrayList;
@@ -103,7 +104,9 @@ public class StreamThreadStateStoreProvider {
                             " because the store is not open. " +
                             "The state store may have migrated to another instance.");
             }
-            if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+            if (store instanceof TimestampedKeyValueStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                return (T) new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store);
+            } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                 return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
             } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                 return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store);

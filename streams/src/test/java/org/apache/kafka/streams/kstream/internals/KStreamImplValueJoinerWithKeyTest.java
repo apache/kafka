@@ -100,7 +100,7 @@ public class KStreamImplValueJoinerWithKeyTest {
     }
 
     @Test
-    public void shouldIncludeKeyInStreamLeftJoinResults() {
+        public void shouldIncludeKeyInStreamLeftJoinResults() {
         leftStream.leftJoin(
             rightStream,
             valueJoinerWithKey,

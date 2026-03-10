@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
@@ -359,7 +360,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
             if (combinedWindow == null) {
                 final TimeWindow window = new TimeWindow(0, windows.timeDifferenceMs());
-                final ValueTimestampHeaders<VAgg> valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), record.headers());
+                final ValueTimestampHeaders<VAgg> valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), new RecordHeaders());
                 updateWindowAndForward(window, valueTimestampHeaders, record, windowCloseTime);
 
             } else {
@@ -389,9 +390,9 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             if (!leftWinAlreadyCreated) {
                 final ValueTimestampHeaders<VAgg> valueTimestampHeaders;
                 if (leftWindowNotEmpty(previousRecordTimestamp, record.timestamp())) {
-                    valueTimestampHeaders = ValueTimestampHeaders.make(leftWinAgg.value(), record.timestamp(), record.headers());
+                    valueTimestampHeaders = ValueTimestampHeaders.make(leftWinAgg.value(), record.timestamp(), new RecordHeaders());
                 } else {
-                    valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), record.headers());
+                    valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), new RecordHeaders());
                 }
                 final TimeWindow window = new TimeWindow(record.timestamp() - windows.timeDifferenceMs(), record.timestamp());
                 updateWindowAndForward(window, valueTimestampHeaders, record, closeTime);
@@ -418,7 +419,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                                                      final Record<KIn, VIn> record,
                                                      final long closeTime) {
             final TimeWindow window = new TimeWindow(windowStart, windowStart + windows.timeDifferenceMs());
-            final ValueTimestampHeaders<VAgg> valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), record.headers());
+            final ValueTimestampHeaders<VAgg> valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), new RecordHeaders());
             updateWindowAndForward(window, valueTimestampHeaders, record, closeTime);
         }
 
@@ -470,10 +471,9 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 final VAgg newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
                 final long newTimestamp = oldAgg == null ? record.timestamp() : Math.max(record.timestamp(), valueTimestampHeaders.timestamp());
-                final Headers headers  =  oldAgg == null ? record.headers() : valueTimestampHeaders.headers();
                 windowStore.put(
                     record.key(),
-                    ValueTimestampHeaders.make(newAgg, newTimestamp, headers),
+                    ValueTimestampHeaders.make(newAgg, newTimestamp, new RecordHeaders()),
                     windowStart);
                 maybeForwardUpdate(record, window, oldAgg, newAgg, newTimestamp);
             } else {

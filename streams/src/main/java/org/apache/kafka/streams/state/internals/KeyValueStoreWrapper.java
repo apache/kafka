@@ -62,7 +62,6 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             return;
         } catch (final ClassCastException e) {
             // ignore since could be regular timestamped or versioned store instead
-            System.out.println(e.getMessage());
         }
 
         try {

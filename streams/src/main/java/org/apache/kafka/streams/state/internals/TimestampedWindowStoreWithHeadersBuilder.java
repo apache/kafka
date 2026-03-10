@@ -21,10 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -68,12 +64,18 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
 
     @Override
     public TimestampedWindowStoreWithHeaders<K, V> build() {
+        // DEBUG LOGGING - START
+        System.out.println("=== DEBUG TimestampedWindowStoreWithHeadersBuilder.build() ===");
+        System.out.println("Store name: " + storeSupplier.name());
+        System.out.println("Store supplier class: " + storeSupplier.getClass().getName());
+        // DEBUG LOGGING - END
+
         WindowStore<Bytes, byte[]> store = storeSupplier.get();
 
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
                 if (store instanceof TimestampedBytesStore) {
-                    store = new TimestampedToHeadersWindowStoreAdapter(store);
+                    store = new  TimestampedToHeadersWindowStoreAdapter(store);
                 } else {
                     store = new PlainToHeadersWindowStoreAdapter(store);
                 }
@@ -216,13 +218,6 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
             return wrapped().backwardAll();
-        }
-
-        @Override
-        public <R> QueryResult<R> query(final Query<R> query,
-                                        final PositionBound positionBound,
-                                        final QueryConfig config) {
-            return wrapped().query(query, positionBound, config);
         }
 
         @Override
