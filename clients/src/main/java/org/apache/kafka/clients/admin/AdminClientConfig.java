@@ -42,7 +42,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * Configuration for the {@link Admin} client. This class defines all configuration properties
  * accepted by the admin client and provides constants for their names.
  * <p>
- * At minimum, {@link #BOOTSTRAP_SERVERS_CONFIG} must be set to connect to brokers, or
+ * At minimum, <em>either</em> {@link #BOOTSTRAP_SERVERS_CONFIG} must be set to connect to brokers, or
  * {@link #BOOTSTRAP_CONTROLLERS_CONFIG} to connect directly to KRaft controllers for
  * controller-only operations (e.g., {@link Admin#addRaftVoter}).
  *
@@ -344,7 +344,7 @@ public class AdminClientConfig extends AbstractConfig {
     }
 
     /**
-     * @param props The configuration properties.
+     * @param props the configuration properties.
      */
     public AdminClientConfig(Map<?, ?> props) {
         this(props, false);

@@ -1250,9 +1250,10 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List all the current partition reassignments
-     * 
-     * @param partitions the partitions we want to get reassignment for, or an empty optional if we want to get the reassignments for all partitions in the cluster
+     * List all the current partition reassignments.
+     *
+     * @param partitions The partitions to get reassignments for.
+     *                   If empty, reassignments for all partitions in the cluster are returned.
      * @param options         The options to use.
      * @return                The result.
      */

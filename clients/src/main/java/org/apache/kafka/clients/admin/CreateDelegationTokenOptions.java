@@ -25,7 +25,7 @@ import java.util.Optional;
 
 /**
  * Delegation tokens provide a lightweight authentication mechanism for Kafka clients. They are
- * useful when distributing Kerberos TGTs to a large number of clients is impractical,
+ * useful when distributing Kerberos TGTs to a large number of clients is impractical.
  * <p>
  * If no {@link #renewers(List) renewers} are specified, only the token owner (or a broker's
  * configured delegation token management principal) can renew or expire the token. If no
@@ -78,7 +78,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
     }
 
     /**
-     * @deprecated Since 4.0 and should not be used any longer. please use {@link #maxLifetimeMs(long)} instead.
+     * @deprecated Since 4.0 and should not be used any longer. Please use {@link #maxLifetimeMs(long)} instead.
      */
     @Deprecated
     public CreateDelegationTokenOptions maxlifeTimeMs(long maxLifetimeMs) {
@@ -98,7 +98,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
     }
 
     /**
-     * @deprecated Since 4.0 and should not be used any longer. please use {@link #maxLifetimeMs()} instead.
+     * @deprecated Since 4.0 and should not be used any longer. Please use {@link #maxLifetimeMs()} instead.
      */
     @Deprecated
     public long maxlifeTimeMs() {
