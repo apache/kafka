@@ -22619,6 +22619,13 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             // The member subscription is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+
+            // The group is initialized at group epoch 1. Since the group epoch is not bumped until
+            // regex resolution has completed, no consumer group metadata record is created.
+            // Similarly, the target assignment is initialized at epoch 1 with an empty assignment
+            // and not updated until regex resolution has completed, so no target assignment records
+            // are created.
+
             // The member current state is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
         );
