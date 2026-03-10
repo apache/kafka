@@ -454,36 +454,36 @@ public class ConsumerGroupTest {
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
 
         consumerGroup.updateMember(member1);
-        consumerGroup.setGroupEpoch(1);
+        consumerGroup.setGroupEpoch(2);
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
 
         consumerGroup.updateMember(member2);
-        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setGroupEpoch(3);
 
         assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
-        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         member1 = new ConsumerGroupMember.Builder(member1)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         consumerGroup.updateMember(member1);
@@ -494,8 +494,8 @@ public class ConsumerGroupTest {
         // Member 2 is not stable so the group stays in reconciling state.
         member2 = new ConsumerGroupMember.Builder(member2)
             .setState(MemberState.UNREVOKED_PARTITIONS)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         consumerGroup.updateMember(member2);
@@ -505,8 +505,8 @@ public class ConsumerGroupTest {
 
         member2 = new ConsumerGroupMember.Builder(member2)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         consumerGroup.updateMember(member2);
@@ -807,8 +807,8 @@ public class ConsumerGroupTest {
         MockTime time = new MockTime();
         ConsumerGroup group = createConsumerGroup("group-foo");
 
-        // Group epoch starts at 0.
-        assertEquals(0, group.groupEpoch());
+        // Group epoch starts at 1.
+        assertEquals(1, group.groupEpoch());
 
         // The refresh time deadline should be empty when the group is created or loaded.
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
@@ -941,6 +941,7 @@ public class ConsumerGroupTest {
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
+            .setMemberEpoch(1)
             .setSubscribedTopicNames(List.of("foo"))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
@@ -988,7 +989,7 @@ public class ConsumerGroupTest {
         assertDoesNotThrow(consumerGroup::validateDeleteGroup);
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
         consumerGroup.updateMember(member1);
@@ -996,12 +997,12 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
         assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
 
-        consumerGroup.setGroupEpoch(1);
+        consumerGroup.setGroupEpoch(2);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
         assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
 
-        consumerGroup.setTargetAssignmentMetadata(1, 12345L);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
         assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
@@ -1055,26 +1056,31 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
+                .setMemberEpoch(1)
                 .setSubscribedTopicNames(List.of("foo"))
                 .setServerAssignorName("assignorName")
                 .build());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
+                .setMemberEpoch(1)
                 .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         ConsumerGroupDescribeResponseData.DescribedGroup expected = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId("group-id-1")
             .setGroupState(ConsumerGroup.ConsumerGroupState.STABLE.toString())
-            .setGroupEpoch(0)
-            .setAssignmentEpoch(0)
+            .setGroupEpoch(1)
+            .setAssignmentEpoch(1)
             .setAssignorName("assignorName")
             .setMembers(Arrays.asList(
                 new ConsumerGroupDescribeResponseData.Member()
                     .setMemberId("member1")
+                    .setMemberEpoch(1)
                     .setSubscribedTopicNames(List.of("foo"))
                     .setSubscribedTopicRegex("")
                     .setMemberType((byte) 1),
-                new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
+                new ConsumerGroupDescribeResponseData.Member()
+                    .setMemberId("member2")
+                    .setMemberEpoch(1)
                     .setSubscribedTopicRegex("")
                     .setMemberType((byte) 1)
             ));
@@ -1093,6 +1099,7 @@ public class ConsumerGroupTest {
         assertFalse(group.isInStates(Set.of("Empty"), 0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
+            .setMemberEpoch(1)
             .setSubscribedTopicNames(List.of("foo"))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);

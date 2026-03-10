@@ -39,7 +39,7 @@ public class ShareGroupBuilder {
     public ShareGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.assignmentEpoch = 0;
+        this.assignmentEpoch = 1;
         this.assignmentTimestamp = 0L;
     }
 

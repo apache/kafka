@@ -42,7 +42,7 @@ public class StreamsGroupBuilder {
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.targetAssignmentEpoch = 0;
+        this.targetAssignmentEpoch = 1;
         this.targetAssignmentTimestamp = 0L;
         this.topology = null;
     }
