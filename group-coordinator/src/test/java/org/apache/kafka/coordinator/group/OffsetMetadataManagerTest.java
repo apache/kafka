@@ -1287,8 +1287,6 @@ public class OffsetMetadataManagerTest {
 
     @Test
     public void testConsumerGroupOffsetCommitWithZeroUuidResolvesTopicId() {
-        // Verifies that when a consumer group member commits with ZERO_UUID topic ID
-        // the topic ID is resolved from metadata for assignment epoch validation.
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
@@ -1328,12 +1326,16 @@ public class OffsetMetadataManagerTest {
                     ))
             ));
 
-        // Should fail because member epoch (3) < assignment epoch (5).
+        // client epoch (3) < assignment epoch (5), fail
         assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
 
-        // Now try with member epoch >= assignment epoch, should succeed.
+        // client epoch (5) >= assignment epoch (5), succeed.
         request.setGenerationIdOrMemberEpoch(5);
         assertDoesNotThrow(() -> context.commitOffset(request));
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> resp = context.commitOffset(request);
+        // validate topic name and id in the response
+        assertEquals(1, resp.response().topics().size());
+        assertEquals(barTopicName, resp.response().topics().get(0).name());
     }
 
     private static void verifyOffsetCommitFromAdminClient(OffsetMetadataManagerTestContext context) {

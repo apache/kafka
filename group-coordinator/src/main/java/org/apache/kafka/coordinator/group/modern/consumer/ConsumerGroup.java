@@ -1187,11 +1187,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Create a new consumer group according to the given classic group.
      *
-     * @param logContext              The log context.
-     * @param snapshotRegistry        The SnapshotRegistry.
-     * @param classicGroup            The converted classic group.
-     * @param topicHashCache          The cache for topic hashes.
-     * @param metadataImage           The current metadata image for the Kafka cluster.
+     * @param logContext        The log context.
+     * @param snapshotRegistry  The SnapshotRegistry.
+     * @param classicGroup      The converted classic group.
+     * @param topicHashCache    The cache for topic hashes.
+     * @param metadataImage     The current metadata image for the Kafka cluster.
      * @return  The created ConsumerGroup.
      *
      * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
