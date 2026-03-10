@@ -1,5 +1,6 @@
 KRaft (Kafka Raft)
 ==================
+
 KRaft (Kafka Raft) is a protocol based on the [Raft Consensus Protocol](https://www.usenix.org/system/files/conference/atc14/atc14-paper-ongaro.pdf)
 tailored for Apache Kafka.
 
