@@ -19,9 +19,9 @@ package org.apache.kafka.coordinator.group.modern.share;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -137,6 +137,16 @@ public class ShareGroupConfig {
         validate();
     }
 
+    public static ShareGroupConfig fromProps(Map<?, ?> props) {
+        return new ShareGroupConfig(
+            new AbstractConfig(
+                Utils.mergeConfigs(Arrays.asList(CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
+                props,
+                false
+            )
+        );
+    }
+
     /** Share group configuration **/
     public boolean isShareGroupEnabled() {
         return isShareGroupEnabled;
@@ -212,21 +222,5 @@ public class ShareGroupConfig {
         Utils.require(shareGroupMaxShareSessions >= config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG),
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG));
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
-     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
-     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
-     * (Ex. group.share.session.timeout.ms).
-     */
-    public Map<String, Integer> extractShareGroupConfigMap(GroupCoordinatorConfig groupCoordinatorConfig) {
-        return Map.of(
-            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
-            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.shareGroupHeartbeatIntervalMs(),
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs(),
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit(),
-            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupPartitionMaxRecordLocks()
-        );
     }
 }

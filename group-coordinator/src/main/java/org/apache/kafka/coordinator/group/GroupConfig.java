@@ -24,6 +24,9 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +45,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * defined in this class.
  */
 public final class GroupConfig extends AbstractConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(GroupConfig.class);
 
     public static final String CONSUMER_SESSION_TIMEOUT_MS_CONFIG = "consumer.session.timeout.ms";
 
@@ -298,11 +303,11 @@ public final class GroupConfig extends AbstractConfig {
         }
         if (shareDeliveryCountLimit < shareGroupConfig.shareGroupMinDeliveryCountLimit()) {
             throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be greater than or equal to " +
-                    ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
+                ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
         }
         if (shareDeliveryCountLimit > shareGroupConfig.shareGroupMaxDeliveryCountLimit()) {
             throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be less than or equal to " +
-                    ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
+                ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
         }
         if (sharePartitionMaxRecordLocks < shareGroupConfig.shareGroupMinPartitionMaxRecordLocks()) {
             throw new InvalidConfigurationException(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG + " must be greater than or equal to " +
@@ -347,13 +352,180 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Check that the given properties contain only valid consumer group config names and that all values can be
-     * parsed and are valid.
+     * Check that the given properties contain only valid group config names and that
+     * all values can be parsed and are valid. The provided properties are merged with
+     * the broker-level defaults before validation.
      */
     public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
-        validateNames(props);
-        Map<?, ?> valueMaps = CONFIG.parse(props);
+        Properties combinedConfigs = new Properties();
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
+        combinedConfigs.putAll(props);
+
+        validateNames(combinedConfigs);
+        Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
         validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
+    }
+
+    /**
+     * Evaluate group config values to their effective values within broker-level bounds.
+     * Out-of-range values are capped and a WARN log is emitted.
+     *
+     * @param props                  The raw group config properties.
+     * @param groupId                The group id.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     * @return A new Properties with out-of-range values capped.
+     */
+    public static Properties evaluate(
+        Properties props,
+        String groupId,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        Properties effective = new Properties();
+        effective.putAll(props);
+        evaluateValues(effective, groupId, groupCoordinatorConfig, shareGroupConfig);
+        return effective;
+    }
+
+    private static void evaluateValues(
+        Properties props,
+        String groupId,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        // Consumer group configs
+        clampToRange(props, groupId, CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs());
+        clampToRange(props, groupId, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs());
+
+        // Share group configs
+        clampToRange(props, groupId, SHARE_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs());
+        clampToRange(props, groupId, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs());
+        clampToRange(props, groupId, SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
+            shareGroupConfig.shareGroupMinRecordLockDurationMs(),
+            shareGroupConfig.shareGroupMaxRecordLockDurationMs());
+        clampToRange(props, groupId, SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
+            shareGroupConfig.shareGroupMinDeliveryCountLimit(),
+            shareGroupConfig.shareGroupMaxDeliveryCountLimit());
+        clampToRange(props, groupId, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
+            shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
+            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks());
+
+        // Streams group configs
+        clampToRange(props, groupId, STREAMS_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs());
+        clampToRange(props, groupId, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs());
+        clampToMax(props, groupId, STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas());
+
+        // Verify that clamping did not break the session > heartbeat invariant.
+        checkSessionExceedsHeartbeat(props, groupId,
+            CONSUMER_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.consumerGroupSessionTimeoutMs(),
+            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs());
+        checkSessionExceedsHeartbeat(props, groupId,
+            SHARE_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
+            SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.shareGroupHeartbeatIntervalMs());
+        checkSessionExceedsHeartbeat(props, groupId,
+            STREAMS_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.streamsGroupSessionTimeoutMs(),
+            STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs());
+    }
+
+    /**
+     * Log a WARN if the session timeout is not greater than the heartbeat interval after
+     * evaluation. When a key is absent from props, the broker-level default is used.
+     */
+    private static void checkSessionExceedsHeartbeat(
+        Properties props,
+        String groupId,
+        String sessionKey,
+        int defaultSession,
+        String heartbeatKey,
+        int defaultHeartbeat
+    ) {
+        Object rawSession = props.get(sessionKey);
+        Object rawHeartbeat = props.get(heartbeatKey);
+        if (rawSession == null && rawHeartbeat == null) return;
+
+        int session = rawSession != null ? Integer.parseInt(rawSession.toString()) : defaultSession;
+        int heartbeat = rawHeartbeat != null ? Integer.parseInt(rawHeartbeat.toString()) : defaultHeartbeat;
+        if (session <= heartbeat) {
+            log.warn("The effective {} ({}) for group '{}' is not greater than {} ({}). "
+                    + "Check that the broker-level min/max bounds for session timeout "
+                    + "and heartbeat interval do not overlap.",
+                sessionKey, session, groupId, heartbeatKey, heartbeat);
+        }
+    }
+
+    /**
+     * Clamp a config value to [min, max]. A WARN log is emitted on adjustment.
+     * No-op when the key is absent from props.
+     *
+     * @param props   The properties to modify in place.
+     * @param groupId The group id.
+     * @param key     The config key.
+     * @param min     The minimum allowed value (inclusive).
+     * @param max     The maximum allowed value (inclusive).
+     */
+    private static void clampToRange(
+        Properties props,
+        String groupId,
+        String key,
+        int min,
+        int max
+    ) {
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
+
+        int value = Integer.parseInt(rawValue.toString());
+        if (value < min) {
+            log.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
+                    "allowed minimum {}. The effective value will be capped to {}.",
+                key, groupId, value, min, min);
+            props.put(key, min);
+        } else if (value > max) {
+            log.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
+                    "allowed maximum {}. The effective value will be capped to {}.",
+                key, groupId, value, max, max);
+            props.put(key, max);
+        }
+    }
+
+    /**
+     * Clamp a config value to at most max. A WARN log is emitted on adjustment.
+     * No-op when the key is absent from props.
+     *
+     * @param props   The properties to modify in place.
+     * @param groupId The group id.
+     * @param key     The config key.
+     * @param max     The maximum allowed value (inclusive).
+     */
+    private static void clampToMax(
+        Properties props,
+        String groupId,
+        String key,
+        int max
+    ) {
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
+
+        int value = Integer.parseInt(rawValue.toString());
+        if (value > max) {
+            log.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
+                    "allowed maximum {}. The effective value will be capped to {}.",
+                key, groupId, value, max, max);
+            props.put(key, max);
+        }
     }
 
     /**

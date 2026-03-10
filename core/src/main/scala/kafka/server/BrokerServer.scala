@@ -374,7 +374,7 @@ class BrokerServer(
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.BrokerRole.toString)
 
       /* initializing the groupConfigManager */
-      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), config.groupCoordinatorConfig, config.shareGroupConfig)
 
       /* create share coordinator */
       shareCoordinator = createShareCoordinator()
