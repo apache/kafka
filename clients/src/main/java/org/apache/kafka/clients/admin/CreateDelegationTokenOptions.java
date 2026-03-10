@@ -44,7 +44,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
      * only the token owner and the broker's delegation token management principal can renew
      * or expire the token.
      *
-     * @param renewers the list of principals that can renew the token.
+     * @param renewers The list of principals that can renew the token.
      */
     public CreateDelegationTokenOptions renewers(List<KafkaPrincipal> renewers) {
         this.renewers = renewers;
@@ -63,7 +63,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
      * {@link Admin#createDelegationToken(CreateDelegationTokenOptions)} becomes the token owner.
      * Setting a different owner allows a superuser to create tokens on behalf of other principals.
      *
-     * @param owner the owner principal.
+     * @param owner The owner principal.
      */
     public CreateDelegationTokenOptions owner(KafkaPrincipal owner) {
         this.owner = owner;
@@ -90,7 +90,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
      * Set the maximum lifetime in milliseconds for the delegation token. If -1, the default
      * server-side maximum lifetime will be used, which is 7 days.
      *
-     * @param maxLifetimeMs the maximum lifetime in milliseconds.
+     * @param maxLifetimeMs The maximum lifetime in milliseconds.
      */
     public CreateDelegationTokenOptions maxLifetimeMs(long maxLifetimeMs) {
         this.maxLifetimeMs = maxLifetimeMs;

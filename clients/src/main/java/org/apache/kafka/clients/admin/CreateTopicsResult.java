@@ -117,10 +117,10 @@ public class CreateTopicsResult {
         private final Config config;
 
         /**
-         * @param topicId           the topic ID.
-         * @param numPartitions     the number of partitions.
-         * @param replicationFactor the replication factor.
-         * @param config            the topic configuration.
+         * @param topicId           The topic ID.
+         * @param numPartitions     The number of partitions.
+         * @param replicationFactor The replication factor.
+         * @param config            The topic configuration.
          */
         public TopicMetadataAndConfig(Uuid topicId, int numPartitions, int replicationFactor, Config config) {
             this.exception = null;
@@ -133,7 +133,7 @@ public class CreateTopicsResult {
         /**
          * Create a failed instance with the provided exception.
          *
-         * @param exception the exception that caused the topic creation failure.
+         * @param exception The exception that caused the topic creation failure.
          */
         public TopicMetadataAndConfig(ApiException exception) {
             this.exception = exception;

@@ -100,9 +100,9 @@ public class AlterConfigOp {
     private final OpType opType;
 
     /**
-     * @param configEntry   the configuration entry to be altered. The name field must be non-null and non-empty.
+     * @param configEntry   The configuration entry to be altered. The name field must be non-null and non-empty.
      *                      The value field may be null, depending on the operation type.
-     * @param operationType the type of alteration operation to be performed on the configuration entry.
+     * @param operationType The type of alteration operation to be performed on the configuration entry.
      */
     public AlterConfigOp(ConfigEntry configEntry, OpType operationType) {
         this.configEntry = configEntry;

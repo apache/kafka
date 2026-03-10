@@ -34,7 +34,7 @@ public class ClientMetricsResourceListing {
     private final String name;
 
     /**
-     * @param name the client metrics resource name.
+     * @param name The client metrics resource name.
      */
     public ClientMetricsResourceListing(String name) {
         this.name = name;

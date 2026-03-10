@@ -54,12 +54,12 @@ public class ClassicGroupDescription {
     private final Set<AclOperation> authorizedOperations;
 
     /**
-     * @param groupId         the group id.
-     * @param protocol        the group protocol type.
-     * @param protocolData    the group protocol data.
-     * @param members         the group members.
-     * @param state           the classic group state.
-     * @param coordinator     the group coordinator.
+     * @param groupId         The group id.
+     * @param protocol        The group protocol type.
+     * @param protocolData    The group protocol data.
+     * @param members         The group members.
+     * @param state           The classic group state.
+     * @param coordinator     The group coordinator.
      */
     public ClassicGroupDescription(String groupId,
                                    String protocol,
@@ -71,13 +71,13 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * @param groupId               the group id.
-     * @param protocol              the group protocol type.
-     * @param protocolData          the group protocol data.
-     * @param members               the group members.
-     * @param state                 the classic group state.
-     * @param coordinator           the group coordinator.
-     * @param authorizedOperations  the authorized operations.
+     * @param groupId               The group id.
+     * @param protocol              The group protocol type.
+     * @param protocolData          The group protocol data.
+     * @param members               The group members.
+     * @param state                 The classic group state.
+     * @param coordinator           The group coordinator.
+     * @param authorizedOperations  The authorized operations.
      */
     public ClassicGroupDescription(String groupId,
                                    String protocol,

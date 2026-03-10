@@ -43,10 +43,10 @@ public class AbortTransactionSpec {
     private final int coordinatorEpoch;
 
     /**
-     * @param topicPartition   the topic partition where the transaction is open.
-     * @param producerId       the ID of the producer that initiated the transaction.
-     * @param producerEpoch    the epoch of the producer.
-     * @param coordinatorEpoch the epoch of the transaction coordinator.
+     * @param topicPartition   The topic partition where the transaction is open.
+     * @param producerId       The ID of the producer that initiated the transaction.
+     * @param producerEpoch    The epoch of the producer.
+     * @param coordinatorEpoch The epoch of the transaction coordinator.
      */
     public AbortTransactionSpec(
         TopicPartition topicPartition,

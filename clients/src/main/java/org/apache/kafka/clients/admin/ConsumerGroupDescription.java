@@ -109,16 +109,16 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * @param groupId                 the group id.
-     * @param isSimpleConsumerGroup   whether the consumer group is simple.
-     * @param members                 the group members.
-     * @param partitionAssignor       the partition assignor.
-     * @param type                    the group type.
-     * @param groupState              the group state.
-     * @param coordinator             the group coordinator.
-     * @param authorizedOperations    the authorized operations.
-     * @param groupEpoch              the group epoch.
-     * @param targetAssignmentEpoch   the target assignment epoch.
+     * @param groupId                 The group id.
+     * @param isSimpleConsumerGroup   Whether the consumer group is simple.
+     * @param members                 The group members.
+     * @param partitionAssignor       The partition assignor.
+     * @param type                    The group type.
+     * @param groupState              The group state.
+     * @param coordinator             The group coordinator.
+     * @param authorizedOperations    The authorized operations.
+     * @param groupEpoch              The group epoch.
+     * @param targetAssignmentEpoch   The target assignment epoch.
      */
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,

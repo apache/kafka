@@ -344,7 +344,7 @@ public class AdminClientConfig extends AbstractConfig {
     }
 
     /**
-     * @param props the configuration properties.
+     * @param props The configuration properties.
      */
     public AdminClientConfig(Map<?, ?> props) {
         this(props, false);
