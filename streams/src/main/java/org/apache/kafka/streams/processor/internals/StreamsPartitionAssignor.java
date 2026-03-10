@@ -1550,12 +1550,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Set<String> missingSourceTopics =
             StreamsMetadataState.missingSourceTopicsForMetadata(topicToPartitionInfo, taskManager.topologyMetadata());
-        if (missingSourceTopics.isEmpty()) {
-            streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, topicToPartitionInfo);
-        } else {
-            log.info("Skipping streams metadata update because partition metadata is missing for source topics {}. " +
-                    "Will retry after metadata is refreshed.", missingSourceTopics);
+        if (!missingSourceTopics.isEmpty()) {
+            log.info("Missing partition metadata for source topics {} while updating streams metadata; " +
+                    "continuing with stores/topics that have metadata.", missingSourceTopics);
         }
+        streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, topicToPartitionInfo);
 
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread

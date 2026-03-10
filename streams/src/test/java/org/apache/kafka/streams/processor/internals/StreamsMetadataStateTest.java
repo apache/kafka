@@ -404,4 +404,34 @@ public class StreamsMetadataStateTest {
 
         assertFalse(metadataState.allMetadata().isEmpty(), "encapsulation broken");
     }
+
+    @Test
+    public void shouldUpdateMetadataForStoreWithCompleteTopicMetadataWhenAnotherStoreTopicIsMissing() {
+        final Map<TopicPartition, PartitionInfo> topicOneOnlyPartitionInfo = new HashMap<>();
+        topicOneOnlyPartitionInfo.put(topic1P0, new PartitionInfo("topic-one", 0, null, null, null));
+
+        metadataState.onChange(
+            Collections.singletonMap(hostOne, Collections.singleton(topic1P0)),
+            Collections.emptyMap(),
+            topicOneOnlyPartitionInfo
+        );
+
+        Set<HostInfo> hostsForCompleteStore = metadataState.allMetadataForStore("table-one").stream()
+            .map(StreamsMetadata::hostInfo)
+            .collect(Collectors.toSet());
+        assertEquals(Collections.singleton(hostOne), hostsForCompleteStore);
+        assertTrue(metadataState.allMetadataForStore("table-three").isEmpty());
+
+        metadataState.onChange(
+            Collections.singletonMap(hostTwo, Collections.singleton(topic1P0)),
+            Collections.emptyMap(),
+            topicOneOnlyPartitionInfo
+        );
+
+        hostsForCompleteStore = metadataState.allMetadataForStore("table-one").stream()
+            .map(StreamsMetadata::hostInfo)
+            .collect(Collectors.toSet());
+        assertEquals(Collections.singleton(hostTwo), hostsForCompleteStore);
+        assertTrue(metadataState.allMetadataForStore("table-three").isEmpty());
+    }
 }

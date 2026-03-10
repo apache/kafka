@@ -320,15 +320,32 @@ public class StreamsMetadataState {
         rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
     }
 
-    static Set<String> missingSourceTopicsForMetadata(final Map<TopicPartition, PartitionInfo> topicPartitionInfo,
-                                                      final TopologyMetadata topologyMetadata) {
+    static Map<String, List<String>> storeToSourceTopicsWithMetadata(final Map<String, List<String>> storeToSourceTopics,
+                                                                     final Set<String> globalStores,
+                                                                     final Map<TopicPartition, PartitionInfo> topicPartitionInfo) {
         final Set<String> topicsWithMetadata = topicPartitionInfo.keySet().stream()
             .map(TopicPartition::topic)
             .collect(Collectors.toSet());
-        final Set<String> globalStores = topologyMetadata.globalStateStores().keySet();
-        final Set<String> missingSourceTopics = new LinkedHashSet<>();
+        return storeToSourceTopicsWithMetadata(storeToSourceTopics, globalStores, topicsWithMetadata);
+    }
 
-        topologyMetadata.stateStoreNameToSourceTopics().forEach((storeName, sourceTopics) -> {
+    static Set<String> missingSourceTopicsForMetadata(final Map<TopicPartition, PartitionInfo> topicPartitionInfo,
+                                                      final TopologyMetadata topologyMetadata) {
+        final Map<String, List<String>> storeToSourceTopics = topologyMetadata.stateStoreNameToSourceTopics();
+        final Set<String> globalStores = topologyMetadata.globalStateStores().keySet();
+        final Map<String, List<String>> filteredStoreToSourceTopics =
+            storeToSourceTopicsWithMetadata(storeToSourceTopics, globalStores, topicPartitionInfo);
+        return missingSourceTopicsForMetadata(storeToSourceTopics, globalStores, filteredStoreToSourceTopics);
+    }
+
+    static Set<String> missingSourceTopicsForMetadata(final Map<String, List<String>> storeToSourceTopics,
+                                                      final Set<String> globalStores,
+                                                      final Map<String, List<String>> filteredStoreToSourceTopics) {
+        final Set<String> topicsWithMetadata = filteredStoreToSourceTopics.values().stream()
+            .flatMap(Collection::stream)
+            .collect(Collectors.toSet());
+        final Set<String> missingSourceTopics = new LinkedHashSet<>();
+        storeToSourceTopics.forEach((storeName, sourceTopics) -> {
             if (!globalStores.contains(storeName)) {
                 sourceTopics.stream()
                     .filter(sourceTopic -> !topicsWithMetadata.contains(sourceTopic))
@@ -336,6 +353,23 @@ public class StreamsMetadataState {
             }
         });
         return missingSourceTopics;
+    }
+
+    private static Map<String, List<String>> storeToSourceTopicsWithMetadata(final Map<String, List<String>> storeToSourceTopics,
+                                                                              final Set<String> globalStores,
+                                                                              final Set<String> topicsWithMetadata) {
+        final Map<String, List<String>> filteredStoreToSourceTopics = new HashMap<>();
+        storeToSourceTopics.forEach((storeName, sourceTopics) -> {
+            if (!globalStores.contains(storeName)) {
+                final List<String> sourceTopicsWithMetadata = sourceTopics.stream()
+                    .filter(topicsWithMetadata::contains)
+                    .collect(Collectors.toList());
+                if (!sourceTopicsWithMetadata.isEmpty()) {
+                    filteredStoreToSourceTopics.put(storeName, sourceTopicsWithMetadata);
+                }
+            }
+        });
+        return filteredStoreToSourceTopics;
     }
 
     private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
@@ -357,6 +391,10 @@ public class StreamsMetadataState {
             }
         }
         return storesOnHost;
+    }
+
+    private Map<String, List<String>> storeToSourceTopicsWithMetadata(final Map<String, List<String>> storeToSourceTopics) {
+        return storeToSourceTopicsWithMetadata(storeToSourceTopics, globalStores, partitionsByTopic.keySet());
     }
 
     private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
@@ -387,7 +425,7 @@ public class StreamsMetadataState {
             .forEach(hostInfo -> {
                 for (final String topologyName : topologyMetadata.namedTopologiesView()) {
                     final Map<String, List<String>> storeToSourceTopics =
-                        topologyMetadata.stateStoreNameToSourceTopicsForTopology(topologyName);
+                        storeToSourceTopicsWithMetadata(topologyMetadata.stateStoreNameToSourceTopicsForTopology(topologyName));
 
                     final Set<TopicPartition> activePartitionsOnHost = new HashSet<>();
                     final Set<String> activeStoresOnHost = new HashSet<>();
@@ -427,7 +465,8 @@ public class StreamsMetadataState {
                 }
 
                 // Construct metadata across all topologies on this host for the `localMetadata` field
-                final Map<String, List<String>> storeToSourceTopics = topologyMetadata.stateStoreNameToSourceTopics();
+                final Map<String, List<String>> storeToSourceTopics =
+                    storeToSourceTopicsWithMetadata(topologyMetadata.stateStoreNameToSourceTopics());
                 final Set<TopicPartition> localActivePartitions = activePartitionHostMap.get(thisHost);
                 final Set<TopicPartition> localStandbyPartitions = standbyPartitionHostMap.get(thisHost);
 
@@ -445,7 +484,8 @@ public class StreamsMetadataState {
     private List<StreamsMetadata> rebuildMetadataForSingleTopology(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
                                                                    final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         final List<StreamsMetadata> rebuiltMetadata = new ArrayList<>();
-        final Map<String, List<String>> storeToSourceTopics = topologyMetadata.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> storeToSourceTopics =
+            storeToSourceTopicsWithMetadata(topologyMetadata.stateStoreNameToSourceTopics());
         Stream.concat(activePartitionHostMap.keySet().stream(), standbyPartitionHostMap.keySet().stream())
             .distinct()
             .sorted(Comparator.comparing(HostInfo::host).thenComparingInt(HostInfo::port))

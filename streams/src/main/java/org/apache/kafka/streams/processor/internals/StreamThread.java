@@ -88,6 +88,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -1534,17 +1535,21 @@ public class StreamThread extends Thread implements ProcessingThread {
                 standbyHostInfoMap.put(new HostInfo(hostInfo.host(), hostInfo.port()), new HashSet<>(endpointPartitions.standbyPartitions()));
             });
             final Map<TopicPartition, PartitionInfo> topicPartitionInfo = getTopicPartitionInfo(activeHostInfoMap);
-            final Set<String> missingSourceTopics = StreamsMetadataState.missingSourceTopicsForMetadata(topicPartitionInfo, topologyMetadata);
-            if (missingSourceTopics.isEmpty()) {
-                streamsMetadataState.onChange(
-                        activeHostInfoMap,
-                        standbyHostInfoMap,
-                        topicPartitionInfo
-                );
-            } else {
-                log.info("Skipping streams metadata update because partition metadata is missing for source topics {}. " +
-                        "Will retry after metadata is refreshed.", missingSourceTopics);
+            final Map<String, List<String>> storeToSourceTopics = topologyMetadata.stateStoreNameToSourceTopics();
+            final Set<String> globalStores = topologyMetadata.globalStateStores().keySet();
+            final Map<String, List<String>> filteredStoreToSourceTopics =
+                StreamsMetadataState.storeToSourceTopicsWithMetadata(storeToSourceTopics, globalStores, topicPartitionInfo);
+            final Set<String> missingSourceTopics =
+                StreamsMetadataState.missingSourceTopicsForMetadata(storeToSourceTopics, globalStores, filteredStoreToSourceTopics);
+            if (!missingSourceTopics.isEmpty()) {
+                log.warn("Missing partition metadata for source topics {} while updating streams metadata; " +
+                        "continuing with stores/topics that have metadata.", missingSourceTopics);
             }
+            streamsMetadataState.onChange(
+                    activeHostInfoMap,
+                    standbyHostInfoMap,
+                    topicPartitionInfo
+            );
         }
     }
 
