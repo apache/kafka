@@ -138,17 +138,15 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        readRawHeaders(buffer); // Skip the headers bytes without deserializing
+        // Skip the headers bytes without deserizization or copying
+        final int headersSize = ByteUtils.readVarint(buffer);
+        buffer.position(buffer.position() + headersSize); 
         return readBytes(buffer, buffer.remaining());
     }
 
-    public static byte[] readRawHeaders(final ByteBuffer buffer) {
-        final int headersSize = ByteUtils.readVarint(buffer);
-        return readBytes(buffer, headersSize);
-    }
-
     public static Headers readHeaders(final ByteBuffer buffer) {
-        final byte[] rawHeaders = readRawHeaders(buffer);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        final byte[] rawHeaders = readBytes(buffer, headersSize);
         return HeadersDeserializer.deserialize(rawHeaders);
     }
 }

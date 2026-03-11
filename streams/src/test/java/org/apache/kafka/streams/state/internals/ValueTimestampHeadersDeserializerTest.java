@@ -23,12 +23,15 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -303,5 +306,18 @@ public class ValueTimestampHeadersDeserializerTest {
         // we should invoke the deserialize(String, Headers, byte) instead of deserialize(String, byte)
         verify(mockDeserializer).deserialize(eq(TOPIC), any(Headers.class), any(byte[].class));
         verify(mockDeserializer, never()).deserialize(eq(TOPIC), any(byte[].class));
+    }
+
+    @Test
+    public void shouldExtractRawValueWithEmptyHeaders() {
+        final byte[] value = "test-value".getBytes(StandardCharsets.UTF_8);
+        final byte[] data = new byte[1 + StateSerdes.TIMESTAMP_SIZE + value.length];
+        final ByteBuffer buf = ByteBuffer.wrap(data);
+        buf.put((byte) 0x00); // header size
+        buf.putLong(123456789L); // timestamp
+        buf.put(value); // non-header payload
+
+        final byte[] res = ValueTimestampHeadersDeserializer.rawValue(data);
+        assertArrayEquals(value, res);
     }
 }

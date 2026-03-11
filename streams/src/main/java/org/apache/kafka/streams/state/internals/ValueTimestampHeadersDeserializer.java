@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.nio.ByteBuffer;
@@ -47,7 +48,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  *
  * This is used by KIP-1271 to deserialize values with timestamps and headers from state stores.
  */
-class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueTimestampHeaders<V>, Void, V> {
+public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueTimestampHeaders<V>, Void, V> {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     public final Deserializer<V> valueDeserializer;
@@ -159,12 +160,21 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final byte[] rawHeaders = readBytes(buffer, headersSize);
         return HeadersDeserializer.deserialize(rawHeaders);
     }
+
     /**
      * Extract raw value from serialized ValueTimestampHeaders.
      */
-    static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
+    public static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
             return null;
+        }
+
+        // If the header is empty, then copy the value bytes directly
+        if (rawValueTimestampHeaders[0] == 0x00) {
+            // Strip header size (varint 1 byte), empty headers (no bytes), and timestamp
+            final byte[] res = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
+            System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, res, 0, res.length);
+            return res;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
