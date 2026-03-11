@@ -338,7 +338,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
@@ -1252,7 +1252,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -1268,7 +1268,7 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
@@ -1277,12 +1277,12 @@ public class GroupMetadataManagerTest {
             .setServerAssignorName("range")
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                mkTopicAssignment(barTopicId, 0, 1, 2)), 1))
+                mkTopicAssignment(barTopicId, 0, 1, 2)), 2))
             .build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage),
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             ))),
@@ -1290,7 +1290,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1337,7 +1337,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -1350,7 +1350,7 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
@@ -1358,18 +1358,18 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(List.of("foo"))
             .setServerAssignorName("range")
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 1))
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 2))
             .build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                 fooTopicName, fooTopicHash
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
@@ -1395,7 +1395,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0)
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, 0)
         );
         assertRecordsEquals(expectedRecords, result.records());
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -3118,7 +3118,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -3138,7 +3138,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000),
             result.response()
         );
@@ -3158,7 +3158,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -3183,7 +3183,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -4281,7 +4281,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(90000)
                     .setSubscribedTopicNames(List.of("foo"))
                     .setTopicPartitions(List.of()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
@@ -4298,7 +4298,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().memberEpoch()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
@@ -4356,7 +4356,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(90000)
                     .setSubscribedTopicNames(List.of("foo"))
                     .setTopicPartitions(List.of()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
@@ -4373,7 +4373,7 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
                         GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
                         GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0)
+                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, 0)
                     )
                 )
             )),
@@ -4482,7 +4482,7 @@ public class GroupMetadataManagerTest {
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(1, result.response().getKey().memberEpoch());
+        assertEquals(2, result.response().getKey().memberEpoch());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
@@ -4499,7 +4499,7 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
                         GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId, memberId),
                         GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 2, 0)
+                        GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 3, 0)
                     )
                 )
             )),
@@ -4609,7 +4609,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(90000)
                     .setSubscribedTopicNames(List.of("foo"))
                     .setTopicPartitions(List.of()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
@@ -4642,7 +4642,7 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
                         GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
                         GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, 0)
+                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, 0)
                     )
                 )
             )),
@@ -4691,7 +4691,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -4729,7 +4729,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
-                .setMemberEpoch(2)
+                .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
@@ -4746,14 +4746,14 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setRebalanceTimeoutMs(12000)
                 .setSubscribedTopicNames(List.of("foo")));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -4778,7 +4778,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setTopicPartitions(List.of(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
                     .setTopicId(fooTopicId)
                     .setPartitions(List.of(0, 1)))));
@@ -4786,7 +4786,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(2)
+                .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000),
             result.response()
         );
@@ -4838,7 +4838,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -4876,7 +4876,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
-                .setMemberEpoch(2)
+                .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
@@ -4893,12 +4893,12 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(1));
+                .setMemberEpoch(2));
 
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -4920,7 +4920,7 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
                         GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
                         GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, computeGroupHash(Map.of(
+                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 4, computeGroupHash(Map.of(
                             fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
                         )))
                     )
@@ -10284,7 +10284,8 @@ public class GroupMetadataManagerTest {
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(0))
                 .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
-                .setAssignorName("range"),
+                .setAssignorName("range")
+                .setAssignmentEpoch(1),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(1))
@@ -10296,6 +10297,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
                 .setAssignorName("assignorName")
+                .setAssignmentEpoch(1)
         );
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(consumerGroupIds);
 
@@ -10351,6 +10353,7 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember.Builder memberBuilder2 = new ConsumerGroupMember.Builder(memberId2);
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(consumerGroupId, memberBuilder2.build()));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(consumerGroupId, memberId2, assignmentMap));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(consumerGroupId, epoch + 1, 12345L));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(consumerGroupId, memberBuilder2.build()));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(consumerGroupId, epoch + 2, 0));
 
@@ -10376,7 +10379,8 @@ public class GroupMetadataManagerTest {
             ))
             .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
             .setAssignorName("range")
-            .setGroupEpoch(epoch + 2);
+            .setGroupEpoch(epoch + 2)
+            .setAssignmentEpoch(epoch + 1);
         expected = List.of(
             describedGroup
         );
@@ -10428,7 +10432,7 @@ public class GroupMetadataManagerTest {
                 .setGroupEpoch(epoch)
                 .setGroupId(streamsGroupIds.get(0))
                 .setGroupState(StreamsGroupState.EMPTY.toString())
-                .setAssignmentEpoch(0)
+                .setAssignmentEpoch(1)
                 .setTopology(expectedTopology),
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
@@ -10440,6 +10444,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setTopology(expectedTopology)
                 .setGroupState(StreamsGroupState.NOT_READY.toString())
+                .setAssignmentEpoch(1)
         );
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(streamsGroupIds);
 
@@ -10496,6 +10501,7 @@ public class GroupMetadataManagerTest {
         StreamsGroupMember.Builder memberBuilder2 = streamsGroupMemberBuilderWithDefaults(memberId2);
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder2.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(streamsGroupId, memberId2, assignment));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(streamsGroupId, epoch + 1, 12345L));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 2, 0, 0, Map.of()));
 
@@ -10529,7 +10535,8 @@ public class GroupMetadataManagerTest {
                     )
             )
             .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
-            .setGroupEpoch(epoch + 2);
+            .setGroupEpoch(epoch + 2)
+            .setAssignmentEpoch(epoch + 1);
         assertEquals(1, actual.size());
         assertEquals(describedGroup, actual.get(0));
     }
@@ -11424,7 +11431,7 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setRebalanceTimeoutMs(5000)
             .setClientId(DEFAULT_CLIENT_ID)
@@ -11439,9 +11446,9 @@ public class GroupMetadataManagerTest {
             List.of(
                 GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId),
                 GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(classicGroupId, expectedMember),
-                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(classicGroupId, 1, 0),
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(classicGroupId, 2, 0),
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(classicGroupId, memberId, Map.of()),
-                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(classicGroupId, 1, context.time.milliseconds()),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(classicGroupId, 2, context.time.milliseconds()),
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(classicGroupId, expectedMember)
             ),
             result.records()
@@ -16607,6 +16614,7 @@ public class GroupMetadataManagerTest {
         List<ShareGroupDescribeResponseData.DescribedGroup> expected = List.of(
             new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(100)
+                .setAssignmentEpoch(1)
                 .setGroupId(groupIds.get(0))
                 .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
                 .setAssignorName("share-range"),
@@ -16675,7 +16683,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0)
             ),
             groupId,
-            1,
+            2,
             true
         );
 
@@ -16691,7 +16699,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new ShareGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()),
             result.response().getKey()
@@ -16755,7 +16763,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0)
             ),
             groupId,
-            1,
+            2,
             true
         );
 
@@ -16829,14 +16837,14 @@ public class GroupMetadataManagerTest {
                 Set.of(0, 1, 2)
             ),
             groupId,
-            1,
+            2,
             true
         );
 
         assertResponseEquals(
             new ShareGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -16853,7 +16861,7 @@ public class GroupMetadataManagerTest {
         ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setSubscribedTopicNames(List.of("foo", "bar"))
             .setAssignedPartitions(mkAssignment(
@@ -16864,7 +16872,7 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedMember),
-            GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
+            GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, coordinatorMetadataImage),
                 barTopicName, computeTopicHash(barTopicName, coordinatorMetadataImage)
             ))),
@@ -16872,7 +16880,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
-            GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
                     mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5)),
@@ -20628,7 +20636,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(90000)
                     .setSubscribedTopicNames(List.of("foo"))
                     .setTopicPartitions(List.of()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify heartbeat interval
         assertEquals(5000, result.response().heartbeatIntervalMs());
@@ -20654,7 +20662,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().memberEpoch()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify heartbeat interval
         assertEquals(10000, result.response().heartbeatIntervalMs());
@@ -20719,7 +20727,7 @@ public class GroupMetadataManagerTest {
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(1, result.response().getKey().memberEpoch());
+        assertEquals(2, result.response().getKey().memberEpoch());
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
@@ -20728,7 +20736,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0, 1, 2, 3, 4, 5)
             ),
             groupId,
-            1,
+            2,
             true
         );
 
@@ -20769,7 +20777,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().getKey().memberEpoch()));
-        assertEquals(1, result.response().getKey().memberEpoch());
+        assertEquals(2, result.response().getKey().memberEpoch());
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
@@ -22858,11 +22866,13 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             // The member subscription is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            // The group epoch is bumped.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, 0),
-            // The target assignment is created.
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+
+            // The group is initialized at group epoch 1. Since the group epoch is not bumped until
+            // regex resolution has completed, no consumer group metadata record is created.
+            // Similarly, the target assignment is initialized at epoch 1 with an empty assignment
+            // and not updated until regex resolution has completed, so no target assignment records
+            // are created.
+
             // The member current state is created.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
         );
@@ -25302,7 +25312,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0, 1)
             ),
             groupId,
-            1,
+            2,
             true
         );
 
@@ -25350,7 +25360,7 @@ public class GroupMetadataManagerTest {
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId.toString())
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setSubscribedTopicNames(null));
 
         expected = newShareGroupStatePartitionMetadataRecord(
@@ -25377,7 +25387,7 @@ public class GroupMetadataManagerTest {
                 Set.of(2, 3)
             ),
             groupId,
-            2,
+            3,
             true
         );
 
@@ -25411,7 +25421,7 @@ public class GroupMetadataManagerTest {
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
             new ShareGroupMetadataValue()
-                .setEpoch(0)
+                .setEpoch(1)
         );
         context.groupMetadataManager.replay(
             new ShareGroupStatePartitionMetadataKey()
@@ -25448,7 +25458,7 @@ public class GroupMetadataManagerTest {
             result.response().getValue(),
             Map.of(t1Uuid, Set.of(0, 1)),
             groupId,
-            1,
+            2,
             false
         );
 
@@ -25490,7 +25500,7 @@ public class GroupMetadataManagerTest {
             result.response().getValue(),
             Map.of(t1Uuid, Set.of(0, 1)),
             groupId,
-            2,
+            3,
             true
         );
         verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
