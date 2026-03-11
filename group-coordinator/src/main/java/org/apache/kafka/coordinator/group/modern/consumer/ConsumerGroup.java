@@ -673,17 +673,19 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 "by members using the modern group protocol");
         }
 
-        // For members using the consumer protocol, the epoch must either match the last epoch sent
-        // in a heartbeat or be greater than or equal to the partition's assignment epoch.
+        // For members using the classic protocol, the epoch must match the last epoch sent
+        // in a heartbeat.
         if (member.useClassicProtocol()) {
             validateMemberEpoch(memberEpoch, member.memberEpoch(), true);
             return CommitPartitionValidator.NO_OP;
         }
 
-        // For members using the consumer protocol
+        // For members using the consumer protocol, the epoch must either match the last epoch sent
+        // in a heartbeat or be greater than or equal to the partition's assignment epoch.
         if (memberEpoch == member.memberEpoch()) {
             return CommitPartitionValidator.NO_OP;
         }
+
         if (memberEpoch > member.memberEpoch()) {
             throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than "
                 + "current member epoch %d.", memberEpoch, member.memberEpoch()));
@@ -858,9 +860,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * A commit is rejected if the partition is not assigned to the member
      * or if the received client-side epoch is older than the partition's assignment epoch (KIP-1251).
      *
-     * @param member              The consumer group member.
-     * @param receivedMemberEpoch The member epoch from the offset commit request.
-     * @return A validator that checks each partition's assignment epoch.
+     * @param member              The consumer whose assignments are being validated.
+     * @param receivedMemberEpoch The received member epoch.
+     * @return A validator for per-partition validation.
      */
     private CommitPartitionValidator createAssignmentEpochValidator(
         ConsumerGroupMember member,

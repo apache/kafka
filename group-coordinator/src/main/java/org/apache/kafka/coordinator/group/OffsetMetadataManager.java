@@ -48,7 +48,6 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -85,7 +84,7 @@ public class OffsetMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private GroupMetadataManager groupMetadataManager = null;
-        private MetadataImage metadataImage = null;
+        private CoordinatorMetadataImage metadataImage = null;
         private GroupCoordinatorConfig config = null;
         private GroupCoordinatorMetricsShard metrics = null;
 
@@ -114,7 +113,7 @@ public class OffsetMetadataManager {
             return this;
         }
 
-        public Builder withMetadataImage(MetadataImage metadataImage) {
+        public Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
             this.metadataImage = metadataImage;
             return this;
         }
@@ -127,7 +126,7 @@ public class OffsetMetadataManager {
         public OffsetMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
 
             if (groupMetadataManager == null) {
@@ -164,6 +163,11 @@ public class OffsetMetadataManager {
      * The system time.
      */
     private final Time time;
+
+    /**
+     * The metadata image.
+     */
+    private CoordinatorMetadataImage metadataImage;
 
     /**
      * The group metadata manager.
@@ -426,7 +430,7 @@ public class OffsetMetadataManager {
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        MetadataImage metadataImage,
+        CoordinatorMetadataImage metadataImage,
         GroupMetadataManager groupMetadataManager,
         GroupCoordinatorConfig config,
         GroupCoordinatorMetricsShard metrics
@@ -434,6 +438,7 @@ public class OffsetMetadataManager {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
         this.time = time;
+        this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
         this.config = config;
         this.metrics = metrics;
@@ -625,20 +630,20 @@ public class OffsetMetadataManager {
                 .setName(topic.name());
             response.topics().add(topicResponse);
 
+            // Resolve topic ID if it's ZERO_UUID
+            final Uuid resolvedTopicId = topic.topicId().equals(Uuid.ZERO_UUID)
+                ? metadataImage
+                .topicMetadata(topic.name())
+                .map(CoordinatorMetadataImage.TopicMetadata::id)
+                .orElse(Uuid.ZERO_UUID)
+                : topic.topicId();
+
             topic.partitions().forEach(partition -> {
                 if (isMetadataInvalid(partition.committedMetadata())) {
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Resolve topic ID if it's ZERO_UUID
-                    Uuid resolvedTopicId = topic.topicId();
-                    if (resolvedTopicId.equals(Uuid.ZERO_UUID)) {
-                        resolvedTopicId = groupMetadataManager.image()
-                            .topicMetadata(topic.name())
-                            .map(CoordinatorMetadataImage.TopicMetadata::id)
-                            .orElse(Uuid.ZERO_UUID);
-                    }
                     // Validate commit per-partition
                     validator.validate(
                         topic.name(),
@@ -647,7 +652,7 @@ public class OffsetMetadataManager {
                     );
 
                     log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
-                        request.groupId(), partition.committedOffset(), resolvedTopicId, topic.name(), partition.partitionIndex(),
+                        request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -655,7 +660,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
-                        resolvedTopicId,
+                        topic.topicId(),
                         partition,
                         currentTimeMs,
                         expireTimestampMs
@@ -1280,6 +1285,15 @@ public class OffsetMetadataManager {
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
+    }
+
+    /**
+     * Updates the metadata image.
+     *
+     * @param newImage The new metadata image.
+     */
+    public void onMetadataUpdate(CoordinatorMetadataImage newImage) {
+        this.metadataImage = newImage;
     }
 
     /**

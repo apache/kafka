@@ -46,6 +46,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
@@ -91,6 +92,8 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignmentWithEpochs;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
@@ -117,7 +120,7 @@ public class OffsetMetadataManagerTest {
             private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
             private final GroupConfigManager configManager = mock(GroupConfigManager.class);
             private GroupMetadataManager groupMetadataManager = null;
-            private MetadataImage metadataImage = null;
+            private CoordinatorMetadataImage metadataImage = null;
             private GroupCoordinatorConfig config = null;
 
             Builder withOffsetMetadataMaxSize(int offsetMetadataMaxSize) {
@@ -135,13 +138,13 @@ public class OffsetMetadataManagerTest {
                 return this;
             }
 
-            Builder withMetadataImage(MetadataImage metadataImage) {
+            Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
                 this.metadataImage = metadataImage;
                 return this;
             }
 
             OffsetMetadataManagerTestContext build() {
-                if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+                if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
                 if (config == null) {
                     config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 60000L, 24);
                 }
@@ -153,7 +156,7 @@ public class OffsetMetadataManagerTest {
                         .withExecutor(executor)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
-                        .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
+                        .withMetadataImage(metadataImage)
                         .withGroupCoordinatorMetricsShard(metrics)
                         .withGroupConfigManager(configManager)
                         .withConfig(GroupCoordinatorConfig.fromProps(Map.of()))
@@ -1285,59 +1288,6 @@ public class OffsetMetadataManagerTest {
         verifyOffsetCommitFromAdminClient(context);
     }
 
-    @Test
-    public void testConsumerGroupOffsetCommitWithZeroUuidResolvesTopicId() {
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
-
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(barTopicId, barTopicName, 3)
-            .build();
-
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
-            .withMetadataImage(metadataImage)
-            .build();
-
-        // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
-            "foo",
-            true
-        );
-
-        group.updateMember(new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
-            .setAssignedPartitions(Map.of(barTopicId, Map.of(0, 5)))
-            .build()
-        );
-
-        OffsetCommitRequestData request = new OffsetCommitRequestData()
-            .setGroupId("foo")
-            .setMemberId("member")
-            .setGenerationIdOrMemberEpoch(3) // stale member epoch
-            .setTopics(List.of(
-                new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                    .setName(barTopicName)
-                    .setTopicId(Uuid.ZERO_UUID) // ZERO_UUID topic_id
-                    .setPartitions(List.of(
-                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                            .setPartitionIndex(0)
-                            .setCommittedOffset(100L)
-                    ))
-            ));
-
-        // client epoch (3) < assignment epoch (5), fail
-        assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
-
-        // client epoch (5) >= assignment epoch (5), succeed.
-        request.setGenerationIdOrMemberEpoch(5);
-        assertDoesNotThrow(() -> context.commitOffset(request));
-        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> resp = context.commitOffset(request);
-        // validate topic name and id in the response
-        assertEquals(1, resp.response().topics().size());
-        assertEquals(barTopicName, resp.response().topics().get(0).name());
-    }
-
     private static void verifyOffsetCommitFromAdminClient(OffsetMetadataManagerTestContext context) {
         CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
             new OffsetCommitRequestData()
@@ -1477,6 +1427,59 @@ public class OffsetMetadataManagerTest {
             )),
             result.records()
         );
+    }
+
+    @Test
+    public void testConsumerGroupOffsetCommitWithZeroUuidResolvesTopicId() {
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(barTopicId, barTopicName, 3)
+            .build();
+
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
+            .build();
+
+        // Create an empty group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
+            "foo",
+            true
+        );
+
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(barTopicId, 5, 0)))
+            .build()
+        );
+
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("foo")
+            .setMemberId("member")
+            .setTopics(List.of(
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(barTopicName)
+                    .setTopicId(Uuid.ZERO_UUID)
+                    .setPartitions(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100L)
+                    ))
+            ));
+
+        // When client epoch (3) < assignment epoch (5), exception should be thrown.
+        request.setGenerationIdOrMemberEpoch(3);
+        assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
+
+        // When client epoch (5) >= assignment epoch (5), commit should succeed.
+        request.setGenerationIdOrMemberEpoch(5);
+        assertDoesNotThrow(() -> context.commitOffset(request));
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> resp = context.commitOffset(request);
+        assertEquals(1, resp.response().topics().size());
+        assertEquals(barTopicName, resp.response().topics().get(0).name());
     }
 
     @Test
