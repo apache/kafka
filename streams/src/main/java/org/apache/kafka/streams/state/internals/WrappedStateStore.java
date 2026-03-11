@@ -82,24 +82,6 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         }
     }
 
-//    public static boolean isHeadersAware(final StateStore stateStore) {
-//        if (stateStore instanceof HeadersBytesStore) {
-//            return true;
-//        } else if (stateStore instanceof TimestampedToHeadersStoreAdapter) {
-//            // TimestampedToHeadersStoreAdapter converts between timestamped and headers format,
-//            // so it should be treated as headers-aware
-//            return true;
-//        } else if (stateStore instanceof PlainToHeadersStoreAdapter) {
-//            // PlainToHeadersStoreAdapter wraps a plain store (not headers-aware)
-//            // so the underlying store should use plain format during restoration
-//            return false;
-//        } else if (stateStore instanceof WrappedStateStore) {
-//            return isHeadersAware(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
-//        } else {
-//            return false;
-//        }
-//    }
-
     private final S wrapped;
 
     public WrappedStateStore(final S wrapped) {

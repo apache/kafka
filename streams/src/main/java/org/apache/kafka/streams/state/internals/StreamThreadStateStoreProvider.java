@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -104,10 +105,28 @@ public class StreamThreadStateStoreProvider {
                             " because the store is not open. " +
                             "The state store may have migrated to another instance.");
             }
-            if (store instanceof TimestampedKeyValueStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                return (T) new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store);
+            if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+                if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                    return (T) new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store);
+                } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
+                    // For built-in timestamped query type, wrap in facade that strips headers
+                    return (T) new ReadOnlyTimestampedKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store);
+                } else {
+                    // For custom query types, return the raw store so they can access headers directly
+                    return (T) store;
+                }
             } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                 return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
+            } else if (store instanceof TimestampedWindowStoreWithHeaders) {
+                if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                    return (T) new ReadOnlyWindowStoreWithHeadersFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store);
+                } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
+                    // For built-in timestamped window query type, wrap in facade that strips headers
+                    return (T) new ReadOnlyTimestampedWindowStoreWithHeadersFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store);
+                } else {
+                    // For custom query types, return the raw store so they can access headers directly
+                    return (T) store;
+                }
             } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                 return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store);
             } else {

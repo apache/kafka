@@ -521,7 +521,7 @@ public class QueryableStateIntegrationTest {
                     "Cannot get state store " + storeName + " because the queryable store type" +
                         " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
                         " does not accept the actual store type" +
-                        " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore]."
+                        " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeaders]."
                 )
             );
         }

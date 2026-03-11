@@ -35,8 +35,12 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -472,7 +476,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             () -> {
                 try {
                     final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+                        .getStore(STORE_NAME, kafkaStreams, new TimestampedKeyValueStoreWithHeadersType<>());
 
                     if (store == null)
                         return false;
@@ -514,7 +518,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             () -> {
                 try {
                     final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+                        .getStore(STORE_NAME, kafkaStreams, new TimestampedKeyValueStoreWithHeadersType<>());
 
                     if (store == null)
                         return false;
@@ -541,12 +545,11 @@ public class HeadersStoreUpgradeIntegrationTest {
             () -> {
                 try {
                     final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+                        .getStore(STORE_NAME, kafkaStreams, new TimestampedKeyValueStoreWithHeadersType<>());
 
                     if (store == null)
                         return false;
 
-                    store.get(key);
                     final ValueTimestampHeaders<V> result = store.get(key);
                     return result != null
                         && result.value().equals(value)
@@ -568,7 +571,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             () -> {
                 try {
                     final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+                        .getStore(STORE_NAME, kafkaStreams, new TimestampedKeyValueStoreWithHeadersType<>());
 
                     if (store == null)
                         return false;
@@ -585,6 +588,50 @@ public class HeadersStoreUpgradeIntegrationTest {
             },
             60_000L,
             "Could not get expected result in time.");
+    }
+
+    /**
+     * Custom QueryableStoreType for querying TimestampedKeyValueStoreWithHeaders directly
+     * without facade wrapping. This returns the full ValueTimestampHeaders wrapper.
+     */
+    private static class TimestampedKeyValueStoreWithHeadersType<K, V>
+        implements QueryableStoreType<ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>>> {
+
+        @Override
+        public boolean accepts(final org.apache.kafka.streams.processor.StateStore stateStore) {
+            // Accept stores that implement both TimestampedKeyValueStoreWithHeaders and ReadOnlyKeyValueStore
+            return stateStore instanceof TimestampedKeyValueStoreWithHeaders
+                && stateStore instanceof ReadOnlyKeyValueStore;
+        }
+
+        @Override
+        public ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> create(
+                final StateStoreProvider storeProvider,
+                final String storeName) {
+            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+        }
+    }
+
+    /**
+     * Custom queryable store type for accessing TimestampedWindowStoreWithHeaders directly
+     * without facade wrapping. This returns the full ValueTimestampHeaders wrapper.
+     */
+    private static class TimestampedWindowStoreWithHeadersType<K, V>
+        implements QueryableStoreType<ReadOnlyWindowStore<K, ValueTimestampHeaders<V>>> {
+
+        @Override
+        public boolean accepts(final org.apache.kafka.streams.processor.StateStore stateStore) {
+            // Accept stores that implement both TimestampedWindowStoreWithHeaders and ReadOnlyWindowStore
+            return stateStore instanceof TimestampedWindowStoreWithHeaders
+                && stateStore instanceof ReadOnlyWindowStore;
+        }
+
+        @Override
+        public ReadOnlyWindowStore<K, ValueTimestampHeaders<V>> create(
+                final StateStoreProvider storeProvider,
+                final String storeName) {
+            return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
+        }
     }
 
     private static class KeyValueProcessor implements Processor<String, String, Void, Void> {
@@ -800,7 +847,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(() -> {
             try {
                 final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
+                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, new TimestampedWindowStoreWithHeadersType<>());
 
                 if (store == null) {
                     return false;
@@ -840,7 +887,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(() -> {
             try {
                 final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
+                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, new TimestampedWindowStoreWithHeadersType<>());
 
                 if (store == null) {
                     return false;

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
 import java.util.Collections;
 import java.util.List;
@@ -45,10 +46,29 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
         if (!store.isOpen()) {
             throw new InvalidStateStoreException("the state store, " + storeName + ", is not open.");
         }
-        if (store instanceof TimestampedKeyValueStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-            return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store));
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store));
+//            } else if (queryableStoreType.getClass().getName().startsWith("org.apache.kafka.streams.state.QueryableStoreTypes$")) {
+            } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
+                // For built-in timestamped query type, wrap in facade that strips headers
+                return (List<T>) Collections.singletonList(new ReadOnlyTimestampedKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store));
+            } else {
+                // For custom query types, return the raw store so they can access headers directly
+                return (List<T>) Collections.singletonList(store);
+            }
         } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
             return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store));
+        } else if (store instanceof TimestampedWindowStoreWithHeaders) {
+            if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreWithHeadersFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store));
+            } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
+                // For built-in timestamped window query type, wrap in facade that strips headers
+                return (List<T>) Collections.singletonList(new ReadOnlyTimestampedWindowStoreWithHeadersFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store));
+            } else {
+                // For custom query types, return the raw store so they can access headers directly
+                return (List<T>) Collections.singletonList(store);
+            }
         } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
             return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store));
         }

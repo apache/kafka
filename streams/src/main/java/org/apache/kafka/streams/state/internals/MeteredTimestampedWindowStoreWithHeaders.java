@@ -284,13 +284,21 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
     private boolean isUnderlyingStoreTimestamped() {
         Object store = wrapped();
-        do {
+        while (true) {
             if (store instanceof TimestampedBytesStore
                 || store instanceof TimestampedToHeadersWindowStoreAdapter) {
                 return true;
             }
-            store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        } while ((store instanceof WrappedStateStore));
+            if (store instanceof PlainToHeadersWindowStoreAdapter) {
+                // PlainToHeadersWindowStoreAdapter wraps a plain (non-timestamped) store
+                return false;
+            }
+            if (store instanceof WrappedStateStore) {
+                store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
+            } else {
+                break;
+            }
+        }
         return store instanceof TimestampedBytesStore;
     }
 }

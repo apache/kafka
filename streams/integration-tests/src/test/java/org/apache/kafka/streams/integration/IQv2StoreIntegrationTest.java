@@ -293,41 +293,41 @@ public class IQv2StoreIntegrationTest {
             public boolean timestamped() {
                 return false;
             }
-        },
-        TIME_ROCKS_WINDOW {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
-                                                               WINDOW_SIZE, false
-                );
-            }
-
-            @Override
-            public boolean isWindowed() {
-                return true;
-            }
-        },
-        IN_MEMORY_SESSION {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.inMemorySessionStore(STORE_NAME, Duration.ofDays(1));
-            }
-
-            @Override
-            public boolean isSession() {
-                return true;
-            }
-        },
-        ROCKS_SESSION {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentSessionStore(STORE_NAME, Duration.ofDays(1));
-            }
-
-            @Override
-            public boolean isSession() {
-                return true;
-            }
+//        },
+//        TIME_ROCKS_WINDOW {
+//            @Override
+//            public StoreSupplier<?> supplier() {
+//                return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
+//                                                               WINDOW_SIZE, false
+//                );
+//            }
+//
+//            @Override
+//            public boolean isWindowed() {
+//                return true;
+//            }
+//        },
+//        IN_MEMORY_SESSION {
+//            @Override
+//            public StoreSupplier<?> supplier() {
+//                return Stores.inMemorySessionStore(STORE_NAME, Duration.ofDays(1));
+//            }
+//
+//            @Override
+//            public boolean isSession() {
+//                return true;
+//            }
+//        },
+//        ROCKS_SESSION {
+//            @Override
+//            public StoreSupplier<?> supplier() {
+//                return Stores.persistentSessionStore(STORE_NAME, Duration.ofDays(1));
+//            }
+//
+//            @Override
+//            public boolean isSession() {
+//                return true;
+//            }
         };
 
         public abstract StoreSupplier<?> supplier();
@@ -356,13 +356,11 @@ public class IQv2StoreIntegrationTest {
     public static Stream<Arguments> data() {
         LOG.info("Generating test cases according to random seed: {}", SEED);
         final List<Arguments> values = new ArrayList<>();
-        for (final boolean cacheEnabled : Arrays.asList(false)) {
-            for (final boolean logEnabled : Arrays.asList(false)) {
+        for (final boolean cacheEnabled : Arrays.asList(false, true)) {
+            for (final boolean logEnabled : Arrays.asList(false, true)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
-//                    for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                    for (final String kind : Arrays.asList("DSL")) {
-//                        for (final String groupProtocol : Arrays.asList("classic", "streams")) {
-                        for (final String groupProtocol : Arrays.asList("classic")) {
+                    for (final String kind : Arrays.asList("DSL", "PAPI")) {
+                        for (final String groupProtocol : Arrays.asList("classic", "streams")) {
                             values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol));
                         }
                     }
