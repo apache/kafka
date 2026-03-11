@@ -44,7 +44,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  * <p>
  * This is used by KIP-1271 to deserialize aggregations with headers from session state stores.
  */
-class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeserializer<AggregationWithHeaders<AGG>, Void, AGG> {
+public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeserializer<AggregationWithHeaders<AGG>, Void, AGG> {
 
     public final Deserializer<AGG> aggregationDeserializer;
 
@@ -124,9 +124,26 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
      * Extract the raw aggregation bytes from serialized AggregationWithHeaders,
      * stripping the headers prefix.
      */
-    static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
+    public static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
         if (aggregationWithHeaders == null) {
             return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
+        readHeaders(buffer);
+        return readBytes(buffer, buffer.remaining());
+    }
+
+    public static byte[] rawAggregationFastPath(final byte[] aggregationWithHeaders) {
+        if (aggregationWithHeaders == null) {
+            return null;
+        }
+
+        if (aggregationWithHeaders[0] == 0x00) {
+            // Strip the first byte for varint header size
+            byte[] res = new byte[aggregationWithHeaders.length - 1]; 
+            System.arraycopy(aggregationWithHeaders, 1, res, 0, res.length);
+            return res;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
