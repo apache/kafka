@@ -16,14 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -169,7 +166,6 @@ public class ShareGroupConfigTest {
     }
 
     private static ShareGroupConfig createConfig(Map<String, Object> configs) {
-        return new ShareGroupConfig(
-            new AbstractConfig(Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)), configs, false));
+        return ShareGroupConfig.fromProps(configs);
     }
 }

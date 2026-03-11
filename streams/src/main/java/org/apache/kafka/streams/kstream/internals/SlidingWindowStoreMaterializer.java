@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -58,6 +58,7 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
 
     @Override
     public StoreBuilder<?> builder() {
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         materialized.storeName(),
@@ -66,16 +67,22 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
                         false,
                         emitStrategy,
                         true,
-                        true
+                        storeFormat
                 ))
                 : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
-                .timestampedWindowStoreBuilder(
-                        supplier,
-                        materialized.keySerde(),
-                        materialized.valueSerde()
-                );
+        final StoreBuilder<?> builder;
+        if (storeFormat == DslStoreFormat.HEADERS) {
+            builder = Stores.timestampedWindowStoreWithHeadersBuilder(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+        } else {
+            builder = Stores.timestampedWindowStoreBuilder(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

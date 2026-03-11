@@ -299,14 +299,14 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       syncGroupWithOldProtocol(
         groupId = groupId,
         memberId = memberId2,
-        generationId = 2
+        generationId = 3
       )
     )
 
     // Member 2 heartbeats.
     heartbeat(
       groupId = groupId,
-      generationId = 2,
+      generationId = 3,
       memberId = memberId2
     )
 
@@ -323,7 +323,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // Member 2 heartbeats and gets REBALANCE_IN_PROGRESS.
     heartbeat(
       groupId = groupId,
-      generationId = 2,
+      generationId = 3,
       memberId = memberId2,
       expectedError = Errors.REBALANCE_IN_PROGRESS
     )
