@@ -57,6 +57,7 @@ class TransactionsTest extends IntegrationTestHarness {
   val transactionalProducers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   val transactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
   val nonTransactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  var adminClient: org.apache.kafka.clients.admin.Admin = _
 
   def overridingProps(): Properties = {
     val props = new Properties()
@@ -104,6 +105,8 @@ class TransactionsTest extends IntegrationTestHarness {
       createReadCommittedConsumer("transactional-group")
     for (_ <- 0 until nonTransactionalConsumerCount)
       createReadUncommittedConsumer("non-transactional-group")
+
+    adminClient = createAdminClient()
   }
 
   @AfterEach
@@ -111,6 +114,7 @@ class TransactionsTest extends IntegrationTestHarness {
     transactionalProducers.foreach(_.close())
     transactionalConsumers.foreach(_.close())
     nonTransactionalConsumers.foreach(_.close())
+    if (adminClient != null) adminClient.close()
     super.tearDown()
   }
 
@@ -737,19 +741,7 @@ class TransactionsTest extends IntegrationTestHarness {
       s"Expected epoch to be ${Short.MaxValue - 1}, but got $currentEpoch")
 
     // Wait until state is complete abort
-    val adminClient2 = createAdminClient()
-    try {
-      waitUntilTrue(() => {
-        val listResult = adminClient2.listTransactions()
-        val txns = listResult.all().get().asScala
-        txns.exists(txn =>
-          txn.transactionalId() == transactionalId &&
-          txn.state() == TransactionState.COMPLETE_ABORT
-        )
-      }, "Transaction was not aborted on timeout")
-    } finally {
-      adminClient2.close()
-    }
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_ABORT)
 
     // Abort, this should be treated as retry of the abort caused by timeout
     producer.abortTransaction()
@@ -1117,8 +1109,6 @@ class TransactionsTest extends IntegrationTestHarness {
     // Non-tiered storage topic partition doesn't have local log start offset
   }
 
-  // KIP-939 2PC integration tests
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testProducerCrashAndRecoverWith2PC(groupProtocol: String): Unit = {
@@ -1155,9 +1145,7 @@ class TransactionsTest extends IntegrationTestHarness {
       // Simulate crash by closing without committing
       producer.close(Duration.ZERO)
 
-      val adminClient = createAdminClient()
-      try {
-        val baseEpoch: Short = 0
+      val baseEpoch: Short = 0
 
         // Crash and recover numCrashes times
         for (crashNum <- 1 to numCrashes) {
@@ -1197,14 +1185,7 @@ class TransactionsTest extends IntegrationTestHarness {
         // The client-side commitTransaction() returns after receiving the EndTxn response,
         // but the server might still be writing markers and transitioning to COMPLETE_* state.
         val expectedState = if (shouldCommit) TransactionState.COMPLETE_COMMIT else TransactionState.COMPLETE_ABORT
-        waitUntilTrue(() => {
-          val listResult = adminClient.listTransactions()
-          val txns = listResult.all().get().asScala
-          txns.exists(txn =>
-            txn.transactionalId() == transactionalId &&
-            txn.state() == expectedState
-          )
-        }, s"Transaction did not reach $expectedState state")
+        waitForTransactionState(transactionalId, expectedState)
 
         // Verify consumer sees correct records
         consumer.seekToBeginning(consumer.assignment())
@@ -1235,9 +1216,6 @@ class TransactionsTest extends IntegrationTestHarness {
 
         // Unsubscribe consumer for next test iteration
         consumer.unsubscribe()
-      } finally {
-        adminClient.close()
-      }
     }
 
     // Test single crash with commit
@@ -1297,7 +1275,7 @@ class TransactionsTest extends IntegrationTestHarness {
           val recoveryProducer = createTransactionalProducer(transactionalId)
           recoveryProducer.initTransactions(true)  // keepPreparedTxn
 
-          val (clientId, _) = getClientProducerIdAndEpoch(transactionalId)
+          val clientId = getClientProducerId(transactionalId)
           if (clientId != currentClientId) {
             rotationCount = 1
             currentClientId = clientId
@@ -1306,7 +1284,7 @@ class TransactionsTest extends IntegrationTestHarness {
         }
 
         assertTrue(rotationCount >= 1, s"First rotation should have occurred after $iteration iterations")
-        assertEquals(0.toShort, getClientProducerIdAndEpoch(transactionalId)._2,
+        assertEquals(0.toShort, getClientProducerEpoch(transactionalId),
           "After first rotation, client epoch should be exactly 0")
 
         // Set client epoch high again to trigger second rotation
@@ -1330,19 +1308,7 @@ class TransactionsTest extends IntegrationTestHarness {
       finalProducer.commitTransaction()
 
       // Wait for transaction to reach COMPLETE_COMMIT state
-      val adminClient = createAdminClient()
-      try {
-        waitUntilTrue(() => {
-          val listResult = adminClient.listTransactions()
-          val txns = listResult.all().get().asScala
-          txns.exists(txn =>
-            txn.transactionalId() == transactionalId &&
-            txn.state() == TransactionState.COMPLETE_COMMIT
-          )
-        }, "Transaction did not reach COMPLETE_COMMIT state")
-      } finally {
-        adminClient.close()
-      }
+      waitForTransactionState(transactionalId, TransactionState.COMPLETE_COMMIT)
 
       // Verify that rotation happened (regardless of whether it occurred during
       // initTransactions() or commitTransaction()). After transaction completes, verify:
@@ -1407,27 +1373,49 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   /**
+   * Helper method to wait until a transaction reaches a specific state.
+   * Polls listTransactions API until the transaction with given ID reaches the expected state.
+   */
+  private def waitForTransactionState(transactionalId: String, expectedState: TransactionState): Unit = {
+    waitUntilTrue(() => {
+      val listResult = adminClient.listTransactions()
+      val txns = listResult.all().get().asScala
+      txns.exists(txn =>
+        txn.transactionalId() == transactionalId &&
+        txn.state() == expectedState
+      )
+    }, s"Transaction did not reach $expectedState state")
+  }
+
+  /**
+   * Helper method to access transaction metadata for a given transactional ID.
+   * Finds the transaction coordinator and executes the provided function on the transaction metadata.
+   */
+  private def withTransactionMetadata[T](transactionalId: String)(f: org.apache.kafka.coordinator.transaction.TransactionMetadata => T): T = {
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    val coordinatorId = txnDescription.coordinatorId()
+    val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
+    val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+
+    var result: Option[T] = None
+    txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
+      txnMetadataOpt.foreach { epochAndMetadata =>
+        result = Some(f(epochAndMetadata.transactionMetadata))
+      }
+    }
+    result.getOrElse(throw new IllegalStateException(s"Transaction metadata not found for $transactionalId"))
+  }
+
+  /**
    * Helper method to manually set producer epoch to a high value for testing epoch exhaustion.
    */
   private def setProducerEpoch(transactionalId: String, epoch: Short): Unit = {
-    val adminClient = createAdminClient()
-    try {
-      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get()
-      val coordinatorId = txnDescription.coordinatorId()
-      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
-      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
-
-      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          epochAndMetadata.transactionMetadata.inLock(() => {
-            epochAndMetadata.transactionMetadata.setProducerEpoch(epoch)
-            null // inLock expects a Supplier that returns a value
-          })
-        }
-      }
-    } finally {
-      adminClient.close()
+    withTransactionMetadata(transactionalId) { metadata =>
+      metadata.inLock(() => {
+        metadata.setProducerEpoch(epoch)
+        null // inLock expects a Supplier that returns a value
+      })
     }
   }
 
@@ -1437,24 +1425,11 @@ class TransactionsTest extends IntegrationTestHarness {
    * are stored in nextProducerId/nextProducerEpoch.
    */
   private def setClientProducerEpoch(transactionalId: String, epoch: Short): Unit = {
-    val adminClient = createAdminClient()
-    try {
-      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get()
-      val coordinatorId = txnDescription.coordinatorId()
-      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
-      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
-
-      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          epochAndMetadata.transactionMetadata.inLock(() => {
-            epochAndMetadata.transactionMetadata.setNextProducerEpoch(epoch)
-            null // inLock expects a Supplier that returns a value
-          })
-        }
-      }
-    } finally {
-      adminClient.close()
+    withTransactionMetadata(transactionalId) { metadata =>
+      metadata.inLock(() => {
+        metadata.setNextProducerEpoch(epoch)
+        null // inLock expects a Supplier that returns a value
+      })
     }
   }
 
@@ -1462,54 +1437,33 @@ class TransactionsTest extends IntegrationTestHarness {
    * Helper method to get current producer ID from DescribeTransactions API.
    */
   private def getProducerId(transactionalId: String): Long = {
-    val adminClient = createAdminClient()
-    try {
-      adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get().producerId()
-    } finally {
-      adminClient.close()
-    }
+    adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get().producerId()
   }
 
   /**
    * Helper method to get current producer epoch from DescribeTransactions API.
    */
   private def getProducerEpoch(transactionalId: String): Short = {
-    val adminClient = createAdminClient()
-    try {
-      adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get().producerEpoch().toShort
-    } finally {
-      adminClient.close()
-    }
+    adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get().producerEpoch().toShort
   }
 
   /**
-   * Helper method to get client-facing producer ID and epoch (for 2PC dual identity scenarios).
+   * Helper method to get client-facing producer ID (for 2PC dual identity scenarios).
    * When a transaction is prepared, the ongoing transaction keeps its original ID/epoch,
    * but the client gets new credentials (nextProducerId/nextProducerEpoch).
-   * Returns (clientProducerId, clientProducerEpoch)
    */
-  private def getClientProducerIdAndEpoch(transactionalId: String): (Long, Short) = {
-    val adminClient = createAdminClient()
-    try {
-      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get()
-      val coordinatorId = txnDescription.coordinatorId()
-      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
-      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+  private def getClientProducerId(transactionalId: String): Long = {
+    withTransactionMetadata(transactionalId)(_.clientProducerId())
+  }
 
-      var clientId: Long = -1
-      var clientEpoch: Short = -1
-      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          clientId = epochAndMetadata.transactionMetadata.clientProducerId()
-          clientEpoch = epochAndMetadata.transactionMetadata.clientProducerEpoch()
-        }
-      }
-      (clientId, clientEpoch)
-    } finally {
-      adminClient.close()
-    }
+  /**
+   * Helper method to get client-facing producer epoch (for 2PC dual identity scenarios).
+   * When a transaction is prepared, the ongoing transaction keeps its original ID/epoch,
+   * but the client gets new credentials (nextProducerId/nextProducerEpoch).
+   */
+  private def getClientProducerEpoch(transactionalId: String): Short = {
+    withTransactionMetadata(transactionalId)(_.clientProducerEpoch())
   }
 }
