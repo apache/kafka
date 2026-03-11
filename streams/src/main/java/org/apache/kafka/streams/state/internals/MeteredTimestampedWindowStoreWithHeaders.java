@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -280,6 +281,132 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             );
         }
         return result;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetch(final K keyFrom,
+                                                                         final K keyTo,
+                                                                         final long timeFrom,
+                                                                         final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().fetch(
+                keyBytes(keyFrom, new RecordHeaders()),
+                keyBytes(keyTo, new RecordHeaders()),
+                timeFrom,
+                timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetch(final K keyFrom,
+                                                                                 final K keyTo,
+                                                                                 final long timeFrom,
+                                                                                 final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardFetch(
+                keyBytes(keyFrom, new RecordHeaders()),
+                keyBytes(keyTo, new RecordHeaders()),
+                timeFrom,
+                timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().fetchAll(timeFrom, timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardFetchAll(timeFrom, timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> all() {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().all()
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardAll() {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardAll()
+        );
+    }
+
+    private class MeteredTimestampedWindowStoreWithHeadersKeyValueIterator
+        implements KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>>, MeteredIterator {
+
+        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
+        private final long startNs;
+        private final long startTimestampMs;
+        private KeyValue<Windowed<K>, ValueTimestampHeaders<V>> cachedNext;
+
+        private MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
+            this.iter = iter;
+            this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return this.startTimestampMs;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cachedNext != null || iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<Windowed<K>, ValueTimestampHeaders<V>> next() {
+            if (cachedNext != null) {
+                final KeyValue<Windowed<K>, ValueTimestampHeaders<V>> result = cachedNext;
+                cachedNext = null;
+                return result;
+            }
+
+            final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
+
+            if (next == null) {
+                return null;
+            }
+
+            final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(next.value, new RecordHeaders());
+            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
+            final K key = serdes.keyFrom(next.key.key().get(), headers);
+            final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
+            return KeyValue.pair(windowedKey, valueTimestampHeaders);
+        }
+
+        @Override
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                final long duration = time.nanoseconds() - startNs;
+                fetchSensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
+            }
+        }
+
+        @Override
+        public Windowed<K> peekNextKey() {
+            if (cachedNext == null) {
+                cachedNext = next();
+            }
+            return cachedNext == null ? null : cachedNext.key;
+        }
     }
 
     private boolean isUnderlyingStoreTimestamped() {
