@@ -79,7 +79,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
-import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Meter;
 
 import org.junit.jupiter.api.AfterEach;
@@ -4367,16 +4366,6 @@ public class UnifiedLogTest {
                 .map(e -> ((Meter) e.getValue()).count())
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Unable to find metric " + metricName));
-    }
-
-    @SuppressWarnings("unchecked")
-    private Object yammerMetricValue(String name) {
-        Gauge<Object> gauge = (Gauge<Object>) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().endsWith(name))
-                .findFirst()
-                .get()
-                .getValue();
-        return gauge.value();
     }
 
     @Test

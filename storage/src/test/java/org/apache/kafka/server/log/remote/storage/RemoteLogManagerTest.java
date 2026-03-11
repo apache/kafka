@@ -46,7 +46,6 @@ import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -67,7 +66,6 @@ import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
-import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
@@ -1244,7 +1242,7 @@ public class RemoteLogManagerTest {
 
     private long safeLongYammerMetricValue(String name) {
         try {
-            return (long) yammerMetricValue(name);
+            return yammerMetricValue(name).longValue();
         } catch (NoSuchElementException ex) {
             return 0L;
         }

@@ -21,7 +21,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
 
-public class ServerTestUtils {
+public final class ServerTestUtils {
 
     /**
      * Clear all the yammer metrics.
@@ -38,16 +38,12 @@ public class ServerTestUtils {
      * @return The gauge value as a number.
      */
     public static Number yammerMetricValue(String name) {
-        try {
-            Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().contains(name))
-                .findFirst()
-                .orElseThrow()
-                .getValue();
-            return (Number) gauge.value();
-        } catch (Exception e) {
-            return 0;
-        }
+        Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+            .filter(e -> e.getKey().getMBeanName().contains(name))
+            .findFirst()
+            .orElseThrow()
+            .getValue();
+        return (Number) gauge.value();
     }
 
 }
