@@ -345,6 +345,7 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
         private final long startNs;
         private final long startTimestampMs;
+        private KeyValue<Windowed<K>, ValueTimestampHeaders<V>> cachedNext;
 
         private MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
             final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
@@ -362,12 +363,23 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
         @Override
         public boolean hasNext() {
-            return iter.hasNext();
+            return cachedNext != null || iter.hasNext();
         }
 
         @Override
         public KeyValue<Windowed<K>, ValueTimestampHeaders<V>> next() {
+            if (cachedNext != null) {
+                final KeyValue<Windowed<K>, ValueTimestampHeaders<V>> result = cachedNext;
+                cachedNext = null;
+                return result;
+            }
+
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
+
+            if (next == null) {
+                return null;
+            }
+
             final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(next.value, new RecordHeaders());
             final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
             final K key = serdes.keyFrom(next.key.key().get(), headers);
@@ -390,9 +402,10 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
         @Override
         public Windowed<K> peekNextKey() {
-            final Windowed<Bytes> bytesKey = iter.peekNextKey();
-            final K key = serdes.keyFrom(bytesKey.key().get(), new RecordHeaders());
-            return new Windowed<>(key, bytesKey.window());
+            if (cachedNext == null) {
+                cachedNext = next();
+            }
+            return cachedNext == null ? null : cachedNext.key;
         }
     }
 
