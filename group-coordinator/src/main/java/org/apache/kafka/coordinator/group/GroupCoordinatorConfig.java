@@ -666,7 +666,7 @@ public class GroupCoordinatorConfig {
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
-        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
+        defaultConfigs.putAll(extractShareGroupConfigMap(shareGroupConfig));
         defaultConfigs.putAll(extractStreamsGroupConfigMap());
         return Collections.unmodifiableMap(defaultConfigs);
     }
@@ -678,6 +678,22 @@ public class GroupCoordinatorConfig {
         return Map.of(
             GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs(),
             GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
+     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
+     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
+     * (Ex. group.share.session.timeout.ms).
+     */
+    public Map<String, Integer> extractShareGroupConfigMap(ShareGroupConfig shareGroupConfig) {
+        return Map.of(
+            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, this.shareGroupSessionTimeoutMs(),
+            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, this.shareGroupHeartbeatIntervalMs(),
+            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupConfig.shareGroupRecordLockDurationMs(),
+            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupConfig.shareGroupDeliveryCountLimit(),
+            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupConfig.shareGroupPartitionMaxRecordLocks()
+        );
     }
 
     /**

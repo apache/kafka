@@ -172,7 +172,8 @@ public class TimeOrderedWindowStoreTest {
                 ofHours(1L),
                 ofMinutes(1),
                 false,
-                hasIndex
+                hasIndex,
+                false
             ), Serdes.String(), Serdes.String())
             .withCachingEnabled();
 
