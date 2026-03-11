@@ -17,12 +17,12 @@
 
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,31 +36,50 @@ public class GroupConfigManager implements AutoCloseable {
 
     private final Map<String, GroupConfig> configMap;
 
-    public GroupConfigManager(Map<?, ?> defaultConfig) {
+    private final GroupCoordinatorConfig groupCoordinatorConfig;
+
+    private final ShareGroupConfig shareGroupConfig;
+
+    public GroupConfigManager(
+        Map<?, ?> defaultConfig,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
         this.configMap = new ConcurrentHashMap<>();
         this.defaultConfig = new GroupConfig(defaultConfig);
+        this.groupCoordinatorConfig = Objects.requireNonNull(groupCoordinatorConfig);
+        this.shareGroupConfig = Objects.requireNonNull(shareGroupConfig);
     }
 
     /**
      * Update the configuration of the provided group.
      *
-     * @param groupId                   The group id.
-     * @param newGroupConfig            The new group config.
+     * This method evaluates all configuration values within broker-level bounds.
+     *
+     * @param groupId        The group id.
+     * @param newGroupConfig The new group config.
      */
     public void updateGroupConfig(String groupId, Properties newGroupConfig) {
         if (null == groupId || groupId.isEmpty()) {
             throw new InvalidRequestException("Group name can't be empty.");
         }
 
+        // Evaluate ensures configs respect broker-level bounds. For the Admin API path,
+        // values are pre-validated so this is effectively a no-op. For the broker startup
+        // path, configs from metadata may need evaluation if bounds have changed.
+        Properties evaluatedProps = GroupConfig.evaluate(
+            newGroupConfig, groupId, groupCoordinatorConfig, shareGroupConfig);
+
         final GroupConfig newConfig = GroupConfig.fromProps(
             defaultConfig.originals(),
-            newGroupConfig
+            evaluatedProps
         );
         configMap.put(groupId, newConfig);
     }
 
     /**
      * Get the group config if it exists, otherwise return None.
+     * The returned config has already been evaluated within broker-level bounds.
      *
      * @param groupId  The group id.
      * @return The group config.
@@ -71,25 +90,6 @@ public class GroupConfigManager implements AutoCloseable {
 
     public List<String> groupIds() {
         return List.copyOf(configMap.keySet());
-    }
-
-    /**
-     * Validate the given properties.
-     *
-     * @param newGroupConfig         The new group config.
-     * @param groupCoordinatorConfig The group coordinator config.
-     * @param shareGroupConfig       The share group config.
-     * @throws InvalidConfigurationException If validation fails.
-     */
-    public static void validate(
-        Properties newGroupConfig,
-        GroupCoordinatorConfig groupCoordinatorConfig,
-        ShareGroupConfig shareGroupConfig
-    ) {
-        Properties combinedConfigs = new Properties();
-        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
-        combinedConfigs.putAll(newGroupConfig);
-        GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }
 
     /**

@@ -1325,7 +1325,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             if (db != null) {
                 db.close();
             }
-            for (ColumnFamilyHandle columnFamily : columnFamilies) {
+            for (final ColumnFamilyHandle columnFamily : columnFamilies) {
                 columnFamily.close();
             }
             dbOptions.close();

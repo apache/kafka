@@ -59,6 +59,20 @@ public class ShareGroupConfigProvider {
     }
 
     /**
+     * The method is used to get the partition max record locks for the group. If the group config is present,
+     * then the partition max record locks is returned. Otherwise, the default value is returned.
+     *
+     * @param groupId The group id for which the partition max record locks is to be fetched.
+     * @param defaultValue The default value to be returned if the group config is not present.
+     * @return The partition max record locks for the group.
+     */
+    public int partitionMaxRecordLocksOrDefault(String groupId, int defaultValue) {
+        return manager.groupConfig(groupId)
+            .map(GroupConfig::sharePartitionMaxRecordLocks)
+            .orElse(defaultValue);
+    }
+
+    /**
      * The method is used to check if renew acknowledge is enabled for the group. If the group config
      * is present, then the value from the group config is used. Otherwise, the default value is used.
      *
