@@ -297,8 +297,8 @@ public class ShareGroupTest {
         MockTime time = new MockTime();
         ShareGroup shareGroup = createShareGroup("group-foo");
 
-        // Group epoch starts at 0.
-        assertEquals(0, shareGroup.groupEpoch());
+        // Group epoch starts at 1.
+        assertEquals(1, shareGroup.groupEpoch());
 
         // The refresh time deadline should be empty when the group is created or loaded.
         assertTrue(shareGroup.hasMetadataExpired(time.milliseconds()));
@@ -453,8 +453,8 @@ public class ShareGroupTest {
         ShareGroupDescribeResponseData.DescribedGroup expected = new ShareGroupDescribeResponseData.DescribedGroup()
             .setGroupId("group-id-1")
             .setGroupState(ShareGroupState.STABLE.toString())
-            .setGroupEpoch(0)
-            .setAssignmentEpoch(0)
+            .setGroupEpoch(1)
+            .setAssignmentEpoch(1)
             .setAssignorName("assignorName")
             .setMembers(Arrays.asList(
                 new ShareGroupDescribeResponseData.Member()
