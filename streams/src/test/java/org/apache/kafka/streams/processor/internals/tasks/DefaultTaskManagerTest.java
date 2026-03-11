@@ -93,7 +93,7 @@ public class DefaultTaskManagerTest {
     public void shouldAddTask() {
         taskManager.add(Collections.singleton(task));
 
-        verify(tasks).addTask(task);
+        verify(tasks).addActiveTask(task);
         when(tasks.activeInitializedTasks()).thenReturn(Collections.singleton(task));
         assertEquals(1, taskManager.getTasks().size());
     }

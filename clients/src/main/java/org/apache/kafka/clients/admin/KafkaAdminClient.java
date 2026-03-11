@@ -3054,7 +3054,8 @@ public class KafkaAdminClient extends AdminClient {
                 Errors.forCode(logDirResult.errorCode()).exception(),
                 replicaInfoMap,
                 logDirResult.totalBytes(),
-                logDirResult.usableBytes()));
+                logDirResult.usableBytes(),
+                logDirResult.isCordoned()));
         }
         return result;
     }

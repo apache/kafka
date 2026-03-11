@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRIC
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.coordinator.group.GroupConfigManager
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -139,7 +139,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
           throw new InvalidConfigurationException("Null value not supported for group configs: " +
             nullGroupConfigs.mkString(","))
         }
-        GroupConfigManager.validate(properties, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        GroupConfig.validate(properties, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

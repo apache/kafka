@@ -29,15 +29,18 @@ import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesStore;
+import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.ChangeLoggingVersionedKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.MeteredVersionedKeyValueStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
@@ -55,6 +58,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -87,6 +91,8 @@ public class KeyValueStoreMaterializerTest {
                     DslStoreSuppliers.class,
                     emptyMap()
             );
+        lenient().doReturn("default")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
     }
 
     private void mockInnerVersionedStore() {
@@ -258,6 +264,68 @@ public class KeyValueStoreMaterializerTest {
         assertThat(innerVersionedStore, equalTo(inner));
     }
 
+    @Test
+    public void shouldCreateHeadersAwareStoreWithLoggingEnabledByDefault() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
+                .withCachingDisabled(), nameProvider, STORE_PREFIX);
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
+        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
+    }
+
+    @Test
+    public void shouldCreateHeadersAwareStoreWithLoggingDisabled() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, STORE_PREFIX
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertThat(wrapped, not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
+    }
+
+    @Test
+    public void shouldBuildHeadersAwareStoreWithCachingEnabledByDefault() {
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
+    }
+
+    @Test
+    public void shouldCreateHeadersAwareStoreWithProvidedSupplierAndLoggingEnabled() {
+        mockKeyValueStoreSupplier();
+        doReturn("headers")
+                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withCachingDisabled(), nameProvider, STORE_PREFIX);
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
+
+        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        assertThat(innerKeyValueStore.name(), equalTo(store.name()));
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
+        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
+    }
+
     @SuppressWarnings("unchecked")
     private TimestampedKeyValueStore<String, String> getTimestampedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -272,5 +340,13 @@ public class KeyValueStoreMaterializerTest {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         materializer.configure(streamsConfig);
         return (VersionedKeyValueStore<String, String>) materializer.builder().build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private TimestampedKeyValueStoreWithHeaders<String, String> getHeadersAwareStore(
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
+        final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
+        materializer.configure(streamsConfig);
+        return (TimestampedKeyValueStoreWithHeaders<String, String>) materializer.builder().build();
     }
 }

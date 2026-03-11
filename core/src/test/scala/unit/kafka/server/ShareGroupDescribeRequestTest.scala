@@ -108,8 +108,8 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
           new DescribedGroup()
             .setGroupId("grp-1")
             .setGroupState(GroupState.STABLE.toString)
-            .setGroupEpoch(1)
-            .setAssignmentEpoch(1)
+            .setGroupEpoch(2)
+            .setAssignmentEpoch(2)
             .setAssignorName("simple")
             .setAuthorizedOperations(authorizedOperationsInt)
             .setMembers(List(

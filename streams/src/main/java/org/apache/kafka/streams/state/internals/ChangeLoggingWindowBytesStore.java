@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -129,7 +130,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     void log(final Bytes key, final byte[] value) {
-        internalContext.logChange(name(), key, value, internalContext.recordContext().timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), key, value, internalContext.recordContext().timestamp(), new RecordHeaders(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {
