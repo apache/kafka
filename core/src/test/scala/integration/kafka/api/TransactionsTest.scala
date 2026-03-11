@@ -21,9 +21,8 @@ import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.TransactionState
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
@@ -1511,22 +1510,15 @@ class TransactionsTest extends IntegrationTestHarness {
                                           deliveryTimeoutMs: Int = 120000,
                                           requestTimeoutMs: Int = 30000,
                                           enable2PC: Boolean = false): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(brokers))
-    props.put(ProducerConfig.ACKS_CONFIG, "all")
-    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    // Cannot set transaction.timeout.ms when 2PC is enabled
-    if (!enable2PC) {
-      props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    }
-    props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
-    props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
-    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
-    if (enable2PC) {
-      props.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, "true")
-    }
-    val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
+    val producer = TestUtils.createTransactionalProducer(
+      transactionalId,
+      brokers,
+      transactionTimeoutMs = transactionTimeoutMs,
+      maxBlockMs = maxBlockMs,
+      deliveryTimeoutMs = deliveryTimeoutMs,
+      requestTimeoutMs = requestTimeoutMs,
+      enable2PC = enable2PC
+    )
     transactionalProducers += producer
     producer
   }
