@@ -78,7 +78,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
@@ -94,7 +93,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final Timer timer;
     private final PartitionWriter writer;
     private final Map<TopicPartition, Long> lastPrunedOffsets;
-    private final Supplier<Boolean> shareGroupConfigEnabledSupplier;
     private volatile boolean shouldRunPeriodicJob;
 
     public static class Builder {
@@ -104,7 +102,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
-        private Supplier<Boolean> shareGroupConfigEnabledSupplier;
         private ShareCoordinatorMetrics coordinatorMetrics;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
@@ -143,11 +140,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return this;
         }
 
-        public Builder withShareGroupEnabledConfigSupplier(Supplier<Boolean> shareGroupConfigEnabledSupplier) {
-            this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
-            return this;
-        }
-
         public ShareCoordinatorService build() {
             if (config == null) {
                 throw new IllegalArgumentException("Config must be set.");
@@ -169,9 +161,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
             if (coordinatorRuntimeMetrics == null) {
                 throw new IllegalArgumentException("Coordinator runtime metrics must be set.");
-            }
-            if (shareGroupConfigEnabledSupplier == null) {
-                throw new IllegalArgumentException("Share group enabled config enabled supplier must be set.");
             }
 
             String logPrefix = String.format("ShareCoordinator id=%d", nodeId);
@@ -216,8 +205,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 coordinatorMetrics,
                 time,
                 timer,
-                writer,
-                shareGroupConfigEnabledSupplier
+                writer
             );
         }
     }
@@ -229,8 +217,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ShareCoordinatorMetrics shareCoordinatorMetrics,
         Time time,
         Timer timer,
-        PartitionWriter writer,
-        Supplier<Boolean> shareGroupConfigEnabledSupplier
+        PartitionWriter writer
     ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
@@ -240,7 +227,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         this.timer = timer;
         this.writer = writer;
         this.lastPrunedOffsets = new ConcurrentHashMap<>();
-        this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
     }
 
     @Override
@@ -1130,7 +1116,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private boolean isShareGroupsEnabled(MetadataImage image) {
-        return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
+        return ShareVersion.fromFeatureLevel(
             image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
     }
