@@ -37,6 +37,12 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -732,5 +738,72 @@ public class MeteredSessionStoreWithHeadersTest {
         } catch (final NullPointerException expected) {
             // Expected
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldHandleWindowRangeQueryWithKeyAndUnwrapHeaders() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+            QueryResult.forResult(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) rawResult);
+
+        final WindowRangeQuery<String, String> query = WindowRangeQuery.withKey(KEY);
+        final QueryResult<KeyValueIterator<Windowed<String>, String>> result =
+            store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<Windowed<String>, String> iterator = result.getResult();
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, String> next = iterator.next();
+        assertEquals(VALUE, next.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldFailWindowRangeQueryWithoutKey() {
+        setUp();
+        init();
+
+        final WindowRangeQuery<String, String> query = WindowRangeQuery.withWindowStartRange(
+            java.time.Instant.ofEpochMilli(0L),
+            java.time.Instant.ofEpochMilli(0L)
+        );
+        final QueryResult<KeyValueIterator<Windowed<String>, String>> result =
+            store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDelegateUnknownQueryToWrappedStore() {
+        setUp();
+        init();
+
+        final QueryResult<Void> expectedResult = QueryResult.forFailure(
+            FailureReason.UNKNOWN_QUERY_TYPE, "unknown");
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) expectedResult);
+
+        final Query<Void> unknownQuery = new Query<Void>() { };
+        final QueryResult<Void> result =
+            store.query(unknownQuery, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isFailure());
     }
 }
