@@ -216,7 +216,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     private InternalMockProcessorContext<?, ?> getEOSProcessorContext(final File stateDir) {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
-        streamsProps.setProperty(StreamsConfig.EXACTLY_ONCE_V2, String.valueOf(true));
+       streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         return getProcessorContext(stateDir, streamsProps);
     }
 
