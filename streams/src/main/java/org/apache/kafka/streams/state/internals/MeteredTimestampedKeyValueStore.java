@@ -44,6 +44,7 @@ import java.util.function.Function;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.Utils.keyBytes;
 
 /**
  * A Metered {@link TimestampedKeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -101,7 +102,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {
             return maybeMeasureLatency(() -> { 
-                final byte[] serializedValue = wrapped().get(keyBytes(key));
+                final byte[] serializedValue = wrapped().get(keyBytes(key, serdes));
                 return new RawAndDeserializedValue<>(serializedValue, outerValue(serializedValue));
             }, time, getSensor);
         } catch (final ProcessorStateException e) {
@@ -120,7 +121,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                     if (ValueAndTimestampSerializer.valuesAreSameAndTimeIsIncreasing(oldSerializedValue, newSerializedValue)) {
                         return false;
                     } else {
-                        wrapped().put(keyBytes(key), newSerializedValue);
+                        wrapped().put(keyBytes(key, serdes), newSerializedValue);
                         return true;
                     }
                 },
@@ -183,7 +184,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+                KeyQuery.withKey(keyBytes(typedKeyQuery.key(), serdes));
         final QueryResult<byte[]> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -209,8 +210,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.lowerBound().orElse(null)),
-                keyBytes(typedQuery.upperBound().orElse(null))
+                keyBytes(typedQuery.lowerBound().orElse(null), serdes),
+                keyBytes(typedQuery.upperBound().orElse(null), serdes)
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -248,7 +249,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
+                KeyQuery.withKey(keyBytes(typedKeyQuery.getKey(), serdes));
         final QueryResult<byte[]> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -275,8 +276,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().orElse(null)),
-                keyBytes(typedQuery.getUpperBound().orElse(null))
+                keyBytes(typedQuery.getLowerBound().orElse(null), serdes),
+                keyBytes(typedQuery.getUpperBound().orElse(null), serdes)
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
