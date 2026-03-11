@@ -244,6 +244,7 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
 
                 log.debug("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
                 checkpointFile.write(checkpointingOffsets);
+                checkpointedOffsets = new HashMap<>(offsets);
             } catch (final IOException e) {
                 log.warn("{}Failed to write offset checkpoint file to [{}]." +
                                 " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
@@ -251,7 +252,6 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
                                 " Changing the location of state.dir may resolve the problem.",
                         logPrefix, checkpointFile, e);
             }
-            checkpointedOffsets = new HashMap<>(offsets);
         }
     }
 
