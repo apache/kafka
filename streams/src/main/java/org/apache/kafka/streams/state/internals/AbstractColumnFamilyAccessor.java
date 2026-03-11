@@ -26,6 +26,8 @@ import org.rocksdb.RocksDBException;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Abstract base class for all ColumnFamilyAccessor.
@@ -40,10 +42,11 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     private final byte[] statusKey = stringSerializer.serialize(null, "status");
     private final byte[] openState = longSerde.serializer().serialize(null, 1L);
     private final byte[] closedState = longSerde.serializer().serialize(null, 0L);
-    private volatile boolean open = false;
+    private final AtomicBoolean storeOpen;
 
-    AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle) {
+    AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle, final AtomicBoolean storeOpen) {
         this.offsetColumnFamilyHandle = offsetColumnFamilyHandle;
+        this.storeOpen = storeOpen;
     }
 
     @Override
@@ -65,7 +68,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
         if (ignoreInvalidState || (valueBytes == null || Arrays.equals(valueBytes, closedState))) {
             // If the status key is not present, we initialize it to "OPEN"
             accessor.put(offsetColumnFamilyHandle, statusKey, openState);
-            open = true;
+            storeOpen.set(true);
         } else {
             throw new ProcessorStateException("Invalid state during store open. Expected state to be either empty or closed");
         }
@@ -75,12 +78,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
         accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
         offsetColumnFamilyHandle.close();
-        open = false;
-    }
-
-    @Override
-    public final boolean isOpen() {
-        return open;
+        storeOpen.set(false);
     }
 
     @Override

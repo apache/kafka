@@ -72,7 +72,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 noTimestampColumnFamily,
                 withTimestampColumnFamily,
                 TimestampedBytesStore::convertToTimestampedFormat,
-                this
+                this, open
             );
         } else {
             log.info("Opening store {} in regular mode", name);

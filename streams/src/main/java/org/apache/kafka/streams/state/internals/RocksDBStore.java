@@ -83,6 +83,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
@@ -115,6 +116,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     RocksDB db;
     DBAccessor dbAccessor;
     ColumnFamilyAccessor cfAccessor;
+    protected final AtomicBoolean open = new AtomicBoolean(false);
 
     // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
@@ -405,7 +407,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public boolean isOpen() {
-        return cfAccessor != null && cfAccessor.isOpen();
+        return open.get();
     }
 
     private void validateStoreOpen() {
@@ -915,8 +917,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
          */
         void open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
-        boolean isOpen();
-
         Long getCommitedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
     }
 
@@ -924,7 +924,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         private final ColumnFamilyHandle columnFamily;
 
         SingleColumnFamilyAccessor(final ColumnFamilyHandle offsetsColumnFamily, final ColumnFamilyHandle columnFamily) {
-            super(offsetsColumnFamily);
+            super(offsetsColumnFamily, open);
             this.columnFamily = columnFamily;
         }
 

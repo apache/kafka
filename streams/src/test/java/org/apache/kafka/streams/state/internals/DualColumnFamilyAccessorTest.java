@@ -89,7 +89,7 @@ public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTe
             return ByteBuffer.allocate(oldValue.length + 10).put("converted:".getBytes()).put(oldValue).array();
         };
 
-        return new DualColumnFamilyAccessor(offsetsCF, oldCF, newCF, valueConverter, store);
+        return new DualColumnFamilyAccessor(offsetsCF, oldCF, newCF, valueConverter, store, storeOpen);
     }
 
 

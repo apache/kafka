@@ -76,7 +76,8 @@ public class RocksDBMigratingSessionStoreWithHeaders extends RocksDBStore implem
                 noHeadersColumnFamily,
                 withHeadersColumnFamily,
                 HeadersBytesStore::convertToHeaderFormat,
-                this
+                this,
+                    open
             );
         } else {
             log.info("Opening store {} in regular mode", name);

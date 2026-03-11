@@ -31,6 +31,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
@@ -66,8 +67,9 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
                              final ColumnFamilyHandle oldColumnFamily,
                              final ColumnFamilyHandle newColumnFamily,
                              final Function<byte[], byte[]> valueConverter,
-                             final RocksDBStore store) {
-        super(offsetColumnFamily);
+                             final RocksDBStore store,
+                             final AtomicBoolean storeOpen) {
+        super(offsetColumnFamily, storeOpen);
         this.oldColumnFamily = oldColumnFamily;
         this.newColumnFamily = newColumnFamily;
         this.valueConverter = valueConverter;

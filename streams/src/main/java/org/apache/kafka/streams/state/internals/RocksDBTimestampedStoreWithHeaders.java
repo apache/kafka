@@ -115,7 +115,8 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     defaultCf,
                     headersCf,
                     HeadersBytesStore::convertFromPlainToHeaderFormat,
-                    this
+                    this,
+                        open
                 );
             } else {
                 log.info("Opening store {} in regular headers-aware mode", name);
@@ -169,7 +170,8 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     legacyTimestampedCf,
                     headersCf,
                     HeadersBytesStore::convertToHeaderFormat,
-                    this
+                    this,
+                        open
                 );
             } else {
                 log.info("Opening store {} in regular headers-aware mode", name);

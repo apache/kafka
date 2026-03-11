@@ -31,6 +31,7 @@ import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
@@ -56,6 +57,7 @@ abstract class AbstractColumnFamilyAccessorTest {
     private final StringSerializer keySerializer = new StringSerializer();
     private final byte[] openValue = toBytes(1L);
     private final byte[] closedValue = toBytes(0L);
+    protected final AtomicBoolean storeOpen = new AtomicBoolean(false);
 
 
     @BeforeEach
@@ -87,7 +89,7 @@ abstract class AbstractColumnFamilyAccessorTest {
     public void shouldIgnoreExceptionAfterUncleanClose() throws RocksDBException {
         when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(openValue);
         accessor.open(dbAccessor, true);
-        assertTrue(accessor.isOpen());
+        assertTrue(storeOpen.get());
         verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(openValue));
     }
 
