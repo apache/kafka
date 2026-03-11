@@ -750,8 +750,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
         try {
             cfAccessor.close(dbAccessor);
-        } catch (final RocksDBException ignored) {
-            // Swallowing exception during close. This is the best effort attempt to close the store.
+        } catch (final RocksDBException e) {
+            log.error("Error while closing column family handles for store " + name, e);
         }
         dbAccessor.close();
         db.close();
