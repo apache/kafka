@@ -21,8 +21,9 @@ import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.TransactionState
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
@@ -75,6 +76,8 @@ class TransactionsTest extends IntegrationTestHarness {
     // Enable unstable API versions to support KIP-939 2PC (InitProducerId v6 with keepPreparedTxn)
     props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
+    // Enable 2PC support on the broker side
+    props.put(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG, "true")
     props
   }
 
@@ -990,6 +993,136 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testPrepareAndCompleteTransactionCommit(groupProtocol: String): Unit = {
+    // Test the 2PC API: prepareTransaction() and completeTransaction() for commit path.
+    // This tests the client-side 2PC API where the producer explicitly calls prepareTransaction()
+    // and then completeTransaction() to commit.
+    val transactionalId = "test-prepare-complete-commit"
+    val testTopic = s"test-prepare-complete-topic-${System.nanoTime()}"
+    createTopic(testTopic, 1, brokerCount, topicConfig())
+
+    val consumer = transactionalConsumers.head
+    consumer.subscribe(Seq(testTopic).asJava)
+    consumer.poll(Duration.ofMillis(100))
+
+    // Start transaction and produce records
+    val producer1 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer1.initTransactions()
+    producer1.beginTransaction()
+    val numRecords = 5
+    for (i <- 0 until numRecords) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes, s"value-$i".getBytes))
+    }
+    producer1.flush()
+
+    // Prepare the transaction (moves to PREPARED state)
+    val preparedState = producer1.prepareTransaction()
+    assertNotNull(preparedState, "prepareTransaction should return prepared state")
+
+    // Simulate crash - don't call commit/abort, just leave in prepared state
+    // (In real scenario, producer would crash here)
+
+    // New producer recovers and completes the transaction
+    val producer2 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer2.initTransactions(true)  // keepPreparedTxn=true
+
+    // Complete the transaction with the prepared state (should commit)
+    producer2.completeTransaction(preparedState)
+
+    // Wait for transaction to reach COMPLETE_COMMIT state
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_COMMIT)
+
+    // Verify consumer sees the records
+    consumer.seekToBeginning(consumer.assignment())
+    val consumedRecords = consumeRecordsFor(consumer)
+    assertEquals(numRecords, consumedRecords.size,
+      "Consumer should see all records after commit")
+
+    // Verify transaction state
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnDescription.state(),
+      "Transaction should be in COMPLETE_COMMIT state")
+
+    producer1.close()
+    producer2.close()
+    consumer.unsubscribe()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testPrepareAndCompleteTransactionAbort(groupProtocol: String): Unit = {
+    // Test the 2PC API: prepareTransaction() and completeTransaction() for abort path.
+    // This tests that completeTransaction() with a non-matching state triggers abort.
+    val transactionalId = "test-prepare-complete-abort"
+    val testTopic = s"test-prepare-complete-abort-topic-${System.nanoTime()}"
+    createTopic(testTopic, 1, brokerCount, topicConfig())
+
+    val consumer = transactionalConsumers.head
+    consumer.subscribe(Seq(testTopic).asJava)
+    consumer.poll(Duration.ofMillis(100))
+
+    val producer1 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer1.initTransactions()
+
+    // First transaction - prepare but then abort
+    producer1.beginTransaction()
+    for (i <- 0 until 3) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key1-$i".getBytes, s"value1-$i".getBytes))
+    }
+    producer1.flush()
+
+    // Get marker for first transaction
+    val marker1 = producer1.prepareTransaction()
+    assertNotNull(marker1, "prepareTransaction should return prepared state")
+
+    // Abort the first prepared transaction
+    producer1.abortTransaction()
+
+    // Second transaction - prepare and leave in prepared state
+    producer1.beginTransaction()
+    val numRecords = 5
+    for (i <- 0 until numRecords) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key2-$i".getBytes, s"value2-$i".getBytes))
+    }
+    producer1.flush()
+
+    // Get marker for second transaction
+    val marker2 = producer1.prepareTransaction()
+    assertNotNull(marker2, "prepareTransaction should return prepared state")
+
+    // Simulate crash - leave second transaction in prepared state
+
+    // New producer recovers
+    val producer2 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer2.initTransactions(true)  // keepPreparedTxn=true
+
+    // Complete with marker1 (old, aborted transaction) - should trigger abort
+    // because it doesn't match the current prepared state (marker2)
+    producer2.completeTransaction(marker1)
+
+    // Wait for transaction to reach COMPLETE_ABORT state
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_ABORT)
+
+    // Verify consumer sees NO records (both transactions aborted)
+    consumer.seekToBeginning(consumer.assignment())
+    val consumedRecords = consumeRecordsFor(consumer)
+    assertEquals(0, consumedRecords.size,
+      "Consumer should see no records after abort")
+
+    // Verify transaction state
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    assertEquals(TransactionState.COMPLETE_ABORT, txnDescription.state(),
+      "Transaction should be in COMPLETE_ABORT state")
+
+    producer1.close()
+    producer2.close()
+    consumer.unsubscribe()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testProducerCrashAndRecoverWith2PC(groupProtocol: String): Unit = {
     // Test producer crash and recovery with 2PC keepPrepared transaction flow.
@@ -1376,15 +1509,24 @@ class TransactionsTest extends IntegrationTestHarness {
                                           transactionTimeoutMs: Long = 60000,
                                           maxBlockMs: Long = 60000,
                                           deliveryTimeoutMs: Int = 120000,
-                                          requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val producer = TestUtils.createTransactionalProducer(
-      transactionalId,
-      brokers,
-      transactionTimeoutMs = transactionTimeoutMs,
-      maxBlockMs = maxBlockMs,
-      deliveryTimeoutMs = deliveryTimeoutMs,
-      requestTimeoutMs = requestTimeoutMs
-    )
+                                          requestTimeoutMs: Int = 30000,
+                                          enable2PC: Boolean = false): KafkaProducer[Array[Byte], Array[Byte]] = {
+    val props = new Properties()
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(brokers))
+    props.put(ProducerConfig.ACKS_CONFIG, "all")
+    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    // Cannot set transaction.timeout.ms when 2PC is enabled
+    if (!enable2PC) {
+      props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
+    }
+    props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
+    props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
+    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
+    if (enable2PC) {
+      props.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, "true")
+    }
+    val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     transactionalProducers += producer
     producer
   }
