@@ -312,79 +312,6 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
-  private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
-
-    // The basic plan for the test is as follows:
-    //  1. Seed topic1 with 500 unique, numbered, messages.
-    //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
-    //     offsets as part of the transaction.
-    //  3. Randomly abort transactions in step2.
-    //  4. Validate that we have 500 unique committed messages in topic2. If the offsets were committed properly with the
-    //     transactions, we should not have any duplicates or missing messages since we should process in the input
-    //     messages exactly once.
-
-    val consumerGroupId = "foobar-consumer-group"
-    val numSeedMessages = 500
-
-    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, brokers)
-
-    val producer = transactionalProducers.head
-
-    val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
-    consumer.subscribe(java.util.List.of(topic1))
-    producer.initTransactions()
-
-    var shouldCommit = false
-    var recordsProcessed = 0
-    try {
-      while (recordsProcessed < numSeedMessages) {
-        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
-
-        producer.beginTransaction()
-        shouldCommit = !shouldCommit
-
-        records.foreach { record =>
-          val key = new String(record.key(), StandardCharsets.UTF_8)
-          val value = new String(record.value(), StandardCharsets.UTF_8)
-          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, key, value, willBeCommitted = shouldCommit))
-        }
-
-        commit(producer, consumerGroupId, consumer)
-        if (shouldCommit) {
-          producer.commitTransaction()
-          recordsProcessed += records.size
-          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
-            s"records written to $topic2: $recordsProcessed")
-        } else {
-          producer.abortTransaction()
-          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
-            s"records written to $topic2: $recordsProcessed")
-          TestUtils.resetToCommittedPositions(consumer)
-        }
-      }
-    } finally {
-      consumer.close()
-    }
-
-    val partitions = ListBuffer.empty[TopicPartition]
-    for (partition <- 0 until numPartitions) {
-      partitions += new TopicPartition(topic2, partition)
-    }
-    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq)
-
-    // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
-    // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
-    val verifyingConsumer = transactionalConsumers(0)
-    verifyingConsumer.subscribe(java.util.List.of(topic2))
-    val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
-      TestUtils.assertCommittedAndGetValue(record).toInt
-    }
-    val valueSet = valueSeq.toSet
-    assertEquals(numSeedMessages, valueSeq.size, s"Expected $numSeedMessages values in $topic2.")
-    assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testFencingOnCommit(groupProtocol: String): Unit = {
@@ -500,21 +427,6 @@ class TransactionsTest extends IntegrationTestHarness {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testAbortTransactionTimeout(groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = true, producer => producer.abortTransaction())
-  }
-
-  private def testTimeout(needInitAndSendMsg: Boolean,
-                  timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
-    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 3000)
-    if (needInitAndSendMsg) {
-      producer.initTransactions()
-      producer.beginTransaction()
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
-    }
-
-    for  (i <- brokers.indices) killBroker(i)
-
-    assertThrows(classOf[TimeoutException], () => timeoutProcess(producer))
-    producer.close(Duration.ZERO)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -1021,94 +933,6 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.abortTransaction()
   }
 
-  private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
-                                                      start: Int, end: Int, willBeCommitted: Boolean): Unit = {
-    for (i <- start until end) {
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, null, value = i.toString, willBeCommitted = willBeCommitted, key = i.toString))
-    }
-    producer.flush()
-  }
-
-  private def createReadCommittedConsumer(group: String = "group",
-                                          maxPollRecords: Int = 500,
-                                          props: Properties = new Properties) = {
-    val consumer = TestUtils.createConsumer(bootstrapServers(),
-      groupProtocolFromTestParameters(),
-      groupId = group,
-      enableAutoCommit = false,
-      readCommitted = true,
-      maxPollRecords = maxPollRecords)
-    transactionalConsumers += consumer
-    consumer
-  }
-
-  private def createReadUncommittedConsumer(group: String) = {
-    val consumer = TestUtils.createConsumer(bootstrapServers(),
-      groupProtocolFromTestParameters(),
-      groupId = group,
-      enableAutoCommit = false)
-    nonTransactionalConsumers += consumer
-    consumer
-  }
-
-  private def createTransactionalProducer(transactionalId: String,
-                                          transactionTimeoutMs: Long = 60000,
-                                          maxBlockMs: Long = 60000,
-                                          deliveryTimeoutMs: Int = 120000,
-                                          requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val producer = TestUtils.createTransactionalProducer(
-      transactionalId,
-      brokers,
-      transactionTimeoutMs = transactionTimeoutMs,
-      maxBlockMs = maxBlockMs,
-      deliveryTimeoutMs = deliveryTimeoutMs,
-      requestTimeoutMs = requestTimeoutMs
-    )
-    transactionalProducers += producer
-    producer
-  }
-
-  def maybeWaitForAtLeastOneSegmentUpload(topicPartitions: Seq[TopicPartition]): Unit = {
-  }
-
-  def verifyLogStartOffsets(partitionStartOffsets: Map[TopicPartition, Int]): Unit = {
-    val offsets = new util.HashMap[Integer, JLong]()
-    waitUntilTrue(() => {
-      brokers.forall(broker => {
-        partitionStartOffsets.forall {
-          case (partition, offset) =>
-            val lso = broker.replicaManager.localLog(partition).get.logStartOffset
-            offsets.put(broker.config.brokerId, lso)
-            offset == lso
-        }
-      })
-    }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets")
-  }
-
-  /**
-   * Will consume all the records for the given consumer for the specified duration. If you want to drain all the
-   * remaining messages in the partitions the consumer is subscribed to, the duration should be set high enough so
-   * that the consumer has enough time to poll everything. This would be based on the number of expected messages left
-   * in the topic, and should not be too large (ie. more than a second) in our tests.
-   *
-   * @return All the records consumed by the consumer within the specified duration.
-   */
-  private def consumeRecordsFor[K, V](consumer: Consumer[K, V]): Seq[ConsumerRecord[K, V]] = {
-    val duration = 1000
-    val startTime = System.currentTimeMillis()
-    val records = new ArrayBuffer[ConsumerRecord[K, V]]()
-    waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      System.currentTimeMillis() - startTime > duration
-    }, s"The timeout $duration was greater than the maximum wait time.")
-    records
-  }
-
-  @throws(classOf[InterruptedException])
-  def maybeVerifyLocalLogStartOffsets(partitionStartOffsets: Map[TopicPartition, JLong]): Unit = {
-    // Non-tiered storage topic partition doesn't have local log start offset
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testProducerCrashAndRecoverWith2PC(groupProtocol: String): Unit = {
@@ -1370,6 +1194,184 @@ class TransactionsTest extends IntegrationTestHarness {
 
     // Scenario 2 with double rotation: First rotation during iteration, second during final init/commit
     testRotation((Short.MaxValue - 3).toShort, doubleRotation = true)
+  }
+
+  // Helper methods
+
+  private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
+
+    // The basic plan for the test is as follows:
+    //  1. Seed topic1 with 500 unique, numbered, messages.
+    //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
+    //     offsets as part of the transaction.
+    //  3. Randomly abort transactions in step2.
+    //  4. Validate that we have 500 unique committed messages in topic2. If the offsets were committed properly with the
+    //     transactions, we should not have any duplicates or missing messages since we should process in the input
+    //     messages exactly once.
+
+    val consumerGroupId = "foobar-consumer-group"
+    val numSeedMessages = 500
+
+    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, brokers)
+
+    val producer = transactionalProducers.head
+
+    val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
+    consumer.subscribe(java.util.List.of(topic1))
+    producer.initTransactions()
+
+    var shouldCommit = false
+    var recordsProcessed = 0
+    try {
+      while (recordsProcessed < numSeedMessages) {
+        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
+
+        producer.beginTransaction()
+        shouldCommit = !shouldCommit
+
+        records.foreach { record =>
+          val key = new String(record.key(), StandardCharsets.UTF_8)
+          val value = new String(record.value(), StandardCharsets.UTF_8)
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, key, value, willBeCommitted = shouldCommit))
+        }
+
+        commit(producer, consumerGroupId, consumer)
+        if (shouldCommit) {
+          producer.commitTransaction()
+          recordsProcessed += records.size
+          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
+            s"records written to $topic2: $recordsProcessed")
+        } else {
+          producer.abortTransaction()
+          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
+            s"records written to $topic2: $recordsProcessed")
+          TestUtils.resetToCommittedPositions(consumer)
+        }
+      }
+    } finally {
+      consumer.close()
+    }
+
+    val partitions = ListBuffer.empty[TopicPartition]
+    for (partition <- 0 until numPartitions) {
+      partitions += new TopicPartition(topic2, partition)
+    }
+    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq)
+
+    // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
+    // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
+    val verifyingConsumer = transactionalConsumers(0)
+    verifyingConsumer.subscribe(java.util.List.of(topic2))
+    val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
+      TestUtils.assertCommittedAndGetValue(record).toInt
+    }
+    val valueSet = valueSeq.toSet
+    assertEquals(numSeedMessages, valueSeq.size, s"Expected $numSeedMessages values in $topic2.")
+    assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
+  }
+
+  private def testTimeout(needInitAndSendMsg: Boolean,
+                  timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 3000)
+    if (needInitAndSendMsg) {
+      producer.initTransactions()
+      producer.beginTransaction()
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+    }
+
+    for  (i <- brokers.indices) killBroker(i)
+
+    assertThrows(classOf[TimeoutException], () => timeoutProcess(producer))
+    producer.close(Duration.ZERO)
+  }
+
+  private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
+                                                      start: Int, end: Int, willBeCommitted: Boolean): Unit = {
+    for (i <- start until end) {
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, null, value = i.toString, willBeCommitted = willBeCommitted, key = i.toString))
+    }
+    producer.flush()
+  }
+
+  private def createReadCommittedConsumer(group: String = "group",
+                                          maxPollRecords: Int = 500,
+                                          props: Properties = new Properties) = {
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
+      groupProtocolFromTestParameters(),
+      groupId = group,
+      enableAutoCommit = false,
+      readCommitted = true,
+      maxPollRecords = maxPollRecords)
+    transactionalConsumers += consumer
+    consumer
+  }
+
+  private def createReadUncommittedConsumer(group: String) = {
+    val consumer = TestUtils.createConsumer(bootstrapServers(),
+      groupProtocolFromTestParameters(),
+      groupId = group,
+      enableAutoCommit = false)
+    nonTransactionalConsumers += consumer
+    consumer
+  }
+
+  private def createTransactionalProducer(transactionalId: String,
+                                          transactionTimeoutMs: Long = 60000,
+                                          maxBlockMs: Long = 60000,
+                                          deliveryTimeoutMs: Int = 120000,
+                                          requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
+    val producer = TestUtils.createTransactionalProducer(
+      transactionalId,
+      brokers,
+      transactionTimeoutMs = transactionTimeoutMs,
+      maxBlockMs = maxBlockMs,
+      deliveryTimeoutMs = deliveryTimeoutMs,
+      requestTimeoutMs = requestTimeoutMs
+    )
+    transactionalProducers += producer
+    producer
+  }
+
+  def maybeWaitForAtLeastOneSegmentUpload(topicPartitions: Seq[TopicPartition]): Unit = {
+  }
+
+  def verifyLogStartOffsets(partitionStartOffsets: Map[TopicPartition, Int]): Unit = {
+    val offsets = new util.HashMap[Integer, JLong]()
+    waitUntilTrue(() => {
+      brokers.forall(broker => {
+        partitionStartOffsets.forall {
+          case (partition, offset) =>
+            val lso = broker.replicaManager.localLog(partition).get.logStartOffset
+            offsets.put(broker.config.brokerId, lso)
+            offset == lso
+        }
+      })
+    }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets")
+  }
+
+  /**
+   * Will consume all the records for the given consumer for the specified duration. If you want to drain all the
+   * remaining messages in the partitions the consumer is subscribed to, the duration should be set high enough so
+   * that the consumer has enough time to poll everything. This would be based on the number of expected messages left
+   * in the topic, and should not be too large (ie. more than a second) in our tests.
+   *
+   * @return All the records consumed by the consumer within the specified duration.
+   */
+  private def consumeRecordsFor[K, V](consumer: Consumer[K, V]): Seq[ConsumerRecord[K, V]] = {
+    val duration = 1000
+    val startTime = System.currentTimeMillis()
+    val records = new ArrayBuffer[ConsumerRecord[K, V]]()
+    waitUntilTrue(() => {
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
+      System.currentTimeMillis() - startTime > duration
+    }, s"The timeout $duration was greater than the maximum wait time.")
+    records
+  }
+
+  @throws(classOf[InterruptedException])
+  def maybeVerifyLocalLogStartOffsets(partitionStartOffsets: Map[TopicPartition, JLong]): Unit = {
+    // Non-tiered storage topic partition doesn't have local log start offset
   }
 
   /**
