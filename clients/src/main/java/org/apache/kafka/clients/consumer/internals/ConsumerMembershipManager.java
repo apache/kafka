@@ -373,8 +373,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Assignment changes are not allowed outside of consumer.poll() to ensure that
-     * consumer.assignment() only changes within a call to consumer.poll().
+     * Assignment changes are not allowed outside of consumer.poll() for the KafkaConsumer,
+     * to ensure that consumer.assignment() only changes within a call to consumer.poll().
      */
     @Override
     protected boolean allowAssignmentChangeOutsidePoll() {

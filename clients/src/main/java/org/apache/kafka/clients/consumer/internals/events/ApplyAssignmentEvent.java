@@ -23,14 +23,23 @@ import java.util.Set;
 import java.util.SortedSet;
 
 /**
- * Event sent from the application thread to the background thread to apply an assignment change.
- * This is used to update the subscription state with the new assignment after it has been reconciled.
+ * Event sent from the application thread to the background thread to
+ * update the subscription state with a new group assignment after it has been reconciled.
  * Done via events to ensure that assignment updates happen on the background thread,
  * triggered by the application thread during poll, and completed before the call to poll returns to the user.
  */
 public class ApplyAssignmentEvent extends CompletableApplicationEvent<Void> {
 
+    /**
+     * The full assignment to apply
+     * This is used to update the subscription state.
+     */
     private final Set<TopicPartition> assignedPartitions;
+
+    /**
+     * The newly added partitions.
+     * This is used to mark them as awaiting callbacks if needed when updating the subscription state.
+     */
     private final SortedSet<TopicPartition> addedPartitions;
 
     public ApplyAssignmentEvent(Set<TopicPartition> assignedPartitions,

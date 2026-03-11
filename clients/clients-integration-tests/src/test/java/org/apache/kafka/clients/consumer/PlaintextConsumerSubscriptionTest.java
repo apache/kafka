@@ -460,7 +460,7 @@ public class PlaintextConsumerSubscriptionTest {
             awaitAssignment(consumer, patternAssignment);
         }
     }
-
+    
 
     @ClusterTest
     public void testRe2JPatternSubscriptionInvalidRegex() throws InterruptedException {

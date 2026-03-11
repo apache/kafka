@@ -1243,9 +1243,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *
      * @return true if assignment changes can happen outside poll, false to defer to poll
      */
-    protected boolean allowAssignmentChangeOutsidePoll() {
-        return true;
-    }
+    protected abstract boolean allowAssignmentChangeOutsidePoll();
 
     /**
      * Signals to the membership manager that partitions are being assigned so that actions

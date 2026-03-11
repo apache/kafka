@@ -175,6 +175,14 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         }
     }
 
+    /**
+     * Assignment changes can be applied outside of consumer.poll() for the ShareConsumer.
+     */
+    @Override
+    protected boolean allowAssignmentChangeOutsidePoll() {
+        return true;
+    }
+
     @Override
     public int joinGroupEpoch() {
         return ShareGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;

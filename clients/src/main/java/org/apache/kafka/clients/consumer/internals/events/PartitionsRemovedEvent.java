@@ -24,8 +24,8 @@ import java.util.Objects;
 import java.util.SortedSet;
 
 /**
- * Event sent from the background to the app thread to notify that a new assignment has been reconciled in the background,
- * that has removed partitions.
+ * Event sent from the background to the app thread
+ * to notify that a new assignment has been reconciled in the background removing partitions.
  * The app thread is expected to invoke the onPartitionsRevoked/onPartitionsLost callback as needed.
  */
 public class PartitionsRemovedEvent extends CompletableBackgroundEvent<Void> {

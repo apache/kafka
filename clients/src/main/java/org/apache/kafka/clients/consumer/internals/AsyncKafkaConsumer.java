@@ -231,7 +231,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * Processing this event will perform the actions needed in the app thread when new partitions are reconciled in the background:
          * - apply assignment changes (ensuring they happen in the background but triggered within the app thread poll)
          * - run onPartitionsAssigned callback if present
-         * - notify background thread that the assignment actions have been completed in the app thread, so it can carry on (e.g., send ack to the broker)
+         * - notify background thread so it can carry on (e.g., send ack to the broker)
          */
         private void process(final PartitionsAssignedEvent event) {
 
@@ -244,10 +244,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         }
 
+        /**
+         * Send event to the background to update the assignment in the subscription state.
+         * BLock on it to complete to ensure the assignment change happens within a call to
+         * consumer.poll.
+         * Note that this event only happens when there is a pending assignment (reconciliation
+         * completed in the background)
+         */
         private void applyNewAssignment(final PartitionsAssignedEvent event) {
-            // Apply the assignment by sending an event to the background thread.
-            // This ensures the assignment is applied on the background thread but coordinated by the
-            // application thread during poll, so consumer.assignment() only changes within poll.
             ApplyAssignmentEvent applyEvent = new ApplyAssignmentEvent(
                 event.assignedPartitions(),
                 event.addedPartitions()
