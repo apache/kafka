@@ -3959,7 +3959,7 @@ public class GroupMetadataManager {
             ));
 
             return new UpdateTargetAssignmentResult<>(
-                Math.max(1, group.assignmentEpoch()),
+                group.assignmentEpoch(),
                 TasksTuple.EMPTY
             );
         }
