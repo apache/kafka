@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.streams;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
@@ -37,8 +38,8 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readHeaders;
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 @OutputTimeUnit(TimeUnit.SECONDS)
 @Fork(3)
@@ -153,6 +154,22 @@ public class RawBytesExtractionBenchmark {
         }
     }
 
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testRawTimestampedValueWithoutHeaders(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(rawTimestampedValuePre20249(randomValue));
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testRawTimestampedValueWithoutHeadersOpt(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(Utils.rawTimestampedValue(randomValue));
+        }
+    }
+
     /**
      * Prior to KAFKA-20249: AggregationWithHeadersDeserializer - Extract the raw aggregation bytes from 
      * serialized AggregationWithHeaders, stripping the headers prefix. 
@@ -180,5 +197,35 @@ public class RawBytesExtractionBenchmark {
         final int headersSize = ByteUtils.readVarint(buffer);
         buffer.position(buffer.position() + headersSize + Long.BYTES);
         return readBytes(buffer, buffer.remaining());
+    }
+
+    /**
+     * Prior to KAFKA-20249: Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
+     * This strips the headers portion but keeps timestamp and value intact.
+     *
+     * Format conversion:
+     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
+     * Output: [timestamp(8)][value]
+     */
+    private static byte[] rawTimestampedValuePre20249(final byte[] rawValueTimestampHeaders) {
+        if (rawValueTimestampHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        // Skip headers, keep timestamp + value
+        if (headersSize < 0 || headersSize > buffer.remaining() || buffer.remaining() - headersSize < StateSerdes.TIMESTAMP_SIZE) {
+            throw new SerializationException(
+                "Invalid format: headers size " + headersSize + 
+                ", timestamp expected size " + StateSerdes.TIMESTAMP_SIZE + 
+                ", but buffer size " + buffer.remaining()
+            );
+        }
+        buffer.position(buffer.position() + headersSize);
+
+        final byte[] result = new byte[buffer.remaining()];
+        buffer.get(result);
+        return result;
     }
 }

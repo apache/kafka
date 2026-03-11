@@ -41,15 +41,8 @@ public class Utils {
         }
 
         // If the header is empty, then copy the value bytes directly
-        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
+        if (hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
             // Strip header size (varint 1 byte), empty headers (no bytes), and timestamp
-            if (rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE < 0) {
-                throw new SerializationException(
-                    "Invalid format: input length " + rawValueTimestampHeaders.length +
-                    " is less than min length of timestamped value with empty headers " +
-                    (1 + StateSerdes.TIMESTAMP_SIZE)
-                );
-            }
             final byte[] res = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
             System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, res, 0, res.length);
             return res;
@@ -65,6 +58,21 @@ public class Utils {
         return result;
     }
 
+    private static boolean hasEmptyHeadersAndTimestamp(final byte[] rawValueTimestampHeaders) {
+        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
+            // Header size (varint 1 byte), empty headers (no bytes), and timestamp
+            if (rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE < 0) {
+                throw new SerializationException(
+                    "Invalid format: input length " + rawValueTimestampHeaders.length +
+                    " is less than min length of timestamped value with empty headers " +
+                    (1 + StateSerdes.TIMESTAMP_SIZE)
+                );
+            }
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
      * This strips the headers portion but keeps timestamp and value intact.
@@ -73,9 +81,17 @@ public class Utils {
      * Input:  [headersSize(varint)][headers][timestamp(8)][value]
      * Output: [timestamp(8)][value]
      */
-    static byte[] rawTimestampedValue(final byte[] rawValueTimestampHeaders) {
+    public static byte[] rawTimestampedValue(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
             return null;
+        }
+
+        // If the header is empty, then copy the value and timestamp bytes directly
+        if (hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
+            // Strip header size (varint 1 byte), empty headers (no bytes)
+            final byte[] res = new byte[rawValueTimestampHeaders.length - 1]; 
+            System.arraycopy(rawValueTimestampHeaders, 1, res, 0, res.length);
+            return res;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
