@@ -747,6 +747,8 @@ kafka.coordinator.transaction.TransactionCoordinatorTest:
 - shouldGenerateNewProducerIdIfEpochsExhausted
 - shouldGenerateNewProducerIdIfEpochsExhaustedV2
 - shouldGenerateNewProducerIdIfNoStateAndProducerIdAndEpochProvided
+- shouldHandleTimeoutAtEpochOverflowBoundaryCorrectlyAndLateClientAbortRequestTV2
+- shouldHandleTimeoutAtEpochOverflowBoundaryCorrectlyAndRetryInitProducerIdTV2
 - shouldHandleTimeoutAtEpochOverflowBoundaryCorrectlyTV2
 - shouldIncrementEpochAndUpdateMetadataOnHandleInitPidWhenExistingCompleteCommitTransaction
 - shouldIncrementEpochAndUpdateMetadataOnHandleInitPidWhenExistingCompleteTransaction
@@ -795,6 +797,7 @@ kafka.coordinator.transaction.TransactionCoordinatorTest:
 - shouldReturnInvalidTxnRequestOnEndTxnV2IfNotEndTxnV2Retry
 - shouldReturnOkOnEndTxnV2IfEndTxnV2RetryEpochOverflow
 - shouldReturnOkOnEndTxnWhenStatusIsCompleteAbortAndResultIsAbortInV2
+- shouldRotateProducerIdWhenInitPidFencesOngoingTxnAtEpochOverflowBoundaryTV2
 - shouldUseLastEpochToFenceWhenEpochsAreExhausted
 - shouldWaitForCommitToCompleteOnHandleInitPidAndExistingTransactionInPrepareAbortState
 - shouldWaitForCommitToCompleteOnHandleInitPidAndExistingTransactionInPrepareCommitState
@@ -937,13 +940,6 @@ kafka.docker.KafkaDockerWrapperTest:
 - testPrepareToolsLog4jConfigs
 - testPrepareToolsLog4jConfigsWithoutEnvVariable
 - testPrepareToolsLog4jConfigsWithoutMountedFile
-kafka.integration.UncleanLeaderElectionTest:
-- testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs
-- testUncleanLeaderElectionDisabled
-- testUncleanLeaderElectionDisabledByTopicOverride
-- testUncleanLeaderElectionEnabled
-- testUncleanLeaderElectionEnabledByTopicOverride
-- testUncleanLeaderElectionInvalidTopicOverride
 kafka.log.LogCleanerParameterizedIntegrationTest:
 - cleanerConfigUpdateTest
 - cleanerTest
@@ -1119,12 +1115,9 @@ kafka.log.UnifiedLogTest:
 - testAppendWithOutOfOrderOffsetsThrowsException
 - testAsyncDelete
 - testBackgroundDeletionWithIOException
-- testBuildTimeIndexWhenNotAssigningOffsets
 - testCannotDeleteSegmentsAtOrAboveHighWatermark
 - testCannotIncrementLogStartOffsetPastHighWatermark
-- testCompactedTopicConstraints
 - testCompactionDeletesProducerStateSnapshots
-- testCompressedMessages
 - testConvertToOffsetMetadataDoesNotThrowOffsetOutOfRangeError
 - testDegenerateSegmentSplit
 - testDegenerateSegmentSplitWithOutOfRangeBatchLastOffset
@@ -1143,18 +1136,10 @@ kafka.log.UnifiedLogTest:
 - testFetchEarliestPendingUploadTimestampStaleHighestOffsetInRemote
 - testFetchEarliestPendingUploadTimestampWithRemoteStorage
 - testFetchEarliestPendingUploadTimestampWithRemoteStorageNoLocalDeletion
-- testFetchLatestTieredTimestampNoRemoteStorage
-- testFetchLatestTieredTimestampWithRemoteStorage
-- testFetchOffsetByTimestampFromRemoteStorage
-- testFetchOffsetByTimestampIncludesLeaderEpoch
 - testFetchOffsetByTimestampShouldReadOnlyLocalLogWhenLogIsEmpty
-- testFetchOffsetByTimestampWithMaxTimestampIncludesTimestamp
-- testFlushingEmptyActiveSegments
 - testGetFirstBatchTimestampForSegments
 - testIncrementLocalLogStartOffsetAfterLocalLogDeletion
 - testIndexResizingAtTruncation
-- testInvalidLeaderEpoch
-- testInvalidMemoryRecords
 - testLastStableOffsetDoesNotExceedLogStartOffsetAfterSegmentDeletion
 - testLastStableOffsetDoesNotExceedLogStartOffsetMidSegment
 - testLastStableOffsetWithMixedProducerData
@@ -1164,18 +1149,10 @@ kafka.log.UnifiedLogTest:
 - testLoadEmptyLog
 - testLoadPartitionDirWithNoSegmentsShouldNotThrow
 - testLoadingLogDeletesProducerStateSnapshotsPastLogEndOffset
-- testLogFailsWhenInconsistentTopicIdSet
-- testLogFlushesPartitionMetadataOnAppend
-- testLogFlushesPartitionMetadataOnClose
 - testLogOffsetsListener
-- testLogRecoversTopicId
 - testLogRollAfterLogHandlerClosed
-- testLogRolls
 - testLogStartOffsetMovementDeletesSnapshots
 - testMaybeUpdateHighWatermarkAsFollower
-- testMessageSetSizeCheck
-- testMessageSizeCheck
-- testMessageSizeCheckInAppendAsFollower
 - testMultipleProducerIdsPerMemoryRecord
 - testMultipleProducersWithDuplicatesInSingleAppend
 - testNextTransactionVerificationGuardNotCleared
@@ -1187,12 +1164,8 @@ kafka.log.UnifiedLogTest:
 - testProducerIdExpirationOnSegmentDeletion
 - testProducerIdMapTruncateFullyAndStartAt
 - testProducerSnapshotAfterSegmentRollOnAppend
-- testRandomRecords
 - testReadAtLogGap
 - testReadCommittedWithConcurrentHighWatermarkUpdates
-- testReadOutOfRange
-- testReadWithMinMessage
-- testReadWithTooSmallMaxLength
 - testRebuildTransactionalState
 - testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure
 - testRemoteLogStorageIsDisabledOnInternalAndRemoteLogMetadataTopic
@@ -1211,7 +1184,6 @@ kafka.log.UnifiedLogTest:
 - testStartOffsetsRemoteLogStorageIsEnabled
 - testTV2MarkerWithBumpedEpochSucceeds
 - testTakeSnapshotOnRollAndDeleteSnapshotOnRecoveryPointCheckpoint
-- testThatGarbageCollectingSegmentsDoesntChangeOffset
 - testTimeBasedLogRollJitter
 - testTopicIdFlushesBeforeDirectoryRename
 - testTopicIdTransfersAfterDirectoryRename
