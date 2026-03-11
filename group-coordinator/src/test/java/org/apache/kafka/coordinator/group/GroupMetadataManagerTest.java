@@ -20949,7 +20949,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(90000)
                     .setSubscribedTopicNames(List.of("foo"))
                     .setTopicPartitions(List.of()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify default heartbeat interval and session timeout before config update.
         assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
@@ -20976,7 +20976,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().memberEpoch()));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(2, result.response().memberEpoch());
 
         // Verify heartbeat interval is evaluated to min.
         assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
@@ -21025,7 +21025,7 @@ public class GroupMetadataManagerTest {
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(1, result.response().getKey().memberEpoch());
+        assertEquals(2, result.response().getKey().memberEpoch());
 
         // Verify default heartbeat interval and session timeout before config update.
         assertEquals(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
@@ -21066,7 +21066,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().getKey().memberEpoch()));
-        assertEquals(1, result.response().getKey().memberEpoch());
+        assertEquals(2, result.response().getKey().memberEpoch());
 
         // Verify heartbeat interval is evaluated to min.
         assertEquals(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
