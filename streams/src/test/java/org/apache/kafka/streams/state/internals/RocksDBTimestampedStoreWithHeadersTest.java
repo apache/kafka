@@ -540,6 +540,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             boolean hasDefault = false;
             boolean hasHeadersAware = false;
             boolean hasLegacy = false;
+            boolean hasOffsets = false;
 
             for (final byte[] cf : existingCFs) {
                 if (Arrays.equals(cf, RocksDB.DEFAULT_COLUMN_FAMILY)) {
@@ -548,9 +549,12 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
                     hasHeadersAware = true;
                 } else if (Arrays.equals(cf, "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8))) {
                     hasLegacy = true;
+                } else if (Arrays.equals(cf, OFFSETS_COLUMN_FAMILY_NAME)) {
+                    hasOffsets = true;
                 }
             }
 
+            assertTrue(hasOffsets, "Expected offsets column family to exist");
             assertTrue(hasDefault, "Expected default column family to exist");
             assertTrue(hasHeadersAware, "Expected headers-aware column family to exist");
             assertFalse(hasLegacy, "Expected legacy column family to be dropped");

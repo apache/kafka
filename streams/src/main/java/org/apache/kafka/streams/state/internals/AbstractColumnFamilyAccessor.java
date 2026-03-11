@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
@@ -67,7 +67,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
             accessor.put(offsetColumnFamilyHandle, statusKey, openState);
             open = true;
         } else {
-            throw new StreamsException("Invalid state during store open. Expected state to be either empty or closed");
+            throw new ProcessorStateException("Invalid state during store open. Expected state to be either empty or closed");
         }
     }
 

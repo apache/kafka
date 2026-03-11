@@ -683,6 +683,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
+        validateStoreOpen();
         try {
             return cfAccessor.getCommitedOffset(dbAccessor, partition);
         } catch (final RocksDBException e) {

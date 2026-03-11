@@ -20,7 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,7 +79,7 @@ abstract class AbstractColumnFamilyAccessorTest {
     @Test
     public void shouldThrowOnOpenAfterAUncleanClose() throws RocksDBException {
         when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(openValue);
-        final StreamsException thrown = assertThrowsExactly(StreamsException.class, () -> accessor.open(dbAccessor, false));
+        final ProcessorStateException thrown = assertThrowsExactly(ProcessorStateException.class, () -> accessor.open(dbAccessor, false));
         assertEquals("Invalid state during store open. Expected state to be either empty or closed", thrown.getMessage());
     }
 
