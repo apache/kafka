@@ -22,21 +22,21 @@ import org.apache.kafka.common.KafkaException;
  * Exception thrown when cleaning a segment would cause size overflow.
  */
 public class SegmentSizeOverflowException extends KafkaException {
-
     private final int position;
-    private final LogSegment segment;
 
+    /**
+     * @param segment  the destination segment that would overflow
+     * @param position the position (in bytes) in the source segment where the overflow was detected
+     */
     public SegmentSizeOverflowException(LogSegment segment, int position) {
         super(String.format("Segment %s size would overflow at position %d", segment, position));
-        this.segment = segment;
         this.position = position;
     }
 
+    /**
+     * @return the position (in bytes) in the source segment where the overflow was detected
+     */
     public int position() {
         return position;
-    }
-
-    public LogSegment segment() {
-        return segment;
     }
 }

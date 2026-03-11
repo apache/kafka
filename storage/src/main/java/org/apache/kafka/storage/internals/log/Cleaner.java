@@ -239,59 +239,52 @@ public class Cleaner {
                         retainLegacyDeletesAndTxnMarkers ? "retaining" : "discarding"
                 );
 
-                try {
-                    // Start cleaning from position 0
-                    int position = 0;
-                    boolean cleaningComplete = false;
+                // Start cleaning from position 0
+                int position = 0;
+                boolean cleaningComplete = false;
 
-                    while (!cleaningComplete) {
-                        try {
-                            cleanInto(
-                                log.topicPartition(),
-                                currentSegment.log(),
-                                currentCleaned,
-                                position,
-                                map,
-                                retainLegacyDeletesAndTxnMarkers,
-                                log.config().deleteRetentionMs,
-                                log.config().maxMessageSize(),
-                                transactionMetadata,
-                                lastOffsetOfActiveProducers,
-                                upperBoundOffsetOfCleaningRound,
-                                stats,
-                                currentTime
-                            );
+                while (!cleaningComplete) {
+                    try {
+                        cleanInto(
+                            log.topicPartition(),
+                            currentSegment.log(),
+                            currentCleaned,
+                            position,
+                            map,
+                            retainLegacyDeletesAndTxnMarkers,
+                            log.config().deleteRetentionMs,
+                            log.config().maxMessageSize(),
+                            transactionMetadata,
+                            lastOffsetOfActiveProducers,
+                            upperBoundOffsetOfCleaningRound,
+                            stats,
+                            currentTime
+                        );
 
-                            // If cleanInto completes without exception, we're done with this segment
-                            cleaningComplete = true;
+                        // If cleanInto completes without exception, we're done with this segment
+                        cleaningComplete = true;
 
-                        } catch (SegmentSizeOverflowException e) {
-                            // Overflow detected - complete current segment and create new one
-                            logger.info("Completing cleaned segment {} due to overflow, creating new segment", currentCleaned.baseOffset());
+                    } catch (SegmentSizeOverflowException e) {
+                        // Overflow detected - complete current segment and create new one
+                        logger.info("Completing cleaned segment {} due to overflow, creating new segment", currentCleaned.baseOffset());
 
-                            // Complete current cleaned segment
-                            currentCleaned.onBecomeInactiveSegment();
-                            currentCleaned.flush();
-                            cleanedSegments.add(currentCleaned);
+                        // Complete current cleaned segment
+                        currentCleaned.onBecomeInactiveSegment();
+                        currentCleaned.flush();
+                        currentCleaned.setLastModified(segments.get(segments.size() - 1).lastModified());
+                        cleanedSegments.add(currentCleaned);
 
-                            // Create new cleaned segment with base offset = next offset of completed segment
-                            long nextBaseOffset = currentCleaned.readNextOffset();
-                            currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), nextBaseOffset);
-                            transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
+                        // Create new cleaned segment with base offset = next offset of completed segment
+                        long nextBaseOffset = currentCleaned.readNextOffset();
+                        currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), nextBaseOffset);
+                        transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
 
-                            logger.info("Created new cleaned segment with base offset {} for partition {}", nextBaseOffset, log.topicPartition());
-                            // Resume cleaning from the position where overflow occurred
-                            position = e.position();
-                        }
+                        logger.info("Created new cleaned segment with base offset {} for partition {}", nextBaseOffset, log.topicPartition());
+                        // Resume cleaning from the position where overflow occurred
+                        position = e.position();
                     }
-
-                } catch (LogSegmentOffsetOverflowException e) {
-                    // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
-                    // scratch once the split is complete.
-                    logger.info("Caught segment overflow error during cleaning: {}", e.getMessage());
-                    log.splitOverflowedSegment(currentSegment);
-                    throw new LogCleaningAbortedException();
                 }
+
                 currentSegmentOpt = nextSegmentOpt;
             }
 
@@ -446,17 +439,17 @@ public class Cleaner {
                 outputBuffer.flip();
                 MemoryRecords retained = MemoryRecords.readableRecords(outputBuffer);
 
-                // Check for size overflow: file size would exceed Integer.MAX_VALUE. While 
-                // groupSegmentsBySize() ensures source segments don't exceed maxSize, the cleaned
-                // segment contains retained data from multiple sources, and low compaction ratios
-                // can result in cleaned segment sizes approaching or exceeding Integer.MAX_VALUE.
+                // Make sure that file size won't exceed Integer.MAX_VALUE. While groupSegmentsBySize()
+                // ensures source segments don't exceed Integer.MAX_VALUE, recompression during cleaning
+                // can result in the size of cleaned segments exceeding Integer.MAX_VALUE.
                 if (retained.sizeInBytes() > Integer.MAX_VALUE - dest.size()) {
-                    logger.info(
-                        "Size overflow detected for partition {} at position {}. " +
-                            "(Current size: {}, Batch size: {}, Would exceed: {})",
-                        topicPartition, position, dest.size(), retained.sizeInBytes(),
-                        (long) dest.size() + retained.sizeInBytes()
-                    );
+                    throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
+                }
+
+                // Make sure that the offset range of the cleaned segment won't exceed Integer.MAX_VALUE.
+                // Although groupSegmentsBySize() limits offset range of source segments, multiple source
+                // segments combined into one cleaned segment may exceed this range.
+                if (result.maxOffset() - dest.baseOffset() > Integer.MAX_VALUE) {
                     throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
                 }
 
