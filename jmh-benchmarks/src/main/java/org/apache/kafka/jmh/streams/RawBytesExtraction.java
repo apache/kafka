@@ -37,7 +37,7 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readBytes;
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readHeaders;
 
 @OutputTimeUnit(TimeUnit.SECONDS)
