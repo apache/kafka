@@ -3967,8 +3967,7 @@ public class GroupMetadataManager {
 
             return new UpdateTargetAssignmentResult<>(
                 Math.max(1, group.assignmentEpoch()),
-                updatedMember.map(member -> group.targetAssignment(member.memberId()))
-                    .orElse(TasksTuple.EMPTY)
+                TasksTuple.EMPTY
             );
         }
 
