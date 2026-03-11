@@ -17,22 +17,26 @@
 
 package org.apache.kafka.jmh.streams;
 
-import java.nio.ByteBuffer;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+
+import java.nio.ByteBuffer;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readBytes;
+import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readHeaders;
 
 @OutputTimeUnit(TimeUnit.SECONDS)
 @Fork(3)
@@ -88,15 +92,15 @@ public class RawBytesExtraction {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawAggregationWithoutHeaders(IterationStateForEmptyHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.rawAggregation(randomValue));
+            bh.consume(rawAggregationPre20249(randomValue));
         }
     }
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testRawAggregationWithoutHeadersFastPath(IterationStateForEmptyHeaders state, Blackhole bh) {
+    public void testRawAggregationWithoutHeadersOpt(IterationStateForEmptyHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.rawAggregationFastPath(randomValue));
+            bh.consume(AggregationWithHeadersDeserializer.rawAggregation(randomValue));
         }
     }
 
@@ -104,15 +108,30 @@ public class RawBytesExtraction {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawAggregationWithHeaders(IterationStateForHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.rawAggregation(randomValue));
+            bh.consume(rawAggregationPre20249(randomValue));
         }
     }
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testRawAggregationWithHeadersFastPath(IterationStateForHeaders state, Blackhole bh) {
+    public void testRawAggregationWithHeadersOpt(IterationStateForHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.rawAggregationFastPath(randomValue));
+            bh.consume(AggregationWithHeadersDeserializer.rawAggregation(randomValue));
         }
+    }
+
+    /**
+     * Prior to KAFKA-20249: AggregationWithHeadersDeserializer - Extract the raw aggregation bytes from 
+     * serialized AggregationWithHeaders, stripping the headers prefix. 
+     * Slow due to deserialization of headers for both empty and nonempty cases.
+     */
+    public static byte[] rawAggregationPre20249(final byte[] aggregationWithHeaders) {
+        if (aggregationWithHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
+        readHeaders(buffer); 
+        return readBytes(buffer, buffer.remaining());
     }
 }

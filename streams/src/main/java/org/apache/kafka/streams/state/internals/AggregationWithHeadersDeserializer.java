@@ -91,7 +91,7 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
      * @return the byte array containing the read bytes
      * @throws SerializationException if buffer doesn't have enough bytes or length is negative
      */
-    private static byte[] readBytes(final ByteBuffer buffer, final int length) {
+    public static byte[] readBytes(final ByteBuffer buffer, final int length) {
         if (length < 0) {
             throw new SerializationException(
                 "Invalid AggregationWithHeaders format: negative length " + length
@@ -129,19 +129,10 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
             return null;
         }
 
-        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        readHeaders(buffer);
-        return readBytes(buffer, buffer.remaining());
-    }
-
-    public static byte[] rawAggregationFastPath(final byte[] aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
-            return null;
-        }
-
+        // If the header is empty, then copy the value bytes directly
         if (aggregationWithHeaders[0] == 0x00) {
-            // Strip the first byte for varint header size
-            byte[] res = new byte[aggregationWithHeaders.length - 1]; 
+            // Strip header size's varint byte, and empty headers consume no bytes
+            final byte[] res = new byte[aggregationWithHeaders.length - 1]; 
             System.arraycopy(aggregationWithHeaders, 1, res, 0, res.length);
             return res;
         }
@@ -151,12 +142,12 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         return readBytes(buffer, buffer.remaining());
     }
 
-    private static byte[] readRawHeaders(final ByteBuffer buffer) {
+    public static byte[] readRawHeaders(final ByteBuffer buffer) {
         final int headersSize = ByteUtils.readVarint(buffer);
         return readBytes(buffer, headersSize);
     }
 
-    private static Headers readHeaders(final ByteBuffer buffer) {
+    public static Headers readHeaders(final ByteBuffer buffer) {
         final byte[] rawHeaders = readRawHeaders(buffer);
         return HeadersDeserializer.deserialize(rawHeaders);
     }
