@@ -26,7 +26,6 @@ import org.rocksdb.RocksDBException;
 
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -82,7 +81,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     }
 
     @Override
-    public final Long getCommitedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException {
+    public final Long getCommittedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException {
         final byte[] valueBytes = accessor.get(offsetColumnFamilyHandle, stringSerializer.serialize(null, partition.toString()));
         if (valueBytes != null) {
             return longSerde.deserializer().deserialize(null, valueBytes);

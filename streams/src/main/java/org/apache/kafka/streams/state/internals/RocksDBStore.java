@@ -687,7 +687,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public Long committedOffset(final TopicPartition partition) {
         validateStoreOpen();
         try {
-            return cfAccessor.getCommitedOffset(dbAccessor, partition);
+            return cfAccessor.getCommittedOffset(dbAccessor, partition);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while getting committed offset for partition " + partition, e);
         }
@@ -917,7 +917,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
          */
         void open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
-        Long getCommitedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
+        Long getCommittedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
     }
 
     class SingleColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
