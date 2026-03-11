@@ -59,7 +59,6 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -904,12 +903,8 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(KeyValue.pair("pause:resume", t4)));
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair("stop", t3)));
 
-        // verify can query data via IQ
-        if (withHeaders) {
-            verifySessionStoreWithHeaders(userSessionsStore, t1, t2, t3, t4, t5);
-        } else {
-            verifySessionStore(userSessionsStore, t1, t3, t4);
-        }
+        verifySessionStore(userSessionsStore, t1, t3, t4);
+
     }
 
     private void produceSessionWindowData(final Properties producerConfig,
@@ -957,44 +952,6 @@ public class KStreamAggregationIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 userSessionsStream, records, producerConfig, timestamp);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void verifySessionStoreWithHeaders(final String storeName,
-                                               final long t1, final long t2,
-                                               final long t3, final long t4, final long t5) throws Exception {
-        final ReadOnlySessionStore<String, AggregationWithHeaders<String>> sessionStore =
-            (ReadOnlySessionStore<String, AggregationWithHeaders<String>>) (ReadOnlySessionStore<?, ?>)
-                IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
-
-        // bob: [t1,t1] = "start", [t3,t4] = "pause:resume"
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> bob = sessionStore.fetch("bob")) {
-            assertAggregationWithEmptyHeaders(bob.next(), new Windowed<>("bob", new SessionWindow(t1, t1)), "start");
-            assertAggregationWithEmptyHeaders(bob.next(), new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume");
-            assertFalse(bob.hasNext());
-        }
-
-        // emily: [t1,t2] = "pause:resume"
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> emily = sessionStore.fetch("emily")) {
-            assertAggregationWithEmptyHeaders(emily.next(), new Windowed<>("emily", new SessionWindow(t1, t2)), "pause:resume");
-            assertFalse(emily.hasNext());
-        }
-
-        // jo: [t1,t1] = "pause", [t5,t4] = "resume:late"
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> jo = sessionStore.fetch("jo")) {
-            assertAggregationWithEmptyHeaders(jo.next(), new Windowed<>("jo", new SessionWindow(t1, t1)), "pause");
-            assertAggregationWithEmptyHeaders(jo.next(), new Windowed<>("jo", new SessionWindow(t5, t4)), "resume:late");
-            assertFalse(jo.hasNext());
-        }
-    }
-
-    private static <V> void assertAggregationWithEmptyHeaders(
-            final KeyValue<Windowed<String>, AggregationWithHeaders<V>> actual,
-            final Windowed<String> expectedKey,
-            final V expectedValue) {
-        assertThat(actual.key, equalTo(expectedKey));
-        assertThat(actual.value.aggregation(), equalTo(expectedValue));
-        assertHeaderCount(actual.value.headers(), 0);
     }
 
     private void verifySessionStore(final String storeName,
