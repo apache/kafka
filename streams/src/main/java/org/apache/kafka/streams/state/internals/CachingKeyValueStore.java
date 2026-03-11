@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -64,7 +65,7 @@ public class CachingKeyValueStore
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Position position;
-    private final boolean timestampedSchema;
+    private final CacheType cacheType;
 
     @FunctionalInterface
     public interface CacheQueryHandler {
@@ -88,10 +89,10 @@ public class CachingKeyValueStore
         );
 
 
-    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final boolean timestampedSchema) {
+    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final CacheType cacheType) {
         super(underlying);
         position = Position.emptyPosition();
-        this.timestampedSchema = timestampedSchema;
+        this.cacheType = cacheType;
     }
 
     @Override
@@ -128,7 +129,6 @@ public class CachingKeyValueStore
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
-
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -186,7 +186,7 @@ public class CachingKeyValueStore
                 final LRUCacheEntry lruCacheEntry = internalContext.cache().get(cacheName, key);
                 if (lruCacheEntry != null) {
                     final byte[] rawValue;
-                    if (timestampedSchema && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
+                    if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
                         rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
                     } else {
                         rawValue = lruCacheEntry.value();
@@ -452,13 +452,13 @@ public class CachingKeyValueStore
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         validateStoreOpen();
         lock.writeLock().lock();
         try {
             validateStoreOpen();
             internalContext.cache().flush(cacheName);
-            wrapped().flush();
+            wrapped().commit(changelogOffsets);
         } finally {
             lock.writeLock().unlock();
         }
@@ -504,5 +504,11 @@ public class CachingKeyValueStore
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    public enum CacheType {
+        KEY_VALUE_STORE,
+        TIMESTAMPED_KEY_VALUE_STORE,
+        TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS
     }
 }

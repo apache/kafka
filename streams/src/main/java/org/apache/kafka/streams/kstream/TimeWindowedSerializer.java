@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -88,13 +90,18 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serialize(final String topic, final Windowed<T> data) {
+        return serialize(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public byte[] serialize(final String topic, final Headers headers, final Windowed<T> data) {
         WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
 
         if (data == null) {
             return null;
         }
 
-        return WindowKeySchema.toBinary(data, inner, topic);
+        return WindowKeySchema.toBinary(data, inner, headers, topic);
     }
 
     @Override

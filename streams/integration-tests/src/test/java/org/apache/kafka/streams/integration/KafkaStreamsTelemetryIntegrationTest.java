@@ -247,6 +247,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         return "org.apache.kafka." + group + "." + name;
                     }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
                     .sorted().toList();
+            TestUtils.waitForCondition(
+                () -> TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(mainConsumerInstanceId).size() == expectedMetrics.size(),
+                30_000,
+                "Never received enough metrics"
+            );
             final List<String> actualMetrics = new ArrayList<>(TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
             assertEquals(expectedMetrics, actualMetrics);
 
@@ -279,6 +284,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsApplicationProperties = props(groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
 
+        shouldPassMetrics(topology, FIRST_INSTANCE_CLIENT);
+        shouldPassMetrics(topology, SECOND_INSTANCE_CLIENT);
+    }
+
+    private void shouldPassMetrics(final Topology topology, final int clientInstance) throws Exception {
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
@@ -290,8 +300,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
 
 
-            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics().stream().map(KafkaMetric::metricName).toList();
-            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).toList();
+            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(clientInstance).passedMetrics().stream().map(KafkaMetric::metricName).toList();
+            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(clientInstance).passedMetrics.stream().map(KafkaMetric::metricName).toList();
 
 
             assertEquals(streamsThreadMetrics.size(), consumerPassedStreamThreadMetricNames.size());

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -181,11 +182,12 @@ public class MeteredTimestampedKeyValueStoreTest {
         final Deserializer<ValueAndTimestamp<String>> valueDeserializer = mock(Deserializer.class);
         final Serializer<ValueAndTimestamp<String>> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
-        when(keySerializer.serialize(topic, KEY)).thenReturn(KEY.getBytes());
+        when(keySerializer.serialize(topic, new RecordHeaders(), KEY)).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-        when(valueDeserializer.deserialize(topic, VALUE_AND_TIMESTAMP_BYTES)).thenReturn(VALUE_AND_TIMESTAMP);
+        when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_AND_TIMESTAMP_BYTES)).thenReturn(VALUE_AND_TIMESTAMP);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
-        when(valueSerializer.serialize(topic, VALUE_AND_TIMESTAMP)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
+        when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE_AND_TIMESTAMP)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
         metered = new MeteredTimestampedKeyValueStore<>(
             inner,
@@ -240,7 +242,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(KEY);
         assertEquals(VALUE_AND_TIMESTAMP, valueWithBinary.value);
-        assertArrayEquals(VALUE_AND_TIMESTAMP_BYTES, valueWithBinary.serializedValue);
+        assertArrayEquals(VALUE_AND_TIMESTAMP_BYTES, valueWithBinary.rawValue);
     }
 
     @Test
@@ -357,12 +359,12 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     @Test
-    public void shouldFlushInnerWhenFlushTimeRecords() {
+    public void shouldCommitInnerWhenCommitTimeRecords() {
         setUp();
-        doNothing().when(inner).flush();
+        doNothing().when(inner).commit(Map.of());
         init();
 
-        metered.flush();
+        metered.commit(Map.of());
 
         final KafkaMetric metric = metric("flush-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -503,15 +505,13 @@ public class MeteredTimestampedKeyValueStoreTest {
         when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
         init();
 
-        KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, nullValue());
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
         KeyValueIterator<String, ValueAndTimestamp<String>> second = null;
         final long secondTimestamp;
         try {
             try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
-                oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-                assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
@@ -531,8 +531,7 @@ public class MeteredTimestampedKeyValueStoreTest {
                 second.close();
             }
         }
-
-        oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, nullValue());
+        // now that all iterators are closed, the metric should be zero
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 }

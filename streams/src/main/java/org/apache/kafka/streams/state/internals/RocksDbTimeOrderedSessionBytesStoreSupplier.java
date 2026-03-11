@@ -24,13 +24,22 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
     private final String name;
     private final long retentionPeriod;
     private final boolean withIndex;
+    private final boolean withHeaders;
 
     public RocksDbTimeOrderedSessionBytesStoreSupplier(final String name,
                                                        final long retentionPeriod,
                                                        final boolean withIndex) {
+        this(name, retentionPeriod, withIndex, false);
+    }
+
+    public RocksDbTimeOrderedSessionBytesStoreSupplier(final String name,
+                                                       final long retentionPeriod,
+                                                       final boolean withIndex,
+                                                       final boolean withHeaders) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.withIndex = withIndex;
+        this.withHeaders = withHeaders;
     }
 
     @Override
@@ -40,15 +49,18 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
 
     @Override
     public SessionStore<Bytes, byte[]> get() {
-        return new RocksDBTimeOrderedSessionStore(
+        final RocksDBTimeOrderedSessionSegmentedBytesStore bytesStore =
             new RocksDBTimeOrderedSessionSegmentedBytesStore(
                 name,
                 metricsScope(),
                 retentionPeriod,
                 segmentIntervalMs(),
                 withIndex
-            )
-        );
+            );
+        if (withHeaders) {
+            return new RocksDBTimeOrderedSessionStoreWithHeaders(bytesStore);
+        }
+        return new RocksDBTimeOrderedSessionStore(bytesStore);
     }
 
     @Override

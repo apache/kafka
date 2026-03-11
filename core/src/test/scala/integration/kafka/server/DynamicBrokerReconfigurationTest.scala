@@ -1126,7 +1126,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
 
     TestUtils.waitUntilTrue(
-      () => newBroker.raftManager.replicatedLog.latestSnapshotId().isPresent,
+      () => newBroker.raftManager.raftLog.latestSnapshotId().isPresent,
       "metadata snapshot not present on broker",
       30000L
     )

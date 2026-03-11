@@ -36,30 +36,13 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     }
 
     @Override
-    public TimestampedSegment getOrCreateSegment(final long segmentId,
-                                                 final StateStoreContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            final TimestampedSegment newSegment =
-                new TimestampedSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
-
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
-            }
-
-            newSegment.openDB(context.appConfigs(), context.stateDir());
-            return newSegment;
-        }
+    protected TimestampedSegment createSegment(final long segmentId, final String segmentName) {
+        return new TimestampedSegment(segmentName, name, segmentId, position, metricsRecorder);
     }
 
     @Override
-    public TimestampedSegment getOrCreateSegmentIfLive(final long segmentId,
-                                                    final StateStoreContext context,
-                                                    final long streamTime) {
-        final TimestampedSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
-        cleanupExpiredSegments(streamTime);
-        return segment;
+    protected void openSegmentDB(final TimestampedSegment segment, final StateStoreContext context) {
+        segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override

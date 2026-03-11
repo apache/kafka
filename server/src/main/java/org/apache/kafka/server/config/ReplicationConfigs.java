@@ -40,8 +40,16 @@ public class ReplicationConfigs {
 
     public static final String DEFAULT_REPLICATION_FACTOR_CONFIG = "default.replication.factor";
     public static final int REPLICATION_FACTOR_DEFAULT = 1;
-    public static final String DEFAULT_REPLICATION_FACTOR_DOC = "The replication factor for automatically created topics," +
-            " and for topics created with -1 as the replication factor";
+    public static final String DEFAULT_REPLICATION_FACTOR_DOC =
+        "The default replication factor per topic. This configuration affects the following paths:"
+        + "<ul>"
+        + "  <li>1. Auto topic creation</li>"
+        + "  <li>2. Internal streams topic creation</li>"
+        + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the replication factor is set to -1</li>"
+        + "</ul>"
+        + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
+        + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
+        + "For (2) and (3), the value from the controller configuration is always used.</p>";
 
     public static final String REPLICA_LAG_TIME_MAX_MS_CONFIG = "replica.lag.time.max.ms";
     public static final long REPLICA_LAG_TIME_MAX_MS_DEFAULT = 30000L;
@@ -132,6 +140,10 @@ public class ReplicationConfigs {
     public static final String REPLICA_SELECTOR_CLASS_CONFIG = "replica.selector.class";
     public static final String REPLICA_SELECTOR_CLASS_DOC = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader.";
 
+    public static final String FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG = "follower.fetch.last.tiered.offset.enable";
+    public static final String FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DOC = "When enabled, an empty follower skips offsets up to the last tiered offset and begins replication from the next offset.";
+    public static final boolean FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT = false;
+
     public static final String AUTO_LEADER_REBALANCE_ENABLE_CONFIG = "auto.leader.rebalance.enable";
     public static final boolean AUTO_LEADER_REBALANCE_ENABLE_DEFAULT = true;
     public static final String AUTO_LEADER_REBALANCE_ENABLE_DOC = String.format("Enables auto leader balancing. A background thread checks the distribution of partition leaders at regular intervals, configurable by %s. If the leader is imbalanced, leader rebalance to the preferred leader for partitions is triggered.",
@@ -158,6 +170,7 @@ public class ReplicationConfigs {
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
             .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
-            .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC);
+            .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC)
+            .define(FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, BOOLEAN, FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT, MEDIUM, FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DOC);
 
 }

@@ -337,12 +337,14 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNewTopicConfigs() throws Exception {
         Map<String, Object> filterConfig = new HashMap<>();
-        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
-                + "leader\\.replication\\.throttled\\.replicas, "
-                + "message\\.timestamp\\.difference\\.max\\.ms, "
-                + "message\\.timestamp\\.type, "
-                + "unclean\\.leader\\.election\\.enable, "
-                + "min\\.insync\\.replicas,"
+        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower.replication.throttled.replicas, "
+                + "leader.replication.throttled.replicas, "
+                + "message.timestamp.difference.max.ms, "
+                + "log.message.timestamp.before.max.ms, "
+                + "log.message.timestamp.after.max.ms, "
+                + "message.timestamp.type, "
+                + "unclean.leader.election.enable, "
+                + "min.insync.replicas,"
                 + "exclude_param.*");
         DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
         filter.configure(filterConfig);
@@ -376,7 +378,6 @@ public class MirrorSourceConnectorTest {
         connector.createNewTopics(Set.of(topic), Map.of(topic, 1L));
         verify(connector).createNewTopics(any(), any());
     }
-
 
     @Test
     public void testMirrorSourceConnectorTaskConfig() {
