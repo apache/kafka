@@ -59,6 +59,8 @@ public class Cleaner {
     private final Throttler throttler;
     private final Time time;
     private final Consumer<TopicPartition> checkDone;
+    private final long maxCleanedSegmentSize;
+    private final long maxCleanedOffsetRange;
 
     /**
      * Buffer used for read i/o
@@ -89,6 +91,20 @@ public class Cleaner {
                    Throttler throttler,
                    Time time,
                    Consumer<TopicPartition> checkDone) {
+        this(id, offsetMap, ioBufferSize, maxIoBufferSize, dupBufferLoadFactor, throttler, time, checkDone, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    }
+
+    // Visible for testing
+    public Cleaner(int id,
+                   OffsetMap offsetMap,
+                   int ioBufferSize,
+                   int maxIoBufferSize,
+                   double dupBufferLoadFactor,
+                   Throttler throttler,
+                   Time time,
+                   Consumer<TopicPartition> checkDone,
+                   long maxCleanedSegmentSize,
+                   long maxCleanedOffsetRange) {
         this.id = id;
         this.offsetMap = offsetMap;
         this.ioBufferSize = ioBufferSize;
@@ -97,6 +113,8 @@ public class Cleaner {
         this.throttler = throttler;
         this.time = time;
         this.checkDone = checkDone;
+        this.maxCleanedSegmentSize = maxCleanedSegmentSize;
+        this.maxCleanedOffsetRange = maxCleanedOffsetRange;
         logger = new LogContext("Cleaner " + id + ": ").logger(Cleaner.class);
 
         readBuffer = ByteBuffer.allocate(ioBufferSize);
@@ -442,14 +460,14 @@ public class Cleaner {
                 // Make sure that file size won't exceed Integer.MAX_VALUE. While groupSegmentsBySize()
                 // ensures source segments don't exceed Integer.MAX_VALUE, recompression during cleaning
                 // can result in the size of cleaned segments exceeding Integer.MAX_VALUE.
-                if (retained.sizeInBytes() > Integer.MAX_VALUE - dest.size()) {
+                if (retained.sizeInBytes() > maxCleanedSegmentSize - dest.size()) {
                     throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
                 }
 
                 // Make sure that the offset range of the cleaned segment won't exceed Integer.MAX_VALUE.
                 // Although groupSegmentsBySize() limits offset range of source segments, multiple source
                 // segments combined into one cleaned segment may exceed this range.
-                if (result.maxOffset() - dest.baseOffset() > Integer.MAX_VALUE) {
+                if (result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange) {
                     throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
                 }
 
