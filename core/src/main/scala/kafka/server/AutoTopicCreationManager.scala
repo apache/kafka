@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, RequestContext, RequestHeader}
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -125,6 +125,14 @@ class DefaultAutoTopicCreationManager(
 
       val creatableTopicResponses = Option(topicErrors.get) match {
         case Some(errors) =>
+          val silentFailures = errors.collect { case (topic, apiError) if apiError.error == Errors.TOPIC_ALREADY_EXISTS => topic }
+          val successfulCreations = errors.collect { case (topic, apiError) if apiError.error == Errors.NONE || apiError.error == Errors.REQUEST_TIMED_OUT => topic }
+
+          if (silentFailures.nonEmpty)
+            debug(s"Auto topic creation skipped for topics that already exist: $silentFailures")
+          if (successfulCreations.nonEmpty)
+            info(s"Successfully auto-created new topics: $successfulCreations")
+
           errors.toSeq.map { case (topic, apiError) =>
             val error = apiError.error match {
               case Errors.TOPIC_ALREADY_EXISTS | Errors.REQUEST_TIMED_OUT =>
@@ -182,6 +190,16 @@ class DefaultAutoTopicCreationManager(
         } else if (response.versionMismatch() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
+          val createTopicsResponse = response.responseBody.asInstanceOf[CreateTopicsResponse]
+          val topics = createTopicsResponse.data.topics.asScala
+          val successfulCreations = topics.filter(t => Errors.forCode(t.errorCode) == Errors.NONE || Errors.forCode(t.errorCode) == Errors.LEADER_NOT_AVAILABLE)
+          val silentFailures = topics.filter(t => Errors.forCode(t.errorCode) == Errors.TOPIC_ALREADY_EXISTS)
+
+          if (successfulCreations.nonEmpty)
+            info(s"Successfully auto-created new topics: ${successfulCreations.map(_.name()).mkString(", ")}")
+          if (silentFailures.nonEmpty)
+            debug(s"Auto topic creation skipped for topics that already exist: ${silentFailures.map(_.name()).mkString(", ")}")
+
           debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
