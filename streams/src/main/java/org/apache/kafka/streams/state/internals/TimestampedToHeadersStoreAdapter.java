@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -39,11 +38,11 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
+import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
@@ -69,29 +68,6 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
             throw new IllegalArgumentException("Provided store must be a timestamped store, but it is not.");
         }
         this.store = store;
-    }
-
-    /**
-     * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
-     * This strips the headers portion but keeps timestamp and value intact.
-     *
-     * Format conversion:
-     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
-     * Output: [timestamp(8)][value]
-     */
-    static byte[] rawTimestampedValue(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // Skip headers, keep timestamp + value
-        buffer.position(buffer.position() + headersSize);
-
-        final byte[] result = new byte[buffer.remaining()];
-        buffer.get(result);
-        return result;
     }
 
     @Override

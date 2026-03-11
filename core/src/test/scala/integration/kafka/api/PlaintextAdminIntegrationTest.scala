@@ -2069,8 +2069,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertTrue(testGroupDescription.groupEpoch.isEmpty)
           assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
         } else {
-          assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
-          assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
+          assertEquals(Optional.of(4), testGroupDescription.groupEpoch)
+          assertEquals(Optional.of(4), testGroupDescription.targetAssignmentEpoch)
         }
 
         assertEquals(testGroupId, testGroupDescription.groupId())
