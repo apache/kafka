@@ -248,7 +248,6 @@ public class PositionRestartIntegrationTest {
         public boolean isSession() {
             return false;
         }
-
     }
 
     public static Stream<Arguments> data() {
