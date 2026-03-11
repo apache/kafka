@@ -162,7 +162,7 @@ class NodeToControllerRequestThreadTest {
 
     @Test
     void testControllerChanged() {
-        // in this test the current broker is 1, and the controller changes from 2 -> 3 then back: 3 -> 2
+        // in this test the controller changes from node 1 -> node 2
         MockTime time = new MockTime();
         AbstractConfig config = createConfig();
         int oldControllerId = 1;
