@@ -457,17 +457,13 @@ public class Cleaner {
                 outputBuffer.flip();
                 MemoryRecords retained = MemoryRecords.readableRecords(outputBuffer);
 
-                // Make sure that file size won't exceed Integer.MAX_VALUE. While groupSegmentsBySize()
-                // ensures source segments don't exceed Integer.MAX_VALUE, recompression during cleaning
-                // can result in the size of cleaned segments exceeding Integer.MAX_VALUE.
-                if (retained.sizeInBytes() > maxCleanedSegmentSize - dest.size()) {
-                    throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
-                }
-
-                // Make sure that the offset range of the cleaned segment won't exceed Integer.MAX_VALUE.
-                // Although groupSegmentsBySize() limits offset range of source segments, multiple source
-                // segments combined into one cleaned segment may exceed this range.
-                if (result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange) {
+                // While groupSegmentsBySize() ensures source segments don't exceed Integer.MAX_VALUE,
+                // recompression during cleaning can cause the cleaned segment to exceed that size.
+                // Similarly, combining multiple source segments into one cleaned segment can cause
+                // the offset range to exceed Integer.MAX_VALUE.
+                boolean sizeOverflow = retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
+                boolean offsetOverflow = result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
+                if (sizeOverflow || offsetOverflow) {
                     throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
                 }
 
