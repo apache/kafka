@@ -74,7 +74,7 @@ public class ReplicationQuotaManagerTest {
         //Then it should not break the quota
         assertFalse(quota.isQuotaExceeded());
 
-        //When we record half the quota (half way through the window), we still should not break
+        //When we record half the quota (halfway through the window), we still should not break
         quota.record(149); //150B, 1.5s
         assertFalse(quota.isQuotaExceeded());
 
@@ -88,11 +88,11 @@ public class ReplicationQuotaManagerTest {
         //When we sleep for the remaining half the window
         time.sleep(500); //151B, 2s
 
-        //Then Our rate should have halved (i.e back down below the quota)
+        //Then Our rate should have halved (i.e. back down below the quota)
         assertFalse(quota.isQuotaExceeded());
         assertEquals(151d / 2, rate(metrics), 0.1); //151B, 2s
 
-        //When we sleep for another half a window (now half way through second window)
+        //When we sleep for another half a window (now halfway through second window)
         time.sleep(500);
         quota.record(99); //250B, 2.5s
 
@@ -106,10 +106,10 @@ public class ReplicationQuotaManagerTest {
         //Sleep for 2 more window
         time.sleep(2 * 1000); //so now at 3.5s
         assertFalse(quota.isQuotaExceeded());
-        assertEquals(251d / 4.5, rate(metrics), 0);
+        assertEquals(251 / 4.5, rate(metrics), 0);
     }
 
-    double rate(Metrics metrics) {
+    private double rate(Metrics metrics) {
         MetricName metricName = metrics.metricName("byte-rate", QuotaType.LEADER_REPLICATION.toString(), "Tracking byte-rate for " + QuotaType.LEADER_REPLICATION);
         return (double) metrics.metrics().get(metricName).metricValue();
     }
