@@ -138,8 +138,4 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             return (QueryResult<R>) rawResult;
         }
     }
-
-    protected Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers) {
-        return Bytes.wrap(serdes.rawKey(sessionKey.key(), headers));
-    }
 }
