@@ -227,6 +227,16 @@ org.apache.kafka.server.MetadataRequestTest:
 - testTopicIdsInResponse
 org.apache.kafka.server.MonitorablePluginsIntegrationTest:
 - testMonitorableServerPlugins
+org.apache.kafka.server.NodeToControllerRequestThreadTest:
+- testAuthenticationExceptionHandling
+- testControllerChanged
+- testEnvelopeResponseWithNotControllerError
+- testNotController
+- testRequestsSent
+- testRetryTimeout
+- testRetryTimeoutWhileControllerNotAvailable
+- testThreadNotStarted
+- testUnsupportedVersionHandling
 org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:
 - testControllersAutoJoinStandaloneVoter
 - testCreateAndDestroyNonReconfigurableCluster
