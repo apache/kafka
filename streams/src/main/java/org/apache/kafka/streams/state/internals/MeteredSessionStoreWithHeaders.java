@@ -35,7 +35,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 
-import java.time.Instant;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -69,13 +68,6 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
     }
 
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                   final Instant earliestSessionEndTime,
-                                                                                   final Instant latestSessionStartTime) {
-        return super.findSessions(key, earliestSessionEndTime, latestSessionStartTime);
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
@@ -85,9 +77,9 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         final QueryResult<R> result;
 
         if (query instanceof WindowRangeQuery) {
-            final WindowRangeQuery<?, ?> windowRangeQuery = (WindowRangeQuery<?, ?>) query;
+            final WindowRangeQuery<K, AGG> windowRangeQuery = (WindowRangeQuery<K, AGG>) query;
             if (windowRangeQuery.getKey().isPresent()) {
-                result = runRangeQueryWithHeadersUnwrap(query, positionBound, config);
+                result = runRangeQuery(query, positionBound, config);
             } else {
                 result = QueryResult.forFailure(
                     FailureReason.UNKNOWN_QUERY_TYPE,
@@ -114,10 +106,10 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQueryWithHeadersUnwrap(final Query<R> query,
-                                                              final PositionBound positionBound,
-                                                              final QueryConfig config) {
-        final WindowRangeQuery<K, ?> typedQuery = (WindowRangeQuery<K, ?>) query;
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
+        final WindowRangeQuery<K, AGG> typedQuery = (WindowRangeQuery<K, AGG>) query;
         final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
             WindowRangeQuery.withKey(
                 Bytes.wrap(serdes.rawKey(typedQuery.getKey().get(), new RecordHeaders()))
@@ -125,7 +117,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
             wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
-            final MeteredWindowedKeyValueIterator<K, ?> typedResult =
+            final MeteredWindowedKeyValueIterator<K, AGG> typedResult =
                 new MeteredWindowedKeyValueIterator<>(
                     rawResult.getResult(),
                     fetchSensor,
