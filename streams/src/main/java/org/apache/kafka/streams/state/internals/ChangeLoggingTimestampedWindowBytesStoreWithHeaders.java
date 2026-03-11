@@ -20,8 +20,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowStore;
 
 import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.rawValue;
 import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.timestamp;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 
 /**
  * Change-logging wrapper for window stores that support headers.
@@ -47,7 +47,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeL
         internalContext.logChange(
             name(),
             key,
-            rawValue(valueTimestampHeaders),
+            rawPlainValue(valueTimestampHeaders),
             valueTimestampHeaders != null
                 ? timestamp(valueTimestampHeaders)
                 : internalContext.recordContext().timestamp(),

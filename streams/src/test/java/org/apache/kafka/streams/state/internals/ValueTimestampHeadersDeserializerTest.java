@@ -307,17 +307,4 @@ public class ValueTimestampHeadersDeserializerTest {
         verify(mockDeserializer).deserialize(eq(TOPIC), any(Headers.class), any(byte[].class));
         verify(mockDeserializer, never()).deserialize(eq(TOPIC), any(byte[].class));
     }
-
-    @Test
-    public void shouldExtractRawValueWithEmptyHeaders() {
-        final byte[] value = "test-value".getBytes(StandardCharsets.UTF_8);
-        final byte[] data = new byte[1 + StateSerdes.TIMESTAMP_SIZE + value.length];
-        final ByteBuffer buf = ByteBuffer.wrap(data);
-        buf.put((byte) 0x00); // header size
-        buf.putLong(123456789L); // timestamp
-        buf.put(value); // non-header payload
-
-        final byte[] res = ValueTimestampHeadersDeserializer.rawValue(data);
-        assertArrayEquals(value, res);
-    }
 }

@@ -141,33 +141,4 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
         final byte[] rawHeaders = readBytes(buffer, headersSize);
         return HeadersDeserializer.deserialize(rawHeaders);
     }
-
-    /**
-     * Extract raw value from serialized ValueTimestampHeaders.
-     */
-    public static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
-        }
-
-        // If the header is empty, then copy the value bytes directly
-        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
-            // Strip header size (varint 1 byte), empty headers (no bytes), and timestamp
-            if (rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE < 0) {
-                throw new SerializationException(
-                    "Invalid format: input length " + rawValueTimestampHeaders.length +
-                    " is less than min length of timestamped value with empty headers " +
-                    (1 + StateSerdes.TIMESTAMP_SIZE)
-                );
-            }
-            final byte[] res = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
-            System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, res, 0, res.length);
-            return res;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headersSize + Long.BYTES);
-        return readBytes(buffer, buffer.remaining());
-    }
 }

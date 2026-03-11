@@ -20,7 +20,7 @@ package org.apache.kafka.jmh.streams;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
-import org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer;
+import org.apache.kafka.streams.state.internals.Utils;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
@@ -44,7 +44,7 @@ import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDes
 @Fork(3)
 @Warmup(iterations = 3, time = 1)
 @Measurement(iterations = 5, time = 1)
-public class RawBytesExtraction {
+public class RawBytesExtractionBenchmark {
     private static final int DATA_SET_SAMPLE_SIZE = 16384;
 
     @State(Scope.Benchmark)
@@ -149,7 +149,7 @@ public class RawBytesExtraction {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawValueWithoutHeadersOpt(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(ValueTimestampHeadersDeserializer.rawValue(randomValue));
+            bh.consume(Utils.rawPlainValue(randomValue));
         }
     }
 

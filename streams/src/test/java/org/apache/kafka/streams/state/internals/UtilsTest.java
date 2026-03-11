@@ -78,6 +78,18 @@ public class UtilsTest {
         assertNull(rawPlainValue(null));
     }
 
+    @Test
+    public void shouldExtractRawValueWithEmptyHeaders() {
+        final byte[] data = new byte[1 + StateSerdes.TIMESTAMP_SIZE + VALUE.length];
+        final ByteBuffer buf = ByteBuffer.wrap(data);
+        buf.put((byte) 0x00); // header size
+        buf.putLong(TIMESTAMP);
+        buf.put(VALUE); // non-header payload
+
+        final byte[] res = rawPlainValue(data);
+        assertArrayEquals(VALUE, res);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = { VALUE_STR, "" })
     public void testRawTimestampedValue(final String valueStr) {
