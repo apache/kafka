@@ -47,7 +47,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.Custo
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
-import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -138,6 +137,8 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
+import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
+import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -274,7 +275,7 @@ public class RemoteLogManagerTest {
             remoteLogManager.close();
             remoteLogManager = null;
         }
-        YammerMetricsTestUtils.clearYammerMetrics();
+        clearYammerMetrics();
     }
 
     @Test
@@ -1239,15 +1240,6 @@ public class RemoteLogManagerTest {
                 String.format("Expected to find 0 for RemoteCopyLagSegments metric value, but found %d for topic 'Leader' and %d for all topics.",
                         safeLongYammerMetricValue("RemoteCopyLagSegments,topic=" + leaderTopic),
                         safeLongYammerMetricValue("RemoteCopyLagSegments")));
-    }
-
-    private Object yammerMetricValue(String name) {
-        Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().endsWith(name))
-                .findFirst()
-                .get()
-                .getValue();
-        return gauge.value();
     }
 
     private long safeLongYammerMetricValue(String name) {

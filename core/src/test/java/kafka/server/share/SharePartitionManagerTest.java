@@ -54,7 +54,6 @@ import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
-import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.quota.ReplicaQuota;
@@ -79,6 +78,7 @@ import org.apache.kafka.server.share.session.ShareSessionKey;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -174,7 +174,7 @@ public class SharePartitionManagerTest {
     @BeforeEach
     public void setUp() {
         time = new MockTime();
-        YammerMetricsTestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats();
         mockReplicaManager = mock(ReplicaManager.class);
         Partition partition = mockPartition();

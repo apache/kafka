@@ -15,9 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.metrics;
+package org.apache.kafka.server.util;
 
-public class YammerMetricsTestUtils {
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
+
+public class ServerTestUtils {
 
     /**
      * Clear all the yammer metrics.
@@ -25,6 +29,25 @@ public class YammerMetricsTestUtils {
     public static void clearYammerMetrics() {
         KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().forEach(
                 metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName));
+    }
+
+    /**
+     * Fetch the gauge value from the yammer metrics.
+     *
+     * @param name The name of the metric.
+     * @return The gauge value as a number.
+     */
+    public static Number yammerMetricValue(String name) {
+        try {
+            Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                .filter(e -> e.getKey().getMBeanName().contains(name))
+                .findFirst()
+                .orElseThrow()
+                .getValue();
+            return (Number) gauge.value();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
 }

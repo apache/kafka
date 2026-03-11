@@ -55,7 +55,6 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
-import org.apache.kafka.server.metrics.YammerMetricsTestUtils;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -101,7 +100,8 @@ import java.util.function.Supplier;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.yammerMetricValue;
+import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
+import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -139,7 +139,7 @@ public class SharePartitionTest {
 
     @BeforeEach
     public void setUp() {
-        YammerMetricsTestUtils.clearYammerMetrics();
+        clearYammerMetrics();
         mockTimer = new MockTimer();
         sharePartitionMetrics = new SharePartitionMetrics(GROUP_ID, TOPIC_ID_PARTITION.topic(), TOPIC_ID_PARTITION.partition());
     }
