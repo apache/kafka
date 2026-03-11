@@ -53,26 +53,38 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
     private StateStore store;
 
+    @SuppressWarnings("unchecked")
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
-        // Try headers-aware store first, then versioned store
+        final StateStore rawStore = context.getStateStore(storeName);
+
+        // Check if it's an OLD TimestampedKeyValueStore that needs adaptation
+        if (rawStore instanceof TimestampedKeyValueStore &&
+            !(rawStore instanceof TimestampedKeyValueStoreWithHeaders)) {
+            // Adapt OLD store to NEW type for backward compatibility
+            headersStore = new TimestampedKeyValueStoreToHeadersAdapter<>(
+                (TimestampedKeyValueStore<K, V>) rawStore
+            );
+            store = headersStore;
+            return;
+        }
+
+        // Try headers-aware timestamped store
         try {
-            // first try headers-aware timestamped store
-            headersStore = context.getStateStore(storeName);
+            headersStore = (TimestampedKeyValueStoreWithHeaders<K, V>) rawStore;
             store = headersStore;
             return;
         } catch (final ClassCastException e) {
-            // ignore since could be regular timestamped or versioned store instead
+            // not headers store, try versioned
         }
 
+        // Try versioned store
         try {
-            // finally try versioned store
-            versionedStore = context.getStateStore(storeName);
+            versionedStore = (VersionedKeyValueStore<K, V>) rawStore;
             store = versionedStore;
         } catch (final ClassCastException e) {
-            store = context.getStateStore(storeName);
-            final String storeType = store == null ? "null" : store.getClass().getName();
+            final String storeType = rawStore == null ? "null" : rawStore.getClass().getName();
             throw new InvalidStateStoreException("KTable source state store must implement either "
-                + "TimestampedKeyValueStoreWithHeaders, or VersionedKeyValueStore. Got: " + storeType);
+                + "TimestampedKeyValueStore, TimestampedKeyValueStoreWithHeaders, or VersionedKeyValueStore. Got: " + storeType);
         }
     }
 

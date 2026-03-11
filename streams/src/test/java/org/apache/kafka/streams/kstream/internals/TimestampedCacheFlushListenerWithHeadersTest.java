@@ -33,7 +33,7 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class TimestampedCacheFlushListenerTest {
+public class TimestampedCacheFlushListenerWithHeadersTest {
 
     @Test
     public void shouldForwardValueTimestampIfNewValueExists() {

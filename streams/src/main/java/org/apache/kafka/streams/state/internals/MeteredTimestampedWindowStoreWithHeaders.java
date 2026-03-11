@@ -291,6 +291,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             }
             store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
         } while ((store instanceof WrappedStateStore));
-        return store instanceof TimestampedBytesStore;
+        return store instanceof TimestampedBytesStore || store instanceof TimestampedToHeadersWindowStoreAdapter;
     }
 }
