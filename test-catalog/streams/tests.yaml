@@ -4654,6 +4654,53 @@ org.apache.kafka.streams.state.internals.LeftOrRightValueSerializerTest:
 - shouldSerializeStringValue
 - shouldThrowIfSerializeOtherValueAsNull
 - shouldThrowIfSerializeValueAsNull
+org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStoreTest:
+- shouldAcceptNullOffsets
+- shouldBeNoOpForMigrationWhenNoLegacyFileExists
+- shouldBeNoOpForNonLCSSStoreInMaybeMarkCorrupted
+- shouldCloseWrappedStoreOnClose
+- shouldCommitWhenOldOffsetIsNull
+- shouldDeleteCheckpointFileAfterInitUnderEOS
+- shouldIgnoreCheckpointEntriesForPartitionsNotInChangelogSet
+- shouldLoadOffsetsFromCheckpointFileOnInit
+- shouldLogWarningInsteadOfThrowingWhenCheckpointWriteFails
+- shouldLogWarningWhenMigratingToStoreThatDoesNotManageOffsets
+- shouldMapOffsetUnknownToNullOnInit
+- shouldMarkLCSSAsCorruptedSoCloseDoesNotWriteCheckpoint
+- shouldMigrateOffsetsFromLegacyGlobalFileAndDeleteIt
+- shouldMigrateOffsetsFromLegacyPerTaskFileAndDeleteIt
+- shouldNotDeleteCheckpointFileAfterInitUnderALOS
+- shouldNotWrapNonPersistentStore
+- shouldNotWrapOffsetManagingStore
+- shouldNotWriteCheckpointDuringCommitUnderALOSWhenDeltaDoesNotExceedThreshold
+- shouldNotWriteCheckpointDuringCommitUnderEOS
+- shouldNotWriteCheckpointForNonPersistentStore
+- shouldNotWriteCheckpointOnCloseWhenCorrupted
+- shouldNotWriteCheckpointWhenChangelogPartitionsIsEmpty
+- shouldPreserveExistingOffsetsWhenCommittingSubsetOfPartitions
+- shouldReturnCommittedOffset
+- shouldReturnFalseFromCheckpointNeededWhenDeltaBelowThreshold
+- shouldReturnFalseFromCheckpointNeededWhenDeltaEqualsThreshold
+- shouldReturnFalseFromCheckpointNeededWhenOldSnapshotIsNull
+- shouldReturnLegacyGlobalCheckpointFile
+- shouldReturnLegacyPerTaskCheckpointFile
+- shouldReturnNonLCSSStoreUnchangedFromMaybeUnwrap
+- shouldReturnNullForCommittedOffsetWhenNoneCommitted
+- shouldReturnPerStoreCheckpointFileForGlobalStore
+- shouldReturnPerStoreCheckpointFileForTask
+- shouldReturnTrueForManagesOffsets
+- shouldReturnTrueFromCheckpointNeededWhenDeltaExceedsThreshold
+- shouldSucceedOnInitWhenNoCheckpointFileExists
+- shouldThrowProcessorStateExceptionOnCorruptCheckpointFile
+- shouldThrowProcessorStateExceptionWhenMigrationFails
+- shouldUnwrapLCSSToInnerStore
+- shouldUpdateInMemoryOffsetsOnCommit
+- shouldWrapPersistentNonOffsetManagingStore
+- shouldWriteCheckpointDuringCommitUnderALOSWhenDeltaExceedsThreshold
+- shouldWriteCheckpointOnClose
+- shouldWriteCheckpointOnCloseUnderEOS
+- shouldWriteCommittedOffsetsToCheckpointFile
+- shouldWriteOffsetUnknownSentinelWhenOffsetIsNull
 org.apache.kafka.streams.state.internals.ListValueStoreTest:
 - shouldAllowDeleteWhileIterateRecords
 - shouldGetAll
@@ -4833,11 +4880,14 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreWithHeadersTest:
 - shouldBackwardFindSessionsFromStoreAndRecordFetchMetric
 - shouldCloseInnerStore
 - shouldDelegateInit
+- shouldDelegateUnknownQueryToWrappedStore
+- shouldFailWindowRangeQueryWithoutKey
 - shouldFetchForKeyAndRecordFetchMetric
 - shouldFetchRangeFromStoreAndRecordFetchMetric
 - shouldFetchSessionAndReturnValueWithHeaders
 - shouldFindSessionRangeFromStoreAndRecordFetchMetric
 - shouldFindSessionsFromStoreAndRecordFetchMetric
+- shouldHandleWindowRangeQueryWithKeyAndUnwrapHeaders
 - shouldRecordRestoreTime
 - shouldRemoveFromStoreAndRecordRemoveMetric
 - shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
@@ -4912,6 +4962,12 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWithHeader
 - shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
+- shouldUseHeadersFromValueToDeserializeKeyInAll
+- shouldUseHeadersFromValueToDeserializeKeyInBackwardAll
+- shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchAll
+- shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchRange
+- shouldUseHeadersFromValueToDeserializeKeyInFetchAll
+- shouldUseHeadersFromValueToDeserializeKeyInFetchRange
 org.apache.kafka.streams.state.internals.MeteredVersionedKeyValueStoreTest:
 - shouldDelegateAndAddExecutionInfoOnCustomQuery
 - shouldDelegateAndRecordMetricsOnCommit
@@ -5205,7 +5261,9 @@ org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest:
 - testIteratorPeek
 - testIteratorPeekBackward
 org.apache.kafka.streams.state.internals.RocksDBSessionStoreWithHeadersTest:
-- shouldThrowUnsupportedOperationOnQuery
+- shouldCollectExecutionInfoWhenRequested
+- shouldNotCollectExecutionInfoWhenNotRequested
+- shouldReturnUnknownQueryTypeForWindowRangeQuery
 org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - prefixScanShouldNotThrowConcurrentModificationException
 - shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug
@@ -5357,8 +5415,9 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithoutI
 - shouldRollSegments
 - shouldSkipAndRemoveDanglingIndex
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStoreWithHeadersTest:
-- shouldThrowUnsupportedOperationOnQueryWithIndex
-- shouldThrowUnsupportedOperationOnQueryWithOutIndex
+- shouldCollectExecutionInfoWhenRequested
+- shouldNotCollectExecutionInfoWhenNotRequested
+- shouldReturnUnknownQueryTypeForWindowRangeQuery
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStoreWithIndexTest:
 - shouldBackwardFetchAllSessionsWithSameRecordKey
 - shouldBackwardFetchAllSessionsWithinKeyRange
@@ -5932,6 +5991,13 @@ org.apache.kafka.streams.state.internals.SessionStoreBuilderTest:
 - shouldThrowNullPointerIfTimeIsNull
 org.apache.kafka.streams.state.internals.SessionStoreFetchTest:
 - testStoreConfig
+org.apache.kafka.streams.state.internals.SessionStoreIteratorFacadeTest:
+- shouldCloseInnerIterator
+- shouldForwardHasNext
+- shouldForwardPeekNextKey
+- shouldReturnNullValueWhenAggregationWithHeadersIsNull
+- shouldReturnNullWhenInnerNextReturnsNull
+- shouldReturnPlainKeyValuePairOnNext
 org.apache.kafka.streams.state.internals.SessionToHeadersIteratorAdapterTest:
 - shouldAddHeadersOnNext
 - shouldDelegateClose
