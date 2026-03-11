@@ -428,6 +428,27 @@ public class LegacyCheckpointingStateStoreTest {
         assertFalse(storeCheckpointFile().exists());
     }
 
+    @Test
+    public void shouldAcceptNullOffsets() throws IOException {
+        final LegacyCheckpointingStateStore<MockKeyValueStore, Object, Object> store = createStore(false);
+        store.init(context, persistentStore);
+        store.commit(Collections.singletonMap(partition, null));
+        assertFalse(storeCheckpointFile().exists());
+    }
+
+    @Test
+    public void shouldCommitWhenOldOffsetIsNull() throws IOException {
+        final LegacyCheckpointingStateStore<MockKeyValueStore, Object, Object> store = createStore(false);
+        store.init(context, persistentStore);
+
+        store.commit(Collections.singletonMap(partition, null));
+
+        final long offsetBeyondThreshold = OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT + 1L;
+        store.commit(Collections.singletonMap(partition, offsetBeyondThreshold));
+
+        assertTrue(storeCheckpointFile().exists());
+    }
+
     // =====================================================================
     // checkpoint()
     // =====================================================================
