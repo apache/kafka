@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -150,8 +151,15 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
         }
 
         // If the header is empty, then copy the value bytes directly
-        if (rawValueTimestampHeaders[0] == 0x00) {
+        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
             // Strip header size (varint 1 byte), empty headers (no bytes), and timestamp
+            if (rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE < 0) {
+                throw new SerializationException(
+                    "Invalid format: input length " + rawValueTimestampHeaders.length +
+                    " is less than min length of timestamped value with empty headers " +
+                    (1 + StateSerdes.TIMESTAMP_SIZE)
+                );
+            }
             final byte[] res = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
             System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, res, 0, res.length);
             return res;

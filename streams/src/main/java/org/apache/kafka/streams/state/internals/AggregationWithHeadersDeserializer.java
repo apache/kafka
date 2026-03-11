@@ -104,7 +104,7 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         }
 
         // If the header is empty, then copy the value bytes directly
-        if (aggregationWithHeaders[0] == 0x00) {
+        if (aggregationWithHeaders.length > 0 && aggregationWithHeaders[0] == 0x00) {
             // Strip header size's varint byte, and empty headers consume no bytes
             final byte[] res = new byte[aggregationWithHeaders.length - 1]; 
             System.arraycopy(aggregationWithHeaders, 1, res, 0, res.length);
