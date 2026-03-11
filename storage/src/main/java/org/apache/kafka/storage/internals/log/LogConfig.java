@@ -455,7 +455,7 @@ public class LogConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Map<String, ?> props) {
+    public static void validateNames(Map<String, String> props) {
         List<String> names = configNames();
         for (Object name : props.keySet())
             if (!names.contains(name))

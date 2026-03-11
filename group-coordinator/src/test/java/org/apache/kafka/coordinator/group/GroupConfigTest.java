@@ -348,7 +348,7 @@ public class GroupConfigTest {
         ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
         assertDoesNotThrow(() ->
-            GroupConfig.validate(new Properties(), groupCoordinatorConfig, shareGroupConfig));
+            GroupConfig.validate(new HashMap<>(), groupCoordinatorConfig, shareGroupConfig));
     }
 
     @Test
@@ -488,8 +488,8 @@ public class GroupConfigTest {
         assertEquals(expectedMax, result.get(key));
     }
 
-    private Properties createValidGroupConfig() {
-        Properties props = new Properties();
+    private Map<String, String> createValidGroupConfig() {
+        Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000");
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
         props.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "45000");
