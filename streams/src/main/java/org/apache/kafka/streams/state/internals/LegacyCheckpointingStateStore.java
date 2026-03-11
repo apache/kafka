@@ -285,7 +285,11 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         // we can checkpoint if the difference between the current and the previous snapshot is large enough
         long totalOffsetDelta = 0L;
         for (final Map.Entry<TopicPartition, Long> entry : newOffsetSnapshot.entrySet()) {
-            totalOffsetDelta += entry.getValue() - oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L);
+            final Long newOffset = entry.getValue();
+            if (newOffset != null) {
+                final Long oldOffset = oldOffsetSnapshot.get(entry.getKey());
+                totalOffsetDelta += newOffset - (oldOffset == null ? 0L : oldOffset);
+            }
         }
 
         // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;
