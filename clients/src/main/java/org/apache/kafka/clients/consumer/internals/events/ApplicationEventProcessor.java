@@ -228,12 +228,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final SharePollEvent event) {
-        requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
-            consumerMembershipManager.maybeReconcile(true));
-        requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
-            hrm.membershipManager().onConsumerPoll();
-            hrm.resetPollTimer(event.pollTimeMs());
+        requestManagers.shareMembershipManager.ifPresent(shareMembershipManager -> {
+            shareMembershipManager.maybeReconcile(true);
+            shareMembershipManager.onConsumerPoll();
         });
+        requestManagers.shareHeartbeatRequestManager.ifPresent(hrm ->
+            hrm.resetPollTimer(event.pollTimeMs()));
     }
 
     private void process(final CreateFetchRequestsEvent event) {

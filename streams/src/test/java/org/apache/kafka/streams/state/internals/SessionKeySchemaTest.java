@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -76,17 +78,17 @@ public class SessionKeySchemaTest {
     );
 
     @FunctionalInterface
-    interface TriFunction<A, B, C, R> {
-        R apply(A a, B b, C c);
+    interface QuadFunction<A, B, C, D, R> {
+        R apply(A a, B b, C c, D d);
     }
 
-    private static final Map<SchemaType, TriFunction<Windowed<String>, Serializer<String>, String, byte[]>> SERDE_TO_STORE_BINARY_MAP = mkMap(
+    private static final Map<SchemaType, QuadFunction<Windowed<String>, Serializer<String>, Headers, String, byte[]>> SERDE_TO_STORE_BINARY_MAP = mkMap(
         mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::toBinary),
         mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::toBinary),
         mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::toBinary)
     );
 
-    private static final Map<SchemaType, TriFunction<byte[], Deserializer<String>, String, Windowed<String>>> SERDE_FROM_BYTES_MAP = mkMap(
+    private static final Map<SchemaType, QuadFunction<byte[], Deserializer<String>, Headers, String, Windowed<String>>> SERDE_FROM_BYTES_MAP = mkMap(
         mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::from),
         mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::from),
         mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::from)
@@ -124,8 +126,8 @@ public class SessionKeySchemaTest {
     private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
     private SchemaType schemaType;
     private Function<Windowed<Bytes>, Bytes> toBinary;
-    private TriFunction<Windowed<String>, Serializer<String>, String, byte[]> serdeToBinary;
-    private TriFunction<byte[], Deserializer<String>, String, Windowed<String>> serdeFromBytes;
+    private QuadFunction<Windowed<String>, Serializer<String>, Headers, String, byte[]> serdeToBinary;
+    private QuadFunction<byte[], Deserializer<String>, Headers, String, Windowed<String>> serdeFromBytes;
     private Function<Bytes, Windowed<Bytes>> fromBytes;
     private Function<byte[], Long> extractStartTS;
     private Function<byte[], Long> extractEndTS;
@@ -336,8 +338,8 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldConvertToBinaryAndBack(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
-        final Windowed<String> result = serdeFromBytes.apply(serialized, Serdes.String().deserializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
+        final Windowed<String> result = serdeFromBytes.apply(serialized, Serdes.String().deserializer(), new RecordHeaders(), "dummy");
         assertEquals(windowedKey, result);
     }
 
@@ -345,7 +347,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractEndTimeFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertEquals(endTime, (long) extractEndTS.apply(serialized));
     }
 
@@ -353,7 +355,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractStartTimeFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertEquals(startTime, (long) extractStartTS.apply(serialized));
     }
 
@@ -361,7 +363,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractWindowFromBindary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertEquals(window, extractWindow.apply(serialized));
     }
 
@@ -369,7 +371,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractKeyBytesFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertArrayEquals(key.getBytes(), extractKeyBytes.apply(serialized));
     }
 
@@ -377,8 +379,8 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractKeyFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
-        assertEquals(windowedKey, serdeFromBytes.apply(serialized, serde.deserializer(), "dummy"));
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
+        assertEquals(windowedKey, serdeFromBytes.apply(serialized, serde.deserializer(), new RecordHeaders(), "dummy"));
     }
 
     @ParameterizedTest

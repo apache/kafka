@@ -86,6 +86,7 @@ public class BrokerRegistrationTest {
             setInControlledShutdown(true).
             setIsMigratingZkBroker(true).
             setDirectories(List.of(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
+            setCordonedDirectories(List.of(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
             build());
 
     @Test
@@ -117,20 +118,22 @@ public class BrokerRegistrationTest {
             "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, directories=[])",
+            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, " +
+            "directories=[], cordonedDirectories=[])",
             REGISTRATIONS.get(1).toString());
         assertEquals("BrokerRegistration(id=2, epoch=0, " +
             "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
-            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false, directories=[])",
+            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false, " +
+            "directories=[], cordonedDirectories=[])",
             REGISTRATIONS.get(2).toString());
         assertEquals("BrokerRegistration(id=3, epoch=0, " +
             "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
             "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true, " +
-            "directories=[r4HpEsMuST6nQ4rznIEJVA])",
+            "directories=[r4HpEsMuST6nQ4rznIEJVA], cordonedDirectories=[r4HpEsMuST6nQ4rznIEJVA])",
             REGISTRATIONS.get(3).toString());
     }
 
@@ -221,5 +224,40 @@ public class BrokerRegistrationTest {
         assertTrue(registration.hasOnlineDir(DirectoryId.MIGRATING));
         assertFalse(registration.hasOnlineDir(Uuid.fromString("sOwN7HH7S1maxpU1WzlzXg")));
         assertFalse(registration.hasOnlineDir(DirectoryId.LOST));
+    }
+
+    @Test
+    void testHasUncordonedDirs() {
+        BrokerRegistration registration = new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(0).
+                setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
+                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(false).
+                setDirectories(List.of(
+                        Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+                )).
+                build();
+        assertTrue(registration.hasUncordonedDirs());
+        registration = new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(0).
+                setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
+                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(false).
+                setDirectories(List.of(
+                        Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+                )).
+                setCordonedDirectories(List.of(
+                        Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+                )).
+                build();
+        assertFalse(registration.hasUncordonedDirs());
     }
 }

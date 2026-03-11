@@ -196,6 +196,7 @@
     <subpackage name="serialization">
       <allow pkg="org.apache.kafka.clients" />
       <allow class="org.apache.kafka.common.header.Headers" />
+      <allow class="org.apache.kafka.common.header.internals.RecordHeaders" />
     </subpackage>
 
     <subpackage name="utils">
@@ -316,6 +317,11 @@
     <allow pkg="scala.jdk.javaapi" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
+    <allow pkg="org.apache.kafka.coordinator.common.runtime" />
+    <allow pkg="org.apache.kafka.coordinator.share" />
+    <allow pkg="org.apache.kafka.snapshot" />
+    <allow pkg="org.apache.kafka.server.storage.log" />
+    <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.security" />

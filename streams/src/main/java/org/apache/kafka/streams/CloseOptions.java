@@ -26,7 +26,9 @@ public class CloseOptions {
      *
      * <ul>
      *   <li><b>{@code LEAVE_GROUP}</b>: means the consumer leave the group.</li>
-     *   <li><b>{@code REMAIN_IN_GROUP}</b>: means the consumer will remain in the group.</li>
+     *   <li><b>{@code REMAIN_IN_GROUP}</b>: means the consumer will not leave the group explicitly.
+     *       Note that this option is ignored when using the streams group protocol
+     *       ({@code group.protocol=streams}); in that case, the consumer will always leave the group.</li>
      * </ul>
      */
     public enum GroupMembershipOperation {

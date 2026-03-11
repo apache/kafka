@@ -171,6 +171,7 @@ public class StateManagerUtilTest {
             "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
@@ -211,6 +212,7 @@ public class StateManagerUtilTest {
         }
 
         inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }

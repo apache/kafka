@@ -131,10 +131,9 @@ class ActiveTaskCreator {
         return isClosed;
     }
 
-    // TODO: convert to StreamTask when we remove TaskManager#StateMachineTask with mocks
-    public Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
-                                        final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-        final List<Task> createdTasks = new ArrayList<>();
+    public Collection<StreamTask> createTasks(final Consumer<byte[], byte[]> consumer,
+                                              final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<StreamTask> createdTasks = new ArrayList<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();

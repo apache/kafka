@@ -39,7 +39,7 @@ public interface BatchingStateRestoreCallback extends StateRestoreCallback {
     void restoreAll(Collection<KeyValue<byte[], byte[]>> records);
 
     @Override
-    default void restore(byte[] key, byte[] value) {
+    default void restore(final byte[] key, final byte[] value) {
         throw new UnsupportedOperationException();
     }
 }

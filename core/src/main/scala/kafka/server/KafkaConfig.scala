@@ -56,7 +56,11 @@ import scala.jdk.OptionConverters.RichOptional
 object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
-    System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
+    val combined = new ConfigDef(configDef)
+    // Broker quota configs are dynamic-only and not defined in AbstractKafkaConfig.CONFIG_DEF,
+    // so we need to add them explicitly here for the generated HTML documentation.
+    QuotaConfig.brokerQuotaConfigs().configKeys().forEach((_, v) => combined.define(v))
+    System.out.println(combined.toHtml(4, (config: String) => "brokerconfigs_" + config,
       JDynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
@@ -354,9 +358,25 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.SHARE)) {
-      warn(s"'${GroupType.SHARE}' in ${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG} is deprecated. " +
-        s"Share groups are controlled by the 'share.version' feature; this broker config will be ignored in a future release.")
+    if (doLog && protocols.contains(GroupType.SHARE)) {
+      warn(s"'${GroupType.SHARE}' in `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated. " +
+        s"Share groups are controlled by the 'share.version' feature. " +
+        s"This config will be removed in Kafka 5.0.")
+    }
+    if (doLog && originals().containsKey(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)) {
+      val defaultProtocols = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT
+        .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
+      val missingProtocols = defaultProtocols -- protocols
+      if (missingProtocols.nonEmpty) {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"The following protocol(s) are currently disabled: ${missingProtocols.mkString(", ")}. " +
+          s"In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+          s"(group.version, streams.version, share.version) via kafka-features.sh. " +
+          s"Please remove the configuration, which will restore all protocols to the default enabled state, to prepare for the upgrade.")
+      } else {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"Please remove the configuration to prepare for the upgrade.")
+      }
     }
     protocols
   }
@@ -480,6 +500,16 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listener))
   }
 
+  def validateCordonedLogDirs(): Unit = {
+    val cordonedLogDirs = getList(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG)
+    if (cordonedLogDirs.contains(ServerLogConfigs.CORDONED_LOG_DIRS_ALL)) {
+      require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
+    } else {
+      val unknownLogDirs = cordonedLogDirs.asScala.filter(!logDirs().contains(_))
+      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
+    }
+  }
+
   validateValues()
 
   private def validateValues(): Unit = {
@@ -570,6 +600,14 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG)
+      if (originals.containsKey(ServerLogConfigs.NUM_PARTITIONS_CONFIG)) {
+        warn(s"${ServerLogConfigs.NUM_PARTITIONS_CONFIG} is defined in the broker role. This configuration will be ignored in 5.0. " +
+          s"Please set ${ServerLogConfigs.NUM_PARTITIONS_CONFIG} in the controller role instead.")
+      }
+      if (originals.containsKey(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)) {
+        warn(s"${ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG} is defined in the broker role. This configuration will be ignored in 5.0. " +
+          s"Please set ${ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG} in the controller role instead.")
+      }
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
@@ -607,6 +645,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
           s"Found ${advertisedBrokerListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
           s"are ${listenerNames.map(_.value).mkString(",")}"
       )
+      validateCordonedLogDirs()
     }
 
     require(!effectiveAdvertisedBrokerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
