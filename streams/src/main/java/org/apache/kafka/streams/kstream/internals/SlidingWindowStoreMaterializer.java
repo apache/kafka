@@ -36,9 +36,9 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     private final long retentionPeriod;
 
     public SlidingWindowStoreMaterializer(
-            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
-            final SlidingWindows windows,
-            final EmitStrategy emitStrategy
+        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
+        final SlidingWindows windows,
+        final EmitStrategy emitStrategy
     ) {
         super(materialized);
         this.windows = windows;
@@ -49,11 +49,11 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
         // earliest window start time we could need to create corresponding right window would be recordTime - 2 * timeDifference
         if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
             throw new IllegalArgumentException("The retention period of the window store "
-                    + materialized.storeName()
-                    + " must be no smaller than 2 * time difference plus the grace period."
-                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
-                    + " grace=[" + windows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
+                + materialized.storeName()
+                + " must be no smaller than 2 * time difference plus the grace period."
+                + " Got time difference=[" + windows.timeDifferenceMs() + "],"
+                + " grace=[" + windows.gracePeriodMs() + "],"
+                + " retention=[" + retentionPeriod + "]");
         }
     }
 
@@ -61,23 +61,23 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     public StoreBuilder<?> builder() {
         final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().windowStore(new DslWindowParams(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.timeDifferenceMs()),
-                        false,
-                        emitStrategy,
-                        true,
-                        storeFormat
-                ))
-                : (WindowBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().windowStore(new DslWindowParams(
+            materialized.storeName(),
+            Duration.ofMillis(retentionPeriod),
+            Duration.ofMillis(windows.timeDifferenceMs()),
+            false,
+            emitStrategy,
+            true,
+            storeFormat
+        ))
+            : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> builder = Stores
-                .timestampedWindowStoreWithHeadersBuilder(
-                        supplier,
-                        materialized.keySerde(),
-                        materialized.valueSerde()
-                );
+            .timestampedWindowStoreWithHeadersBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
@@ -98,14 +98,14 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     @Override
     public final long retentionPeriod() {
         return  materialized.retention() != null
-                ? materialized.retention().toMillis()
-                : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
+            ? materialized.retention().toMillis()
+            : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
     }
 
     @Override
     public long historyRetention() {
         throw new IllegalStateException(
-                "historyRetention is not supported when not a versioned store");
+            "historyRetention is not supported when not a versioned store");
     }
 
     @Override

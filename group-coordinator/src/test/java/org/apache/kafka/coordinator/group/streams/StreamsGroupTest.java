@@ -489,12 +489,12 @@ public class StreamsGroupTest {
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
 
         streamsGroup.updateMember(member1);
-        streamsGroup.setGroupEpoch(1);
+        streamsGroup.setGroupEpoch(2);
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
@@ -508,24 +508,24 @@ public class StreamsGroupTest {
 
         StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
 
         streamsGroup.updateMember(member2);
-        streamsGroup.setGroupEpoch(2);
+        streamsGroup.setGroupEpoch(3);
 
         assertEquals(MemberState.STABLE, member2.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
 
-        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
+        streamsGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
 
         member1 = new StreamsGroupMember.Builder(member1)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         streamsGroup.updateMember(member1);
@@ -536,8 +536,8 @@ public class StreamsGroupTest {
         // Member 2 is not stable so the group stays in reconciling state.
         member2 = new StreamsGroupMember.Builder(member2)
             .setState(MemberState.UNREVOKED_TASKS)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         streamsGroup.updateMember(member2);
@@ -547,8 +547,8 @@ public class StreamsGroupTest {
 
         member2 = new StreamsGroupMember.Builder(member2)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         streamsGroup.updateMember(member2);
@@ -567,8 +567,8 @@ public class StreamsGroupTest {
         MockTime time = new MockTime();
         StreamsGroup group = createStreamsGroup("group-foo");
 
-        // Group epoch starts at 0.
-        assertEquals(0, group.groupEpoch());
+        // Group epoch starts at 1.
+        assertEquals(1, group.groupEpoch());
 
         // The refresh time deadline should be empty when the group is created or loaded.
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
@@ -856,7 +856,7 @@ public class StreamsGroupTest {
         assertDoesNotThrow(streamsGroup::validateDeleteGroup);
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.STABLE)
             .build();
@@ -872,12 +872,12 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
-        streamsGroup.setGroupEpoch(1);
+        streamsGroup.setGroupEpoch(2);
 
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
-        streamsGroup.setTargetAssignmentMetadata(1, 12345L);
+        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
 
         assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);

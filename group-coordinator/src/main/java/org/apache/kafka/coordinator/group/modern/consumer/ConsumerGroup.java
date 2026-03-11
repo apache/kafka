@@ -740,7 +740,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId))
@@ -777,7 +777,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, removedMemberId));
         });
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;

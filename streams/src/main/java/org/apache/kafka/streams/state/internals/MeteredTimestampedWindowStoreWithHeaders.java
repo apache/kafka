@@ -54,7 +54,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> key type
  * @param <V> value type
  */
-class MeteredTimestampedWindowStoreWithHeaders<K, V>
+public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     extends MeteredWindowStore<K, ValueTimestampHeaders<V>>
     implements TimestampedWindowStoreWithHeaders<K, V> {
 
