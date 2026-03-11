@@ -103,9 +103,7 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
             out.write(rawTimestamp);                        // [timestamp(8)]
             out.write(rawValue);                            // [value]
 
-            final byte[] result = baos.toByteArray();
-
-            return result;
+            return baos.toByteArray();
         } catch (final IOException e) {
             throw new SerializationException("Failed to serialize ValueTimestampHeaders", e);
         }

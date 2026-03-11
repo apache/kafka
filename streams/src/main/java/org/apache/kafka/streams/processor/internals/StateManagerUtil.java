@@ -56,17 +56,6 @@ final class StateManagerUtil {
 
     private StateManagerUtil() {}
 
-//    static RecordConverter converterForStore(final StateStore store) {
-//        if (isHeadersAware(store)) {
-//            return rawValueToHeadersValue();
-//        } else if (isTimestamped(store) && !isVersioned(store)) {
-//            // should not prepend timestamp when restoring records for versioned store, as
-//            // timestamp is used separately during put() process for restore of versioned stores
-//            return rawValueToTimestampedValue();
-//        }
-//        return identity();
-//    }
-
     static RecordConverter converterForStore(final StateStore store) {
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
         // This handles in-memory stores with marker wrappers

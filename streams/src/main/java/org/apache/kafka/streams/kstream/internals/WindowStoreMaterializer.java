@@ -36,9 +36,9 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
     private final long retentionPeriod;
 
     public WindowStoreMaterializer(
-        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
-        final Windows<?> windows,
-        final EmitStrategy emitStrategy
+            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
+            final Windows<?> windows,
+            final EmitStrategy emitStrategy
     ) {
         super(materialized);
         this.windows = windows;
@@ -48,10 +48,10 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
 
         if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
             throw new IllegalArgumentException("The retention period of the window store "
-                + materialized.storeName() + " must be no smaller than its window size plus the grace period."
-                + " Got size=[" + windows.size() + "],"
-                + " grace=[" + windows.gracePeriodMs() + "],"
-                + " retention=[" + retentionPeriod + "]");
+                    + materialized.storeName() + " must be no smaller than its window size plus the grace period."
+                    + " Got size=[" + windows.size() + "],"
+                    + " grace=[" + windows.gracePeriodMs() + "],"
+                    + " retention=[" + retentionPeriod + "]");
         }
     }
 
@@ -92,14 +92,14 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
     @Override
     public final long retentionPeriod() {
         return materialized.retention() != null
-            ? materialized.retention().toMillis()
-            : windows.size() + windows.gracePeriodMs();
+                ? materialized.retention().toMillis()
+                : windows.size() + windows.gracePeriodMs();
     }
 
     @Override
     public long historyRetention() {
         throw new IllegalStateException(
-            "historyRetention is not supported when not a versioned store");
+                "historyRetention is not supported when not a versioned store");
     }
 
     @Override

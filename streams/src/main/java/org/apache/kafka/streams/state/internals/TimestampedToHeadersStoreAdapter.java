@@ -97,9 +97,7 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestampAndHeaders) {
-
-        final byte[] stripped = rawTimestampedValue(valueWithTimestampAndHeaders);
-        store.put(key, stripped);
+        store.put(key, rawTimestampedValue(valueWithTimestampAndHeaders));
     }
 
     @Override
@@ -175,11 +173,11 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
             // Handle RangeQuery: wrap iterator to convert values
             final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
             final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-                store.query(rangeQuery, positionBound, config);
+                    store.query(rangeQuery, positionBound, config);
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
-                    new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
+                        new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;
@@ -205,9 +203,7 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
 
     @Override
     public byte[] get(final Bytes key) {
-        final byte[] rawBytes = store.get(key);
-
-        return convertToHeaderFormat(rawBytes);
+        return convertToHeaderFormat(store.get(key));
     }
 
     @Override

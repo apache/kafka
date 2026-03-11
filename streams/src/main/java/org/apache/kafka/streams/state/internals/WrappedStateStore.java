@@ -46,7 +46,6 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         }
     }
 
-
     public static boolean isVersioned(final StateStore stateStore) {
         if (stateStore instanceof VersionedBytesStore) {
             return true;

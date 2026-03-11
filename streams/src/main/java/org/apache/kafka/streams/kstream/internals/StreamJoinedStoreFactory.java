@@ -101,9 +101,6 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                 valueSerde
         );
 
-        // DEBUG LOGGING - START
-        System.out.println("Builder class: " + builder.getClass().getName());
-        // DEBUG LOGGING - END
 
         if (joinedInternal.loggingEnabled()) {
             builder.withLoggingEnabled(logConfig);

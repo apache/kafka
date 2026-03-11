@@ -49,7 +49,6 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
         if (store instanceof TimestampedKeyValueStoreWithHeaders) {
             if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                 return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store));
-//            } else if (queryableStoreType.getClass().getName().startsWith("org.apache.kafka.streams.state.QueryableStoreTypes$")) {
             } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
                 // For built-in timestamped query type, wrap in facade that strips headers
                 return (List<T>) Collections.singletonList(new ReadOnlyTimestampedKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store));

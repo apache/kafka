@@ -147,11 +147,11 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
             // Handle RangeQuery: wrap iterator to convert values
             final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
             final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-                store.query(rangeQuery, positionBound, config);
+                    store.query(rangeQuery, positionBound, config);
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
-                    new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+                        new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;
