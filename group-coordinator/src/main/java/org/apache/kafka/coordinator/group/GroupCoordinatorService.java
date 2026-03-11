@@ -81,9 +81,9 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorBackgroundThreadPoolExecutor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
@@ -140,7 +140,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -261,6 +261,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 coordinatorRuntimeMetrics
             );
 
+            ExecutorService executorService = new CoordinatorBackgroundThreadPoolExecutor(
+                "group-coordinator-background-",
+                config.numBackgroundThreads(),
+                time,
+                coordinatorRuntimeMetrics
+            );
+
             CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime =
                 new CoordinatorRuntime.Builder<GroupCoordinatorShard, CoordinatorRecord>()
                     .withTime(time)
@@ -277,10 +284,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withSerializer(new GroupCoordinatorRecordSerde())
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
-                    .withExecutorService(Executors.newFixedThreadPool(
-                        config.numBackgroundThreads(),
-                        ThreadUtils.createThreadFactory("group-coordinator-background-%d", false)
-                    ))
+                    .withExecutorService(executorService)
                     .withCachedBufferMaxBytesSupplier(config::cachedBufferMaxBytes)
                     .build();
 

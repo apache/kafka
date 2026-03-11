@@ -23,6 +23,6 @@ public class GroupCoordinatorRuntimeMetrics extends CoordinatorRuntimeMetricsImp
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
     public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
-        super(metrics, METRICS_GROUP);
+        super(metrics, METRICS_GROUP, true);
     }
 }

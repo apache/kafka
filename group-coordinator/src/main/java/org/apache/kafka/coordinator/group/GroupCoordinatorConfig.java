@@ -65,8 +65,14 @@ public class GroupCoordinatorConfig {
     ///
     /// Group coordinator configs
     ///
+    @Deprecated(since = "4.3", forRemoval = true)
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
-    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols.";
+    @Deprecated(since = "4.3", forRemoval = true)
+    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "This configuration is deprecated and will be removed in Kafka 5.0. " +
+        "The list of enabled rebalance protocols. " +
+        "In Kafka 5.0, all protocols will always be enabled and cannot be disabled via this configuration. " +
+        "Use feature versions (group.version, streams.version, share.version) managed by kafka-features.sh instead.";
+    @Deprecated(since = "4.3", forRemoval = true)
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = List.of(
         Group.GroupType.CLASSIC.toString(),
         Group.GroupType.CONSUMER.toString(),
@@ -655,12 +661,13 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * Copy the subset of properties that are relevant to consumer group and share group.
+     * Copy the subset of properties that are relevant to consumer group, share group and streams group.
      */
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
-        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
+        defaultConfigs.putAll(extractShareGroupConfigMap(shareGroupConfig));
+        defaultConfigs.putAll(extractStreamsGroupConfigMap());
         return Collections.unmodifiableMap(defaultConfigs);
     }
 
@@ -671,6 +678,33 @@ public class GroupCoordinatorConfig {
         return Map.of(
             GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs(),
             GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
+     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
+     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
+     * (Ex. group.share.session.timeout.ms).
+     */
+    public Map<String, Integer> extractShareGroupConfigMap(ShareGroupConfig shareGroupConfig) {
+        return Map.of(
+            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, this.shareGroupSessionTimeoutMs(),
+            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, this.shareGroupHeartbeatIntervalMs(),
+            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupConfig.shareGroupRecordLockDurationMs(),
+            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupConfig.shareGroupDeliveryCountLimit(),
+            GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupConfig.shareGroupPartitionMaxRecordLocks()
+        );
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to streams group.
+     */
+    public Map<String, Integer> extractStreamsGroupConfigMap() {
+        return Map.of(
+            GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
+            GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
+            GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
+            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs());
     }
 
     /**

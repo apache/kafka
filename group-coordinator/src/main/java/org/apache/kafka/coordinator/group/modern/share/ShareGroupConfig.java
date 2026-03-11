@@ -19,9 +19,9 @@ package org.apache.kafka.coordinator.group.modern.share;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -42,6 +42,14 @@ public class ShareGroupConfig {
     public static final String SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.partition.max.record.locks";
     public static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 2000;
     public static final String SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC = "Share-group record lock limit per share-partition.";
+
+    public static final String SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.max.partition.max.record.locks";
+    public static final int SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 4000;
+    public static final String SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DOC = "The maximum value of a group configuration for the record lock limit per share-partition.";
+
+    public static final String SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.min.partition.max.record.locks";
+    public static final int SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 100;
+    public static final String SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DOC = "The minimum value of a group configuration for the record lock limit per share-partition.";
 
     public static final String SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG = "group.share.delivery.count.limit";
     public static final int SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT = 5;
@@ -89,12 +97,16 @@ public class ShareGroupConfig {
             .define(SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 30000), MEDIUM, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, between(30000, 3600000), MEDIUM, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 10000), MEDIUM, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC)
+            .define(SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(2000, 10000), MEDIUM, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DOC)
+            .define(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 2000), MEDIUM, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DOC)
             .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, INT, SHARE_GROUP_MAX_SHARE_SESSIONS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_SHARE_SESSIONS_DOC)
             .defineInternal(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC);
 
     private final boolean isShareGroupEnabled;
     private final int shareGroupPartitionMaxRecordLocks;
+    private final int shareGroupMaxPartitionMaxRecordLocks;
+    private final int shareGroupMinPartitionMaxRecordLocks;
     private final int shareGroupDeliveryCountLimit;
     private final int shareGroupMaxDeliveryCountLimit;
     private final int shareGroupMinDeliveryCountLimit;
@@ -111,6 +123,8 @@ public class ShareGroupConfig {
         // The proper way to enable share groups is to use the share.version feature with v1 or later.
         isShareGroupEnabled = config.getBoolean(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG);
         shareGroupPartitionMaxRecordLocks = config.getInt(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+        shareGroupMaxPartitionMaxRecordLocks = config.getInt(SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+        shareGroupMinPartitionMaxRecordLocks = config.getInt(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         shareGroupDeliveryCountLimit = config.getInt(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG);
         shareGroupMaxDeliveryCountLimit = config.getInt(SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
         shareGroupMinDeliveryCountLimit = config.getInt(SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
@@ -123,6 +137,16 @@ public class ShareGroupConfig {
         validate();
     }
 
+    public static ShareGroupConfig fromProps(Map<?, ?> props) {
+        return new ShareGroupConfig(
+            new AbstractConfig(
+                Utils.mergeConfigs(Arrays.asList(CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
+                props,
+                false
+            )
+        );
+    }
+
     /** Share group configuration **/
     public boolean isShareGroupEnabled() {
         return isShareGroupEnabled;
@@ -130,6 +154,14 @@ public class ShareGroupConfig {
 
     public int shareGroupPartitionMaxRecordLocks() {
         return shareGroupPartitionMaxRecordLocks;
+    }
+
+    public int shareGroupMaxPartitionMaxRecordLocks() {
+        return shareGroupMaxPartitionMaxRecordLocks;
+    }
+
+    public int shareGroupMinPartitionMaxRecordLocks() {
+        return shareGroupMinPartitionMaxRecordLocks;
     }
 
     public int shareGroupDeliveryCountLimit() {
@@ -175,6 +207,12 @@ public class ShareGroupConfig {
         Utils.require(shareGroupDeliveryCountLimit >= shareGroupMinDeliveryCountLimit,
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG));
+        Utils.require(shareGroupMaxPartitionMaxRecordLocks >= shareGroupPartitionMaxRecordLocks,
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG));
+        Utils.require(shareGroupPartitionMaxRecordLocks >= shareGroupMinPartitionMaxRecordLocks,
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG));
         Utils.require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG));
@@ -184,20 +222,5 @@ public class ShareGroupConfig {
         Utils.require(shareGroupMaxShareSessions >= config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG),
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG));
-    }
-
-    /**
-     * Copy the subset of properties that are relevant to share group. These configs include those which can be set
-     * statically (for all groups) or dynamically (for a specific group). In those cases, the default value for the
-     * group specific dynamic config (Ex. share.session.timeout.ms) should be the value set for the static config
-     * (Ex. group.share.session.timeout.ms).
-     */
-    public Map<String, Integer> extractShareGroupConfigMap(GroupCoordinatorConfig groupCoordinatorConfig) {
-        return Map.of(
-            GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
-            GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.shareGroupHeartbeatIntervalMs(),
-            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs(),
-            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit()
-        );
     }
 }
