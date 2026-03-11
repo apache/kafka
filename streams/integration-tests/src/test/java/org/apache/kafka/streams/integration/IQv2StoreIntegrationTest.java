@@ -771,10 +771,6 @@ public class IQv2StoreIntegrationTest {
     @MethodSource("data")
     public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
         setup(cache, log, storeToTest, kind, groupProtocol);
-        // DSL + session + headers is not yet supported, setup() returned early
-        if (kafkaStreams == null) {
-            return;
-        }
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
