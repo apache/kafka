@@ -49,12 +49,10 @@ import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
@@ -64,7 +62,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -250,10 +247,6 @@ public class PositionRestartIntegrationTest {
         public boolean isSession() {
             return false;
         }
-
-        public boolean isHeaders() {
-            return false;
-        }
     }
 
     public static Stream<Arguments> data() {
@@ -342,14 +335,9 @@ public class PositionRestartIntegrationTest {
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof WindowBytesStoreSupplier) {
             setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof SessionBytesStoreSupplier) {
-            // TODO: DSL + session + headers is not yet supported
             setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof SessionBytesStoreSupplier) {
-            if (storeToTest.isHeaders()) {
-                setUpSessionHeadersPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
-            } else {
-                setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
-            }
+            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder, cache, log);
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -617,44 +605,6 @@ public class PositionRestartIntegrationTest {
             .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             .process(processorSupplier, windowStoreStoreBuilder.name());
 
-    }
-
-    private static void setUpSessionHeadersPAPITopology(final SessionBytesStoreSupplier supplier,
-                                                        final StreamsBuilder builder,
-                                                        final boolean cache,
-                                                        final boolean log) {
-        final StoreBuilder<?> sessionStoreBuilder =
-            Stores.sessionStoreBuilderWithHeaders(
-                supplier,
-                Serdes.Integer(),
-                Serdes.Integer()
-            );
-        final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier =
-            () -> new ContextualProcessor<>() {
-                @Override
-                public void process(final Record<Integer, Integer> record) {
-                    final SessionStoreWithHeaders<Integer, Integer> stateStore =
-                        context().getStateStore(sessionStoreBuilder.name());
-                    stateStore.put(
-                        new Windowed<>(record.key(), new SessionWindow(WINDOW_START, WINDOW_START)),
-                        AggregationWithHeaders.make(record.value(), record.headers())
-                    );
-                }
-            };
-        if (cache) {
-            sessionStoreBuilder.withCachingEnabled();
-        } else {
-            sessionStoreBuilder.withCachingDisabled();
-        }
-        if (log) {
-            sessionStoreBuilder.withLoggingEnabled(Collections.emptyMap());
-        } else {
-            sessionStoreBuilder.withLoggingDisabled();
-        }
-        builder.addStateStore(sessionStoreBuilder);
-        builder
-            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-            .process(processorSupplier, sessionStoreBuilder.name());
     }
 
     private static void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
