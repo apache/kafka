@@ -934,6 +934,62 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testFencingWithDualIdentity(groupProtocol: String): Unit = {
+    // Test that zombie producer is properly fenced when dual identity is established
+    // after crash recovery with 2PC keepPreparedTxn.
+    val transactionalId = "test-fencing-dual-identity"
+    val testTopic = s"test-fencing-topic-${System.nanoTime()}"
+    createTopic(testTopic, 1, brokerCount, topicConfig())
+
+    val consumer = transactionalConsumers.head
+    consumer.subscribe(Seq(testTopic).asJava)
+    consumer.poll(Duration.ofMillis(100))
+
+    // Start transaction and send records (simulating crash before commit)
+    val producer1 = createTransactionalProducer(transactionalId)
+    producer1.initTransactions()
+    producer1.beginTransaction()
+    val numRecords = 5
+    for (i <- 0 until numRecords) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes, s"value-$i".getBytes))
+    }
+    producer1.flush()
+    // Simulate crash - don't commit (leave transaction prepared)
+
+    // Create new producer and recover with initTransactions(keepPreparedTxn=true)
+    val producer2 = createTransactionalProducer(transactionalId)
+    producer2.initTransactions(true)  // This establishes dual identity
+
+    // Old (zombie) producer tries to abort - should get ProducerFencedException
+    assertThrows(classOf[ProducerFencedException], () => {
+      producer1.abortTransaction()
+    }, "Zombie producer should be fenced when trying to abort")
+
+    // New producer commits the prepared transaction
+    producer2.commitTransaction()
+
+    // Wait for transaction to reach COMPLETE_COMMIT state
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_COMMIT)
+
+    // Verify consumer sees the records from the first producer
+    consumer.seekToBeginning(consumer.assignment())
+    val consumedRecords = consumeRecordsFor(consumer)
+    assertEquals(numRecords, consumedRecords.size,
+      "Consumer should see all records from first producer after commit")
+
+    // Verify transaction state
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnDescription.state(),
+      "Transaction should be in COMPLETE_COMMIT state")
+
+    producer1.close()
+    producer2.close()
+    consumer.unsubscribe()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testProducerCrashAndRecoverWith2PC(groupProtocol: String): Unit = {
     // Test producer crash and recovery with 2PC keepPrepared transaction flow.
