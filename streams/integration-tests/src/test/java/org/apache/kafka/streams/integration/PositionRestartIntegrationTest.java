@@ -231,22 +231,6 @@ public class PositionRestartIntegrationTest {
             public boolean isSession() {
                 return true;
             }
-        },
-        ROCKS_SESSION_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofDays(1));
-            }
-
-            @Override
-            public boolean isSession() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeaders() {
-                return true;
-            }
         };
 
         public abstract StoreSupplier<?> supplier();

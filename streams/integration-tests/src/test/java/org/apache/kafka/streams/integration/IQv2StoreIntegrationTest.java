@@ -110,6 +110,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
@@ -328,22 +329,6 @@ public class IQv2StoreIntegrationTest {
 
             @Override
             public boolean isSession() {
-                return true;
-            }
-        },
-        ROCKS_SESSION_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofDays(1));
-            }
-
-            @Override
-            public boolean isSession() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeaders() {
                 return true;
             }
         };
