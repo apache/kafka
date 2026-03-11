@@ -36,20 +36,6 @@ import java.util.Map;
  */
 public abstract class WrappedStateStore<S extends StateStore, K, V> implements StateStore, CachedStateStore<K, V> {
 
-//    public static boolean isTimestamped(final StateStore stateStore) {
-//        if (stateStore instanceof TimestampedBytesStore) {
-//            return true;
-//        } else if (stateStore instanceof TimestampedToHeadersStoreAdapter) {
-//            // TimestampedToHeadersStoreAdapter wraps a timestamped store
-//            return true;
-//        } else if (stateStore instanceof WrappedStateStore) {
-//            return isTimestamped(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
-//        } else {
-//            return false;
-//        }
-//    }
-
-    // trunk
     public static boolean isTimestamped(final StateStore stateStore) {
         if (stateStore instanceof TimestampedBytesStore) {
             return true;
@@ -71,7 +57,6 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         }
     }
 
-    // trunk
     public static boolean isHeadersAware(final StateStore stateStore) {
         if (stateStore instanceof HeadersBytesStore) {
             return true;

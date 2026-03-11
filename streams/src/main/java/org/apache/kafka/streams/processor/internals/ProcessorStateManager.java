@@ -331,14 +331,6 @@ public class ProcessorStateManager implements StateManager {
                               final CommitCallback commitCallback) {
         final String storeName = store.name();
 
-        // DEBUG LOGGING - START
-        System.out.println("=== DEBUG ProcessorStateManager.registerStore() ===");
-        System.out.println("Store name: " + storeName);
-        System.out.println("Store class: " + store.getClass().getName());
-        System.out.println("Store instanceof TimestampedWindowStoreWithHeaders: " + (store instanceof org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders));
-        System.out.println("Store instanceof WindowStore: " + (store instanceof org.apache.kafka.streams.state.WindowStore));
-        // DEBUG LOGGING - END
-
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
         // fail-crash; in this case we would not need to immediately close the state store before throwing
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
@@ -377,12 +369,6 @@ public class ProcessorStateManager implements StateManager {
     public StateStore store(final String name) {
         if (stores.containsKey(name)) {
             final StateStore stateStore = stores.get(name).stateStore;
-            // DEBUG LOGGING - START
-            System.out.println("=== DEBUG ProcessorStateManager.store() ===");
-            System.out.println("Store name requested: " + name);
-            System.out.println("Store class returned: " + stateStore.getClass().getName());
-            System.out.println("Store instanceof TimestampedWindowStoreWithHeaders: " + (stateStore instanceof org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders));
-            // DEBUG LOGGING - END
             return stateStore;
         } else {
             return null;

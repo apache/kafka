@@ -64,12 +64,6 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
 
     @Override
     public TimestampedWindowStoreWithHeaders<K, V> build() {
-        // DEBUG LOGGING - START
-        System.out.println("=== DEBUG TimestampedWindowStoreWithHeadersBuilder.build() ===");
-        System.out.println("Store name: " + storeSupplier.name());
-        System.out.println("Store supplier class: " + storeSupplier.getClass().getName());
-        // DEBUG LOGGING - END
-
         WindowStore<Bytes, byte[]> store = storeSupplier.get();
 
         if (!(store instanceof HeadersBytesStore)) {

@@ -95,13 +95,6 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                 ))
                 : storeSupplier;
 
-        // DEBUG LOGGING - START
-        System.out.println("=== DEBUG StreamJoinedStoreFactory.builder() ===");
-        System.out.println("Store name: " + this.name);
-        System.out.println("Supplier class: " + supplier.getClass().getName());
-        System.out.println("storeSupplier was " + (storeSupplier == null ? "null (using default)" : "provided (custom)"));
-        // DEBUG LOGGING - END
-
         final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
                 supplier,
                 joinedInternal.keySerde(),

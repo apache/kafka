@@ -64,20 +64,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     }
 
     static StateStore wrapWithReadWriteStore(final StateStore store) {
-//        // DEBUG LOGGING - START
-//        System.out.println("=== DEBUG wrapWithReadWriteStore ===");
-//        System.out.println("Store name: " + store.name());
-//        System.out.println("Store class: " + store.getClass().getName());
-//        System.out.println("Store instanceof TimestampedWindowStoreWithHeaders: " + (store instanceof TimestampedWindowStoreWithHeaders));
-//        System.out.println("Store instanceof TimestampedWindowStore: " + (store instanceof TimestampedWindowStore));
-//        System.out.println("Store instanceof WindowStore: " + (store instanceof WindowStore));
-//        System.out.println("Implemented interfaces:");
-//        for (final Class<?> iface : store.getClass().getInterfaces()) {
-//            System.out.println("  - " + iface.getName());
-//        }
-//        System.out.println("Superclass: " + store.getClass().getSuperclass().getName());
-//        // DEBUG LOGGING - END
-
         if (store instanceof TimestampedKeyValueStoreWithHeaders) {
             return new TimestampedKeyValueStoreReadWriteDecoratorWithHeaders<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store);
         } else if (store instanceof TimestampedKeyValueStore) {
@@ -91,7 +77,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         } else if (store instanceof TimestampedWindowStore) {
             return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
-            System.out.println("MATCHED: WindowStore - returning WindowStoreReadWriteDecorator");
             return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
         } else if (store instanceof SessionStore) {
             return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);

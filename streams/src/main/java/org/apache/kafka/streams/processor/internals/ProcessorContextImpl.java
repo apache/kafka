@@ -181,16 +181,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         }
 
         final StateStore store = stateManager.store(name);
-        // DEBUG LOGGING - START
-        System.out.println("=== DEBUG ProcessorContextImpl.getStateStore() ===");
-        System.out.println("Store name: " + name);
-        System.out.println("Before wrapping - Store class: " + (store != null ? store.getClass().getName() : "null"));
-        // DEBUG LOGGING - END
         final StateStore wrappedStore = wrapWithReadWriteStore(store);
-        // DEBUG LOGGING - START
-        System.out.println("After wrapping - Store class: " + (wrappedStore != null ? wrappedStore.getClass().getName() : "null"));
-        System.out.println("=== END ProcessorContextImpl.getStateStore() ===");
-        // DEBUG LOGGING - END
         return (S) wrappedStore;
     }
 
