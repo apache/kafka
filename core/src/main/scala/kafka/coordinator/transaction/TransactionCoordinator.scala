@@ -873,7 +873,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                       case e: Exception => Left(Errors.forException(e))
                     }
                   } else {
-                    Right(RecordBatch.NO_PRODUCER_ID)
+                    Right(txnMetadata.nextProducerId)
                   }
 
                 // If the next producer epoch is set (which can happen if we used InitProducerId(keepPreparedTxn))
