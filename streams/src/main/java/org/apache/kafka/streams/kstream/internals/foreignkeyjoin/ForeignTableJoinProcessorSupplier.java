@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.BytesUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -123,7 +124,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
 
             //Perform the prefixScan and propagate the results
             try (final KeyValueIterator<Bytes, ValueAndTimestamp<SubscriptionWrapper<KLeft>>> prefixScanResults =
-                     subscriptionStore.range(prefixBytes, Bytes.increment(prefixBytes))) {
+                     subscriptionStore.range(prefixBytes, BytesUtils.increment(prefixBytes))) {
 
                 while (prefixScanResults.hasNext()) {
                     final KeyValue<Bytes, ValueAndTimestamp<SubscriptionWrapper<KLeft>>> next = prefixScanResults.next();

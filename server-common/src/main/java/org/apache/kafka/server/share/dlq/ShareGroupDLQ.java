@@ -14,18 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package org.apache.kafka.server.share.dlq;
+
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Provides utilities for Kafka server and clients.
- *
- * <p>This package contains the public API class {@link org.apache.kafka.common.utils.Bytes}, which was made
- * part of the public API via KIP-1247.
- *
- * <p>Other classes in this package, including {@link org.apache.kafka.common.utils.Time} and {@link org.apache.kafka.common.utils.Timer},
- * are currently exposed through Kafka APIs but are not yet officially designated
- * as public API. A future KIP will address their public API status and design.
- *
- * <p>The remaining classes in this package are internal utilities and not part of
- * the supported Kafka API; their implementation may change without warning
- * between releases.
+ * The main interface to identify implementations of dead letter queues for share groups.
  */
-package org.apache.kafka.common.utils;
+public interface ShareGroupDLQ {
+    /**
+     * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
+     *
+     * @param param A java record encapsulating required and optional information about the kafka record
+     *              being dead letter queued.
+     * @return A completable future of Void type, mainly to signal exceptions.
+     */
+    CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param);
+}

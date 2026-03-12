@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package org.apache.kafka.server.share.dlq;
+
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Provides utilities for Kafka server and clients.
- *
- * <p>This package contains the public API class {@link org.apache.kafka.common.utils.Bytes}, which was made
- * part of the public API via KIP-1247.
- *
- * <p>Other classes in this package, including {@link org.apache.kafka.common.utils.Time} and {@link org.apache.kafka.common.utils.Timer},
- * are currently exposed through Kafka APIs but are not yet officially designated
- * as public API. A future KIP will address their public API status and design.
- *
- * <p>The remaining classes in this package are internal utilities and not part of
- * the supported Kafka API; their implementation may change without warning
- * between releases.
+ * A no op implementation of {@link ShareGroupDLQ}. This will be useful
+ * in development cycle and testing. All methods return immediately with
+ * a successfully completed future.
  */
-package org.apache.kafka.common.utils;
+public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
+    @Override
+    public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
+        return CompletableFuture.completedFuture(null);
+    }
+}

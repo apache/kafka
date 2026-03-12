@@ -474,7 +474,7 @@ public class StateDirectory implements AutoCloseable {
      * @return directory for the global stores
      * @throws ProcessorStateException if the global store directory does not exists and could not be created
      */
-    File globalStateDir() {
+    public File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (hasPersistentStores) {
             if (!dir.exists() && !dir.mkdir()) {
