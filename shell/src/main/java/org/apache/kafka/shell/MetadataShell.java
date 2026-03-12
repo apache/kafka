@@ -17,7 +17,6 @@
 
 package org.apache.kafka.shell;
 
-import kafka.server.DefaultSupportedConfigChecker;
 import kafka.tools.TerseFailure;
 
 import org.apache.kafka.common.utils.Exit;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
 import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.util.SnapshotFileReader;
+import org.apache.kafka.server.config.DefaultSupportedConfigChecker;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
 import org.apache.kafka.server.util.FileLock;

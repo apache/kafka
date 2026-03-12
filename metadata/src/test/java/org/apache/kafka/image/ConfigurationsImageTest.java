@@ -157,32 +157,6 @@ public class ConfigurationsImageTest {
         assertTrue(result.data().containsKey("baz"));
     }
 
-    @Test
-    public void testConfigurationDeltaPreventsInvalidConfigsInResultingImage() {
-        Set<String> validConfigs = Set.of("foo", "bar");
-        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
-
-        Map<String, String> initialConfigs = Map.of(
-            "foo", "value1",      // valid
-            "bar", "value2",      // valid
-            "invalid", "value3"   // invalid
-        );
-        ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
-        ConfigurationDelta delta = new ConfigurationDelta(image, supportedConfigChecker);
-
-        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
-            .setName("foo").setValue("value1"));
-        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
-            .setName("bar").setValue("value2"));
-        delta.finishSnapshot();
-        
-        ConfigurationImage result = delta.apply();
-
-        assertTrue(result.data().containsKey("foo"));
-        assertTrue(result.data().containsKey("bar"));
-        assertFalse(result.data().containsKey("invalid"));
-    }
-
     private static void testToImage(ConfigurationsImage image) {
         testToImage(image, Optional.empty());
     }

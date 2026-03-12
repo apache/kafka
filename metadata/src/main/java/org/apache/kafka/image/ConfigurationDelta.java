@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.metadata.SupportedConfigChecker;
 
@@ -48,7 +49,7 @@ public final class ConfigurationDelta {
     }
 
     public void replay(ConfigRecord record) {
-        if (!supportedConfigChecker.isSupported(image.resource().type(), record.name())) {
+        if (!supportedConfigChecker.isSupported(ConfigResource.Type.forId(record.resourceType()), record.name())) {
             // We skip unsupported configs during replay. This can happen when the config was
             // deprecated and removed, but old records still exist in the log.
             return;
