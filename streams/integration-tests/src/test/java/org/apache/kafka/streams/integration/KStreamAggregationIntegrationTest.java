@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -62,9 +61,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.consumer.ConsoleConsumer;
@@ -809,31 +805,19 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
 
-        final var groupedByKey = builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(sessionGap)));
-
         if (withHeaders) {
-            final SessionBytesStoreSupplier supplier = Stores.persistentSessionStoreWithHeaders(
-                "CountSessionWithHeadersStore",
-                ofMillis(sessionGap + TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1)
-            );
-            groupedByKey
-                .count(Materialized.as(supplier))
-                .toStream()
-                .process(() -> (Processor<Windowed<String>, Long, Object, Object>) record -> {
-                    results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
-                    latch.countDown();
-                });
-        } else {
-            groupedByKey
-                .count()
-                .toStream()
-                .process(() -> (Processor<Windowed<String>, Long, Object, Object>) record -> {
-                    results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
-                    latch.countDown();
-                });
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
+
+        builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(sessionGap)))
+            .count()
+            .toStream()
+            .process(() -> (Processor<Windowed<String>, Long, Object, Object>) record -> {
+                results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
+                latch.countDown();
+            });
 
         startStreams();
         latch.await(30, TimeUnit.SECONDS);
@@ -870,21 +854,14 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(13);
         final String userSessionsStore = "UserSessionsStore";
 
-        final Materialized<String, String, SessionStore<Bytes, byte[]>> materialized;
         if (withHeaders) {
-            final SessionBytesStoreSupplier supplier = Stores.persistentSessionStoreWithHeaders(
-                userSessionsStore,
-                ofMillis(sessionGap + ofMinutes(1).toMillis() + 1)
-            );
-            materialized = Materialized.as(supplier);
-        } else {
-            materialized = Materialized.as(userSessionsStore);
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(sessionGap), ofMinutes(1)))
-            .reduce((value1, value2) -> value1 + ":" + value2, materialized)
+            .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
             .toStream()
             .process(() -> (Processor<Windowed<String>, String, Object, Object>) record -> {
                 results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
@@ -965,12 +942,7 @@ public class KStreamAggregationIntegrationTest {
             assertFalse(bob.hasNext());
         }
     }
-
-    private static void assertHeaderCount(final Headers headers, final int expectedCount) {
-        assertThat("header count", headers.toArray().length, equalTo(expectedCount));
-    }
-
-
+    
     @Test
     public void shouldCountUnlimitedWindows() throws Exception {
         final long startTime = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;
