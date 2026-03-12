@@ -686,8 +686,8 @@ public class ClusterControlManagerTest {
                 build();
         clusterControl.activate();
 
-        assertEquals("Unable to register because the broker does not support finalized version 4 of " +
-            "metadata.version. The broker wants a version between 1 and 1, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 4 (3.3-IV0) of " +
+            "metadata.version. The broker wants a version between 1 (3.0-IV1) and 1 (3.0-IV1), inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().
@@ -698,8 +698,8 @@ public class ClusterControlManagerTest {
                     123L,
                     featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
 
-        assertEquals("Unable to register because the broker does not support finalized version 4 of " +
-            "metadata.version. The broker wants a version between 7 and 7, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 4 (3.3-IV0) of " +
+            "metadata.version. The broker wants a version between 7 (3.3-IV3) and 7 (3.3-IV3), inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().

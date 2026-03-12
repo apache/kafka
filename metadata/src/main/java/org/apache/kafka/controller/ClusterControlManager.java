@@ -525,10 +525,22 @@ public class ClusterControlManager {
         int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ? 1 : 0; // The default value for MetadataVersion is 1 not 0.
         short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
         if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
+            boolean isMetadataVersion = feature.name().equals(MetadataVersion.FEATURE_NAME);
+            String finalizedDisplay = isMetadataVersion
+                ? finalized + " (" + MetadataVersion.fromFeatureLevel(finalized) + ")"
+                : String.valueOf(finalized);
+            String minSupportedDisplay = isMetadataVersion
+                ? feature.minSupportedVersion() + " (" +
+                    MetadataVersion.fromFeatureLevel(feature.minSupportedVersion()) + ")"
+                : String.valueOf(feature.minSupportedVersion());
+            String maxSupportedDisplay = isMetadataVersion
+                ? feature.maxSupportedVersion() + " (" +
+                    MetadataVersion.fromFeatureLevel(feature.maxSupportedVersion()) + ")"
+                : String.valueOf(feature.maxSupportedVersion());
             throw new UnsupportedVersionException("Unable to register because the broker " +
-                "does not support finalized version " + finalized + " of " + feature.name() +
-                    ". The broker wants a version between " + feature.minSupportedVersion() + " and " +
-                    feature.maxSupportedVersion() + ", inclusive.");
+                "does not support finalized version " + finalizedDisplay + " of " + feature.name() +
+                    ". The broker wants a version between " + minSupportedDisplay + " and " +
+                    maxSupportedDisplay + ", inclusive.");
         }
         // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).
         if (!finalizedFeatures.featureNames().contains(feature.name()))
