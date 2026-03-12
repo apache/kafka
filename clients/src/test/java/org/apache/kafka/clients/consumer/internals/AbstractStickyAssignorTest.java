@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,8 +55,6 @@ import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssig
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.racks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.verifyRackAssignment;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -184,13 +183,11 @@ public abstract class AbstractStickyAssignorTest {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, partitionInfos(topic, 2));
-        subscriptions = mkMap(
-                mkEntry(consumerId, buildSubscriptionV2Above(
-                        topics(topic),
-                        Arrays.asList(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
-                        generationId, 0)
-                )
-        );
+        subscriptions = new HashMap<>();
+        subscriptions.put(consumerId, buildSubscriptionV2Above(
+                topics(topic),
+                Arrays.asList(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
+                generationId, 0));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumerId));
@@ -1272,7 +1269,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformSubscription() {
-        Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
+        Map<String, Integer> topics = orderedMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
@@ -1339,7 +1336,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithNonEqualSubscription() {
-        Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
+        Map<String, Integer> topics = orderedMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
         List<String> nonRackAwareAssignment = asList(
@@ -1561,5 +1558,14 @@ public abstract class AbstractStickyAssignorTest {
         this.numBrokerRacks = rackConfig != RackConfig.NO_BROKER_RACK ? 3 : 0;
         this.hasConsumerRack = rackConfig != RackConfig.NO_CONSUMER_RACK;
         AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
+    }
+
+    @SafeVarargs
+    private static <K, V> Map<K, V> orderedMap(Map.Entry<K, V>... entries) {
+        Map<K, V> map = new LinkedHashMap<>();
+        for (Map.Entry<K, V> entry : entries) {
+            map.put(entry.getKey(), entry.getValue());
+        }
+        return map;
     }
 }

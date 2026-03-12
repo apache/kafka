@@ -27,9 +27,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-
 /**
  * The {@link FetchMetricsManager} class provides wrapper methods to record lag, lead, latency, and fetch metrics.
  * It keeps an internal ID of the assigned set of partitions which is updated to ensure the set of metrics it
@@ -130,7 +127,7 @@ public class FetchMetricsManager {
         String name = partitionRecordsLagMetricName(tp);
         maybeRecordDeprecatedPartitionLag(name, tp, lag);
 
-        Sensor recordsLag = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
+        Sensor recordsLag = new SensorBuilder(metrics, name, () -> Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition())))
             .withValue(metricsRegistry.partitionRecordsLag)
             .withMax(metricsRegistry.partitionRecordsLagMax)
             .withAvg(metricsRegistry.partitionRecordsLagAvg)
@@ -145,7 +142,7 @@ public class FetchMetricsManager {
         String name = partitionRecordsLeadMetricName(tp);
         maybeRecordDeprecatedPartitionLead(name, tp, lead);
 
-        Sensor recordsLead = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
+        Sensor recordsLead = new SensorBuilder(metrics, name, () -> Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition())))
             .withValue(metricsRegistry.partitionRecordsLead)
             .withMin(metricsRegistry.partitionRecordsLeadMin)
             .withAvg(metricsRegistry.partitionRecordsLeadAvg)
@@ -283,7 +280,7 @@ public class FetchMetricsManager {
     }
 
     private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
-        Map<String, String> metricTags = mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition())));
+        Map<String, String> metricTags = Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition()));
         return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
@@ -300,8 +297,8 @@ public class FetchMetricsManager {
 
     @Deprecated
     static Map<String, String> topicPartitionTags(TopicPartition tp) {
-        return mkMap(mkEntry("topic", tp.topic().replace('.', '_')),
-            mkEntry("partition", String.valueOf(tp.partition())));
+        return Map.of("topic", tp.topic().replace('.', '_'),
+            "partition", String.valueOf(tp.partition()));
     }
 
 }

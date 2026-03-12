@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.common.feature;
 
-import org.apache.kafka.common.utils.Utils;
-
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -95,7 +94,10 @@ class BaseVersionRange {
     }
 
     public Map<String, Short> toMap() {
-        return Utils.mkMap(Utils.mkEntry(minKeyLabel, min()), Utils.mkEntry(maxKeyLabel, max()));
+        Map<String, Short> map = new LinkedHashMap<>();
+        map.put(minKeyLabel, min());
+        map.put(maxKeyLabel, max());
+        return map;
     }
 
     private static String mapToString(final Map<String, Short> map) {
