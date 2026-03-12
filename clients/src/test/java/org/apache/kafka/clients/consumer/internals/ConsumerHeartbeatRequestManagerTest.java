@@ -336,6 +336,41 @@ public class ConsumerHeartbeatRequestManagerTest
     }
 
     @Test
+    public void testHeartbeatOutsideInterval() {
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+        // Heartbeat should be sent
+        assertEquals(1, result.unsentRequests.size());
+        // Interval timer reset
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result.timeUntilNextPollMs);
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        // Membership manager updated (to transition out of the heartbeating state)
+        verify(membershipManager).onHeartbeatRequestGenerated();
+    }
+
+    @Test
+    public void testMaximumTimeToWaitRespectsBackoffWhenHeartbeatNow() {
+        // Simulate a heartbeat failure that puts the request state into backoff
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Fail the heartbeat request (simulates auth failure recovery scenario)
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException("timeout"));
+
+        // shouldHeartbeatNow is true but the request is in backoff
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        // maximumTimeToWait should respect the backoff and NOT return 0
+        long waitTime = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(waitTime > 0,
+            "maximumTimeToWait should return backoff time when heartbeat is requested " +
+            "but request is in backoff, got " + waitTime);
+    }
+
+    @Test
     public void testNetworkTimeout() {
         // The initial heartbeatInterval is set to 0
         createHeartbeatRequestStateWithZeroHeartbeatInterval();

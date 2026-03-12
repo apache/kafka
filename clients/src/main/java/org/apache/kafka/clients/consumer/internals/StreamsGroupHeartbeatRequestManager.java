@@ -528,10 +528,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired() ||
-            membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
-
+        if (pollTimer.isExpired()) {
             return 0L;
+        }
+        if (membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
+            if (heartbeatRequestState.canSendRequest(currentTimeMs)) {
+                return 0L;
+            }
+            return heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs);
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
     }
