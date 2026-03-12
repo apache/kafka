@@ -92,6 +92,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG = "streams.initial.rebalance.delay.ms";
 
+    public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -115,6 +117,8 @@ public final class GroupConfig extends AbstractConfig {
     public final int streamsNumStandbyReplicas;
 
     public final int streamsInitialRebalanceDelayMs;
+
+    public final int streamsTaskOffsetIntervalMs;
 
     public final String shareIsolationLevel;
 
@@ -203,7 +207,13 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC)
+        .define(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
@@ -219,6 +229,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        this.streamsTaskOffsetIntervalMs = getInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
         this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
@@ -262,6 +273,7 @@ public final class GroupConfig extends AbstractConfig {
         int streamsSessionTimeoutMs = (Integer) valueMaps.get(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         int streamsHeartbeatIntervalMs = (Integer) valueMaps.get(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         int streamsNumStandbyReplicas = (Integer) valueMaps.get(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
+        int streamsTaskOffsetIntervalMs = (Integer) valueMaps.get(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -337,6 +349,10 @@ public final class GroupConfig extends AbstractConfig {
         if (streamsNumStandbyReplicas > groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas()) {
             throw new InvalidConfigurationException(STREAMS_NUM_STANDBY_REPLICAS_CONFIG + " must be less than or equal to " +
                 GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
+        }
+        if (streamsTaskOffsetIntervalMs < groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()) {
+            throw new InvalidConfigurationException(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
         }
         if (consumerSessionTimeout <= consumerHeartbeatInterval) {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
@@ -635,6 +651,13 @@ public final class GroupConfig extends AbstractConfig {
      */
     public int streamsInitialRebalanceDelayMs() {
         return streamsInitialRebalanceDelayMs;
+    }
+
+    /**
+     * The task offset reporting interval.
+     */
+    public int streamsTaskOffsetIntervalMs() {
+        return streamsTaskOffsetIntervalMs;
     }
 
     /**
