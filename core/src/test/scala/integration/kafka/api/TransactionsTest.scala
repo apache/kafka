@@ -949,7 +949,7 @@ class TransactionsTest extends IntegrationTestHarness {
     consumer.poll(Duration.ofMillis(100))
 
     // Start transaction and send records (simulating crash before commit)
-    val producer1 = createTransactionalProducer(transactionalId)
+    val producer1 = createTransactionalProducer(transactionalId, enable2PC = true)
     producer1.initTransactions()
     producer1.beginTransaction()
     val numRecords = 5
@@ -960,7 +960,7 @@ class TransactionsTest extends IntegrationTestHarness {
     // Simulate crash - don't commit (leave transaction prepared)
 
     // Create new producer and recover with initTransactions(keepPreparedTxn=true)
-    val producer2 = createTransactionalProducer(transactionalId)
+    val producer2 = createTransactionalProducer(transactionalId, enable2PC = true)
     producer2.initTransactions(true)  // This establishes dual identity
 
     // Old (zombie) producer tries to abort - should get ProducerFencedException
@@ -1138,7 +1138,7 @@ class TransactionsTest extends IntegrationTestHarness {
       consumer.poll(Duration.ofMillis(100))  // Trigger assignment
 
       // Create producer and send records in a transaction
-      var producer = createTransactionalProducer(transactionalId)
+      var producer = createTransactionalProducer(transactionalId, enable2PC = true)
       producer.initTransactions()
       producer.beginTransaction()
 
@@ -1161,7 +1161,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
         // Crash and recover numCrashes times
         for (crashNum <- 1 to numCrashes) {
-          val recoveredProducer = createTransactionalProducer(transactionalId)
+          val recoveredProducer = createTransactionalProducer(transactionalId, enable2PC = true)
           // Use keepPreparedTxn=true to preserve in-flight transaction
           recoveredProducer.initTransactions(true)
 
@@ -1257,7 +1257,7 @@ class TransactionsTest extends IntegrationTestHarness {
       consumer.poll(Duration.ofMillis(100))
 
       // Establish transactional ID
-      var producer = createTransactionalProducer(transactionalId)
+      var producer = createTransactionalProducer(transactionalId, enable2PC = true)
       producer.initTransactions()
       producer.close()
 
@@ -1265,7 +1265,7 @@ class TransactionsTest extends IntegrationTestHarness {
       setProducerEpoch(transactionalId, startEpoch)
 
       // Create producer and start a prepared transaction
-      producer = createTransactionalProducer(transactionalId)
+      producer = createTransactionalProducer(transactionalId, enable2PC = true)
       producer.initTransactions()
       producer.beginTransaction()
       val numRecords = 3
@@ -1284,7 +1284,7 @@ class TransactionsTest extends IntegrationTestHarness {
         var iteration = 0
         while (rotationCount == 0 && iteration < 20) {
           iteration += 1
-          val recoveryProducer = createTransactionalProducer(transactionalId)
+          val recoveryProducer = createTransactionalProducer(transactionalId, enable2PC = true)
           recoveryProducer.initTransactions(true)  // keepPreparedTxn
 
           val clientId = getClientProducerId(transactionalId)
@@ -1303,7 +1303,7 @@ class TransactionsTest extends IntegrationTestHarness {
         setClientProducerEpoch(transactionalId, startEpoch)
 
         // Do a compensating epoch bump so that we get at the same epoch as w/o double rotation
-        val recoveryProducer = createTransactionalProducer(transactionalId)
+        val recoveryProducer = createTransactionalProducer(transactionalId, enable2PC = true)
         recoveryProducer.initTransactions(true)
         recoveryProducer.close(Duration.ZERO)
       }
@@ -1313,7 +1313,7 @@ class TransactionsTest extends IntegrationTestHarness {
       //   2. Second initTransactions(true): startEpoch + 1 → startEpoch + 2
       //   3. commitTransaction(): startEpoch + 2 → startEpoch + 3
       // Rotation may happen during step 2 or 3 depending on startEpoch.
-      val finalProducer = createTransactionalProducer(transactionalId)
+      val finalProducer = createTransactionalProducer(transactionalId, enable2PC = true)
       finalProducer.initTransactions(true)  // keepPreparedTxn - may rotate here
 
       // Complete the transaction - may rotate here
