@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.BytesUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
@@ -426,7 +427,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().prefixScan(prefix, prefixKeySerializer);
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = Bytes.increment(from);
+        final Bytes to = BytesUtils.increment(from);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, from, to, false);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
     }
