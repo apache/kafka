@@ -211,5 +211,4 @@ class ControllerConfigurationValidatorTest {
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
   }
-
 }
