@@ -31,7 +31,6 @@ import java.net.URL;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.components.Versioned;
 
 /**
  * Fake plugin class for testing classloading isolation.

@@ -18,7 +18,6 @@ package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;

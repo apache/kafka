@@ -775,11 +775,6 @@ public class PluginsTest {
         public Map<String, ?> configs;
 
         @Override
-        public String version() {
-            return "test";
-        }
-
-        @Override
         public void configure(Map<String, ?> configs) {
             this.configs = configs;
             super.configure(configs);

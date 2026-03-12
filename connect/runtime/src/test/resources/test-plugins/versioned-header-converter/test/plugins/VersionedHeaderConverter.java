@@ -18,7 +18,6 @@
 package test.plugins;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.HeaderConverter;
