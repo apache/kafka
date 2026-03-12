@@ -4613,6 +4613,37 @@ public class TransactionManagerTest {
         }
     }
 
+    @Test
+    public void testIdempotentProducerRecoversFromLostInitProducerIdRequest() {
+        // Simulate the scenario from KAFKA-20237: InitProducerId request is dequeued
+        // but lost due to authentication failure, leaving state stuck at INITIALIZING.
+        initializeTransactionManager(Optional.empty(), false);
+
+        // First call transitions to INITIALIZING and enqueues request
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+        assertTrue(transactionManager.isInitializing());
+
+        // Simulate the request being dequeued (as nextRequest() would do in Sender)
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
+        assertNotNull(handler, "InitProducerIdHandler should have been enqueued");
+
+        // Simulate authentication failure: the request was dequeued but never sent.
+        // authenticationFailed() iterates pendingRequests (now empty) so it does nothing.
+        transactionManager.authenticationFailed(new org.apache.kafka.common.errors.AuthenticationException("SSL handshake failed"));
+
+        // State should still be INITIALIZING (the handler was already dequeued)
+        assertTrue(transactionManager.isInitializing());
+
+        // On the next Sender iteration, bumpIdempotentEpochAndResetIdIfNeeded should
+        // detect the lost request and re-enqueue
+        transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+        assertTrue(transactionManager.isInitializing());
+
+        // Verify a new request was enqueued
+        TransactionManager.TxnRequestHandler retryHandler = transactionManager.nextRequest(false);
+        assertNotNull(retryHandler, "A new InitProducerIdHandler should have been re-enqueued");
+    }
+
     private void runUntil(Supplier<Boolean> condition) {
         ProducerTestUtils.runUntil(sender, condition);
     }
