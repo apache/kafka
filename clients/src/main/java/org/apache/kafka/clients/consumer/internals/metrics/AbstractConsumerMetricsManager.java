@@ -16,12 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
-
-import java.util.Map;
 import java.util.Objects;
-import java.util.function.Supplier;
 
 /**
  * Utility class that serves as a common abstraction point for consumers to create and register their
@@ -33,22 +28,6 @@ public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
 
     protected AbstractConsumerMetricsManager(RecordingMetrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
-    }
-
-    protected final Meter createMeter(String groupName, String baseName, String descriptiveName) {
-        return new Meter(new WindowedCount(),
-            metrics.metricName(baseName + "-rate", groupName,
-                String.format("The number of %s per second", descriptiveName)),
-            metrics.metricName(baseName + "-total", groupName,
-                String.format("The total number of %s", descriptiveName)));
-    }
-
-    protected SensorBuilder sensorBuilder(String name) {
-        return new SensorBuilder(metrics, name);
-    }
-
-    protected SensorBuilder sensorBuilder(String name, Supplier<Map<String, String>> tagsSupplier) {
-        return new SensorBuilder(metrics, name, tagsSupplier);
     }
 
     @Override

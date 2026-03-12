@@ -50,6 +50,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1338,7 +1339,22 @@ public abstract class AbstractCoordinator implements Closeable {
         return heartbeatThread;
     }
 
-    private class GroupCoordinatorMetrics extends AbstractConsumerMetricsManager {
+    protected class AbstractCoordinatorMetrics extends AbstractConsumerMetricsManager {
+
+        protected AbstractCoordinatorMetrics(RecordingMetrics metrics) {
+            super(metrics);
+        }
+
+        protected final Meter createMeter(String groupName, String baseName, String descriptiveName) {
+            return new Meter(new WindowedCount(),
+                metrics.metricName(baseName + "-rate", groupName,
+                    String.format("The number of %s per second", descriptiveName)),
+                metrics.metricName(baseName + "-total", groupName,
+                    String.format("The total number of %s", descriptiveName)));
+        }
+    }
+
+    private class GroupCoordinatorMetrics extends AbstractCoordinatorMetrics {
 
         public final String metricGrpName;
 

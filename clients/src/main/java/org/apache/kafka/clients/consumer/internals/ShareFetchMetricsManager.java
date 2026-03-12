@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.SensorBuilder;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -39,32 +40,32 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     @SuppressWarnings({"this-escape"})
     private ShareFetchMetricsManager(RecordingMetrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
         super(metrics);
-        this.bytesFetched = sensorBuilder("bytes-fetched")
+        this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
                 .withMeter(metricsRegistry.bytesFetchedRate, metricsRegistry.bytesFetchedTotal)
                 .build();
-        this.recordsFetched = sensorBuilder("records-fetched")
+        this.recordsFetched = new SensorBuilder(metrics, "records-fetched")
                 .withAvg(metricsRegistry.recordsPerRequestAvg)
                 .withMax(metricsRegistry.recordsPerRequestMax)
                 .withMeter(metricsRegistry.recordsFetchedRate, metricsRegistry.recordsFetchedTotal)
                 .build();
 
-        this.sentAcknowledgements = sensorBuilder("sent-acknowledgements")
+        this.sentAcknowledgements = new SensorBuilder(metrics, "sent-acknowledgements")
                 .withMeter(metricsRegistry.acknowledgementSendRate, metricsRegistry.acknowledgementSendTotal)
                 .build();
 
-        this.failedAcknowledgements = sensorBuilder("failed-acknowledgements")
+        this.failedAcknowledgements = new SensorBuilder(metrics, "failed-acknowledgements")
                 .withMeter(metricsRegistry.acknowledgementErrorRate, metricsRegistry.acknowledgementErrorTotal)
                 .build();
 
-        this.fetchLatency = sensorBuilder("fetch-latency")
+        this.fetchLatency = new SensorBuilder(metrics, "fetch-latency")
                 .withAvg(metricsRegistry.fetchLatencyAvg)
                 .withMax(metricsRegistry.fetchLatencyMax)
                 .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
                 .build();
 
-        this.throttleTime = sensorBuilder("fetch-throttle-time")
+        this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")
                 .withAvg(metricsRegistry.fetchThrottleTimeAvg)
                 .withMax(metricsRegistry.fetchThrottleTimeMax)
                 .build();
