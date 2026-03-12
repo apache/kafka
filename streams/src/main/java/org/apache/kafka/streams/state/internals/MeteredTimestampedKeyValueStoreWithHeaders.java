@@ -315,7 +315,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(final P prefix,
-                                                                                                   final PS prefixKeySerializer) {
+                                                                                                  final PS prefixKeySerializer) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         return new MeteredValueTimestampHeadersIterator(
@@ -326,7 +326,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
-                                                                final K to) {
+                                                               final K to) {
         return new MeteredValueTimestampHeadersIterator(
             wrapped().range(
                 keyBytes(from, new RecordHeaders()),
@@ -338,7 +338,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from,
-                                                                       final K to) {
+                                                                      final K to) {
         return new MeteredValueTimestampHeadersIterator(
             wrapped().reverseRange(
                 keyBytes(from, new RecordHeaders()),
