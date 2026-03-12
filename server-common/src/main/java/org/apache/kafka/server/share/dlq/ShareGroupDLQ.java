@@ -17,14 +17,11 @@
 
 package org.apache.kafka.server.share.dlq;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.concurrent.CompletableFuture;
 
 /**
  * The main interface to identify implementations of dead letter queues for share groups.
  */
-@InterfaceStability.Evolving
 public interface ShareGroupDLQ {
     /**
      * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
