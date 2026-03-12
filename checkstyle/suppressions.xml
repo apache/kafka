@@ -306,7 +306,7 @@
               files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
     <suppress checks="JavaNCSS" files="RemoteLogManagerTest.java"/>
-    
+
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(ReplicaFetcherThreadBenchmark).java"/>
