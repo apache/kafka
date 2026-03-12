@@ -100,7 +100,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
@@ -132,7 +132,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
 
     // Verify the response.
-    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
     // Leave the group.
@@ -382,7 +382,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
@@ -416,7 +416,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
     val oldMemberId = consumerGroupHeartbeatResponse.data.memberId
@@ -451,7 +451,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
     // The 2 member IDs should be different
     assertNotEquals(oldMemberId, consumerGroupHeartbeatResponse.data.memberId)
@@ -493,7 +493,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
@@ -526,7 +526,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
 
     // Verify the response.
-    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
     // A new static member tries to join the group with an inuse instanceid.
@@ -554,8 +554,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
         consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
     }, msg = s"Could not re-join the group successfully. Last response $consumerGroupHeartbeatResponse.")
 
-    // Verify the response. The group epoch bumps upto 4 which eventually reflects in the new member epoch.
-    assertEquals(4, consumerGroupHeartbeatResponse.data.memberEpoch)
+    // Verify the response. The group epoch bumps upto 5 which eventually reflects in the new member epoch.
+    assertEquals(5, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
   }
 
@@ -598,7 +598,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
       // Verify the response.
       assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-      assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
       assertEquals(5000, consumerGroupHeartbeatResponse.data.heartbeatIntervalMs)
 
       // Alter consumer heartbeat interval config
@@ -706,7 +706,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify initial join success.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
 
     // Create the topic to trigger partition assignment.
     val topicId = createTopic(
@@ -735,8 +735,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
         consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
     }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
 
-    // Verify member has epoch > 0 (should be 2).
-    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    // Verify member has epoch > 0 (should be 3).
+    assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
     // Simulate a fenced member attempting to rejoin with epoch=0.
@@ -754,11 +754,11 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the full response.
     // Since the subscription/metadata hasn't changed, the member should get
-    // their current state back with the same epoch (2) and assignment.
+    // their current state back with the same epoch (3) and assignment.
     val expectedRejoinResponse = new ConsumerGroupHeartbeatResponseData()
       .setErrorCode(Errors.NONE.code)
       .setMemberId(memberId)
-      .setMemberEpoch(2)
+      .setMemberEpoch(3)
       .setHeartbeatIntervalMs(rejoinResponse.data.heartbeatIntervalMs)
       .setAssignment(expectedAssignment)
 

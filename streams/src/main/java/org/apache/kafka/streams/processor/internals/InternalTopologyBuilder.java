@@ -207,13 +207,16 @@ public class InternalTopologyBuilder {
         private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
         private final Deserializer<KIn> keyDeserializer;
         private final Deserializer<VIn> valueDeserializer;
+        private final String processorName;
 
         private ReprocessFactory(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                                  final Deserializer<KIn> key,
-                                 final Deserializer<VIn> value) {
+                                 final Deserializer<VIn> value,
+                                 final String processorName) {
             this.processorSupplier = processorSupplier;
             this.keyDeserializer = key;
             this.valueDeserializer = value;
+            this.processorName = processorName;
         }
         public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
             return processorSupplier;
@@ -225,6 +228,10 @@ public class InternalTopologyBuilder {
 
         public Deserializer<VIn> valueDeserializer() {
             return valueDeserializer;
+        }
+
+        public String processorName() {
+            return processorName;
         }
     }
 
@@ -682,7 +689,7 @@ public class InternalTopologyBuilder {
         );
         storeNameToReprocessOnRestore.put(storeFactory.storeName(),
             reprocessOnRestore ?
-                Optional.of(new ReprocessFactory<>(stateUpdateSupplier, keyDeserializer, valueDeserializer))
+                Optional.of(new ReprocessFactory<>(stateUpdateSupplier, keyDeserializer, valueDeserializer, processorName))
                 : Optional.empty());
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);

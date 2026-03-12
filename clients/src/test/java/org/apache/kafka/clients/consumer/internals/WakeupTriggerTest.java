@@ -219,6 +219,39 @@ public class WakeupTriggerTest {
         assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
     }
 
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyCompletedBeforeSet() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        task.complete(null);
+        wakeupTrigger.wakeup();
+        wakeupTrigger.setActiveTask(task);
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyFailedBeforeSet() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        task.completeExceptionally(new RuntimeException("Simulated error"));
+        wakeupTrigger.wakeup();
+        wakeupTrigger.setActiveTask(task);
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyCancelledBeforeSet() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        task.cancel(true);
+        wakeupTrigger.wakeup();
+        wakeupTrigger.setActiveTask(task);
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {
         assertTrue(future.isCompletedExceptionally());
         assertInstanceOf(WakeupException.class,

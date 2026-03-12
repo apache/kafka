@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -133,10 +134,10 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
         streamsBuilderForOldStore.addStateStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                persistentStore ? Stores.persistentTimestampedKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
-                Serdes.String(),
-                Serdes.String()))
+                Stores.timestampedKeyValueStoreBuilder(
+                    persistentStore ? Stores.persistentTimestampedKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
@@ -154,10 +155,10 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
-                Serdes.String(),
-                Serdes.String()))
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
 
@@ -184,10 +185,10 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
         streamsBuilderForOldStore.addStateStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore(STORE_NAME),
-                Serdes.String(),
-                Serdes.String()))
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
@@ -207,10 +208,10 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                Stores.persistentTimestampedKeyValueStore(STORE_NAME),
-                Serdes.String(),
-                Serdes.String()))
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
 
@@ -233,6 +234,125 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams.close();
     }
 
+    @Test
+    public void shouldMigrateInMemoryPlainKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi() throws Exception {
+        shouldMigratePlainKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi(false);
+    }
+
+    @Test
+    public void shouldMigratePersistentPlainKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi() throws Exception {
+        shouldMigratePlainKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi(true);
+    }
+
+    private void shouldMigratePlainKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi(final boolean persistentStore) throws Exception {
+        final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
+
+        streamsBuilderForOldStore.addStateStore(
+                Stores.keyValueStoreBuilder(
+                    persistentStore ? Stores.persistentKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(KeyValueProcessor::new, STORE_NAME);
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
+        kafkaStreams.start();
+
+        processKeyValueAndVerifyValue("key1", "value1");
+        final long lastUpdateKeyOne = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
+
+        processKeyValueAndVerifyValue("key2", "value2");
+        final long lastUpdateKeyTwo = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
+
+        processKeyValueAndVerifyValue("key3", "value3");
+        final long lastUpdateKeyThree = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
+
+        kafkaStreams.close();
+        kafkaStreams = null;
+
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
+
+        streamsBuilderForNewStore.addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
+        kafkaStreams.start();
+
+        // Verify legacy data can be read with empty headers and timestamp
+        verifyLegacyValuesWithEmptyHeaders("key1", "value1", lastUpdateKeyOne);
+        verifyLegacyValuesWithEmptyHeaders("key2", "value2", lastUpdateKeyTwo);
+        verifyLegacyValuesWithEmptyHeaders("key3", "value3", lastUpdateKeyThree);
+
+        // Process new records with headers
+        final Headers headers = new RecordHeaders();
+        headers.add("source", "test".getBytes());
+
+        processKeyValueWithTimestampAndHeadersAndVerify("key3", "value3", 333L, headers, headers);
+        processKeyValueWithTimestampAndHeadersAndVerify("key4new", "value4", 444L, headers, headers);
+
+        kafkaStreams.close();
+    }
+
+    @Test
+    public void shouldProxyPlainKeyValueStoreToTimestampedKeyValueStoreWithHeadersUsingPapi() throws Exception {
+        final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
+
+        streamsBuilderForOldStore.addStateStore(
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(KeyValueProcessor::new, STORE_NAME);
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
+        kafkaStreams.start();
+
+        processKeyValueAndVerifyValue("key1", "value1");
+        processKeyValueAndVerifyValue("key2", "value2");
+        processKeyValueAndVerifyValue("key3", "value3");
+
+        kafkaStreams.close();
+        kafkaStreams = null;
+
+
+
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
+
+        streamsBuilderForNewStore.addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
+        kafkaStreams.start();
+
+        // Verify legacy data can be read with empty headers
+        verifyLegacyValuesWithEmptyHeaders("key1", "value1", -1L);
+        verifyLegacyValuesWithEmptyHeaders("key2", "value2", -1L);
+        verifyLegacyValuesWithEmptyHeaders("key3", "value3", -1L);
+
+        // Process new records with headers
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add("source", "proxy-test".getBytes());
+        final Headers expectedHeaders = new RecordHeaders();
+
+        processKeyValueWithTimestampAndHeadersAndVerify("key3", "value3", 333L, -1, headers, expectedHeaders);
+        processKeyValueWithTimestampAndHeadersAndVerify("key4new", "value4", 444L, -1, headers, expectedHeaders);
+
+        kafkaStreams.close();
+    }
+
     private <K, V> void processKeyValueAndVerifyTimestampedValue(final K key,
                                                                  final V value,
                                                                  final long timestamp)
@@ -246,6 +366,68 @@ public class HeadersStoreUpgradeIntegrationTest {
                 StringSerializer.class),
             timestamp,
             false);
+
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
+                        IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null) {
+                        return false;
+                    }
+
+                    final ValueAndTimestamp<V> result = store.get(key);
+                    return result != null && result.value().equals(value) && result.timestamp() == timestamp;
+                } catch (final Exception swallow) {
+                    swallow.printStackTrace();
+                    System.err.println(swallow.getMessage());
+                    return false;
+                }
+            },
+            60_000L,
+            "Could not get expected result in time.");
+    }
+
+    private <K, V> void processKeyValueAndVerifyValue(final K key,
+                                                      final V value)
+        throws Exception {
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class),
+            CLUSTER.time,
+            false);
+
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    final ReadOnlyKeyValueStore<K, V> store =
+                        IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+
+                    if (store == null) {
+                        return false;
+                    }
+
+                    final V result = store.get(key);
+                    return result != null && result.equals(value);
+                } catch (final Exception swallow) {
+                    swallow.printStackTrace();
+                    System.err.println(swallow.getMessage());
+                    return false;
+                }
+            },
+            60_000L,
+            "Could not get expected result in time.");
+    }
+
+    private <K, V> void verifyLegacyTimestampedValue(final K key,
+                                                     final V value,
+                                                     final long timestamp)
+        throws Exception {
 
         TestUtils.waitForCondition(
             () -> {
@@ -310,6 +492,48 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
+    private <K, V> void processKeyValueWithTimestampAndHeadersAndVerify(final K key,
+                                                                        final V value,
+                                                                        final long timestamp,
+                                                                        final long expectedTimestamp,
+                                                                        final Headers headers,
+                                                                        final Headers expectedHeaders)
+        throws Exception {
+
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class),
+            headers,
+            timestamp,
+            false);
+
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+
+                    if (store == null)
+                        return false;
+
+                    final ValueTimestampHeaders<V> result = store.get(key);
+                    return result != null
+                        && result.value().equals(value)
+                        && result.timestamp() == expectedTimestamp
+                        && result.headers().equals(expectedHeaders);
+                } catch (final Exception swallow) {
+                    swallow.printStackTrace();
+                    System.err.println(swallow.getMessage());
+                    return false;
+                }
+            },
+            60_000L,
+            "Could not get expected result in time.");
+    }
+
     private <K, V> void verifyLegacyValuesWithEmptyHeaders(final K key,
                                                            final V value,
                                                            final long timestamp) throws Exception {
@@ -335,6 +559,45 @@ public class HeadersStoreUpgradeIntegrationTest {
             },
             60_000L,
             "Could not get expected result in time.");
+    }
+
+    private <K, V> void verifyLegacyValuesWithEmptyHeaders(final K key,
+                                                           final V value) throws Exception {
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+
+                    if (store == null)
+                        return false;
+
+                    final ValueTimestampHeaders<V> result = store.get(key);
+                    return result != null
+                        && result.value().equals(value)
+                        && result.headers().toArray().length == 0;
+                } catch (final Exception swallow) {
+                    swallow.printStackTrace();
+                    System.err.println(swallow.getMessage());
+                    return false;
+                }
+            },
+            60_000L,
+            "Could not get expected result in time.");
+    }
+
+    private static class KeyValueProcessor implements Processor<String, String, Void, Void> {
+        private KeyValueStore<String, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<String, String> record) {
+            store.put(record.key(), record.value());
+        }
     }
 
     private static class TimestampedKeyValueProcessor implements Processor<String, String, Void, Void> {
@@ -519,10 +782,10 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     private void processWindowedKeyValueWithHeadersAndVerify(final String key,
-                                                              final String value,
-                                                              final long timestamp,
-                                                              final Headers headers,
-                                                              final Headers expectedHeaders) throws Exception {
+                                                             final String value,
+                                                             final long timestamp,
+                                                             final Headers headers,
+                                                             final Headers expectedHeaders) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputStream,
             singletonList(KeyValue.pair(key, value)),
@@ -571,8 +834,8 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     private void verifyWindowValueWithEmptyHeaders(final String key,
-                                                    final String value,
-                                                    final long timestamp) throws Exception {
+                                                   final String value,
+                                                   final long timestamp) throws Exception {
         TestUtils.waitForCondition(() -> {
             try {
                 final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
@@ -652,6 +915,155 @@ public class HeadersStoreUpgradeIntegrationTest {
                 windowStart);
         }
     }
+
+    @Test
+    public void shouldFailDowngradeFromTimestampedKeyValueStoreWithHeadersToPlainKeyValueStore() throws Exception {
+        final Properties props = props();
+        setupAndPopulateKeyValueStoreWithHeaders(props);
+        kafkaStreams = null;
+
+        // Attempt to downgrade to plain key-value store
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(KeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+
+        boolean exceptionThrown = false;
+        try {
+            kafkaStreams.start();
+        } catch (final Exception e) {
+            Throwable cause = e;
+            while (cause != null) {
+                if (cause instanceof ProcessorStateException &&
+                    cause.getMessage() != null &&
+                    cause.getMessage().contains("headers-aware") &&
+                    cause.getMessage().contains("Downgrade")) {
+                    exceptionThrown = true;
+                    break;
+                }
+                cause = cause.getCause();
+            }
+
+            if (!exceptionThrown) {
+                throw new AssertionError("Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+            }
+        } finally {
+            kafkaStreams.close(Duration.ofSeconds(30L));
+        }
+
+        if (!exceptionThrown) {
+            throw new AssertionError("Expected ProcessorStateException to be thrown when attempting to downgrade from headers-aware to plain key-value store");
+        }
+    }
+
+    @Test
+    public void shouldSuccessfullyDowngradeFromTimestampedKeyValueStoreWithHeadersToPlainKeyValueStoreAfterCleanup() throws Exception {
+        final Properties props = props();
+        setupAndPopulateKeyValueStoreWithHeaders(props);
+
+        kafkaStreams.cleanUp(); // Delete local state
+        kafkaStreams = null;
+
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(KeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+        kafkaStreams.start();
+
+        processKeyValueAndVerifyValue("key3", "value3");
+        processKeyValueAndVerifyValue("key4", "value4");
+
+        kafkaStreams.close();
+    }
+
+    @Test
+    public void shouldFailDowngradeFromTimestampedKeyValueStoreWithHeadersToTimestampedKeyValueStore() throws Exception {
+        final Properties props = props();
+        setupAndPopulateKeyValueStoreWithHeaders(props);
+        kafkaStreams = null;
+
+        // Attempt to downgrade to non-headers key-value store
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+
+        boolean exceptionThrown = false;
+        try {
+            kafkaStreams.start();
+        } catch (final Exception e) {
+            Throwable cause = e;
+            while (cause != null) {
+                if (cause instanceof ProcessorStateException &&
+                    cause.getMessage() != null &&
+                    cause.getMessage().contains("headers-aware") &&
+                    cause.getMessage().contains("Downgrade")) {
+                    exceptionThrown = true;
+                    break;
+                }
+                cause = cause.getCause();
+            }
+
+            if (!exceptionThrown) {
+                throw new AssertionError("Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+            }
+        } finally {
+            kafkaStreams.close(Duration.ofSeconds(30L));
+        }
+
+        if (!exceptionThrown) {
+            throw new AssertionError("Expected ProcessorStateException to be thrown when attempting to downgrade from headers-aware to non-headers key-value store");
+        }
+    }
+
+    @Test
+    public void shouldSuccessfullyDowngradeFromTimestampedKeyValueStoreWithHeadersToTimestampedKeyValueStoreAfterCleanup() throws Exception {
+        final Properties props = props();
+        setupAndPopulateKeyValueStoreWithHeaders(props);
+
+        kafkaStreams.cleanUp(); // Delete local state
+        kafkaStreams = null;
+
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+        kafkaStreams.start();
+
+        // verify legacy key, values
+        verifyLegacyTimestampedValue("key1", "value1", 11L);
+        verifyLegacyTimestampedValue("key2", "value2", 22L);
+
+        processKeyValueAndVerifyTimestampedValue("key3", "value3", 333L);
+        processKeyValueAndVerifyTimestampedValue("key4", "value4", 444L);
+
+        kafkaStreams.close();
+    }
+
 
     @Test
     public void shouldFailDowngradeFromTimestampedWindowStoreWithHeadersToTimestampedWindowStore() throws Exception {
@@ -820,5 +1232,27 @@ public class HeadersStoreUpgradeIntegrationTest {
             headers,
             timestamp,
             false);
+    }
+
+    private void setupAndPopulateKeyValueStoreWithHeaders(final Properties props) throws Exception {
+        final StreamsBuilder headersBuilder = new StreamsBuilder();
+        headersBuilder.addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(headersBuilder.build(), props);
+        kafkaStreams.start();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("source", "test".getBytes());
+
+        processKeyValueWithTimestampAndHeadersAndVerify("key1", "value1", 11L, headers, headers);
+        processKeyValueWithTimestampAndHeadersAndVerify("key2", "value2", 22L, headers, headers);
+
+        kafkaStreams.close();
     }
 }

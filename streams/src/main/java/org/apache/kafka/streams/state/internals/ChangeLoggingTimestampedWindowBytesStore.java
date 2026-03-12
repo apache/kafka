@@ -23,7 +23,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.timestamp;
 
-class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesStore {
+public class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesStore {
 
     ChangeLoggingTimestampedWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
                                              final boolean retainDuplicates) {

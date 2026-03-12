@@ -29,6 +29,7 @@ import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -664,6 +665,23 @@ public final class Stores {
                                                                               final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStoreWithHeaders}.
+     *
+     * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} than can build a {@link SessionStoreWithHeaders}
+     */
+    public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreBuilderWithHeaders(final SessionBytesStoreSupplier supplier,
+                                                                                                     final Serde<K> keySerde,
+                                                                                                     final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new SessionStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**

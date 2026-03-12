@@ -850,7 +850,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     case TransactionState.ONGOING | TransactionState.EMPTY | TransactionState.DEAD | TransactionState.PREPARE_EPOCH_FENCE =>
                       producerEpoch == txnMetadata.clientProducerEpoch
                     case TransactionState.PREPARE_COMMIT | TransactionState.PREPARE_ABORT =>
-                      false  // must not happen, as we already checked and returned concurrent transactions
+                      retryOnEpochBump
                     case TransactionState.COMPLETE_COMMIT | TransactionState.COMPLETE_ABORT =>
                       retryOnEpochBump || retryOnOverflow || producerEpoch == txnMetadata.producerEpoch
                   }
