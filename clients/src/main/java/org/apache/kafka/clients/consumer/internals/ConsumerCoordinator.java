@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -56,8 +57,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -1633,23 +1632,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private class ConsumerCoordinatorMetrics extends AbstractConsumerMetricsManager {
         private final Sensor commitSensor;
 
-        @SuppressWarnings({"this-escape"})
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            super(metrics, metricGrpPrefix + COORDINATOR_METRICS_SUFFIX);
+            this(new RecordingMetrics(metrics), metricGrpPrefix);
+        }
 
-            this.commitSensor = sensor("commit-latency");
-            this.commitSensor.add(metricName("commit-latency-avg",
+        private ConsumerCoordinatorMetrics(RecordingMetrics metrics, String metricGrpPrefix) {
+            super(metrics);
+            String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
+
+            this.commitSensor = recordingMetrics.sensor("commit-latency");
+            this.commitSensor.add(recordingMetrics.metricName("commit-latency-avg",
+                metricGrpName,
                 "The average time taken for a commit request"), new Avg());
-            this.commitSensor.add(metricName("commit-latency-max",
+            this.commitSensor.add(recordingMetrics.metricName("commit-latency-max",
+                metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(new Meter(new WindowedCount(),
-                metricName("commit-rate",
-                    String.format("The number of %s per second", "commit calls")),
-                metricName("commit-total",
-                    String.format("The total number of %s", "commit calls"))));
+            this.commitSensor.add(createMeter(metricGrpName, "commit", "commit calls"));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
-            addMetric(metricName("assigned-partitions",
+            recordingMetrics.addMetric(recordingMetrics.metricName("assigned-partitions",
+                metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
         }
     }

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
@@ -49,9 +50,14 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     private int assignmentId = 0;
     private Set<TopicPartition> assignedPartitions = Collections.emptySet();
 
-    @SuppressWarnings({"this-escape"})
+    @SuppressWarnings("this-escape")
     public FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
-        super(metrics, metricsRegistry.groupName());
+        this(new RecordingMetrics(metrics), metricsRegistry);
+    }
+
+    @SuppressWarnings("this-escape")
+    private FetchMetricsManager(RecordingMetrics metrics, FetchMetricsRegistry metricsRegistry) {
+        super(metrics);
         this.metricsRegistry = metricsRegistry;
 
         this.throttleTime = sensorBuilder("fetch-throttle-time")
@@ -88,7 +94,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
         fetchLatency.record(requestLatencyMs);
         if (!node.isEmpty()) {
             String nodeTimeName = "node-" + node + ".latency";
-            Sensor nodeRequestTime = getSensor(nodeTimeName);
+            Sensor nodeRequestTime = this.recordingMetrics.getSensor(nodeTimeName);
             if (nodeRequestTime != null)
                 nodeRequestTime.record(requestLatencyMs);
         }
@@ -170,13 +176,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
             for (TopicPartition tp : this.assignedPartitions) {
                 if (!newAssignedPartitions.contains(tp)) {
-                    removeSensor(partitionRecordsLagMetricName(tp));
-                    removeSensor(partitionRecordsLeadMetricName(tp));
-                    removeMetric(partitionPreferredReadReplicaMetricName(tp));
+                    recordingMetrics.removeSensor(partitionRecordsLagMetricName(tp));
+                    recordingMetrics.removeSensor(partitionRecordsLeadMetricName(tp));
+                    recordingMetrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
                     // Remove deprecated metrics.
-                    removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
-                    removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
-                    removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
+                    recordingMetrics.removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
+                    recordingMetrics.removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
+                    recordingMetrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
                 }
             }
 
@@ -185,7 +191,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
                     maybeRecordDeprecatedPreferredReadReplica(tp, subscription);
 
                     MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
-                    addMetricIfAbsent(
+                    recordingMetrics.addMetricIfAbsent(
                         metricName,
                         null,
                         (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
@@ -251,7 +257,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     private void maybeRecordDeprecatedPreferredReadReplica(TopicPartition tp, SubscriptionState subscription) {
         if (shouldReportDeprecatedMetric(tp.topic())) {
             MetricName metricName = deprecatedPartitionPreferredReadReplicaMetricName(tp);
-            addMetricIfAbsent(
+            recordingMetrics.addMetricIfAbsent(
                 metricName,
                 null,
                 (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
@@ -285,13 +291,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
     private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition())));
-        return metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        return this.recordingMetrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
     @Deprecated
     private MetricName deprecatedPartitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = topicPartitionTags(tp);
-        return metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        return this.recordingMetrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
     @Deprecated

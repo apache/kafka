@@ -28,15 +28,20 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 
 public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
+    private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
-    @SuppressWarnings({"this-escape"})
     public KafkaShareConsumerMetrics(Metrics metrics) {
-        super(metrics, CONSUMER_SHARE_METRIC_GROUP);
+        this(new RecordingMetrics(metrics));
+    }
+
+    private KafkaShareConsumerMetrics(RecordingMetrics metrics) {
+        super(metrics);
+        final String metricGroupName = CONSUMER_SHARE_METRIC_GROUP;
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.
@@ -44,20 +49,23 @@ public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
             else
                 return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
         };
-        MetricName lastPollMetricName = metricName("last-poll-seconds-ago",
-            "The number of seconds since the last poll() invocation.");
-        addMetric(lastPollMetricName, lastPoll);
+        this.lastPollMetricName = metrics.metricName("last-poll-seconds-ago",
+                metricGroupName, "The number of seconds since the last poll() invocation.");
+        metrics.addMetric(lastPollMetricName, lastPoll);
 
-        this.timeBetweenPollSensor = sensor("time-between-poll");
-        this.timeBetweenPollSensor.add(metricName("time-between-poll-avg",
+        this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
+        this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
+                        metricGroupName,
                         "The average delay between invocations of poll() in milliseconds."),
                 new Avg());
-        this.timeBetweenPollSensor.add(metricName("time-between-poll-max",
+        this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-max",
+                        metricGroupName,
                         "The max delay between invocations of poll() in milliseconds."),
                 new Max());
 
-        this.pollIdleSensor = sensor("poll-idle-ratio-avg");
-        this.pollIdleSensor.add(metricName("poll-idle-ratio-avg",
+        this.pollIdleSensor = metrics.sensor("poll-idle-ratio-avg");
+        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
+                        metricGroupName,
                         "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
                 new Avg());
     }

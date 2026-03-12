@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -29,9 +30,15 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor sentAcknowledgements;
     private final Sensor failedAcknowledgements;
 
+
     @SuppressWarnings({"this-escape"})
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
-        super(metrics, metricsRegistry.groupName());
+        this(new RecordingMetrics(metrics), metricsRegistry);
+    }
+
+    @SuppressWarnings({"this-escape"})
+    private ShareFetchMetricsManager(RecordingMetrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
+        super(metrics);
         this.bytesFetched = sensorBuilder("bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
@@ -71,7 +78,7 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
         fetchLatency.record(requestLatencyMs);
         if (!node.isEmpty()) {
             String nodeTimeName = "node-" + node + ".latency";
-            Sensor nodeRequestTime = getSensor(nodeTimeName);
+            Sensor nodeRequestTime = recordingMetrics.getSensor(nodeTimeName);
             if (nodeRequestTime != null)
                 nodeRequestTime.record(requestLatencyMs);
         }

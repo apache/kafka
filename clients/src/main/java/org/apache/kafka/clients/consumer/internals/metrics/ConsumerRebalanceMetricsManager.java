@@ -52,36 +52,39 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
-    @SuppressWarnings({"this-escape"})
     public ConsumerRebalanceMetricsManager(Metrics metrics, SubscriptionState subscriptions) {
+        this(new RecordingMetrics(metrics), subscriptions);
+    }
+
+    private ConsumerRebalanceMetricsManager(RecordingMetrics metrics, SubscriptionState subscriptions) {
         super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
-        rebalanceLatencyAvg = metricName("rebalance-latency-avg",
+        rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
                 "The average time in ms taken for a group to complete a rebalance");
-        rebalanceLatencyMax = metricName("rebalance-latency-max",
+        rebalanceLatencyMax = createMetric(metrics, "rebalance-latency-max",
                 "The max time in ms taken for a group to complete a rebalance");
-        rebalanceLatencyTotal = metricName("rebalance-latency-total",
+        rebalanceLatencyTotal = createMetric(metrics, "rebalance-latency-total",
                 "The total number of milliseconds spent in rebalances");
-        rebalanceTotal = metricName("rebalance-total",
+        rebalanceTotal = createMetric(metrics, "rebalance-total",
                 "The total number of rebalance events");
-        rebalanceRatePerHour = metricName("rebalance-rate-per-hour",
+        rebalanceRatePerHour = createMetric(metrics, "rebalance-rate-per-hour",
                 "The number of rebalance events per hour");
-        failedRebalanceTotal = metricName("failed-rebalance-total",
+        failedRebalanceTotal = createMetric(metrics, "failed-rebalance-total",
                 "The total number of failed rebalance events");
-        failedRebalanceRate = metricName("failed-rebalance-rate-per-hour",
+        failedRebalanceRate = createMetric(metrics, "failed-rebalance-rate-per-hour",
                 "The number of failed rebalance events per hour");
-        assignedPartitionsCount = metricName("assigned-partitions",
+        assignedPartitionsCount = createMetric(metrics, "assigned-partitions",
                 "The number of partitions currently assigned to this consumer");
         registerAssignedPartitionCount(subscriptions);
 
-        successfulRebalanceSensor = sensor("rebalance-latency");
+        successfulRebalanceSensor = metrics.sensor("rebalance-latency");
         successfulRebalanceSensor.add(rebalanceLatencyAvg, new Avg());
         successfulRebalanceSensor.add(rebalanceLatencyMax, new Max());
         successfulRebalanceSensor.add(rebalanceLatencyTotal, new CumulativeSum());
         successfulRebalanceSensor.add(rebalanceTotal, new CumulativeCount());
         successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
-        failedRebalanceSensor = sensor("failed-rebalance");
+        failedRebalanceSensor = metrics.sensor("failed-rebalance");
         failedRebalanceSensor.add(failedRebalanceTotal, new CumulativeSum());
         failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
@@ -91,10 +94,10 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
             else
                 return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
         };
-        lastRebalanceSecondsAgo = metricName(
+        lastRebalanceSecondsAgo = createMetric(metrics,
                 "last-rebalance-seconds-ago",
                 "The number of seconds since the last rebalance event");
-        addMetric(lastRebalanceSecondsAgo, lastRebalance);
+        metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
     }
 
     public void recordRebalanceStarted(long nowMs) {
@@ -124,6 +127,6 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
      */
     private void registerAssignedPartitionCount(SubscriptionState subscriptions) {
         Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
-        addMetric(assignedPartitionsCount, numParts);
+        recordingMetrics.addMetric(assignedPartitionsCount, numParts);
     }
 }

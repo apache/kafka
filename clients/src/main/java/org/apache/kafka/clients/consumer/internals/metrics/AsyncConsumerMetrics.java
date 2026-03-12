@@ -45,136 +45,154 @@ public class AsyncConsumerMetrics extends AbstractConsumerMetricsManager {
     private final Sensor unsentRequestsQueueSizeSensor;
     private final Sensor unsentRequestsQueueTimeSensor;
 
-    @SuppressWarnings({"this-escape"})
     public AsyncConsumerMetrics(Metrics metrics, String groupName) {
-        super(metrics, groupName);
+        this(new RecordingMetrics(metrics), groupName);
+    }
 
-        this.timeBetweenNetworkThreadPollSensor = sensor(TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME);
+    private AsyncConsumerMetrics(RecordingMetrics metrics, String groupName) {
+        super(metrics);
+        this.timeBetweenNetworkThreadPollSensor = metrics.sensor(TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME);
         this.timeBetweenNetworkThreadPollSensor.add(
-            metricName(
+            metrics.metricName(
                 "time-between-network-thread-poll-avg",
+                groupName,
                 "The average time taken, in milliseconds, between each poll in the network thread."
             ),
             new Avg()
         );
         this.timeBetweenNetworkThreadPollSensor.add(
-            metricName(
+            metrics.metricName(
                 "time-between-network-thread-poll-max",
+                groupName,
                 "The maximum time taken, in milliseconds, between each poll in the network thread."
             ),
             new Max()
         );
 
-        this.applicationEventQueueSizeSensor = sensor(APPLICATION_EVENT_QUEUE_SIZE_SENSOR_NAME);
+        this.applicationEventQueueSizeSensor = metrics.sensor(APPLICATION_EVENT_QUEUE_SIZE_SENSOR_NAME);
         this.applicationEventQueueSizeSensor.add(
-            metricName(
+            metrics.metricName(
                 APPLICATION_EVENT_QUEUE_SIZE_SENSOR_NAME,
+                groupName,
                 "The current number of events in the queue to send from the application thread to the background thread."
             ),
             new Value()
         );
 
-        this.applicationEventQueueTimeSensor = sensor(APPLICATION_EVENT_QUEUE_TIME_SENSOR_NAME);
+        this.applicationEventQueueTimeSensor = metrics.sensor(APPLICATION_EVENT_QUEUE_TIME_SENSOR_NAME);
         this.applicationEventQueueTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "application-event-queue-time-avg",
+                groupName,
                 "The average time, in milliseconds, that application events are taking to be dequeued."
             ),
             new Avg()
         );
         this.applicationEventQueueTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "application-event-queue-time-max",
+                groupName,
                 "The maximum time, in milliseconds, that an application event took to be dequeued."
             ),
             new Max()
         );
 
-        this.applicationEventQueueProcessingTimeSensor = sensor(APPLICATION_EVENT_QUEUE_PROCESSING_TIME_SENSOR_NAME);
+        this.applicationEventQueueProcessingTimeSensor = metrics.sensor(APPLICATION_EVENT_QUEUE_PROCESSING_TIME_SENSOR_NAME);
         this.applicationEventQueueProcessingTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "application-event-queue-processing-time-avg",
+                groupName,
                 "The average time, in milliseconds, that the background thread takes to process all available application events."
             ),
             new Avg()
         );
         this.applicationEventQueueProcessingTimeSensor.add(
-            metricName("application-event-queue-processing-time-max",
+            metrics.metricName("application-event-queue-processing-time-max",
+                groupName,
                 "The maximum time, in milliseconds, that the background thread took to process all available application events."
             ),
             new Max()
         );
 
-        this.applicationEventExpiredSizeSensor = sensor(APPLICATION_EVENT_EXPIRED_SIZE_SENSOR_NAME);
+        this.applicationEventExpiredSizeSensor = metrics.sensor(APPLICATION_EVENT_EXPIRED_SIZE_SENSOR_NAME);
         this.applicationEventExpiredSizeSensor.add(
-            metricName(
+            metrics.metricName(
                 APPLICATION_EVENT_EXPIRED_SIZE_SENSOR_NAME,
+                groupName,
                 "The current number of expired application events."
             ),
             new Value()
         );
 
-        this.unsentRequestsQueueSizeSensor = sensor(UNSENT_REQUESTS_QUEUE_SIZE_SENSOR_NAME);
+        this.unsentRequestsQueueSizeSensor = metrics.sensor(UNSENT_REQUESTS_QUEUE_SIZE_SENSOR_NAME);
         this.unsentRequestsQueueSizeSensor.add(
-            metricName(
+            metrics.metricName(
                 UNSENT_REQUESTS_QUEUE_SIZE_SENSOR_NAME,
+                groupName,
                 "The current number of unsent requests in the background thread."
             ),
             new Value()
         );
 
-        this.unsentRequestsQueueTimeSensor = sensor(UNSENT_REQUESTS_QUEUE_TIME_SENSOR_NAME);
+        this.unsentRequestsQueueTimeSensor = metrics.sensor(UNSENT_REQUESTS_QUEUE_TIME_SENSOR_NAME);
         this.unsentRequestsQueueTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "unsent-requests-queue-time-avg",
+                groupName,
                 "The average time, in milliseconds, that requests are taking to be sent in the background thread."
             ),
             new Avg()
         );
         this.unsentRequestsQueueTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "unsent-requests-queue-time-max",
+                groupName,
                 "The maximum time, in milliseconds, that a request remained unsent in the background thread."
             ),
             new Max()
         );
 
-        this.backgroundEventQueueSizeSensor = sensor(BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME);
+        this.backgroundEventQueueSizeSensor = metrics.sensor(BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME);
         this.backgroundEventQueueSizeSensor.add(
-            metricName(
+            metrics.metricName(
                 BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME,
+                groupName,
                 "The current number of events in the queue to send from the background thread to the application thread."
             ),
             new Value()
         );
 
-        this.backgroundEventQueueTimeSensor = sensor(BACKGROUND_EVENT_QUEUE_TIME_SENSOR_NAME);
+        this.backgroundEventQueueTimeSensor = metrics.sensor(BACKGROUND_EVENT_QUEUE_TIME_SENSOR_NAME);
         this.backgroundEventQueueTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "background-event-queue-time-avg",
+                groupName,
                 "The average time, in milliseconds, that background events are taking to be dequeued."
             ),
             new Avg()
         );
         this.backgroundEventQueueTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "background-event-queue-time-max",
+                groupName,
                 "The maximum time, in milliseconds, that background events are taking to be dequeued."
             ),
             new Max()
         );
 
-        this.backgroundEventQueueProcessingTimeSensor = sensor(BACKGROUND_EVENT_QUEUE_PROCESSING_TIME_SENSOR_NAME);
+        this.backgroundEventQueueProcessingTimeSensor = metrics.sensor(BACKGROUND_EVENT_QUEUE_PROCESSING_TIME_SENSOR_NAME);
         this.backgroundEventQueueProcessingTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "background-event-queue-processing-time-avg",
+                groupName,
                 "The average time, in milliseconds, that the consumer took to process all available background events."
             ),
             new Avg()
         );
         this.backgroundEventQueueProcessingTimeSensor.add(
-            metricName(
+            metrics.metricName(
                 "background-event-queue-processing-time-max",
+                groupName,
                 "The maximum time, in milliseconds, that the consumer took to process all available background events."
             ),
             new Max()

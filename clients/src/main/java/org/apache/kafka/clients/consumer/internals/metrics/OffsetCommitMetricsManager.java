@@ -34,19 +34,27 @@ public class OffsetCommitMetricsManager extends AbstractConsumerMetricsManager {
     final MetricName commitTotal;
     private final Sensor commitSensor;
 
-    @SuppressWarnings({"this-escape"})
     public OffsetCommitMetricsManager(Metrics metrics) {
-        super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
-        commitSensor = sensor("commit-latency");
-        commitLatencyAvg = metricName("commit-latency-avg",
+        this(new RecordingMetrics(metrics));
+    }
+
+    private OffsetCommitMetricsManager(RecordingMetrics metrics) {
+        super(metrics);
+        final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+        commitSensor = metrics.sensor("commit-latency");
+        commitLatencyAvg = metrics.metricName("commit-latency-avg",
+            metricGroupName,
             "The average time taken for a commit request");
         commitSensor.add(commitLatencyAvg, new Avg());
-        commitLatencyMax = metricName("commit-latency-max",
+        commitLatencyMax = metrics.metricName("commit-latency-max",
+            metricGroupName,
             "The max time taken for a commit request");
         commitSensor.add(commitLatencyMax, new Max());
-        commitRate = metricName("commit-rate",
+        commitRate = metrics.metricName("commit-rate",
+            metricGroupName,
             "The number of commit calls per second");
-        commitTotal = metricName("commit-total",
+        commitTotal = metrics.metricName("commit-total",
+            metricGroupName,
             "The total number of commit calls");
         commitSensor.add(new Meter(new WindowedCount(),
             commitRate,
