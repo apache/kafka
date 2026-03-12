@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
+import java.util.Map;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
@@ -216,7 +217,7 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     }
 
     @Override
-    public void commit(final java.util.Map<TopicPartition, Long> changelogOffsets) {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         store.commit(changelogOffsets);
     }
 
