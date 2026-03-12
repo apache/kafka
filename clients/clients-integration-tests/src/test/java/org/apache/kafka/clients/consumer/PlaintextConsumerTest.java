@@ -962,11 +962,14 @@ public class PlaintextConsumerTest {
 
             // Remove topic from subscription
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)));
+            // Check the metrics are cleaned up.
+            // The cleanup is done when a new fetch request is generated, so poll until it happens.
+            var lagMetricName1 = new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1);
+            var lagMetricName2 = new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2);
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return consumer.metrics().get(lagMetricName1) == null && consumer.metrics().get(lagMetricName2) == null;
+            }, "Metrics for removed partitions should be cleaned up");
         }
     }
 
