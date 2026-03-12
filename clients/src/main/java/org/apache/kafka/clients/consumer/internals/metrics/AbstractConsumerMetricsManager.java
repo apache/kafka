@@ -29,30 +29,30 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
 
-    protected final RecordingMetrics recordingMetrics;
+    protected final RecordingMetrics metrics;
 
-    protected AbstractConsumerMetricsManager(RecordingMetrics recordingMetrics) {
-        this.recordingMetrics = Objects.requireNonNull(recordingMetrics);
+    protected AbstractConsumerMetricsManager(RecordingMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics);
     }
 
     protected final Meter createMeter(String groupName, String baseName, String descriptiveName) {
         return new Meter(new WindowedCount(),
-            recordingMetrics.metricName(baseName + "-rate", groupName,
+            metrics.metricName(baseName + "-rate", groupName,
                 String.format("The number of %s per second", descriptiveName)),
-            recordingMetrics.metricName(baseName + "-total", groupName,
+            metrics.metricName(baseName + "-total", groupName,
                 String.format("The total number of %s", descriptiveName)));
     }
 
     protected SensorBuilder sensorBuilder(String name) {
-        return new SensorBuilder(recordingMetrics, name);
+        return new SensorBuilder(metrics, name);
     }
 
     protected SensorBuilder sensorBuilder(String name, Supplier<Map<String, String>> tagsSupplier) {
-        return new SensorBuilder(recordingMetrics, name, tagsSupplier);
+        return new SensorBuilder(metrics, name, tagsSupplier);
     }
 
     @Override
     public final void close() {
-        recordingMetrics.close();
+        metrics.close();
     }
 }

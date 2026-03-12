@@ -94,7 +94,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
         fetchLatency.record(requestLatencyMs);
         if (!node.isEmpty()) {
             String nodeTimeName = "node-" + node + ".latency";
-            Sensor nodeRequestTime = this.recordingMetrics.getSensor(nodeTimeName);
+            Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
             if (nodeRequestTime != null)
                 nodeRequestTime.record(requestLatencyMs);
         }
@@ -176,13 +176,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
             for (TopicPartition tp : this.assignedPartitions) {
                 if (!newAssignedPartitions.contains(tp)) {
-                    recordingMetrics.removeSensor(partitionRecordsLagMetricName(tp));
-                    recordingMetrics.removeSensor(partitionRecordsLeadMetricName(tp));
-                    recordingMetrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
+                    metrics.removeSensor(partitionRecordsLagMetricName(tp));
+                    metrics.removeSensor(partitionRecordsLeadMetricName(tp));
+                    metrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
                     // Remove deprecated metrics.
-                    recordingMetrics.removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
-                    recordingMetrics.removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
-                    recordingMetrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
+                    metrics.removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
+                    metrics.removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
+                    metrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
                 }
             }
 
@@ -191,7 +191,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
                     maybeRecordDeprecatedPreferredReadReplica(tp, subscription);
 
                     MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
-                    recordingMetrics.addMetricIfAbsent(
+                    metrics.addMetricIfAbsent(
                         metricName,
                         null,
                         (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
@@ -257,7 +257,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     private void maybeRecordDeprecatedPreferredReadReplica(TopicPartition tp, SubscriptionState subscription) {
         if (shouldReportDeprecatedMetric(tp.topic())) {
             MetricName metricName = deprecatedPartitionPreferredReadReplicaMetricName(tp);
-            recordingMetrics.addMetricIfAbsent(
+            metrics.addMetricIfAbsent(
                 metricName,
                 null,
                 (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
@@ -291,13 +291,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
     private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition())));
-        return this.recordingMetrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
     @Deprecated
     private MetricName deprecatedPartitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = topicPartitionTags(tp);
-        return this.recordingMetrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
     @Deprecated

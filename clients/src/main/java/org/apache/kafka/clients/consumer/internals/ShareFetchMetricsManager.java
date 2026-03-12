@@ -78,7 +78,7 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
         fetchLatency.record(requestLatencyMs);
         if (!node.isEmpty()) {
             String nodeTimeName = "node-" + node + ".latency";
-            Sensor nodeRequestTime = recordingMetrics.getSensor(nodeTimeName);
+            Sensor nodeRequestTime = metrics.getSensor(nodeTimeName);
             if (nodeRequestTime != null)
                 nodeRequestTime.record(requestLatencyMs);
         }

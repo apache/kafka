@@ -127,6 +127,6 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
      */
     private void registerAssignedPartitionCount(SubscriptionState subscriptions) {
         Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
-        recordingMetrics.addMetric(assignedPartitionsCount, numParts);
+        metrics.addMetric(assignedPartitionsCount, numParts);
     }
 }
