@@ -1097,14 +1097,14 @@ public class ConsumerGroupTest {
 
     private static Stream<Arguments> offsetCommitVersionsAndTransactionalParams() {
         Stream.Builder<Arguments> builder = Stream.builder();
-        // Non-transactional: use OFFSET_COMMIT versions
+
         for (short version = ApiKeys.OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.OFFSET_COMMIT.latestVersion(true); version++) {
             builder.add(Arguments.of(false, version));
         }
-        // Transactional: use TXN_OFFSET_COMMIT versions
         for (short version = ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true); version++) {
             builder.add(Arguments.of(true, version));
         }
+
         return builder.build();
     }
 

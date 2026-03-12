@@ -629,9 +629,9 @@ public class OffsetMetadataManager {
             // Resolve topic ID if it's ZERO_UUID
             final Uuid resolvedTopicId = topic.topicId().equals(Uuid.ZERO_UUID)
                 ? metadataImage
-                .topicMetadata(topic.name())
-                .map(CoordinatorMetadataImage.TopicMetadata::id)
-                .orElse(Uuid.ZERO_UUID)
+                    .topicMetadata(topic.name())
+                    .map(CoordinatorMetadataImage.TopicMetadata::id)
+                    .orElse(Uuid.ZERO_UUID)
                 : topic.topicId();
 
             final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
