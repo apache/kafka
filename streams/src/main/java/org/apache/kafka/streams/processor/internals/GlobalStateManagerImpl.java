@@ -36,6 +36,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -44,13 +45,12 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 
 import org.slf4j.Logger;
 
 import java.io.File;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,7 +65,6 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
-import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
@@ -102,19 +101,20 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     private final Time time;
     private final Logger log;
+    private final String logPrefix;
+    private final StateDirectory stateDirectory;
     private final File baseDir;
     private final long taskTimeoutMs;
     private final ProcessorTopology topology;
-    private final OffsetCheckpoint checkpointFile;
     private final Duration pollMsPlusRequestTimeout;
     private final Consumer<byte[], byte[]> globalConsumer;
     private final StateRestoreListener stateRestoreListener;
-    private final Map<TopicPartition, Long> checkpointFileCache;
+    private final Map<TopicPartition, Long> currentOffsets;
     private final Map<String, String> storeToChangelogTopic;
     private final Set<String> globalStoreNames = new HashSet<>();
-    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private final Map<String, StateStoreMetadata> storeMetadata = new HashMap<>();
+    private final boolean eosEnabled;
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
@@ -129,20 +129,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StreamsConfig config) {
         this.time = time;
         this.topology = topology;
+        this.stateDirectory = stateDirectory;
         baseDir = stateDirectory.globalStateDir();
         storeToChangelogTopic = topology.storeToChangelogTopic();
-        checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
-        checkpointFileCache = new HashMap<>();
+        currentOffsets = new HashMap<>();
 
         // Find non persistent store's topics
         for (final StateStore store : topology.globalStateStores()) {
             globalStoreNames.add(store.name());
-            if (!store.persistent()) {
-                globalNonPersistentStoresTopics.add(changelogFor(store.name()));
-            }
         }
 
         log = logContext.logger(GlobalStateManagerImpl.class);
+        logPrefix = logContext.logPrefix();
         this.globalConsumer = globalConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
@@ -160,6 +158,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         @SuppressWarnings("deprecation")
         final boolean globalEnabled = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
         processingExceptionHandler = globalEnabled ? config.processingExceptionHandler() : null;
+        eosEnabled = StreamsConfigUtils.eosEnabled(config);
     }
 
     @Override
@@ -169,41 +168,40 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public Set<String> initialize() {
-        try {
-            checkpointFileCache.putAll(checkpointFile.read());
-        } catch (final IOException e) {
-            throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
-        }
-
         droppedRecordsSensor = droppedRecordsSensor(
             Thread.currentThread().getName(),
             globalProcessorContext.taskId().toString(),
             globalProcessorContext.metrics()
         );
 
-        final Set<String> changelogTopics = new HashSet<>();
+        final Map<TopicPartition, StateStore> wrappedStores = new HashMap<>();
         for (final StateStore stateStore : topology.globalStateStores()) {
-            final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
-            changelogTopics.add(sourceTopic);
-            stateStore.init(globalProcessorContext, stateStore);
+            final List<TopicPartition> storePartitions = topicPartitionsForStore(stateStore);
+            final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
+                    stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
+            maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
+
+            for (final TopicPartition storePartition : storePartitions) {
+                wrappedStores.put(storePartition, maybeWrappedStore);
+            }
         }
 
-        // make sure each topic-partition from checkpointFileCache is associated with a global state store
-        checkpointFileCache.keySet().forEach(tp -> {
-            if (!changelogTopics.contains(tp.topic())) {
-                log.error(
-                    "Encountered a topic-partition in the global checkpoint file not associated with any global" +
-                        " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
-                        " an application reset and state store directory cleanup will be required.",
-                    tp.topic(),
-                    checkpointFile
-                );
-                throw new StreamsException("Encountered a topic-partition not associated with any global state store");
-            }
-        });
+        // migrate offsets from legacy checkpoint file into the stores
+        LegacyCheckpointingStateStore.migrateLegacyOffsets(logPrefix, stateDirectory, null, wrappedStores);
 
-        // restore or reprocess each registered store using the now-populated currentOffsets
         for (final StateStoreMetadata metadata : storeMetadata.values()) {
+            // load the committed offsets from the store
+            final StateStore store = metadata.stateStore;
+            if (store.persistent()) {
+                for (final TopicPartition partition : metadata.changelogPartitions) {
+                    final Long offset = store.committedOffset(partition);
+                    if (offset != null) {
+                        currentOffsets.put(partition, offset);
+                    }
+                }
+            }
+
+            // restore or reprocess each registered store using the now-populated currentOffsets
             try {
                 if (metadata.reprocessFactory.isPresent()) {
                     reprocessState(metadata);
@@ -219,7 +217,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     public StateStore globalStore(final String name) {
-        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
+        return LegacyCheckpointingStateStore.maybeUnwrapStore(globalStores.getOrDefault(name, Optional.empty()).orElse(null));
     }
 
     @Override
@@ -267,9 +265,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
 
         final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
-            .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
+                .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
         storeMetadata.put(store.name(), new StateStoreMetadata(
-            store, topicPartitions, reprocessFactory, stateRestoreCallback, converterForStore(store), highWatermarks));
+                store, topicPartitions, reprocessFactory, stateRestoreCallback, converterForStore(store), highWatermarks));
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -310,7 +308,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
             globalConsumer.assign(Collections.singletonList(topicPartition));
             long offset;
-            final Long checkpoint = checkpointFileCache.get(topicPartition);
+            final Long checkpoint = currentOffsets.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
                 offset = checkpoint;
@@ -441,7 +439,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 stateRestoreListener.onBatchRestored(topicPartition, storeMetadata.stateStore.name(), offset, batchRestoreCount);
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeMetadata.stateStore.name(), restoreCount);
-            checkpointFileCache.put(topicPartition, offset);
+            currentOffsets.put(topicPartition, offset);
 
         }
     }
@@ -452,7 +450,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
             globalConsumer.assign(Collections.singletonList(topicPartition));
             long offset;
-            final Long checkpoint = checkpointFileCache.get(topicPartition);
+            final Long checkpoint = currentOffsets.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
                 offset = checkpoint;
@@ -497,7 +495,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 restoreCount += restoreRecords.size();
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeMetadata.stateStore.name(), restoreCount);
-            checkpointFileCache.put(topicPartition, offset);
+            currentOffsets.put(topicPartition, offset);
         }
     }
 
@@ -561,7 +559,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 final StateStore store = entry.getValue().get();
                 try {
                     log.trace("Committing global store={}", store.name());
-                    store.commit(Map.of());
+                    // construct per-store Map of offsets to commit
+                    final List<TopicPartition> storePartitions = storeMetadata.get(store.name()).changelogPartitions;
+                    final Map<TopicPartition, Long> storeOffsets = new HashMap<>(storePartitions.size());
+
+                    // only add offsets for persistent stores
+                    if (store.persistent()) {
+                        for (final TopicPartition storePartition : storePartitions) {
+                            storeOffsets.put(storePartition, currentOffsets.get(storePartition));
+                        }
+                    }
+                    store.commit(storeOffsets);
                 } catch (final RuntimeException e) {
                     throw new ProcessorStateException(
                         String.format("Failed to commit global state store %s", store.name()),
@@ -572,6 +580,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
+    }
+
+    @Override
+    public void checkpoint() {
     }
 
     @Override
@@ -606,28 +618,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void updateChangelogOffsets(final Map<TopicPartition, Long> offsets) {
-        checkpointFileCache.putAll(offsets);
-    }
-
-    @Override
-    public void checkpoint() {
-        final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
-
-        // Skip non persistent store
-        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointFileCache.entrySet()) {
-            final String topic = topicPartitionOffset.getKey().topic();
-            if (!globalNonPersistentStoresTopics.contains(topic)) {
-                filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
-            }
-        }
-
-        try {
-            checkpointFile.write(filteredOffsets);
-        } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {} for global stores." +
-                " This may occur if OS cleaned the state.dir in case when it is located in the (default) ${java.io.tmpdir}/kafka-streams directory." +
-                " Changing the location of state.dir may resolve the problem", checkpointFile, e);
-        }
+        currentOffsets.putAll(offsets);
     }
 
     @Override
@@ -637,7 +628,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
-        return Collections.unmodifiableMap(checkpointFileCache);
+        return Collections.unmodifiableMap(currentOffsets);
     }
 
     public final String changelogFor(final String storeName) {
