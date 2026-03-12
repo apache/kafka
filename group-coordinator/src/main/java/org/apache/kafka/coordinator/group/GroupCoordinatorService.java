@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -79,6 +80,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
+import java.util.stream.Collectors;
 
 /**
  * The group coordinator service.
@@ -302,7 +304,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return responseFuture;
         }
 
-        runtime.scheduleWriteOperation("generic-group-join",
+        runtime.scheduleWriteOperation(
+            "generic-group-join",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
@@ -341,7 +344,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
 
-        runtime.scheduleWriteOperation("generic-group-sync",
+        runtime.scheduleWriteOperation(
+            "generic-group-sync",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
@@ -411,9 +415,37 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new LeaveGroupResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "generic-group-leave",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.genericGroupLeave(context, request)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("LeaveGroup request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+
+            if (exception instanceof UnknownMemberIdException) {
+                // Group was not found.
+                List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
+                    .map(member -> new LeaveGroupResponseData.MemberResponse()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId())
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
+                    .collect(Collectors.toList());
+
+                return new LeaveGroupResponseData()
+                    .setMembers(memberResponses);
+            }
+
+            return new LeaveGroupResponseData()
+                .setErrorCode(Errors.forException(exception).code());
+        });
     }
 
     /**

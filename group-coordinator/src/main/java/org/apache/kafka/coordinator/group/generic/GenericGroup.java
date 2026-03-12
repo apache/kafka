@@ -692,10 +692,10 @@ public class GenericGroup implements Group {
     }
 
     /**
-     * @return all static members in the group.
+     * @return the ids of all static members in the group.
      */
     public Set<String> allStaticMemberIds() {
-        return staticMembers.keySet();
+        return new HashSet<>(staticMembers.values());
     }
 
     // For testing only.
