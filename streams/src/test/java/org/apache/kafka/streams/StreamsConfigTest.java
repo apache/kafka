@@ -1245,7 +1245,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldThrowExceptionWhenClientTagKeyIsEmpty() {
-        props.put(StreamsConfig.clientTagPrefix(" ") , "tagValue");
+        props.put(StreamsConfig.clientTagPrefix(" "), "tagValue");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
             "Invalid config `client.tag.` (missing client tag key).",
