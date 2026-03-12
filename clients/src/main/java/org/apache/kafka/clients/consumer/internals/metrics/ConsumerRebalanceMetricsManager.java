@@ -53,10 +53,10 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     private long lastRebalanceStartMs = -1L;
 
     public ConsumerRebalanceMetricsManager(Metrics metrics, SubscriptionState subscriptions) {
-        this(new RecordingMetrics(metrics), subscriptions);
+        this(new MetricsLedger(metrics), subscriptions);
     }
 
-    private ConsumerRebalanceMetricsManager(RecordingMetrics metrics, SubscriptionState subscriptions) {
+    private ConsumerRebalanceMetricsManager(MetricsLedger metrics, SubscriptionState subscriptions) {
         super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
         rebalanceLatencyAvg = createMetric("rebalance-latency-avg",

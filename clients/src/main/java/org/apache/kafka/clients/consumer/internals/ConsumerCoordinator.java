@@ -30,8 +30,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
-import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -1632,10 +1632,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Sensor commitSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this(new RecordingMetrics(metrics), metricGrpPrefix);
+            this(new MetricsLedger(metrics), metricGrpPrefix);
         }
 
-        private ConsumerCoordinatorMetrics(RecordingMetrics metrics, String metricGrpPrefix) {
+        private ConsumerCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
             super(metrics);
             String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
 

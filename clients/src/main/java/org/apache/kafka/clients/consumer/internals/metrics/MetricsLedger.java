@@ -29,13 +29,24 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class RecordingMetrics implements AutoCloseable {
+/**
+ * {@code MetricsLedger} records the {@link MetricName}s and {@link Sensor}s that are created
+ * using the internal {@link Metrics} instance in a ledger. Then, in {@link #close()}, the
+ * ledger is reviewed and each of the {@link MetricName}s and {@link Sensor}s are removed from
+ * the underlying {@link Metrics} instance.
+ * 
+ * <p/>
+ *
+ * Because {@link Metrics} is a <code>final</code> class, we cannot extend it in a delegation
+ * pattern. Instead, we mimic the subset of APIs that are needed by the callers.
+ */
+public class MetricsLedger implements AutoCloseable {
 
     private final Metrics metrics;
     private final Set<MetricName> metricNames;
     private final Set<Sensor> sensors;
 
-    public RecordingMetrics(Metrics metrics) {
+    public MetricsLedger(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
         this.metricNames = new HashSet<>();
         this.sensors = new HashSet<>();

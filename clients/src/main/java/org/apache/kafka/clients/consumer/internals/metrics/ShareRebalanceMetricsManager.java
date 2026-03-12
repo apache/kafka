@@ -36,10 +36,10 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
     private long lastRebalanceStartMs = -1L;
 
     public ShareRebalanceMetricsManager(Metrics metrics) {
-        this(new RecordingMetrics(metrics));
+        this(new MetricsLedger(metrics));
     }
 
-    private ShareRebalanceMetricsManager(RecordingMetrics metrics) {
+    private ShareRebalanceMetricsManager(MetricsLedger metrics) {
         super(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
         rebalanceTotal = createMetric("rebalance-total",

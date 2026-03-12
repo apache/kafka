@@ -21,7 +21,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
-import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -1341,7 +1341,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected class AbstractCoordinatorMetrics extends AbstractConsumerMetricsManager {
 
-        protected AbstractCoordinatorMetrics(RecordingMetrics metrics) {
+        protected AbstractCoordinatorMetrics(MetricsLedger metrics) {
             super(metrics);
         }
 
@@ -1365,10 +1365,10 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor failedRebalanceSensor;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this(new RecordingMetrics(metrics), metricGrpPrefix);
+            this(new MetricsLedger(metrics), metricGrpPrefix);
         }
 
-        private GroupCoordinatorMetrics(RecordingMetrics metrics, String metricGrpPrefix) {
+        private GroupCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
             super(metrics);
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 

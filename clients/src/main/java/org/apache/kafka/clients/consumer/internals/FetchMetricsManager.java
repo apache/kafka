@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
-import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.clients.consumer.internals.metrics.SensorBuilder;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -53,11 +53,11 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
     @SuppressWarnings("this-escape")
     public FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
-        this(new RecordingMetrics(metrics), metricsRegistry);
+        this(new MetricsLedger(metrics), metricsRegistry);
     }
 
     @SuppressWarnings("this-escape")
-    private FetchMetricsManager(RecordingMetrics metrics, FetchMetricsRegistry metricsRegistry) {
+    private FetchMetricsManager(MetricsLedger metrics, FetchMetricsRegistry metricsRegistry) {
         super(metrics);
         this.metricsRegistry = metricsRegistry;
 

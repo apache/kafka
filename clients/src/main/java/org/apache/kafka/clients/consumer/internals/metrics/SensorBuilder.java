@@ -36,7 +36,7 @@ import java.util.function.Supplier;
  */
 public class SensorBuilder {
 
-    private final RecordingMetrics metrics;
+    private final MetricsLedger metrics;
 
     private final Sensor sensor;
 
@@ -44,11 +44,11 @@ public class SensorBuilder {
 
     private final Map<String, String> tags;
 
-    public SensorBuilder(RecordingMetrics metrics, String name) {
+    public SensorBuilder(MetricsLedger metrics, String name) {
         this(metrics, name, Collections::emptyMap);
     }
 
-    public SensorBuilder(RecordingMetrics metrics, String name, Supplier<Map<String, String>> tagsSupplier) {
+    public SensorBuilder(MetricsLedger metrics, String name, Supplier<Map<String, String>> tagsSupplier) {
         this.metrics = metrics;
         Sensor s = metrics.getSensor(name);
 

@@ -43,10 +43,10 @@ public class HeartbeatMetricsManager extends AbstractConsumerMetricsManager {
     }
 
     public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix) {
-        this(new RecordingMetrics(metrics), metricGroupPrefix);
+        this(new MetricsLedger(metrics), metricGroupPrefix);
     }
 
-    private HeartbeatMetricsManager(RecordingMetrics metrics, String metricGroupPrefix) {
+    private HeartbeatMetricsManager(MetricsLedger metrics, String metricGroupPrefix) {
         super(metrics);
         final String metricGroupName = metricGroupPrefix + COORDINATOR_METRICS_SUFFIX;
         heartbeatSensor = metrics.sensor("heartbeat-latency");

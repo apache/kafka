@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
-import org.apache.kafka.clients.consumer.internals.metrics.RecordingMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.clients.consumer.internals.metrics.SensorBuilder;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -33,11 +33,11 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
 
     @SuppressWarnings({"this-escape"})
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
-        this(new RecordingMetrics(metrics), metricsRegistry);
+        this(new MetricsLedger(metrics), metricsRegistry);
     }
 
     @SuppressWarnings({"this-escape"})
-    private ShareFetchMetricsManager(RecordingMetrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
+    private ShareFetchMetricsManager(MetricsLedger metrics, ShareFetchMetricsRegistry metricsRegistry) {
         super(metrics);
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)

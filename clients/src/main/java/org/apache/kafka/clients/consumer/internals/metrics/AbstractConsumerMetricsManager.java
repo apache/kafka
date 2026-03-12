@@ -20,18 +20,18 @@ import java.util.Objects;
 
 /**
  * Utility class that serves as a common abstraction point for consumers to create and register their
- * metrics, and to ensure they're removed on {@link #close()}.
+ * metrics, and to ensure they're removed on {@link #close()} via the {@link MetricsLedger} instance.
  */
 public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
 
-    protected final RecordingMetrics metrics;
+    protected final MetricsLedger metrics;
 
-    protected AbstractConsumerMetricsManager(RecordingMetrics metrics) {
+    protected AbstractConsumerMetricsManager(MetricsLedger metrics) {
         this.metrics = Objects.requireNonNull(metrics);
     }
 
     @Override
-    public final void close() {
+    public void close() {
         metrics.close();
     }
 }

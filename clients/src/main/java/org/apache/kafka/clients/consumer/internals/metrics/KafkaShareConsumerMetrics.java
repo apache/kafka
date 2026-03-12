@@ -36,10 +36,10 @@ public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
     private long timeSinceLastPollMs;
 
     public KafkaShareConsumerMetrics(Metrics metrics) {
-        this(new RecordingMetrics(metrics));
+        this(new MetricsLedger(metrics));
     }
 
-    private KafkaShareConsumerMetrics(RecordingMetrics metrics) {
+    private KafkaShareConsumerMetrics(MetricsLedger metrics) {
         super(metrics);
         final String metricGroupName = CONSUMER_SHARE_METRIC_GROUP;
         Measurable lastPoll = (mConfig, now) -> {

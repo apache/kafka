@@ -35,10 +35,10 @@ public class OffsetCommitMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor commitSensor;
 
     public OffsetCommitMetricsManager(Metrics metrics) {
-        this(new RecordingMetrics(metrics));
+        this(new MetricsLedger(metrics));
     }
 
-    private OffsetCommitMetricsManager(RecordingMetrics metrics) {
+    private OffsetCommitMetricsManager(MetricsLedger metrics) {
         super(metrics);
         final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
         commitSensor = metrics.sensor("commit-latency");

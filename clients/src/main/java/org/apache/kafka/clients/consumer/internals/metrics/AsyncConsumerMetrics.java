@@ -46,10 +46,10 @@ public class AsyncConsumerMetrics extends AbstractConsumerMetricsManager {
     private final Sensor unsentRequestsQueueTimeSensor;
 
     public AsyncConsumerMetrics(Metrics metrics, String groupName) {
-        this(new RecordingMetrics(metrics), groupName);
+        this(new MetricsLedger(metrics), groupName);
     }
 
-    private AsyncConsumerMetrics(RecordingMetrics metrics, String groupName) {
+    private AsyncConsumerMetrics(MetricsLedger metrics, String groupName) {
         super(metrics);
         this.timeBetweenNetworkThreadPollSensor = metrics.sensor(TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME);
         this.timeBetweenNetworkThreadPollSensor.add(

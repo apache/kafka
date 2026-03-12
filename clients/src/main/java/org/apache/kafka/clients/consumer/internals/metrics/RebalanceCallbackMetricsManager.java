@@ -41,10 +41,10 @@ public class RebalanceCallbackMetricsManager extends AbstractConsumerMetricsMana
     }
 
     public RebalanceCallbackMetricsManager(Metrics metrics, String grpMetricsPrefix) {
-        this(new RecordingMetrics(metrics), grpMetricsPrefix);
+        this(new MetricsLedger(metrics), grpMetricsPrefix);
     }
 
-    private RebalanceCallbackMetricsManager(RecordingMetrics metrics, String grpMetricsPrefix) {
+    private RebalanceCallbackMetricsManager(MetricsLedger metrics, String grpMetricsPrefix) {
         super(metrics);
         final String metricGroupName = grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX;
         partitionRevokeCallbackSensor = metrics.sensor("partition-revoked-latency");

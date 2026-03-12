@@ -21,7 +21,7 @@ import org.apache.kafka.common.MetricName;
 public abstract class RebalanceMetricsManager extends AbstractConsumerMetricsManager {
     protected final String metricGroupName;
 
-    RebalanceMetricsManager(RecordingMetrics metrics, String metricGroupName) {
+    RebalanceMetricsManager(MetricsLedger metrics, String metricGroupName) {
         super(metrics);
         this.metricGroupName = metricGroupName;
     }
