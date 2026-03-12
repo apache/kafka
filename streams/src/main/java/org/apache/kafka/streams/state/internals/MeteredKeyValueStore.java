@@ -177,7 +177,6 @@ public class MeteredKeyValueStore<K, V>
                 }
             }
         );
-        // Only register this metric if it is an in-memory store
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                     (config, now) -> wrapped().approximateNumEntries());
