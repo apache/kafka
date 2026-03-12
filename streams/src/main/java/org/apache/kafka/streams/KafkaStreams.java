@@ -1388,6 +1388,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {
+            final Long dirMaxAgeMs = applicationConfigs.getLong(StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG);
+            if (dirMaxAgeMs != StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED) {
+                log.debug("Start cleaning outdated directories");
+                stateDirectory.cleanOutdatedDirsOnStartup(dirMaxAgeMs);
+            }
             log.debug("Initializing store offsets for existing local state");
             stateDirectory.initializeStartupStores(topologyMetadata, logContext, streamsMetrics);
 

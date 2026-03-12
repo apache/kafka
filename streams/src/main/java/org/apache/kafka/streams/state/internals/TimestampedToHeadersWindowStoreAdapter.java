@@ -27,6 +27,9 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -210,8 +213,46 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
 
-        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
+        // Handle WindowKeyQuery: wrap iterator to convert from timestamped to headers format
+        if (query instanceof WindowKeyQuery) {
+            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = store.query(windowKeyQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final WindowStoreIterator<byte[]> wrappedIterator =
+                    new TimestampedWindowToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else if (query instanceof WindowRangeQuery) {
+            // Handle WindowRangeQuery: wrap iterator to convert values
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                store.query(windowRangeQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
+                    new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            // For other query types, delegate to the underlying store
+            result = store.query(query, positionBound, config);
+        }
+
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns"
+            );
+        }
+
+        return result;
     }
 
     @Override
