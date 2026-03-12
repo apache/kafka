@@ -4312,6 +4312,7 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldAddToBatchDeletesFromBothWhenValueIsNull
 - shouldAddToBatchDeletesFromOldAndPutsToNew
 - shouldCloseBothColumnFamilies
+- shouldCommitOffsets
 - shouldCreateAllIteratorForward
 - shouldCreateAllIteratorReverse
 - shouldCreatePrefixScanIterator
@@ -4325,11 +4326,14 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldGetValueFromNewColumnFamily
 - shouldGetValueFromOldColumnFamilyAndConvert
 - shouldGetValueWithReadOptions
+- shouldIgnoreExceptionAfterUncleanClose
+- shouldOpenClean
 - shouldPrepareBatchWithMultipleEntries
 - shouldPutValueToNewColumnFamilyAndDeleteFromOld
 - shouldReturnNullWhenKeyNotFoundInEitherColumnFamily
 - shouldReturnSumOfEntriesFromBothColumnFamilies
 - shouldThrowNPEWhenBatchEntryHasNullKey
+- shouldThrowOnOpenAfterAUncleanClose
 - shouldThrowProcessorStateExceptionWhenDeleteFailsOnNewColumnFamilyWithNullValue
 - shouldThrowProcessorStateExceptionWhenDeleteFailsOnOldColumnFamilyWithNullValue
 - shouldThrowProcessorStateExceptionWhenDeleteRangeFailsOnNewColumnFamily
@@ -5109,6 +5113,7 @@ org.apache.kafka.streams.state.internals.RecordConvertersTest:
 org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest:
 - shouldForwardAllColumnFamilyCalls
 - shouldForwardAllDbOptionsCalls
+- shouldLogWarningWhenSettingAtomicFlushOption
 - shouldLogWarningWhenSettingWalOptions
 - shouldOverwriteAllOptionsMethods
 org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeadersTest:
@@ -5152,6 +5157,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose
 - shouldRequireOpenIteratorsWhenUsingCustomManagedIterators
 - shouldRestoreAll
+- shouldRestoreCommittedOffsetsAfterUncleanShutdownWhenEOSDisabled
 - shouldRestoreRecordsAndConsistencyVectorMultipleTopics
 - shouldRestoreRecordsAndConsistencyVectorSingleTopic
 - shouldRestoreThenDeleteOnRestoreAll
@@ -5178,6 +5184,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldThrowNullPointerExceptionOnPutAllNullKey
 - shouldThrowNullPointerExceptionOnPutIfAbsentNullKey
 - shouldThrowNullPointerExceptionOnPutNullKey
+- shouldThrowOnInitWhenEOSEnabledAndPersistedStoreStatusIsInvalid
 - shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir
 - shouldThrowProcessorStateExceptionOnPutDeletedDir
 - shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig
@@ -5302,6 +5309,7 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose
 - shouldRequireOpenIteratorsWhenUsingCustomManagedIterators
 - shouldRestoreAll
+- shouldRestoreCommittedOffsetsAfterUncleanShutdownWhenEOSDisabled
 - shouldRestoreRecordsAndConsistencyVectorMultipleTopics
 - shouldRestoreRecordsAndConsistencyVectorSingleTopic
 - shouldRestoreThenDeleteOnRestoreAll
@@ -5328,6 +5336,7 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - shouldThrowNullPointerExceptionOnPutAllNullKey
 - shouldThrowNullPointerExceptionOnPutIfAbsentNullKey
 - shouldThrowNullPointerExceptionOnPutNullKey
+- shouldThrowOnInitWhenEOSEnabledAndPersistedStoreStatusIsInvalid
 - shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir
 - shouldThrowProcessorStateExceptionOnPutDeletedDir
 - shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig
@@ -5700,6 +5709,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose
 - shouldRequireOpenIteratorsWhenUsingCustomManagedIterators
 - shouldRestoreAll
+- shouldRestoreCommittedOffsetsAfterUncleanShutdownWhenEOSDisabled
 - shouldRestoreRecordsAndConsistencyVectorMultipleTopics
 - shouldRestoreRecordsAndConsistencyVectorSingleTopic
 - shouldRestoreThenDeleteOnRestoreAll
@@ -5726,6 +5736,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldThrowNullPointerExceptionOnPutAllNullKey
 - shouldThrowNullPointerExceptionOnPutIfAbsentNullKey
 - shouldThrowNullPointerExceptionOnPutNullKey
+- shouldThrowOnInitWhenEOSEnabledAndPersistedStoreStatusIsInvalid
 - shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir
 - shouldThrowProcessorStateExceptionOnPutDeletedDir
 - shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig
@@ -5786,6 +5797,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose
 - shouldRequireOpenIteratorsWhenUsingCustomManagedIterators
 - shouldRestoreAll
+- shouldRestoreCommittedOffsetsAfterUncleanShutdownWhenEOSDisabled
 - shouldRestoreRecordsAndConsistencyVectorMultipleTopics
 - shouldRestoreRecordsAndConsistencyVectorSingleTopic
 - shouldRestoreThenDeleteOnRestoreAll
@@ -5813,6 +5825,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldThrowNullPointerExceptionOnPutAllNullKey
 - shouldThrowNullPointerExceptionOnPutIfAbsentNullKey
 - shouldThrowNullPointerExceptionOnPutNullKey
+- shouldThrowOnInitWhenEOSEnabledAndPersistedStoreStatusIsInvalid
 - shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir
 - shouldThrowProcessorStateExceptionOnPutDeletedDir
 - shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig
