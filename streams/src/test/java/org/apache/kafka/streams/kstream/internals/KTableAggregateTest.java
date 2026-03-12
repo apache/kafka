@@ -16,6 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -48,23 +63,7 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
@@ -76,7 +75,6 @@ public class KTableAggregateTest {
     
     private StreamsBuilder createStreamBuilderInMemory() {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        props.putAll(CONFIG);  // Add the STATE_DIR from CONFIG
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
                     BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
         return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
