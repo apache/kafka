@@ -91,21 +91,41 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         assertEquals(0L, store.numEntries());
 
-        store.put(Bytes.wrap("a".getBytes()), "1".getBytes(), 0L);
+        store.put(
+                Bytes.wrap("a".getBytes()),
+                "1".getBytes(),
+                0L
+        );
         assertEquals(1L, store.numEntries());
 
-        store.put(Bytes.wrap("b".getBytes()), "2".getBytes(), 0L);
+        store.put(
+                Bytes.wrap("b".getBytes()),
+                "2".getBytes(),
+                0L
+        );
         assertEquals(2L, store.numEntries());
 
-        store.put(Bytes.wrap("a".getBytes()), "3".getBytes(), 10L);
+        store.put(
+                Bytes.wrap("a".getBytes()),
+                "3".getBytes(),
+                10L
+        );
         assertEquals(3L, store.numEntries());
 
         // overwrite existing entry (same key, same timestamp)
-        store.put(Bytes.wrap("a".getBytes()), "4".getBytes(), 0L);
+        store.put(
+                Bytes.wrap("a".getBytes()),
+                "4".getBytes(),
+                0L
+        );
         assertEquals(3L, store.numEntries());
 
         // delete entry by putting null
-        store.put(Bytes.wrap("b".getBytes()), null, 0L);
+        store.put(
+                Bytes.wrap("b".getBytes()),
+                null,
+                0L
+        );
         assertEquals(2L, store.numEntries());
 
         store.close();
