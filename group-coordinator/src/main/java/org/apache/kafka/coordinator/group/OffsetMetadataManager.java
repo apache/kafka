@@ -626,16 +626,8 @@ public class OffsetMetadataManager {
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
-            // Resolve topic ID if it's ZERO_UUID
-            final Uuid resolvedTopicId = topic.topicId().equals(Uuid.ZERO_UUID)
-                ? metadataImage
-                    .topicMetadata(topic.name())
-                    .map(CoordinatorMetadataImage.TopicMetadata::id)
-                    .orElse(Uuid.ZERO_UUID)
-                : topic.topicId();
-
             final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
-                .setTopicId(resolvedTopicId)
+                .setTopicId(topic.topicId())
                 .setName(topic.name());
             response.topics().add(topicResponse);
 
@@ -648,7 +640,7 @@ public class OffsetMetadataManager {
                     // Validate commit per-partition
                     validator.validate(
                         topic.name(),
-                        resolvedTopicId,
+                        topic.topicId(),
                         partition.partitionIndex()
                     );
 

@@ -1271,7 +1271,6 @@ public class GroupCoordinatorShardTest {
         verify(groupMetadataManager, times(1)).onMetadataUpdate(
             any(), eq(image)
         );
-
         verify(groupMetadataManager, times(1)).onLoaded();
     }
 

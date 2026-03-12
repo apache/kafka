@@ -49,8 +49,6 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
@@ -69,7 +67,6 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -92,12 +89,9 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignmentWithEpochs;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -1426,72 +1420,6 @@ public class OffsetMetadataManagerTest {
                 )
             )),
             result.records()
-        );
-    }
-
-    @Test
-    public void testConsumerGroupOffsetCommitWithZeroUuidResolvesTopicId() {
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
-
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(barTopicId, barTopicName, 3)
-            .build();
-
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
-            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
-            .build();
-
-        // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
-            "foo",
-            true
-        );
-
-        group.updateMember(new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
-            .setAssignedPartitions(mkAssignmentWithEpochs(
-                mkTopicAssignmentWithEpochs(barTopicId, 5, 0)))
-            .build()
-        );
-
-        OffsetCommitRequestData request = new OffsetCommitRequestData()
-            .setGroupId("foo")
-            .setMemberId("member")
-            .setTopics(List.of(
-                new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                    .setName(barTopicName)
-                    .setTopicId(Uuid.ZERO_UUID)
-                    .setPartitions(List.of(
-                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                            .setPartitionIndex(0)
-                            .setCommittedOffset(100L)
-                    ))
-            ));
-
-        // When client epoch (3) < assignment epoch (5), exception should be thrown.
-        request.setGenerationIdOrMemberEpoch(3);
-        assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
-
-        // When client epoch (5) >= assignment epoch (5), commit should succeed.
-        request.setGenerationIdOrMemberEpoch(5);
-        assertDoesNotThrow(() -> context.commitOffset(request));
-
-        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(request);
-        assertEquals(
-            new OffsetCommitResponseData()
-                .setTopics(List.of(
-                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                        .setName(barTopicName)
-                        .setTopicId(barTopicId)
-                        .setPartitions(List.of(
-                            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                                .setPartitionIndex(0)
-                                .setErrorCode(Errors.NONE.code())
-                        ))
-                )),
-            result.response()
         );
     }
 

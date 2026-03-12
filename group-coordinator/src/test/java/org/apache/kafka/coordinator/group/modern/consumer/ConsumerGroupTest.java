@@ -365,13 +365,14 @@ public class ConsumerGroupTest {
         assertEquals(11, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
 
         // Updating to a smaller epoch should fail.
-        assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalStateException.class, () -> {
             consumerGroup.addPartitionEpochs(
                 toAssignmentWithEpochs(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1)
                 ), 10),
                 10
-        ));
+            );
+        });
     }
 
     @Test
@@ -955,15 +956,15 @@ public class ConsumerGroupTest {
         // When client epoch (10) == broker epoch (10), no exception thrown.
         if (isTransactional || version >= 9) {
             CommitPartitionValidator validator = group.validateOffsetCommit(
-                "member-id", "", 7, isTransactional, version
+                "member-id", "", 10, isTransactional, version
             );
             assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
         } else {
             assertThrows(UnsupportedVersionException.class, () ->
-                group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+                group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
         }
 
-        // When assignment epoch(7) <= client epoch(7) <= broker epoch(10), no exception thrown.
+        // When assignment epoch (7) <= client epoch (7) <= broker epoch (10), no exception thrown.
         if (isTransactional || version >= 9) {
             CommitPartitionValidator validator = group.validateOffsetCommit(
                 "member-id", "", 7, isTransactional, version
@@ -1001,7 +1002,6 @@ public class ConsumerGroupTest {
 
         group.updateMember(new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
-            .setSubscribedTopicNames(List.of("foo"))
             .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
                 mkTopicAssignmentWithEpochs(topicId, 7, 0)))
             .build());
@@ -1017,7 +1017,7 @@ public class ConsumerGroupTest {
                 group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
         }
 
-        // When partition epoch (7) <= client epoch (7) <= broker epoch (10), no exception thrown.
+        // When assignment epoch (7) <= client epoch (7) <= broker epoch (10), no exception thrown.
         if (isTransactional || version >= 9) {
             CommitPartitionValidator validator = group.validateOffsetCommit(
                 "member-id", "", 7, isTransactional, version
@@ -1028,7 +1028,7 @@ public class ConsumerGroupTest {
                 group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
         }
 
-        // When client epoch (6) != broker epoch (10) and client epoch (6) < partition epoch (7),
+        // When client epoch (6) != broker epoch (10) and client epoch (6) < assignment epoch (7),
         // stale member epoch exception thrown from assignment epoch validator.
         if (isTransactional || version >= 9) {
             CommitPartitionValidator validator = group.validateOffsetCommit(
@@ -1126,7 +1126,7 @@ public class ConsumerGroupTest {
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
-            new LogContext(),
+            new LogContext(), 
             snapshotRegistry,
             "group-foo"
         );
@@ -1499,7 +1499,7 @@ public class ConsumerGroupTest {
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
-            new LogContext(),
+            new LogContext(), 
             new SnapshotRegistry(logContext),
             groupId
         );
