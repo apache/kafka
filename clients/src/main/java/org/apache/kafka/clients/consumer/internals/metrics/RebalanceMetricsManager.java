@@ -26,7 +26,7 @@ public abstract class RebalanceMetricsManager extends AbstractConsumerMetricsMan
         this.metricGroupName = metricGroupName;
     }
 
-    protected MetricName createMetric(RecordingMetrics metrics, String name, String description) {
+    protected MetricName createMetric(String name, String description) {
         return metrics.metricName(name, metricGroupName, description);
     }
 

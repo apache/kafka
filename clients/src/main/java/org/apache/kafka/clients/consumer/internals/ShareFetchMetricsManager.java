@@ -31,7 +31,6 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor sentAcknowledgements;
     private final Sensor failedAcknowledgements;
 
-
     @SuppressWarnings({"this-escape"})
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
         this(new RecordingMetrics(metrics), metricsRegistry);
