@@ -60,24 +60,28 @@ public class RocksDBMigratingSessionStoreWithHeaders extends RocksDBStore implem
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor(SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
         final ColumnFamilyHandle noHeadersColumnFamily = columnFamilies.get(0);
         final ColumnFamilyHandle withHeadersColumnFamily = columnFamilies.get(1);
+        final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
 
         final RocksIterator noHeadersIter = db.newIterator(noHeadersColumnFamily);
         noHeadersIter.seekToFirst();
         if (noHeadersIter.isValid()) {
             log.info("Opening store {} in upgrade mode", name);
             cfAccessor = new DualColumnFamilyAccessor(
+                offsetsCf,
                 noHeadersColumnFamily,
                 withHeadersColumnFamily,
                 HeadersBytesStore::convertToHeaderFormat,
-                this
+                this,
+                    open
             );
         } else {
             log.info("Opening store {} in regular mode", name);
-            cfAccessor = new SingleColumnFamilyAccessor(withHeadersColumnFamily);
+            cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, withHeadersColumnFamily);
             noHeadersColumnFamily.close();
         }
         noHeadersIter.close();
