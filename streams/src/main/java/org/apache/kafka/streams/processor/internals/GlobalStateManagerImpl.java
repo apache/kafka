@@ -552,7 +552,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void flush() {
+    public void commit() {
         log.debug("Committing all global globalStores registered in the state manager");
         for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
             if (entry.getValue().isPresent()) {
@@ -580,10 +580,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
-    }
-
-    @Override
-    public void checkpoint() {
     }
 
     @Override

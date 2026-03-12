@@ -209,7 +209,7 @@ public class GlobalStateManagerImplTest {
         file.setWritable(false);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
-            stateManager.flush();
+            stateManager.commit();
             assertThat(appender.getMessages(), hasItem(containsString(
                 "Failed to write offset checkpoint file to [" + storeCheckpointFile.getPath() + "]. " +
                 "This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory. " +
@@ -403,7 +403,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t2);
         stateManager.registerStore(store2, stateRestoreCallback, null);
 
-        stateManager.flush();
+        stateManager.commit();
         assertTrue(store1.committed);
         assertTrue(store2.committed);
     }
@@ -420,7 +420,7 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         }, stateRestoreCallback, null);
-        assertThrows(StreamsException.class, stateManager::flush);
+        assertThrows(StreamsException.class, stateManager::commit);
     }
 
     @Test
@@ -519,7 +519,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
 
         stateManager.updateChangelogOffsets(offsets);
-        stateManager.flush();
+        stateManager.commit();
 
         assertThat(readOffsetsCheckpoint(storeName1), equalTo(offsets));
         assertThat(stateManager.changelogOffsets(), equalTo(mkMap(
@@ -542,7 +542,7 @@ public class GlobalStateManagerImplTest {
 
         final Map<TopicPartition, Long> initialCheckpoint = stateManager.changelogOffsets();
         stateManager.updateChangelogOffsets(Collections.singletonMap(t1, 101L));
-        stateManager.flush();
+        stateManager.commit();
 
         final Map<TopicPartition, Long> updatedCheckpoint = stateManager.changelogOffsets();
         assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
@@ -579,7 +579,7 @@ public class GlobalStateManagerImplTest {
 
         initializeConsumer(10, 0, t1);
         stateManager.initialize();
-        stateManager.flush();
+        stateManager.commit();
         stateManager.close();
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();

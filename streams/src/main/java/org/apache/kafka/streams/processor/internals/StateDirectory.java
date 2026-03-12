@@ -263,7 +263,7 @@ public class StateDirectory implements AutoCloseable {
                     try {
                         // We only handle TaskCorruptedException at this point. Any other exception is considered fatal.
                         StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, temporaryStateManager, this, initContext);
-                        temporaryStateManager.flush();
+                        temporaryStateManager.commit();
                     } catch (final TaskCorruptedException tce) {
                         // At this point, we only log a warning and continue with the startup store initialization.
                         // The task-corrupted exception will be handled in the first Task assignment phase.

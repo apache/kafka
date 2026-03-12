@@ -567,7 +567,7 @@ public class ProcessorStateManagerTest {
 
             stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
         } finally {
-            stateMgr.flush();
+            stateMgr.commit();
 
             assertTrue(persistentStore.committed);
             assertTrue(nonPersistentStore.committed);
@@ -576,7 +576,7 @@ public class ProcessorStateManagerTest {
             assertThat(persistentStore.getLastCommitCount(), Matchers.lessThan(nonPersistentStore.getLastCommitCount()));
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
-            stateMgr.flush();
+            stateMgr.commit();
 
             assertTrue(storeCheckpointFile.exists());
 
@@ -616,7 +616,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStorePartition, 220L),
                 mkEntry(irrelevantPartition, 9000L)
             ));
-            stateMgr.flush();
+            stateMgr.commit();
 
             assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
             assertThat(storeMetadata.offset(), equalTo(220L));
@@ -640,7 +640,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
 
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 987L));
-            stateMgr.flush();
+            stateMgr.commit();
 
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(emptyMap()));
@@ -679,7 +679,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
 
-        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::commit);
         assertEquals(exception, thrown.getCause());
     }
 
@@ -695,7 +695,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
 
-        final StreamsException thrown = assertThrows(StreamsException.class, stateManager::flush);
+        final StreamsException thrown = assertThrows(StreamsException.class, stateManager::commit);
         assertEquals(exception, thrown);
     }
 
@@ -743,7 +743,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
 
-        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::commit);
         assertEquals(exception, thrown.getCause());
         assertFalse(exception.getMessage().contains("FailedProcessingException"));
         assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
@@ -806,7 +806,7 @@ public class ProcessorStateManagerTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 25_000L));
-            stateMgr.flush();
+            stateMgr.commit();
 
             boolean foundExpectedLogMessage = false;
             for (final LogCaptureAppender.Event event : appender.getEvents()) {
@@ -889,7 +889,7 @@ public class ProcessorStateManagerTest {
         stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback, null);
 
         try {
-            stateManager.flush();
+            stateManager.commit();
         } catch (final ProcessorStateException expected) { /* ignore */ }
 
         assertTrue(committedStore.get());
@@ -991,7 +991,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(nonPersistentStorePartition, 876L),
                 mkEntry(persistentStorePartition, 666L))
             );
-            stateMgr.flush();
+            stateMgr.commit();
 
             // reset the state and offsets, for example as in a corrupted task
             stateMgr.close();
@@ -1050,7 +1050,7 @@ public class ProcessorStateManagerTest {
 
         assertFalse(persistentCheckpoint.getFile().exists());
 
-        stateMgr.flush();
+        stateMgr.commit();
 
         assertTrue(persistentCheckpoint.getFile().exists());
 
@@ -1086,7 +1086,7 @@ public class ProcessorStateManagerTest {
 
         final ProcessorStateException processorStateException = assertThrows(
             ProcessorStateException.class,
-            stateMgr::flush
+            stateMgr::commit
         );
 
         assertThat(

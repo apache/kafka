@@ -481,7 +481,7 @@ public class ProcessorStateManager implements StateManager {
      *                          or committing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public void flush() {
+    public void commit() {
         RuntimeException firstException = null;
         // attempting to commit the stores
         if (!stores.isEmpty()) {
@@ -533,10 +533,6 @@ public class ProcessorStateManager implements StateManager {
         if (firstException != null) {
             throw firstException;
         }
-    }
-
-    @Override
-    public void checkpoint() {
     }
 
     public void flushCache() {
