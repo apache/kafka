@@ -156,7 +156,7 @@ org.apache.kafka.streams.test.MockProcessorContextAPITest:
 - shouldCaptureRecordsOutputToChildByName
 - shouldStoreAndReturnStateStores
 org.apache.kafka.streams.test.MockProcessorContextStateStoreTest:
-- shouldEitherInitOrThrow
+- shouldWorkForAllStoreTypeAndSetups
 org.apache.kafka.streams.test.TestRecordTest:
 - testConsumerRecord
 - testEqualsAndHashCode
