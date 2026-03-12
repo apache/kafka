@@ -1356,52 +1356,52 @@ public abstract class AbstractCoordinator implements Closeable {
             super(metrics);
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
-            this.heartbeatSensor = this.metrics.sensor("heartbeat-latency");
-            this.heartbeatSensor.add(this.metrics.metricName("heartbeat-response-time-max",
+            this.heartbeatSensor = metrics.sensor("heartbeat-latency");
+            this.heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
                 this.metricGrpName,
                 "The max time taken to receive a response to a heartbeat request"), new Max());
             this.heartbeatSensor.add(createMeter(metricGrpName, "heartbeat", "heartbeats"));
 
-            this.joinSensor = this.metrics.sensor("join-latency");
-            this.joinSensor.add(this.metrics.metricName("join-time-avg",
+            this.joinSensor = metrics.sensor("join-latency");
+            this.joinSensor.add(metrics.metricName("join-time-avg",
                 this.metricGrpName,
                 "The average time taken for a group rejoin"), new Avg());
-            this.joinSensor.add(this.metrics.metricName("join-time-max",
+            this.joinSensor.add(metrics.metricName("join-time-max",
                 this.metricGrpName,
                 "The max time taken for a group rejoin"), new Max());
             this.joinSensor.add(createMeter(metricGrpName, "join", "group joins"));
 
-            this.syncSensor = this.metrics.sensor("sync-latency");
-            this.syncSensor.add(this.metrics.metricName("sync-time-avg",
+            this.syncSensor = metrics.sensor("sync-latency");
+            this.syncSensor.add(metrics.metricName("sync-time-avg",
                 this.metricGrpName,
                 "The average time taken for a group sync"), new Avg());
-            this.syncSensor.add(this.metrics.metricName("sync-time-max",
+            this.syncSensor.add(metrics.metricName("sync-time-max",
                 this.metricGrpName,
                 "The max time taken for a group sync"), new Max());
             this.syncSensor.add(createMeter(metricGrpName, "sync", "group syncs"));
 
-            this.successfulRebalanceSensor = this.metrics.sensor("rebalance-latency");
-            this.successfulRebalanceSensor.add(this.metrics.metricName("rebalance-latency-avg",
+            this.successfulRebalanceSensor = metrics.sensor("rebalance-latency");
+            this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a group to complete a successful rebalance, which may be composed of " +
                     "several failed re-trials until it succeeded"), new Avg());
-            this.successfulRebalanceSensor.add(this.metrics.metricName("rebalance-latency-max",
+            this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-max",
                 this.metricGrpName,
                 "The max time taken for a group to complete a successful rebalance, which may be composed of " +
                     "several failed re-trials until it succeeded"), new Max());
-            this.successfulRebalanceSensor.add(this.metrics.metricName("rebalance-latency-total",
+            this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-total",
                 this.metricGrpName,
                 "The total number of milliseconds this consumer has spent in successful rebalances since creation"),
                 new CumulativeSum());
             this.successfulRebalanceSensor.add(
-                this.metrics.metricName("rebalance-total",
+                metrics.metricName("rebalance-total",
                     this.metricGrpName,
                     "The total number of successful rebalance events, each event is composed of " +
                         "several failed re-trials until it succeeded"),
                 new CumulativeCount()
             );
             this.successfulRebalanceSensor.add(
-                this.metrics.metricName(
+                metrics.metricName(
                     "rebalance-rate-per-hour",
                     this.metricGrpName,
                     "The number of successful rebalance events per hour, each event is composed of " +
@@ -1409,15 +1409,15 @@ public abstract class AbstractCoordinator implements Closeable {
                 new Rate(TimeUnit.HOURS, new WindowedCount(), 1)
             );
 
-            this.failedRebalanceSensor = this.metrics.sensor("failed-rebalance");
+            this.failedRebalanceSensor = metrics.sensor("failed-rebalance");
             this.failedRebalanceSensor.add(
-                this.metrics.metricName("failed-rebalance-total",
+                metrics.metricName("failed-rebalance-total",
                     this.metricGrpName,
                     "The total number of failed rebalance events"),
                 new CumulativeCount()
             );
             this.failedRebalanceSensor.add(
-                this.metrics.metricName(
+                metrics.metricName(
                     "failed-rebalance-rate-per-hour",
                     this.metricGrpName,
                     "The number of failed rebalance events per hour"),
@@ -1431,7 +1431,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 else
                     return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
             };
-            this.metrics.addMetric(this.metrics.metricName("last-rebalance-seconds-ago",
+            metrics.addMetric(metrics.metricName("last-rebalance-seconds-ago",
                 this.metricGrpName,
                 "The number of seconds since the last successful rebalance event"),
                 lastRebalance);
@@ -1443,7 +1443,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 else
                     return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
             };
-            this.metrics.addMetric(this.metrics.metricName("last-heartbeat-seconds-ago",
+            metrics.addMetric(metrics.metricName("last-heartbeat-seconds-ago",
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
                 lastHeartbeat);
