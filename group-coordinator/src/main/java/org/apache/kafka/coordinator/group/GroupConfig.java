@@ -649,7 +649,7 @@ public final class GroupConfig extends AbstractConfig {
             throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
         }
     }
-    
+
     /**
      * The share group renew acknowledge enable.
      */
