@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
 import org.junit.jupiter.api.Test;
 
@@ -118,14 +118,13 @@ public class SessionWindowedDeserializerTest {
     }
 
     @Test
-    public void shouldPassHeadersToUnderlyingSerializer() {
+    public void shouldPassHeadersToUnderlyingDeserializer() {
         final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
         when(mockDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn("test-value");
 
-        final String key = "test-key";
-        final Windowed<String> windowed = new Windowed<>(key, new TimeWindow(0, 1));
-        final byte[] data = new SessionWindowedSerializer<>(Serdes.String().serializer()).serialize("dummy", windowed);
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+        final Windowed<String> windowed = new Windowed<>("test-key", new SessionWindow(0, 1));
+        final byte[] data = new SessionWindowedSerializer<>(Serdes.String().serializer()).serialize("dummy", headers, windowed);
 
         final SessionWindowedDeserializer<String> testDeserializer = new SessionWindowedDeserializer<>(mockDeserializer);
 

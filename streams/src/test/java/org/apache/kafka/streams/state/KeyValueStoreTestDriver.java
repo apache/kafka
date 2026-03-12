@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -240,8 +241,8 @@ public class KeyValueStoreTestDriver<K, V> {
                 final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
                 final byte[] valueBytes = valueSerializer.serialize(topic, headers, value);
 
-                final K keyTest = serdes.keyFrom(keyBytes);
-                final V valueTest = serdes.valueFrom(valueBytes);
+                final K keyTest = serdes.keyFrom(keyBytes, headers);
+                final V valueTest = serdes.valueFrom(valueBytes, headers);
 
                 recordCommitted(keyTest, valueTest);
             }
@@ -338,7 +339,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @see #checkForRestoredEntries(KeyValueStore)
      */
     public void addEntryToRestoreLog(final K key, final V value) {
-        restorableEntries.add(new KeyValue<>(stateSerdes.rawKey(key), stateSerdes.rawValue(value)));
+        restorableEntries.add(new KeyValue<>(stateSerdes.rawKey(key, new RecordHeaders()), stateSerdes.rawValue(value, new RecordHeaders())));
     }
 
     /**
@@ -368,8 +369,8 @@ public class KeyValueStoreTestDriver<K, V> {
         int missing = 0;
         for (final KeyValue<byte[], byte[]> kv : restorableEntries) {
             if (kv != null) {
-                final V value = store.get(stateSerdes.keyFrom(kv.key));
-                if (!Objects.equals(value, stateSerdes.valueFrom(kv.value))) {
+                final V value = store.get(stateSerdes.keyFrom(kv.key, new RecordHeaders()));
+                if (!Objects.equals(value, stateSerdes.valueFrom(kv.value, new RecordHeaders()))) {
                     ++missing;
                 }
             }

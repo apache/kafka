@@ -475,6 +475,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         lenient().when(valueDeserializer.deserialize(eq(topic), any(RecordHeaders.class), any(byte[].class))).thenReturn(VALUE_TIMESTAMP_HEADERS);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         lenient().when(valueSerializer.serialize(eq(topic), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
         when(inner.get(any(Bytes.class))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
             inner,

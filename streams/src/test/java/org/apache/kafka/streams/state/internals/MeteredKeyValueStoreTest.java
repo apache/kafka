@@ -175,6 +175,7 @@ public class MeteredKeyValueStoreTest {
         when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_BYTES)).thenReturn(VALUE);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE)).thenReturn(VALUE_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_BYTES);
         metered = new MeteredKeyValueStore<>(
             inner,

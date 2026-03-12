@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -79,12 +78,12 @@ public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
     }
 
     public static ConsumerGroupHeartbeatResponseData.Assignment createAssignment(
-        Map<Uuid, Set<Integer>> assignment
+        Map<Uuid, Map<Integer, Integer>> assignment
     ) {
         List<ConsumerGroupHeartbeatResponseData.TopicPartitions> topicPartitions = assignment.entrySet().stream()
             .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
-                .setPartitions(new ArrayList<>(keyValue.getValue())))
+                .setPartitions(new ArrayList<>(keyValue.getValue().keySet())))
             .collect(Collectors.toList());
 
         return new ConsumerGroupHeartbeatResponseData.Assignment()
