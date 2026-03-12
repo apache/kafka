@@ -1355,7 +1355,6 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class GroupCoordinatorMetrics extends AbstractCoordinatorMetrics {
-
         public final String metricGrpName;
 
         public final Sensor heartbeatSensor;

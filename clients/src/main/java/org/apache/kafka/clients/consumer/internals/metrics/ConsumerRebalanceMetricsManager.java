@@ -95,7 +95,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
                 return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
         };
         lastRebalanceSecondsAgo = createMetric(
-            "last-rebalance-seconds-ago",
+                "last-rebalance-seconds-ago",
                 "The number of seconds since the last rebalance event");
         metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
     }
