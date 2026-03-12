@@ -1916,7 +1916,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldHandleCloseAfterErrorState() throws Exception {
-        // Regression test for the race condition bug fixed by KAFKA-17379.
+        // Regression test for the race condition bug fixed by KAFKA-17379 that also fixed KAFKA-16600.
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
