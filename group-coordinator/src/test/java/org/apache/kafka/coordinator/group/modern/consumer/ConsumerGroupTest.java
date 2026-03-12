@@ -53,7 +53,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,6 +67,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -303,7 +306,9 @@ public class ConsumerGroupTest {
 
         // m3 should not be able to acquire foo-1 because the epoch is smaller
         // than the current partition epoch (11).
-        assertThrows(IllegalStateException.class, () -> consumerGroup.updateMember(m3));
+        assertThrows(IllegalStateException.class, () -> {
+            consumerGroup.updateMember(m3);
+        });
     }
 
     @Test
@@ -935,191 +940,172 @@ public class ConsumerGroupTest {
     }
 
     @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testValidateOffsetCommitWithAssignmentEpochValidation(short version) {
+    @MethodSource("offsetCommitVersionsAndTransactionalParams")
+    public void testValidateOffsetCommitWithAssignmentEpochValidation(boolean isTransactional, short version) {
         Uuid topicId = Uuid.randomUuid();
 
-        for (boolean isTransactional : new boolean[] {true, false}) {
-            ConsumerGroup group = createConsumerGroup("group-foo");
+        ConsumerGroup group = createConsumerGroup("group-foo");
 
-            group.updateMember(new ConsumerGroupMember.Builder("member-id")
-                .setMemberEpoch(10)
-                .setAssignedPartitions(mkAssignmentWithEpochs(
-                    mkTopicAssignmentWithEpochs(topicId, 7, 0)))
-                .build());
+        group.updateMember(new ConsumerGroupMember.Builder("member-id")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(topicId, 7, 0)))
+            .build());
 
-            // When assignment epoch(7) <= client epoch(9) <= broker epoch(10), no exception thrown.
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 9, isTransactional, version
-                );
-                assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 9, isTransactional, version));
-            }
+        // When client epoch (10) == broker epoch (10), no exception thrown.
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 7, isTransactional, version
+            );
+            assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+        }
 
-            // When client epoch (11) > broker epoch (10) , exception thrown directly from validateOffsetCommit.
-            if (version >= 9 || isTransactional) {
-                StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
-                assertEquals("Received member epoch 11 is newer than current member epoch 10.",
-                    ex.getMessage()
-                );
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
-            }
+        // When assignment epoch(7) <= client epoch(7) <= broker epoch(10), no exception thrown.
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 7, isTransactional, version
+            );
+            assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+        }
 
-            // When client epoch (10) == broker epoch (10), no exception thrown.
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 7, isTransactional, version
-                );
-                assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
-            }
-
-            // When client epoch (8) != broker epoch (10) and client epoch (8) > assignment epoch (7),
-            // stale member epoch exception thrown from validateOffsetCommit.
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 6, isTransactional, version
-                );
-                StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-                    validator.validate("foo", topicId, 0));
-                assertEquals(
-                    "Received member epoch 6 is older than assignment epoch 7 for partition foo-0.",
-                    ex.getMessage()
-                );
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 6, isTransactional, version));
-            }
+        // When client epoch (6) != broker epoch (10) and client epoch (6) < assignment epoch (7),
+        // stale member epoch exception thrown from assignment epoch validator.
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 6, isTransactional, version
+            );
+            StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
+                validator.validate("foo", topicId, 0));
+            assertEquals(
+                "Received member epoch 6 is older than assignment epoch 7 for partition foo-0.",
+                ex.getMessage()
+            );
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 6, isTransactional, version));
         }
     }
 
     @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testValidateOffsetCommitWithPartitionPendingRevocation(short version) {
+    @MethodSource("offsetCommitVersionsAndTransactionalParams")
+    public void testValidateOffsetCommitWithPartitionPendingRevocation(boolean isTransactional, short version) {
         Uuid topicId = Uuid.randomUuid();
 
-        for (boolean isTransactional : new boolean[] {true, false}) {
-            ConsumerGroup group = createConsumerGroup("group-foo");
+        ConsumerGroup group = createConsumerGroup("group-foo");
 
-            group.updateMember(new ConsumerGroupMember.Builder("member-id")
-                .setMemberEpoch(10)
-                .setSubscribedTopicNames(List.of("foo"))
-                .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
-                    mkTopicAssignmentWithEpochs(topicId, 7, 0)))
-                .build());
+        group.updateMember(new ConsumerGroupMember.Builder("member-id")
+            .setMemberEpoch(10)
+            .setSubscribedTopicNames(List.of("foo"))
+            .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(topicId, 7, 0)))
+            .build());
 
-            // When client epoch (10) == broker epoch (10), no exception thrown.
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 10, isTransactional, version
-                );
-                assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
-            }
-
-            // When client epoch (11) > broker epoch (10), exception thrown directly from validateOffsetCommit.
-            if (version >= 9 || isTransactional) {
-                StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
-                assertEquals(
-                    "Received member epoch 11 is newer than current member epoch 10.",
-                    ex.getMessage()
-                );
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
-            }
-
-            // When partition epoch (7) <= client epoch (7)  <= broker epoch (10), no exception thrown.
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 7, isTransactional, version
-                );
-                assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
-            }
-
-            // When client epoch (6) != broker epoch (10) and client epoch (6) < partition epoch (7),
-            // exception thrown directly from validateOffsetCommit.
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 6, isTransactional, version
-                );
-                StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-                    validator.validate("foo", topicId, 0));
-                assertEquals(
-                    "Received member epoch 6 is older than assignment epoch 7 for partition foo-0.",
-                    ex.getMessage()
-                );
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 6, isTransactional, version));
-            }
+        // When client epoch (10) == broker epoch (10), no exception thrown.
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 10, isTransactional, version
+            );
+            assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
         }
 
+        // When partition epoch (7) <= client epoch (7) <= broker epoch (10), no exception thrown.
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 7, isTransactional, version
+            );
+            assertDoesNotThrow(() -> validator.validate("foo", topicId, 0));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+        }
+
+        // When client epoch (6) != broker epoch (10) and client epoch (6) < partition epoch (7),
+        // stale member epoch exception thrown from assignment epoch validator.
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 6, isTransactional, version
+            );
+            StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
+                validator.validate("foo", topicId, 0));
+            assertEquals(
+                "Received member epoch 6 is older than assignment epoch 7 for partition foo-0.",
+                ex.getMessage()
+            );
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 6, isTransactional, version));
+        }
     }
 
     @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testValidateOffsetCommitWithUnassignedTopicOrPartition(short version) {
+    @MethodSource("offsetCommitVersionsAndTransactionalParams")
+    public void testValidateOffsetCommitWithUnassignedTopicOrPartition(boolean isTransactional, short version) {
         Uuid assignedTopicId = Uuid.randomUuid();
         Uuid unassignedTopicId = Uuid.randomUuid();
 
-        for (boolean isTransactional : new boolean[] {true, false}) {
-            ConsumerGroup group = createConsumerGroup("group-foo");
+        ConsumerGroup group = createConsumerGroup("group-foo");
 
-            group.updateMember(new ConsumerGroupMember.Builder("member-id")
-                .setMemberEpoch(10)
-                .setAssignedPartitions(mkAssignmentWithEpochs(
-                    mkTopicAssignmentWithEpochs(assignedTopicId, 7, 0)))
-                .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
-                    mkTopicAssignmentWithEpochs(assignedTopicId, 7, 1)))
-                .build());
+        group.updateMember(new ConsumerGroupMember.Builder("member-id")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(assignedTopicId, 7, 0)))
+            .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(assignedTopicId, 7, 1)))
+            .build());
 
-            // Commit an unassigned topic
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 7, isTransactional, version
-                );
-                StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-                    validator.validate("bar", unassignedTopicId, 0));
-                assertEquals(
-                    "Partition bar-0 is not assigned or pending revocation for member.",
-                    ex.getMessage()
-                );
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
-            }
-
-            // Commit to an unassigned partition of an existing topic
-            if (version >= 9 || isTransactional) {
-                CommitPartitionValidator validator = group.validateOffsetCommit(
-                    "member-id", "", 7, isTransactional, version
-                );
-                StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
-                    validator.validate("foo", assignedTopicId, 2));
-                assertEquals(
-                    "Partition foo-2 is not assigned or pending revocation for member.",
-                    ex.getMessage()
-                );
-            } else {
-                assertThrows(UnsupportedVersionException.class, () ->
-                    group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
-            }
+        // Commit an unassigned topic
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 7, isTransactional, version
+            );
+            StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
+                validator.validate("bar", unassignedTopicId, 0));
+            assertEquals(
+                "Partition bar-0 is not assigned or pending revocation for member.",
+                ex.getMessage()
+            );
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
         }
+
+        // Commit to an unassigned partition of an existing topic
+        if (isTransactional || version >= 9) {
+            CommitPartitionValidator validator = group.validateOffsetCommit(
+                "member-id", "", 7, isTransactional, version
+            );
+            StaleMemberEpochException ex = assertThrows(StaleMemberEpochException.class, () ->
+                validator.validate("foo", assignedTopicId, 2));
+            assertEquals(
+                "Partition foo-2 is not assigned or pending revocation for member.",
+                ex.getMessage()
+            );
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+        }
+    }
+
+    private static Stream<Arguments> offsetCommitVersionsAndTransactionalParams() {
+        Stream.Builder<Arguments> builder = Stream.builder();
+        // Non-transactional: use OFFSET_COMMIT versions
+        for (short version = ApiKeys.OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.OFFSET_COMMIT.latestVersion(true); version++) {
+            builder.add(Arguments.of(false, version));
+        }
+        // Transactional: use TXN_OFFSET_COMMIT versions
+        for (short version = ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true); version++) {
+            builder.add(Arguments.of(true, version));
+        }
+        return builder.build();
     }
 
     @Test

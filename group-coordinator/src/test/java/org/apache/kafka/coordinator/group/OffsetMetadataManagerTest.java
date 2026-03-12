@@ -1477,9 +1477,22 @@ public class OffsetMetadataManagerTest {
         // When client epoch (5) >= assignment epoch (5), commit should succeed.
         request.setGenerationIdOrMemberEpoch(5);
         assertDoesNotThrow(() -> context.commitOffset(request));
-        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> resp = context.commitOffset(request);
-        assertEquals(1, resp.response().topics().size());
-        assertEquals(barTopicName, resp.response().topics().get(0).name());
+
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(request);
+        assertEquals(
+            new OffsetCommitResponseData()
+                .setTopics(List.of(
+                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                        .setName(barTopicName)
+                        .setTopicId(barTopicId)
+                        .setPartitions(List.of(
+                            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                .setPartitionIndex(0)
+                                .setErrorCode(Errors.NONE.code())
+                        ))
+                )),
+            result.response()
+        );
     }
 
     @Test

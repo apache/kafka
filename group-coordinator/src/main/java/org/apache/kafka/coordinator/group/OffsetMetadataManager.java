@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
@@ -625,11 +626,6 @@ public class OffsetMetadataManager {
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
-            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
-                .setTopicId(topic.topicId())
-                .setName(topic.name());
-            response.topics().add(topicResponse);
-
             // Resolve topic ID if it's ZERO_UUID
             final Uuid resolvedTopicId = topic.topicId().equals(Uuid.ZERO_UUID)
                 ? metadataImage
@@ -637,6 +633,11 @@ public class OffsetMetadataManager {
                 .map(CoordinatorMetadataImage.TopicMetadata::id)
                 .orElse(Uuid.ZERO_UUID)
                 : topic.topicId();
+
+            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
+                .setTopicId(resolvedTopicId)
+                .setName(topic.name());
+            response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
                 if (isMetadataInvalid(partition.committedMetadata())) {
@@ -1288,11 +1289,12 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Updates the metadata image.
+     * A new metadata image is available.
      *
+     * @param delta    The delta image.
      * @param newImage The new metadata image.
      */
-    public void onMetadataUpdate(CoordinatorMetadataImage newImage) {
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
         this.metadataImage = newImage;
     }
 
