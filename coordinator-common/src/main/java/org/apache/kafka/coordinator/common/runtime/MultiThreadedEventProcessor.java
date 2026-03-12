@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * A multithreaded {{@link CoordinatorEvent}} processor which uses a {{@link EventAccumulator}}
+ * A multithreaded {@link CoordinatorEvent} processor which uses a {@link EventAccumulator}
  * which guarantees that events sharing a partition key are not processed concurrently.
  */
 public final class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
@@ -86,8 +86,8 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
      * @param logContext        The log context.
      * @param threadPrefix      The thread prefix.
      * @param numThreads        The number of threads.
-     * @param metrics           The coordinator runtime metrics.
      * @param time              The time.
+     * @param metrics           The coordinator runtime metrics.
      * @param eventAccumulator  The event accumulator.
      */
     public MultiThreadedEventProcessor(
@@ -196,7 +196,7 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
     }
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}} at the end of the processor.
+     * Enqueues a new {@link CoordinatorEvent} at the end of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
@@ -207,7 +207,7 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
     }
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}} at the front of the processor.
+     * Enqueues a new {@link CoordinatorEvent} at the front of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.

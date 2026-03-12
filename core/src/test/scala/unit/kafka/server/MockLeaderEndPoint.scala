@@ -140,7 +140,9 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
     checkLeaderEpochAndThrow(leaderEpoch, leaderState)
     leaderState.earliestPendingUploadOffset match {
       case -1L => new OffsetAndEpoch(-1L, -1)
-      case _ => new OffsetAndEpoch(math.max(leaderState.earliestPendingUploadOffset, leaderState.logStartOffset), leaderState.leaderEpoch)
+      case _ => new OffsetAndEpoch(
+        math.max(leaderState.earliestPendingUploadOffset, math.max(leaderState.localLogStartOffset, leaderState.logStartOffset)),
+        leaderState.leaderEpoch)
     }
   }
 

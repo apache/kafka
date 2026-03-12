@@ -270,7 +270,9 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     /**
      * Retrieve the kafka metric name.
      *
-     * @param name The name of the metric.
+     * @param name        The name of the metric.
+     * @param description The description of the metric.
+     * @param keyValue    The additional metric tags as key/value pairs.
      *
      * @return The kafka metric name.
      */

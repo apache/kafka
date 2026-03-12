@@ -229,7 +229,7 @@ public class RebalanceTaskClosureIntegrationTest {
                 // to avoid that the "pending task" get fully initialized
                 // (otherwise, we don't have a pending task when the shutdown happens)
                 pendingShutdownLatch.await();
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
