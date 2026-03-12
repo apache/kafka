@@ -44,7 +44,7 @@ public interface ProcessingExceptionHandler extends Configurable {
     @Deprecated
     default ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
         throw new UnsupportedOperationException();
-    };
+    }
 
     /**
      * Inspects a record and the exception received during processing.

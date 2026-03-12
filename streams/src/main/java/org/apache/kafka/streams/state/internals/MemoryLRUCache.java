@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -219,7 +220,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         // do-nothing since it is in-memory
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -75,6 +76,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -166,6 +168,7 @@ public class MeteredVersionedKeyValueStoreTest {
         when(keySerde.serializer()).thenReturn(keySerializer);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        when(context.headers()).thenReturn(new RecordHeaders());
 
         store.close();
         store = new MeteredVersionedKeyValueStore<>(
@@ -179,8 +182,10 @@ public class MeteredVersionedKeyValueStoreTest {
 
         store.put(KEY, VALUE, TIMESTAMP);
 
-        verify(keySerializer).serialize(changelogTopicName, KEY);
-        verify(valueSerializer).serialize(changelogTopicName, VALUE);
+        verify(keySerializer).serialize(changelogTopicName, new RecordHeaders(), KEY);
+        verify(valueSerializer).serialize(changelogTopicName, new RecordHeaders(), VALUE);
+        verify(keySerializer, never()).serialize(changelogTopicName, KEY);
+        verify(valueSerializer, never()).serialize(changelogTopicName, VALUE);
     }
 
     @Test
@@ -224,10 +229,10 @@ public class MeteredVersionedKeyValueStoreTest {
     }
 
     @Test
-    public void shouldDelegateAndRecordMetricsOnFlush() {
-        store.flush();
+    public void shouldDelegateAndRecordMetricsOnCommit() {
+        store.commit(Map.of());
 
-        verify(inner).flush();
+        verify(inner).commit(Map.of());
         assertThat((Double) getMetric("flush-rate").metricValue(), greaterThan(0.0));
     }
 
@@ -419,16 +424,14 @@ public class MeteredVersionedKeyValueStoreTest {
         when(inner.query(any(), any(), any())).thenReturn(
                 QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
 
-        KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, nullValue());
+        final KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
         final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
         VersionedRecordIterator<String> secondIterator = null;
         final long secondTime;
         try {
             try (final VersionedRecordIterator<String> unused = first.getResult()) {
-                oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
-                assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
@@ -450,9 +453,8 @@ public class MeteredVersionedKeyValueStoreTest {
                 secondIterator.close();
             }
         }
-
-        oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, nullValue());
+        // no open iterators left, timestamp should be reset to 0
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
     private KafkaMetric getMetric(final String name) {

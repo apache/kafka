@@ -20,7 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
 

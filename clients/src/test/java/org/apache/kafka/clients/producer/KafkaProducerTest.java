@@ -72,8 +72,8 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -176,7 +176,7 @@ import static org.mockito.Mockito.when;
 public class KafkaProducerTest {
 
     private static final String INIT_TXN_TIMEOUT_MSG =
-            "InitTransactions timed out — " +
+            "InitTransactions timed out - " +
                     "did not complete coordinator discovery or " +
                     "receive the InitProducerId response within max.block.ms.";
     

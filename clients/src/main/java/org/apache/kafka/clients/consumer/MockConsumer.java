@@ -284,7 +284,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         while (partitionsIter.hasNext() && numPollRecords < this.maxPollRecords) {
             Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry = partitionsIter.next();
 
-            if (!subscriptions.isPaused(entry.getKey())) {
+            if (!subscriptions.isPaused(entry.getKey()) && subscriptions.isAssigned(entry.getKey())) {
                 final Iterator<ConsumerRecord<K, V>> recIterator = entry.getValue().iterator();
                 while (recIterator.hasNext()) {
                     if (numPollRecords >= this.maxPollRecords) {
@@ -298,7 +298,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                         throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), position));
                     }
 
-                    if (assignment().contains(entry.getKey()) && rec.offset() >= position) {
+                    if (rec.offset() >= position) {
                         results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
                         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.empty(), rec.leaderEpoch());
                         SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(

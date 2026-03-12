@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -144,6 +145,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
         throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
     }

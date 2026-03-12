@@ -68,6 +68,8 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
+  override protected def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = false
+
   // process fetched data
   override def processPartitionData(
     topicPartition: TopicPartition,

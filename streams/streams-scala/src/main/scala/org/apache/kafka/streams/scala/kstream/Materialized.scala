@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.{ByteArrayKeyValueStore, ByteArraySessionStore, ByteArrayWindowStore}
 import org.apache.kafka.streams.state.{KeyValueBytesStoreSupplier, SessionBytesStoreSupplier, WindowBytesStoreSupplier}
 
+@deprecated("Use `org.apache.kafka.streams.kstream.Materialized` instead", "4.3.0")
 object Materialized {
 
   /**
