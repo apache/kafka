@@ -94,7 +94,7 @@ public class Cleaner {
         this(id, offsetMap, ioBufferSize, maxIoBufferSize, dupBufferLoadFactor, throttler, time, checkDone, Integer.MAX_VALUE, Integer.MAX_VALUE);
     }
 
-    // Visible for testing
+    // Only for testing
     public Cleaner(int id,
                    OffsetMap offsetMap,
                    int ioBufferSize,
@@ -354,8 +354,8 @@ public class Cleaner {
      * @param upperBoundOffsetOfCleaningRound Next offset of the last batch in the source segment
      * @param stats Collector for cleaning statistics
      * @param currentTime The time at which the clean was initiated
-     *                    
-     * @throws SegmentSizeOverflowException if the destination segment would overflow, 
+     *
+     * @throws SegmentSizeOverflowException if the destination segment would overflow,
      *         contains the position where overflow was detected
      */
     private void cleanInto(TopicPartition topicPartition,
