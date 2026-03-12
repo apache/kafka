@@ -863,19 +863,17 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               val isRetry = retryOnEpochBump || retryOnOverflow
 
               def generateTxnTransitMetadataForTxnCompletion(nextState: TransactionState, noPartitionAdded: Boolean): ApiResult[(Int, TxnTransitMetadata)] = {
-                // Maybe allocate new producer ID if the epoch is exhausted
-                // Note that we can arrive at this scenario when a client did a few keep-prepared calls and then
-                // decided to do one without keep-prepared (e.g. to force-terminate), so if we have
-                // nextProducerEpoch, then we need to do the epoch bump even for the isEpochFence case.
+                // EndTxn completion on TV2 bumps epoch, so rotate producer ID whenever the current epoch is exhausted.
+                // This must also apply to the epoch-fence path.
                 val nextProducerIdOrErrors =
-                  if ((!isEpochFence || txnMetadata.hasNextProducerEpoch) && txnMetadata.isProducerEpochExhausted) {
+                  if (txnMetadata.isProducerEpochExhausted) {
                     try {
                       Right(producerIdManager.generateProducerId())
                     } catch {
                       case e: Exception => Left(Errors.forException(e))
                     }
                   } else {
-                    Right(txnMetadata.nextProducerId)
+                    Right(RecordBatch.NO_PRODUCER_ID)
                   }
 
                 // If the next producer epoch is set (which can happen if we used InitProducerId(keepPreparedTxn))
