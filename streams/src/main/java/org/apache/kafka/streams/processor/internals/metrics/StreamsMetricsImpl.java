@@ -366,10 +366,16 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public void removeMetric(final MetricName metricName) {
+        if (metricName == null) {
+            return;
+        }
         metrics.removeMetric(metricName);
     }
 
     public void removeStoreLevelMetric(final MetricName metricName) {
+        if (metricName == null) {
+            return;
+        }
         metrics.removeMetric(metricName);
 
         final List<String> metricsScopeCandidates = metricName.tags().keySet().stream()

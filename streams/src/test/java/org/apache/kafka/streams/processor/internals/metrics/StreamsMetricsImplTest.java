@@ -72,6 +72,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1460,5 +1461,17 @@ public class StreamsMetricsImplTest {
             Collections.singletonMap("thread-id", "t1")
         );
         assertThat(metrics.metric(name), nullValue());
+    }
+
+    @Test
+    public void testRemoveMetricWithNullNameDoesNotThrow() {
+        // KAFKA-19906: removeMetric should handle null gracefully instead of
+        // throwing NPE from ConcurrentHashMap.remove()
+        assertDoesNotThrow(() -> streamsMetrics.removeMetric(null));
+    }
+
+    @Test
+    public void testRemoveStoreLevelMetricWithNullNameDoesNotThrow() {
+        assertDoesNotThrow(() -> streamsMetrics.removeStoreLevelMetric(null));
     }
 }
