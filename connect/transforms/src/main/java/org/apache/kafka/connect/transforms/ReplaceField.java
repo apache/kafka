@@ -22,7 +22,6 @@ import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -40,7 +39,7 @@ import java.util.Set;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC = "Filter or rename fields."
             + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
