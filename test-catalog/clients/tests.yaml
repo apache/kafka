@@ -2327,9 +2327,9 @@ org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManagerTest:
 org.apache.kafka.clients.consumer.internals.ShareMembershipManagerTest:
 - testDelayedMetadataUsedToCompleteAssignment
 - testFatalFailureWhenMemberAlreadyLeft
+- testFatalFailureWhenStateIsJoining
 - testFatalFailureWhenStateIsLeaving
 - testFatalFailureWhenStateIsStable
-- testFatalFailureWhenStateIsUnjoined
 - testFencedWhenAssignmentEmpty
 - testFencingWhenStateIsLeaving
 - testFencingWhenStateIsReconciling
