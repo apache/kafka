@@ -1587,9 +1587,7 @@ class TransactionsTest extends IntegrationTestHarness {
    * Finds the transaction coordinator and executes the provided function on the transaction metadata.
    */
   private def withTransactionMetadata[T](transactionalId: String)(f: org.apache.kafka.coordinator.transaction.TransactionMetadata => T): T = {
-    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
-      .description(transactionalId).get()
-    val coordinatorId = txnDescription.coordinatorId()
+    val coordinatorId = findTransactionCoordinatorId(transactionalId)
     val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
     val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
 
@@ -1699,5 +1697,31 @@ class TransactionsTest extends IntegrationTestHarness {
 
     // Wait for the broker to fully start and metadata to propagate
     TestUtils.waitUntilBrokerMetadataIsPropagated(brokers)
+
+    // Wait until a coordinator is stably available for the transactional ID.
+    // This is needed to avoid flakiness where we try to access coordinator metadata
+    // while leadership is still changing.  We wait for the coordinator ID to remain
+    // stable for a few consecutive checks.
+    var stableCoordinatorId: Option[Int] = None
+    var consecutiveStableChecks = 0
+    val requiredStableChecks = 3
+
+    waitUntilTrue(() => {
+      try {
+        val currentCoordinatorId = findTransactionCoordinatorId(transactionalId)
+        if (stableCoordinatorId.contains(currentCoordinatorId)) {
+          consecutiveStableChecks += 1
+        } else {
+          stableCoordinatorId = Some(currentCoordinatorId)
+          consecutiveStableChecks = 1
+        }
+        consecutiveStableChecks >= requiredStableChecks
+      } catch {
+        case _: Exception =>
+          stableCoordinatorId = None
+          consecutiveStableChecks = 0
+          false
+      }
+    }, s"Transaction coordinator did not stabilize after restarting broker $oldCoordinatorId")
   }
 }
