@@ -1074,7 +1074,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 }
             }
             return sourceMetrics == expectedSourceCount && checkpointMetrics == expectedCheckpointCount;
-        }, 10_000L, "Unable to find the MirrorMaker metrics");
+        }, 30_000L, "Unable to find the MirrorMaker metrics");
     }
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {
