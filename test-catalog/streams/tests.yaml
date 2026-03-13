@@ -4514,6 +4514,7 @@ org.apache.kafka.streams.state.internals.InMemorySessionStoreTest:
 - shouldBackwardFindSessionsToMerge
 - shouldBackwardFindValuesWithinMergingSessionWindowRange
 - shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext
+- shouldCountNumEntries
 - shouldFetchAllSessionsWithSameRecordKey
 - shouldFetchAllSessionsWithinKeyRange
 - shouldFetchAndIterateOverExactBinaryKeys
@@ -4550,6 +4551,7 @@ org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer
 org.apache.kafka.streams.state.internals.InMemoryWindowStoreTest:
 - shouldBackwardFetchAllInTimeRange
 - shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext
+- shouldCountNumEntries
 - shouldEarlyClosedIteratorStillGetAllRecords
 - shouldFetchAllInTimeRange
 - shouldFetchAndIterateOverExactBinaryKeys
@@ -4826,6 +4828,7 @@ org.apache.kafka.streams.state.internals.MeteredKeyValueStoreTest:
 - shouldThrowNullPointerOnReverseRangeIfFromIsNull
 - shouldThrowNullPointerOnReverseRangeIfToIsNull
 - shouldTimeIteratorDuration
+- shouldTrackNumKeysMetric
 - shouldTrackOldestOpenIteratorTimestamp
 - shouldTrackOpenIteratorsMetric
 - shouldWriteBytesToInnerStoreAndRecordPutMetric
@@ -4873,6 +4876,7 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreTest:
 - shouldThrowNullPointerOnRemoveIfWindowIsNull
 - shouldThrowNullPointerOnRemoveIfWrappedKeyIsNull
 - shouldTimeIteratorDuration
+- shouldTrackNumKeysMetric
 - shouldTrackOldestOpenIteratorTimestamp
 - shouldTrackOpenIteratorsMetric
 - shouldWriteBytesToInnerStoreAndRecordPutMetric
@@ -5023,6 +5027,7 @@ org.apache.kafka.streams.state.internals.MeteredWindowStoreTest:
 - shouldThrowNullPointerOnFetchIfKeyIsNull
 - shouldThrowNullPointerOnPutIfKeyIsNull
 - shouldTimeIteratorDuration
+- shouldTrackNumKeysMetric
 - shouldTrackOldestOpenIteratorTimestamp
 - shouldTrackOpenIteratorsMetric
 - testMetrics
@@ -6546,6 +6551,7 @@ org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsTest:
 - shouldGetNumberOfOpenFilesSensor
 - shouldGetWriteStallDurationSensor
 org.apache.kafka.streams.state.internals.metrics.StateStoreMetricsTest:
+- shouldAddNumKeysGauge
 - shouldGetAllSensor
 - shouldGetDeleteSensor
 - shouldGetFetchSensor
