@@ -128,6 +128,7 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
         }
+        assertFalse(context.listener.drainHandledBootstrapSnapshot().isPresent());
     }
 
     @ParameterizedTest
@@ -181,6 +182,7 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
         }
+        assertFalse(context.listener.drainHandledBootstrapSnapshot().isPresent());
     }
 
     @ParameterizedTest
@@ -2148,36 +2150,6 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
         }
         assertFalse(context.listener.drainHandledSnapshot().isPresent());
-    }
-
-    @Test
-    public void testListenerReceivesCommittedSnapshotNotBootstrap() throws Exception {
-        int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, false);
-        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
-
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
-            .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
-            .withEmptySnapshot(snapshotId)
-            .deleteBeforeSnapshot(snapshotId)
-            .build();
-
-        context.unattachedToLeader();
-        int epoch = context.currentEpoch();
-
-        long localLogEndOffset = context.log.endOffset().offset();
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, localLogEndOffset, epoch, 0));
-        context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
-
-        // Committed snapshot should route to handleLoadSnapshot, not handleLoadBootstrap
-        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
-            assertEquals(snapshotId, snapshot.snapshotId());
-        }
-        assertFalse(context.listener.drainHandledBootstrapSnapshot().isPresent());
     }
 
     private static ReplicaKey replicaKey(int id, boolean withDirectoryId) {
