@@ -1165,6 +1165,9 @@ class TransactionsTest extends IntegrationTestHarness {
           // Use keepPreparedTxn=true to preserve in-flight transaction
           recoveredProducer.initTransactions(true)
 
+          // Crash the transaction coordinator to test resilience during 2PC recovery
+          crashAndRestartTransactionCoordinator(transactionalId)
+
           // Verify dual identity after recovery
           val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
             .description(transactionalId).get()
@@ -1657,5 +1660,44 @@ class TransactionsTest extends IntegrationTestHarness {
    */
   private def getClientProducerEpoch(transactionalId: String): Short = {
     withTransactionMetadata(transactionalId)(_.clientProducerEpoch())
+  }
+
+  /**
+   * Helper method to find the transaction coordinator broker ID for a given transactional ID.
+   */
+  private def findTransactionCoordinatorId(transactionalId: String): Int = {
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    txnDescription.coordinatorId()
+  }
+
+  /**
+   * Helper method to crash the transaction coordinator, wait for a new coordinator to be elected,
+   * restart the crashed broker, and wait for leadership to stabilize.
+   * This simulates a coordinator failure during transaction processing.
+   */
+  private def crashAndRestartTransactionCoordinator(transactionalId: String): Unit = {
+    // Find the current coordinator
+    val oldCoordinatorId = findTransactionCoordinatorId(transactionalId)
+    val oldCoordinatorIndex = brokers.indexWhere(_.config.brokerId == oldCoordinatorId)
+
+    // Shutdown the coordinator broker
+    killBroker(oldCoordinatorIndex)
+
+    // Wait for a new coordinator to be elected (coordinator ID should change)
+    waitUntilTrue(() => {
+      try {
+        val newCoordinatorId = findTransactionCoordinatorId(transactionalId)
+        newCoordinatorId != oldCoordinatorId
+      } catch {
+        case _: Exception => false  // Coordinator not yet available
+      }
+    }, s"New coordinator was not elected after shutting down broker $oldCoordinatorId")
+
+    // Restart the old broker
+    startBroker(oldCoordinatorIndex)
+
+    // Wait for the broker to fully start and metadata to propagate
+    TestUtils.waitUntilBrokerMetadataIsPropagated(brokers)
   }
 }
