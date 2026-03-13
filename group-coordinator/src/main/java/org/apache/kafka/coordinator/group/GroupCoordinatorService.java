@@ -152,6 +152,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationEx
 import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNotNullOrEmpty;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 
 /**
@@ -583,6 +584,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         StreamsGroupHeartbeatRequestData request
     ) throws InvalidRequestException {
         throwIfNotNull(request.instanceId(), "Static membership is not yet supported.");
+        throwIfNotNull(request.taskOffsets(), "TaskOffsets are not supported yet.");
+        throwIfNotNull(request.taskEndOffsets(), "TaskEndOffsets are not supported yet.");
+        throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
         if (request.topology() != null) {
             for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : request.topology().subtopologies()) {
                 throwIfNotEmptyCollection(subtopology.sourceTopicRegex(), "Regular expressions for source topics are not supported yet.");
