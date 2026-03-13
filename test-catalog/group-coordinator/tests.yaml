@@ -19,6 +19,7 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testValidateWithAllGroupTypeConfigs
 org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testAppendLingerMs
+- testClampDynamicConfigs
 - testConfigs
 - testConsumerGroupAssignorFullClassNames
 - testConsumerGroupAssignors

@@ -1753,7 +1753,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testConfigUpdateWithSomeInvalidConfigs
 - testConnectionQuota
 - testConnectionRateQuota
-- testCoordinatorCachedBufferMaxBytesUpdates
+- testDynamicGroupCoordinatorConfig
 - testDynamicListenerConfig
 - testDynamicLogConfigCordonedLogDirs
 - testDynamicLogConfigHandlesSynonymsCorrectly
@@ -1764,6 +1764,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testDynamicRemoteFetchMaxWaitMsConfig
 - testDynamicRemoteListOffsetsRequestTimeoutMsConfig
 - testDynamicRemoteLogManagerFollowerThreadPoolSizeConfig
+- testDynamicShareCoordinatorConfig
 - testEnableFollowerFetchLastTieredOffset
 - testImproperConfigsAreRemoved
 - testIsolatedControllerAuthorizerConfig

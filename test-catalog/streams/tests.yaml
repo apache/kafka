@@ -5084,6 +5084,12 @@ org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapterTest:
 - shouldWrapRangeIterator
 - shouldWrapReverseAllIterator
 - shouldWrapReverseRangeIterator
+org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapterTest:
+- shouldCollectExecutionInfoForWindowKeyQueryWhenRequested
+- shouldCollectExecutionInfoForWindowRangeQueryWhenRequested
+- shouldHandleWindowKeyQuerySuccessfully
+- shouldHandleWindowRangeQuerySuccessfully
+- shouldNotCollectExecutionInfoWhenNotRequested
 org.apache.kafka.streams.state.internals.QueryableStoreProviderTest:
 - shouldFindGlobalStores
 - shouldReturnKVStoreWhenItExists
