@@ -140,7 +140,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected StateStoreContext context;
     protected Position position;
-    private OffsetCheckpoint positionCheckpoint;
 
     public RocksDBStore(final String name,
                         final String metricsScope) {
@@ -170,17 +169,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
         openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         this.context = stateStoreContext;
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+                this::writePosition
         );
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             stateStoreContext.appConfigs(),
@@ -252,7 +247,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         openRocksDB(dbOptions, columnFamilyOptions);
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         try {
-            cfAccessor.open(dbAccessor, !eosEnabled);
+            position = cfAccessor.open(dbAccessor, !eosEnabled);
         } catch (final StreamsException fatal) {
             final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
             throw new ProcessorStateException(fatalMessage, fatal);
@@ -394,6 +389,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             }
         }
         return columnFamilies;
+    }
+
+    private void writePosition() {
+        validateStoreOpen();
+        try {
+            cfAccessor.commit(dbAccessor, position);
+        } catch (final RocksDBException e) {
+            // TODO: fatal error?
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -906,6 +911,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         void commit(final DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
 
+        void commit(final DBAccessor accessor, final Position storePosition) throws RocksDBException;
+
         void addToBatch(final byte[] key,
                         final byte[] value,
                         final WriteBatchInterface batch) throws RocksDBException;
@@ -916,7 +923,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
          * Initializes the ColumnFamily.
          * @throws StreamsException if an invalid state is found and ignoreInvalidState is false
          */
-        void open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
+        Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
         Long getCommittedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
     }

@@ -38,7 +38,6 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -254,18 +253,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segments.setPosition(this.position);
-
         segments.openExisting(internalProcessorContext, observedStreamTime);
+        this.position = segments.position;
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+            () -> { } // Nothing to do?
         );
 
         open = true;

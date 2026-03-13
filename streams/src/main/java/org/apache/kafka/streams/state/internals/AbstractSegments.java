@@ -46,7 +46,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     private final long retentionPeriod;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
-    Position position;
+    protected final Position position = Position.emptyPosition();
 
     AbstractSegments(final String name, final long retentionPeriod, final long segmentInterval) {
         this.name = name;
@@ -60,10 +60,6 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     protected abstract S createSegment(long segmentId, String segmentName);
 
     protected abstract void openSegmentDB(final S segment, final StateStoreContext context);
-
-    public void setPosition(final Position position) {
-        this.position = position;
-    }
 
     @Override
     public long segmentId(final long timestamp) {

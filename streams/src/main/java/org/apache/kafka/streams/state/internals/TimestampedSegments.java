@@ -43,6 +43,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     @Override
     protected void openSegmentDB(final TimestampedSegment segment, final StateStoreContext context) {
         segment.openDB(context.appConfigs(), context.stateDir());
+        position.merge(segment.getPosition());
     }
 
     @Override
