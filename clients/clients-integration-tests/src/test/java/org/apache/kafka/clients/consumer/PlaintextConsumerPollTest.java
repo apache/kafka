@@ -224,12 +224,14 @@ public class PlaintextConsumerPollTest {
             };
             consumer.subscribe(List.of(topic), listener);
 
-            // Consume records to ensure the rebalance completed and positions are initialized (position then used in callback)
+            // Consume records to ensure the rebalance completed and positions are initialized
+            // (position then used in callback, triggered on next rebalance)
             awaitNonEmptyRecords(consumer, tp, 100);
 
             // force a rebalance to trigger an invocation of the revocation callback while in the group
             consumer.subscribe(List.of(otherTopic), listener);
-            // Consume records to ensure positions for otherTopic are initialized before close()
+            // Consume records to ensure positions for otherTopic are initialized
+            // (position then used in callback, triggered on close)
             awaitNonEmptyRecords(consumer, tpOther, 100);
 
             assertEquals(1, committedPosition.get());
