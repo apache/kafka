@@ -5364,9 +5364,6 @@ org.apache.kafka.common.utils.JavaTest:
 - testLoadKerberosLoginModule
 org.apache.kafka.common.utils.LoggingSignalHandlerTest:
 - testRegister
-org.apache.kafka.common.utils.MappedIteratorTest:
-- testEmptyList
-- testStringToInteger
 org.apache.kafka.common.utils.MockTimeTest:
 - testAdvanceClock
 - testAutoTickMs
