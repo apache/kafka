@@ -121,7 +121,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -4044,13 +4043,17 @@ public class ShareConsumerTest {
         // Verify the config is readable via describe configs.
         try (Admin adminClient = createAdminClient()) {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            Map<ConfigResource, Config> configs = assertDoesNotThrow(() ->
-                adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS));
-            Config config = configs.get(configResource);
-            assertNotNull(config);
-            ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-            assertNotNull(entry);
-            assertEquals("500", entry.value());
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    try {
+                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
+                        Config config = configs.get(configResource);
+                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+                        return entry != null && entry.value().equals("500");
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
         }
 
         // Verify the config can be updated dynamically.
@@ -4058,13 +4061,17 @@ public class ShareConsumerTest {
 
         try (Admin adminClient = createAdminClient()) {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            Map<ConfigResource, Config> configs = assertDoesNotThrow(() ->
-                adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS));
-            Config config = configs.get(configResource);
-            assertNotNull(config);
-            ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-            assertNotNull(entry);
-            assertEquals("1000", entry.value());
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    try {
+                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
+                        Config config = configs.get(configResource);
+                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+                        return entry != null && entry.value().equals("1000");
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
         }
     }
 

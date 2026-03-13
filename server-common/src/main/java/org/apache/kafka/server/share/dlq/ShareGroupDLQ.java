@@ -14,7 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package org.apache.kafka.server.share.dlq;
+
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Provides common interfaces used to describe pluggable, configurable and versioned components.
+ * The main interface to identify implementations of dead letter queues for share groups.
  */
-package org.apache.kafka.connect.components;
+public interface ShareGroupDLQ {
+    /**
+     * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
+     *
+     * @param param A java record encapsulating required and optional information about the kafka record
+     *              being dead letter queued.
+     * @return A completable future of Void type, mainly to signal exceptions.
+     */
+    CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param);
+}

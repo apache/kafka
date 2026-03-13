@@ -14,7 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.state.internals;
+
+import org.apache.kafka.streams.state.WindowStoreIterator;
+
 /**
- * Provides common interfaces used to describe pluggable, configurable and versioned components.
+ * Iterator adapter for {@link WindowStoreIterator} that converts plain values
+ * to timestamp-with-headers format by adding empty headers and timestamp=-1.
+ * <p>
+ * This extends {@link PlainToHeadersIteratorAdapter} to also implement the
+ * {@link WindowStoreIterator} interface marker.
  */
-package org.apache.kafka.connect.components;
+class PlainToHeadersWindowStoreIteratorAdapter
+    extends PlainToHeadersIteratorAdapter<Long>
+    implements WindowStoreIterator<byte[]> {
+
+    PlainToHeadersWindowStoreIteratorAdapter(final WindowStoreIterator<byte[]> innerIterator) {
+        super(innerIterator);
+    }
+}

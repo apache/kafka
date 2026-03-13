@@ -14,7 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package org.apache.kafka.server.share.dlq;
+
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Provides common interfaces used to describe pluggable, configurable and versioned components.
+ * A no op implementation of {@link ShareGroupDLQ}. This will be useful
+ * in development cycle and testing. All methods return immediately with
+ * a successfully completed future.
  */
-package org.apache.kafka.connect.components;
+public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
+    @Override
+    public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
+        return CompletableFuture.completedFuture(null);
+    }
+}

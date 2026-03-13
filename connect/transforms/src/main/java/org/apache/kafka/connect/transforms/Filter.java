@@ -18,7 +18,6 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 import java.util.Map;
@@ -29,7 +28,7 @@ import java.util.Map;
  * a particular {@link org.apache.kafka.connect.transforms.predicates.Predicate}.
  * @param <R> The type of record.
  */
-public class Filter<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public class Filter<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC = "Drops all records, filtering them from subsequent transformations in the chain. " +
             "This is intended to be used conditionally to filter out records matching (or not matching) " +

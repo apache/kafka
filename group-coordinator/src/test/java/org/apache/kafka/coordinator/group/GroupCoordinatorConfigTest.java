@@ -199,8 +199,20 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 666);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 500);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 400);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, 600);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 15 * 60 * 1000);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 250);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 150);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, 350);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 5000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 125);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 25);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, 225);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
         configs.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, 2 * 1024 * 1024);
 
         GroupCoordinatorConfig config = createConfig(configs);
@@ -231,8 +243,20 @@ public class GroupCoordinatorConfigTest {
         assertEquals(666, config.consumerGroupMaxSessionTimeoutMs());
         assertEquals(111, config.consumerGroupMinHeartbeatIntervalMs());
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
+        assertEquals(500, config.consumerGroupAssignmentIntervalMs());
+        assertEquals(400, config.consumerGroupMinAssignmentIntervalMs());
+        assertEquals(600, config.consumerGroupMaxAssignmentIntervalMs());
+        assertEquals(false, config.consumerGroupAssignorOffloadEnable());
         assertEquals(15 * 60 * 1000, config.consumerGroupRegexRefreshIntervalMs());
+        assertEquals(250, config.shareGroupAssignmentIntervalMs());
+        assertEquals(150, config.shareGroupMinAssignmentIntervalMs());
+        assertEquals(350, config.shareGroupMaxAssignmentIntervalMs());
+        assertEquals(false, config.shareGroupAssignorOffloadEnable());
         assertEquals(5000, config.streamsGroupInitialRebalanceDelayMs());
+        assertEquals(125, config.streamsGroupAssignmentIntervalMs());
+        assertEquals(25, config.streamsGroupMinAssignmentIntervalMs());
+        assertEquals(225, config.streamsGroupMaxAssignmentIntervalMs());
+        assertEquals(false, config.streamsGroupAssignorOffloadEnable());
         assertEquals(2 * 1024 * 1024, config.cachedBufferMaxBytes());
     }
 
@@ -335,6 +359,45 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, -1);
         assertEquals("Invalid value -1 for configuration group.streams.initial.rebalance.delay.ms: Value must be at least 0",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+    }
+
+    @Test
+    public void testClampDynamicConfigs() {
+        Map<String, String> consumerProps = Map.of(
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000",
+            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000"
+        );
+        testClampDynamicConfig(consumerProps, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000", "15000");
+        testClampDynamicConfig(consumerProps, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "45000", "45000");
+        testClampDynamicConfig(consumerProps, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000", "90000");
+
+        Map<String, String> shareProps = Map.of(
+            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000",
+            GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000"
+        );
+        testClampDynamicConfig(shareProps, GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000", "15000");
+        testClampDynamicConfig(shareProps, GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "45000", "45000");
+        testClampDynamicConfig(shareProps, GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000", "90000");
+
+        Map<String, String> streamsProps = Map.of(
+            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000",
+            GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000"
+        );
+        testClampDynamicConfig(streamsProps, GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000", "15000");
+        testClampDynamicConfig(streamsProps, GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "45000", "45000");
+        testClampDynamicConfig(streamsProps, GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000", "90000");
+    }
+
+    private void testClampDynamicConfig(
+        Map<String, String> props,
+        String configName,
+        String expectedValue,
+        String value
+    ) {
+        props = new HashMap<>(props);
+        props.put(configName, value);
+        GroupCoordinatorConfig.clampDynamicConfigs(props);
+        assertEquals(expectedValue, props.get(configName));
     }
 
     @Test
