@@ -323,7 +323,11 @@ public class RestoreIntegrationTest {
             startApplicationAndWaitUntilRunning(kafkaStreams);
         }
 
-        assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
+        waitForCondition(
+            () -> restored.get() == (long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2,
+            10_000,
+            () -> "Did not restore the expected state within the timeout period."
+        );
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
@@ -388,7 +392,11 @@ public class RestoreIntegrationTest {
 
         }
 
-        assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
+        waitForCondition(
+            () -> restored.get() == (long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2,
+            10_000,
+            () -> "Did not restore the expected state within the timeout period."
+        );
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));

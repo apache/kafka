@@ -189,7 +189,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           warmupTasks = List.empty,
           topology = topology
         )
-        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse.memberEpoch > 2
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Active task assignment should be available
@@ -285,7 +286,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .getOrElse(List.empty),
           topology = topology
         )
-        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.memberEpoch > streamsGroupHeartbeatResponse1.memberEpoch()
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify second member gets assigned
@@ -679,6 +681,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           processId = "process-2"
         )
         streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.memberEpoch > streamsGroupHeartbeatResponse1.memberEpoch() &&
           streamsGroupHeartbeatResponse2.activeTasks() != null
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
