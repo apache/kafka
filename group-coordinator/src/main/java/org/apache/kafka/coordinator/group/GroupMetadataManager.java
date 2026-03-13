@@ -4034,6 +4034,12 @@ public class GroupMetadataManager {
             time.milliseconds()
         );
         if (!canComputeNextTargetAssignment) {
+            returnedStatus.ifPresent(statusList -> statusList.add(
+                new Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment delayed due to the configured assignment interval.")
+            ));
+
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
