@@ -16,22 +16,22 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 /**
- * Facade that wraps {@link TimestampedWindowStore} to provide a plain value interface,
- * discarding timestamps.
+ * A facade that wraps {@link TimestampedWindowStoreWithHeaders} to provide a
+ * plain value interface, discarding both timestamps and headers.
  *
  * @param <K> key type
  * @param <V> value type
  */
-public class ReadOnlyWindowStoreFacade<K, V> extends GenericReadOnlyWindowStoreFacade<K, ValueAndTimestamp<V>, V> {
+public class ReadOnlyWindowStoreWithHeadersFacade<K, V> extends GenericReadOnlyWindowStoreFacade<K, ValueTimestampHeaders<V>, V> {
     // Expose the inner store with its full type for subclasses that need write access
-    protected final TimestampedWindowStore<K, V> inner;
+    protected final TimestampedWindowStoreWithHeaders<K, V> inner;
 
-    protected ReadOnlyWindowStoreFacade(final TimestampedWindowStore<K, V> store) {
-        super(store, ValueConverters.extractValue());
+    protected ReadOnlyWindowStoreWithHeadersFacade(final TimestampedWindowStoreWithHeaders<K, V> store) {
+        super(store, ValueConverters.extractValueFromHeaders());
         this.inner = store;
     }
 }

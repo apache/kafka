@@ -16,55 +16,22 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
-
-public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<K, V> {
+/**
+ * Facade that wraps {@link TimestampedKeyValueStore} to provide a plain value interface,
+ * discarding timestamps.
+ *
+ * @param <K> key type
+ * @param <V> value type
+ */
+public class ReadOnlyKeyValueStoreFacade<K, V> extends GenericReadOnlyKeyValueStoreFacade<K, ValueAndTimestamp<V>, V> {
+    // Expose the inner store with its full type for subclasses that need write access
     protected final TimestampedKeyValueStore<K, V> inner;
 
     protected ReadOnlyKeyValueStoreFacade(final TimestampedKeyValueStore<K, V> store) {
-        inner = store;
-    }
-
-    @Override
-    public V get(final K key) {
-        return getValueOrNull(inner.get(key));
-    }
-
-    @Override
-    public KeyValueIterator<K, V> range(final K from,
-                                        final K to) {
-        return new KeyValueIteratorFacade<>(inner.range(from, to));
-    }
-
-    @Override
-    public KeyValueIterator<K, V> reverseRange(final K from,
-                                               final K to) {
-        return new KeyValueIteratorFacade<>(inner.reverseRange(from, to));
-    }
-
-    @Override
-    public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
-                                                                           final PS prefixKeySerializer) {
-        return new KeyValueIteratorFacade<>(inner.prefixScan(prefix, prefixKeySerializer));
-    }
-
-    @Override
-    public KeyValueIterator<K, V> all() {
-        return new KeyValueIteratorFacade<>(inner.all());
-    }
-
-    @Override
-    public KeyValueIterator<K, V> reverseAll() {
-        return new KeyValueIteratorFacade<>(inner.reverseAll());
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return inner.approximateNumEntries();
+        super(store, ValueConverters.extractValue());
+        this.inner = store;
     }
 }
