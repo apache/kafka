@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -455,7 +454,7 @@ public class StreamThreadStateStoreProviderTest {
             partitions,
             topology,
             consumer,
-            new TopologyConfig(null, streamsConfig, new Properties()).getTaskConfig(),
+            streamsConfig.getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             mock(ThreadCache.class),

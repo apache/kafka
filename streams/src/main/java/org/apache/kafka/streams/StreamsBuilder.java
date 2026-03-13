@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -42,9 +43,12 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX;
 
 /**
  * {@code StreamsBuilder} provides the high-level Kafka Streams DSL to specify a Kafka Streams topology.
@@ -83,6 +87,7 @@ public class StreamsBuilder {
      *
      * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
      */
+    @Deprecated
     @SuppressWarnings("this-escape")
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = newTopology(topologyConfigs);
@@ -97,8 +102,30 @@ public class StreamsBuilder {
         );
     }
 
+    public StreamsBuilder(final Map<String, Object> configs) {
+        this(Utils.mkObjectProperties(configs));
+    }
+
+    public StreamsBuilder(final Properties properties) {
+        topology = newTopology(properties);
+        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalStreamsBuilder = new InternalStreamsBuilder(
+                internalTopologyBuilder,
+                StreamsConfig.InternalConfig.getBoolean(
+                        properties,
+                        ENABLE_PROCESS_PROCESSVALUE_FIX,
+                        false
+                )
+        );
+    }
+
+    @Deprecated
     protected Topology newTopology(final TopologyConfig topologyConfigs) {
         return new Topology(topologyConfigs);
+    }
+
+    protected Topology newTopology(final Properties properties) {
+        return new Topology(properties);
     }
 
     /**
@@ -584,7 +611,8 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
-        return build(null);
+        internalStreamsBuilder.buildAndOptimizeTopology();
+        return topology;
     }
 
     /**
@@ -603,6 +631,7 @@ public class StreamsBuilder {
      * @param props the {@link Properties} used for building possibly optimized topology
      * @return the {@link Topology} that represents the specified processing logic
      */
+    @Deprecated
     public synchronized Topology build(final Properties props) {
         internalStreamsBuilder.buildAndOptimizeTopology(props);
         return topology;

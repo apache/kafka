@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.kstream.KStream;
@@ -38,7 +39,9 @@ import org.apache.kafka.streams.processor.internals.StoreDelegatingProcessorSupp
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -65,8 +68,17 @@ public class Topology {
         this(new InternalTopologyBuilder());
     }
 
+    @Deprecated
     public Topology(final TopologyConfig topologyConfigs) {
         this(new InternalTopologyBuilder(topologyConfigs));
+    }
+
+    public Topology(final Map<String, Object> configs) {
+        this(Utils.mkObjectProperties(configs));
+    }
+
+    public Topology(final Properties properties) {
+        this(new InternalTopologyBuilder(new StreamsConfig(properties)));
     }
 
     protected Topology(final InternalTopologyBuilder internalTopologyBuilder) {

@@ -403,6 +403,7 @@ public abstract class TopologyTestDriverTest {
         return topology;
     }
 
+    @SuppressWarnings("deprecation")
     private Topology setupTopologyWithInternalTopic(final String firstTableName,
                                                     final String secondTableName,
                                                     final String joinName) {

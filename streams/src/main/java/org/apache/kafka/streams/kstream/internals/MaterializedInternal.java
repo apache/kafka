@@ -43,6 +43,7 @@ public final class MaterializedInternal<K, V, S extends StateStore> extends Mate
         this(materialized, nameProvider, generatedStorePrefix, false);
     }
 
+    @SuppressWarnings("deprecation")
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final InternalNameProvider nameProvider,
                                 final String generatedStorePrefix,
@@ -68,9 +69,14 @@ public final class MaterializedInternal<K, V, S extends StateStore> extends Mate
         // is configured with the main StreamsConfig
         if (dslStoreSuppliers == null) {
             if (nameProvider instanceof InternalStreamsBuilder) {
-                final TopologyConfig topologyConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologyConfigs();
-                if (topologyConfig != null) {
-                    dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
+                final StreamsConfig streamsConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologySpecificConfigs();
+                if (streamsConfig != null) {
+                    dslStoreSuppliers = streamsConfig.resolveDslStoreSuppliers().orElse(null);
+                } else {
+                    final TopologyConfig topologyConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologyConfigs();
+                    if (topologyConfig != null) {
+                        dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
+                    }
                 }
             }
         }

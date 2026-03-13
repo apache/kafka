@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -949,7 +948,6 @@ public class StateDirectoryTest {
     private StateStore initializeStartupStores(final TaskId taskId, final boolean createTaskDir) {
         directory.initializeProcessId();
         final TopologyMetadata metadata = Mockito.mock(TopologyMetadata.class);
-        final TopologyConfig topologyConfig = new TopologyConfig(config);
 
         final StateStore store = new MockKeyValueStore("test", true);
 
@@ -970,7 +968,7 @@ public class StateDirectoryTest {
                 Collections.emptyMap()
         );
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
-        Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
+        Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(config.getTaskConfig());
 
         directory.initializeStartupStores(metadata, new LogContext("test"), null);
 

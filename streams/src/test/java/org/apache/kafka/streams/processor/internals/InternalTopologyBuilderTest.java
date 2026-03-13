@@ -84,6 +84,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1450,6 +1451,182 @@ public class InternalTopologyBuilderTest {
             ConfigException.class,
             () -> new InternalTopologyBuilder(new TopologyConfig(new StreamsConfig(props)))
         );
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionWhenConfigIsNull() {
+        assertThrows(NullPointerException.class, () -> builder.verifySpecificTopologyConfig(null));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotThrowExceptionWhenConfigsMatch() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class);
+        props.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "rocksDB");
+
+        final StreamsConfig config = new StreamsConfig(props);
+        builder.setStreamsConfig(config);
+
+        // Should not throw any exception
+        builder.verifySpecificTopologyConfig(config);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotThrowTopologyExceptionWhenStoreTypeConfigsDoNotMatch() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props1.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "in_memory");
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "rocksDB");
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        assertDoesNotThrow(() -> builder.verifySpecificTopologyConfig(streamsConfig));
+    }
+
+    @Test
+    public void shouldNotThrowTopologyExceptionWhenProcessorConfigsDoNotMatch() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props1.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, NoOpProcessorWrapper.class);
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class);
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        assertDoesNotThrow(() -> builder.verifySpecificTopologyConfig(streamsConfig));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenExplicitNamingConfigsDoNotMatch() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props1.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, false);
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        assertDoesNotThrow(() -> builder.verifySpecificTopologyConfig(streamsConfig));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotThrowTopologyExceptionWhenStoreTypeConfigsIsMissing() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "rocksDB");
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        final TopologyException e = assertThrows(TopologyException.class, () -> builder.verifySpecificTopologyConfig(streamsConfig));
+        assertTrue(e.getMessage().contains("Invalid topology: The topology-specific config default.dsl.store is set in StreamsConfig but not applied to the topology."));
+        assertFalse(e.getMessage().contains("The topology-specific config processor.wrapper.class is set in StreamsConfig but not applied to the topology."));
+        assertFalse(e.getMessage().contains("The topology-specific config ensure.explicit.internal.resource.naming is set in StreamsConfig but not applied to the topology."));
+
+    }
+
+    @Test
+    public void shouldNotThrowTopologyExceptionWhenProcessorConfigsIsMissing() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class);
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        final TopologyException e = assertThrows(TopologyException.class, () -> builder.verifySpecificTopologyConfig(streamsConfig));
+        assertTrue(e.getMessage().contains("Invalid topology: The topology-specific config processor.wrapper.class is set in StreamsConfig but not applied to the topology."));
+        assertFalse(e.getMessage().contains("The topology-specific config default.dsl.store is set in StreamsConfig but not applied to the topology."));
+        assertFalse(e.getMessage().contains("The topology-specific config ensure.explicit.internal.resource.naming is set in StreamsConfig but not applied to the topology."));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenExplicitNamingConfigsIsMissing() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        final TopologyException e = assertThrows(TopologyException.class, () -> builder.verifySpecificTopologyConfig(streamsConfig));
+        assertTrue(e.getMessage().contains("Invalid topology: The topology-specific config ensure.explicit.internal.resource.naming is set in StreamsConfig but not applied to the topology."));
+        assertFalse(e.getMessage().contains("The topology-specific config default.dsl.store is set in StreamsConfig but not applied to the topology."));
+        assertFalse(e.getMessage().contains("The topology-specific config processor.wrapper.class is set in StreamsConfig but not applied to the topology."));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowTopologyExceptionWhenAllConfigsIsMissing() {
+        final Properties props1 = new Properties();
+        props1.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props1.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+
+        final Properties props2 = new Properties();
+        props2.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props2.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-1234");
+        props2.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        props2.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class);
+        props2.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "rocksDB");
+
+        final StreamsConfig topologyConfig = new StreamsConfig(props1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props2);
+
+        builder.setStreamsConfig(topologyConfig);
+
+        final TopologyException e = assertThrows(TopologyException.class, () -> builder.verifySpecificTopologyConfig(streamsConfig));
+        assertTrue(e.getMessage().contains("Invalid topology: The topology-specific config ensure.explicit.internal.resource.naming is set in StreamsConfig but not applied to the topology."));
+        assertTrue(e.getMessage().contains("The topology-specific config default.dsl.store is set in StreamsConfig but not applied to the topology."));
+        assertTrue(e.getMessage().contains("The topology-specific config processor.wrapper.class is set in StreamsConfig but not applied to the topology."));
     }
 
     public static class ProcessorSkippingWrapper implements ProcessorWrapper {

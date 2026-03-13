@@ -22,11 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
+import org.apache.kafka.streams.kstream.internals.TaskConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
@@ -310,7 +310,7 @@ public class TopologyMetadata {
 
     public TaskConfig taskConfig(final TaskId taskId) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(taskId);
-        return builder.topologyConfigs().getTaskConfig();
+        return builder.taskConfigs().getTaskConfig();
     }
 
     public void buildAndRewriteTopology() {
@@ -318,6 +318,7 @@ public class TopologyMetadata {
     }
 
     private void buildAndVerifyTopology(final InternalTopologyBuilder builder) {
+        builder.verifySpecificTopologyConfig(config);
         builder.rewriteTopology(config);
         builder.buildTopology();
 
