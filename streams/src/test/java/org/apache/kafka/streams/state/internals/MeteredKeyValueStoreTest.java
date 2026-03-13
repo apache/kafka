@@ -470,6 +470,17 @@ public class MeteredKeyValueStoreTest {
         assertTrue((Double) metric.metricValue() > 0);
     }
 
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        setUp();
+        when(inner.approximateNumEntries()).thenReturn(42L);
+        init();
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(42L));
+    }
+
     @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {

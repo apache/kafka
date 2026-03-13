@@ -14,31 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.streams.state.internals;
 
-import java.util.Iterator;
-import java.util.function.Function;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
- * An iterator that maps another iterator's elements from type `F` to type `T`.
+ * Iterator adapter for {@link WindowStoreIterator} that converts plain values
+ * to timestamp-with-headers format by adding empty headers and timestamp=-1.
+ * <p>
+ * This extends {@link PlainToHeadersIteratorAdapter} to also implement the
+ * {@link WindowStoreIterator} interface marker.
  */
-public final class MappedIterator<F, T> implements Iterator<T> {
-    private final Iterator<? extends F> underlyingIterator;
-    private final Function<F, T> mapper;
+class PlainToHeadersWindowStoreIteratorAdapter
+    extends PlainToHeadersIteratorAdapter<Long>
+    implements WindowStoreIterator<byte[]> {
 
-    public MappedIterator(Iterator<? extends F> underlyingIterator, Function<F, T> mapper) {
-        this.underlyingIterator = underlyingIterator;
-        this.mapper = mapper;
+    PlainToHeadersWindowStoreIteratorAdapter(final WindowStoreIterator<byte[]> innerIterator) {
+        super(innerIterator);
     }
-
-    @Override
-    public boolean hasNext() {
-        return underlyingIterator.hasNext();
-    }
-
-    @Override
-    public T next() {
-        return mapper.apply(underlyingIterator.next());
-    }
-
 }
