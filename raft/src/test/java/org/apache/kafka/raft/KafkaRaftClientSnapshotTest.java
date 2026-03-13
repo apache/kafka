@@ -2132,24 +2132,16 @@ public final class KafkaRaftClientSnapshotTest {
     @Test
     public void testListenerReceivesBootstrapSnapshot() throws Exception {
         ReplicaKey localKey = replicaKey(0, true);
-        ReplicaKey otherNodeKey = replicaKey(localKey.id() + 1, true);
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey));
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey));
 
         RaftClientTestContext context = new RaftClientTestContext
             .Builder(localKey.id(), localKey.directoryId().get())
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
-            .withUnknownLeader(3)
             .build();
 
-        context.unattachedToLeader();
-        int epoch = context.currentEpoch();
-
-        long localLogEndOffset = context.log.endOffset().offset();
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, localLogEndOffset, epoch, 0));
-        context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localKey.id()));
-        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+        // Single voter; poll to let it append control record and advance HWM
+        context.pollUntil(() -> context.client.highWatermark().isPresent());
 
         // Bootstrap snapshot should route to handleLoadBootstrap, not handleLoadSnapshot
         try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
