@@ -670,7 +670,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // the member should be using the OffsetCommit API version >= 9.
         if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
             throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
-                "by members using the modern group protocol");
+                "by members using the consumer group protocol");
         }
 
         // For members using the classic protocol, the epoch must match the last epoch sent

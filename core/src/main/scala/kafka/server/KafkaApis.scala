@@ -287,10 +287,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetCommitRequest.data.topics.forEach { topic =>
           metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
         }
-      } else {
-        offsetCommitRequest.data.topics.forEach { topic =>
-          topic.setTopicId(metadataCache.getTopicId(topic.name))
-        }
       }
 
       val authorizedTopics = authHelper.filterByAuthorized(

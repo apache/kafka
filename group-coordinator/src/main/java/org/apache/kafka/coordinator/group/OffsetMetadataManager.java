@@ -626,8 +626,16 @@ public class OffsetMetadataManager {
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
+            // Resolve topic ID if it's ZERO_UUID
+            final Uuid resolvedTopicId = topic.topicId().equals(Uuid.ZERO_UUID)
+                ? metadataImage
+                    .topicMetadata(topic.name())
+                    .map(CoordinatorMetadataImage.TopicMetadata::id)
+                    .orElse(Uuid.ZERO_UUID)
+                : topic.topicId();
+
             final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
-                .setTopicId(topic.topicId())
+                .setTopicId(resolvedTopicId)
                 .setName(topic.name());
             response.topics().add(topicResponse);
 
@@ -637,12 +645,20 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Validate commit per-partition
-                    validator.validate(
-                        topic.name(),
-                        topic.topicId(),
-                        partition.partitionIndex()
-                    );
+                    if (resolvedTopicId.equals(Uuid.ZERO_UUID)) {
+                        if (validator != CommitPartitionValidator.NO_OP) {
+                            throw new StaleMemberEpochException(
+                                "Cannot validate offset commit for partition " + topic.name() + "-" +
+                                    partition.partitionIndex() + " without topic ID.");
+                        }
+                    } else {
+                        // Validate commit per-partition
+                        validator.validate(
+                            topic.name(),
+                            resolvedTopicId,
+                            partition.partitionIndex()
+                        );
+                    }
 
                     log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
                         request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
@@ -699,21 +715,35 @@ public class OffsetMetadataManager {
             final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic().setName(topic.name());
             response.topics().add(topicResponse);
 
+            // Resolve topic ID if it's ZERO_UUID
+            final Uuid resolvedTopicId = metadataImage
+                .topicMetadata(topic.name())
+                .map(CoordinatorMetadataImage.TopicMetadata::id)
+                .orElse(Uuid.ZERO_UUID);
+
             topic.partitions().forEach(partition -> {
                 if (isMetadataInvalid(partition.committedMetadata())) {
                     topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Validate commit per-partition
-                    try {
-                        validator.validate(
-                            topic.name(),
-                            org.apache.kafka.common.Uuid.ZERO_UUID,
-                            partition.partitionIndex()
-                        );
-                    } catch (StaleMemberEpochException ex) {
-                        throw Errors.ILLEGAL_GENERATION.exception();
+                    if (resolvedTopicId.equals(Uuid.ZERO_UUID)) {
+                        if (validator != CommitPartitionValidator.NO_OP) {
+                            throw new StaleMemberEpochException(
+                                "Cannot validate transactional offset commit for partition " + topic.name() + "-" +
+                                    partition.partitionIndex() + " without topic ID.");
+                        }
+                    } else {
+                        // Validate commit per-partition
+                        try {
+                            validator.validate(
+                                topic.name(),
+                                resolvedTopicId,
+                                partition.partitionIndex()
+                            );
+                        } catch (StaleMemberEpochException ex) {
+                            throw Errors.ILLEGAL_GENERATION.exception();
+                        }
                     }
 
                     log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{} from member {} with leader epoch {}.",

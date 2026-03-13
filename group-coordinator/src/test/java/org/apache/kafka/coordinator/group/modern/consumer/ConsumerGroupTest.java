@@ -995,6 +995,31 @@ public class ConsumerGroupTest {
 
     @ParameterizedTest
     @MethodSource("offsetCommitVersionsAndTransactionalParams")
+    public void testValidateOffsetCommitWithClassicProtocolMember(boolean isTransactional, short version) {
+        Uuid topicId = Uuid.randomUuid();
+
+        ConsumerGroup group = createConsumerGroup("group-foo");
+
+        group.updateMember(new ConsumerGroupMember.Builder("member-id")
+            .setMemberEpoch(10)
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata())
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(topicId, 7, 0)))
+            .build());
+
+        // When client epoch (10) == broker epoch (10), no exception thrown and NO_OP validator returned.
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-id", "", 10, isTransactional, version
+        );
+        assertEquals(CommitPartitionValidator.NO_OP, validator);
+
+        // When client epoch (7) != broker epoch (10), IllegalGenerationException is thrown.
+        assertThrows(IllegalGenerationException.class, () ->
+            group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+    }
+
+    @ParameterizedTest
+    @MethodSource("offsetCommitVersionsAndTransactionalParams")
     public void testValidateOffsetCommitWithPartitionPendingRevocation(boolean isTransactional, short version) {
         Uuid topicId = Uuid.randomUuid();
 
