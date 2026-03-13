@@ -1001,16 +1001,12 @@ private[kafka] class Processor(
 
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
+      var header: RequestHeader = null
+      var req: RequestChannel.Request = null
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
-            val header = try {
-              parseRequestHeader(apiVersionManager, receive.payload)
-            } catch {
-              case e: Exception =>
-                receive.close()
-                throw e
-            }
+            header = parseRequestHeader(apiVersionManager, receive.payload)
             if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
               () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")
@@ -1020,7 +1016,7 @@ private[kafka] class Processor(
                 // be sure to decrease connection count and drop any in-flight responses
                 debug(s"Disconnecting expired channel: $channel : $header")
                 close(channel.id)
-                receive.close()
+                receive.close() // return buffer to memory pool
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
                 val connectionId = receive.source
@@ -1028,37 +1024,22 @@ private[kafka] class Processor(
                   channel.principal, listenerName, securityProtocol, channel.channelMetadataRegistry.clientInformation,
                   isPrivilegedListener, channel.principalSerde)
 
-                val req = try {
-                  new RequestChannel.Request(processor = id, context = context,
-                    startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
-                } catch {
-                  case e: Exception =>
-                    receive.close()
-                    throw e
-                }
+                req = new RequestChannel.Request(processor = id, context = context,
+                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
 
-                try {
-                  // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
-                  // and version. It is done here to avoid wiring things up to the api layer.
-                  if (header.apiKey == ApiKeys.API_VERSIONS) {
-                    val apiVersionsRequest = req.body[ApiVersionsRequest]
-                    if (apiVersionsRequest.isValid) {
-                      channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
-                        apiVersionsRequest.data.clientSoftwareName,
-                        apiVersionsRequest.data.clientSoftwareVersion))
-                    }
+                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                // and version. It is done here to avoid wiring things up to the api layer.
+                if (header.apiKey == ApiKeys.API_VERSIONS) {
+                  val apiVersionsRequest = req.body[ApiVersionsRequest]
+                  if (apiVersionsRequest.isValid) {
+                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                      apiVersionsRequest.data.clientSoftwareName,
+                      apiVersionsRequest.data.clientSoftwareVersion))
                   }
-                  requestChannel.sendRequest(req)
-                  selector.mute(connectionId)
-                  handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
-                } catch {
-                  case e: Exception =>
-                    // non-delayed buffers are released in Request constructor
-                    if (header.apiKey.requiresDelayedAllocation) {
-                      receive.close()
-                    }
-                    throw e
                 }
+                requestChannel.sendRequest(req)
+                selector.mute(connectionId)
+                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
               }
             }
           case None =>
@@ -1069,6 +1050,9 @@ private[kafka] class Processor(
         // note that even though we got an exception, we can assume that receive.source is valid.
         // Issues with constructing a valid receive object were handled earlier
         case e: Throwable =>
+          if (header == null || req == null || header.apiKey.requiresDelayedAllocation) {
+            receive.close() // return buffer to memory pool
+          }
           processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
       }
     }
