@@ -2225,6 +2225,7 @@ public final class RaftClientTestContext {
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
+        private boolean handleLoadBootstrapCalled = false;
 
         MockListener(OptionalInt localId) {
             this.localId = localId;
@@ -2366,8 +2367,12 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleLoadBootstrap(SnapshotReader<String> reader) {
-            // MockListener does not process bootstrap snapshots.
+            handleLoadBootstrapCalled = true;
             reader.close();
+        }
+
+        boolean handleLoadBootstrapCalled() {
+            return handleLoadBootstrapCalled;
         }
     }
 
