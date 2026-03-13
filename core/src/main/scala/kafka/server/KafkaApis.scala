@@ -283,11 +283,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val useTopicIds = OffsetCommitResponse.useTopicIds(request.header.apiVersion)
 
-      offsetCommitRequest.data.topics.forEach { topic =>
-        if (topic.topicId == Uuid.ZERO_UUID) {
-          topic.setTopicId(metadataCache.getTopicId(topic.name))
-        } else if (useTopicIds) {
+      if (useTopicIds) {
+        offsetCommitRequest.data.topics.forEach { topic =>
           metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
+        }
+      } else {
+        offsetCommitRequest.data.topics.forEach { topic =>
+          topic.setTopicId(metadataCache.getTopicId(topic.name))
         }
       }
 

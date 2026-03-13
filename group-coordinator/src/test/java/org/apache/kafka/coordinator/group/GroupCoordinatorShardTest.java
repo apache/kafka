@@ -1283,7 +1283,7 @@ public class GroupCoordinatorShardTest {
     @Test
     public void testOnMetadataUpdate() {
         CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
-        CoordinatorMetadataDelta delta = mock(CoordinatorMetadataDelta.class);
+        CoordinatorMetadataDelta delta = CoordinatorMetadataDelta.EMPTY;
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);

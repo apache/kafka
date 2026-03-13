@@ -1049,7 +1049,7 @@ class KafkaApisTest extends Logging {
       .setMemberId("member")
       .setTopics(util.List.of(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
+          .setTopicId(topicId)
           .setName(topicName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -1110,7 +1110,7 @@ class KafkaApisTest extends Logging {
       .setMemberId("member")
       .setTopics(util.List.of(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
+          .setTopicId(topicId)
           .setName(topicName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -1446,83 +1446,6 @@ class KafkaApisTest extends Logging {
     future.complete(offsetCommitResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
     assertEquals(expectedOffsetCommitResponse, response.data)
-  }
-
-  @Test
-  def testHandleOffsetCommitRequestWithZeroUuidResolvesTopicId(): Unit = {
-    val topicName = "foo"
-    val topicId = Uuid.randomUuid()
-    addTopicToMetadataCache(topicName, topicId = topicId, numPartitions = 2)
-
-    for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion() to ApiKeys.OFFSET_COMMIT.latestVersion()) {
-      // Version >= 10 requires topic IDs, skip.
-      if (version >= 10) return
-      reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
-
-      // Request sends ZERO_UUID with topic name
-      val offsetCommitRequest = new OffsetCommitRequestData()
-        .setGroupId("group")
-        .setMemberId("member")
-        .setTopics(util.List.of(
-          new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setTopicId(Uuid.ZERO_UUID)
-            .setName(topicName)
-            .setPartitions(util.List.of(
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(0)
-                .setCommittedOffset(10),
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(1)
-                .setCommittedOffset(20)))))
-
-      // Expected request should have resolved topic ID
-      val expectedOffsetCommitRequest = new OffsetCommitRequestData()
-        .setGroupId("group")
-        .setMemberId("member")
-        .setTopics(util.List.of(
-          new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setTopicId(topicId)
-            .setName(topicName)
-            .setPartitions(util.List.of(
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(0)
-                .setCommittedOffset(10),
-              new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                .setPartitionIndex(1)
-                .setCommittedOffset(20)))))
-
-      val requestChannelRequest =
-        buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest).build(version.toShort))
-
-      val future = new CompletableFuture[OffsetCommitResponseData]()
-      when(groupCoordinator.commitOffsets(
-        requestChannelRequest.context,
-        expectedOffsetCommitRequest,
-        RequestLocal.noCaching.bufferSupplier
-      )).thenReturn(future)
-      kafkaApis = createKafkaApis()
-      kafkaApis.handle(
-        requestChannelRequest,
-        RequestLocal.noCaching
-      )
-
-      val offsetCommitResponse = new OffsetCommitResponseData()
-        .setTopics(util.List.of(
-          new OffsetCommitResponseData.OffsetCommitResponseTopic()
-            .setTopicId(Uuid.ZERO_UUID)
-            .setName(topicName)
-            .setPartitions(util.List.of(
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                .setPartitionIndex(0)
-                .setErrorCode(Errors.NONE.code),
-              new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                .setPartitionIndex(1)
-                .setErrorCode(Errors.NONE.code)))))
-
-      future.complete(offsetCommitResponse)
-      val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
-      assertEquals(offsetCommitResponse, response.data)
-    }
   }
 
   @Test
