@@ -2152,7 +2152,9 @@ public final class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Bootstrap snapshot should route to handleLoadBootstrap, not handleLoadSnapshot
-        assertTrue(context.listener.handleLoadBootstrapCalled());
+        try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
+            assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
+        }
         assertFalse(context.listener.drainHandledSnapshot().isPresent());
     }
 
@@ -2183,7 +2185,7 @@ public final class KafkaRaftClientSnapshotTest {
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
         }
-        assertFalse(context.listener.handleLoadBootstrapCalled());
+        assertFalse(context.listener.drainHandledBootstrapSnapshot().isPresent());
     }
 
     private static ReplicaKey replicaKey(int id, boolean withDirectoryId) {

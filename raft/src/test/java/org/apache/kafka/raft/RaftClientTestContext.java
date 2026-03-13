@@ -2224,8 +2224,8 @@ public final class RaftClientTestContext {
         private LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
+        private Optional<SnapshotReader<String>> bootstrapSnapshot = Optional.empty();
         private boolean readCommit = true;
-        private boolean handleLoadBootstrapCalled = false;
 
         MockListener(OptionalInt localId) {
             this.localId = localId;
@@ -2367,12 +2367,14 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleLoadBootstrap(SnapshotReader<String> reader) {
-            handleLoadBootstrapCalled = true;
-            reader.close();
+            bootstrapSnapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
+            bootstrapSnapshot = Optional.of(reader);
         }
 
-        boolean handleLoadBootstrapCalled() {
-            return handleLoadBootstrapCalled;
+        Optional<SnapshotReader<String>> drainHandledBootstrapSnapshot() {
+            Optional<SnapshotReader<String>> temp = bootstrapSnapshot;
+            bootstrapSnapshot = Optional.empty();
+            return temp;
         }
     }
 
