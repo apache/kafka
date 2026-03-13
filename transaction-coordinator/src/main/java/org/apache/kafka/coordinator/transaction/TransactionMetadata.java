@@ -531,7 +531,7 @@ public class TransactionMetadata {
         short transitLastProducerEpoch = transitMetadata.lastProducerEpoch();
 
         if (isAtLeastTransactionsV2 &&
-           (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT)) {
+                (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT)) {
             if (transitProducerId != producerId) {
                 // Producer ID rotation case: validate that the transition metadata has the correct prevProducerId
                 // and that the transitProducerEpoch matches the nextProducerEpoch (which may have been bumped during EndTransaction).

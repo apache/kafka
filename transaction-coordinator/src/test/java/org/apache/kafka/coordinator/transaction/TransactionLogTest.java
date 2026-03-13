@@ -175,6 +175,51 @@ class TransactionLogTest {
     }
 
     @Test
+    void testAllPersistedFieldsRoundTrip() {
+        // Test that all persisted fields can be written and read back correctly.
+
+        var partitionsWithData = Set.of(
+            new TopicPartition("topic-a", 0),
+            new TopicPartition("topic-a", 1),
+            new TopicPartition("topic-b", 2)
+        );
+        var txnTransitMetadataWithPartitions = new TxnTransitMetadata(
+            100L,                           // producerId
+            50L,                            // prevProducerId
+            200L,                           // nextProducerId
+            (short) 5,                      // producerEpoch
+            (short) 3,                      // lastProducerEpoch (non-default, should become NO_PRODUCER_EPOCH)
+            (short) 10,                     // nextProducerEpoch
+            1000,                           // txnTimeoutMs
+            TransactionState.PREPARE_COMMIT, // state
+            new HashSet<>(partitionsWithData), // topicPartitions
+            500L,                           // txnStartTimestamp
+            750L,                           // txnLastUpdateTimestamp
+            TV_2                            // clientTransactionVersion
+        );
+
+        var recordWithPartitions = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+            TransactionLog.keyToBytes("test-txn-id"),
+            TransactionLog.valueToBytes(txnTransitMetadataWithPartitions, TV_2)
+        )).records().iterator().next();
+        var readResultWithPartitions = assertInstanceOf(TransactionLog.TxnRecord.class,
+            TransactionLog.read(recordWithPartitions.key(), recordWithPartitions.value()));
+        var deserializedWithPartitions = readResultWithPartitions.metadata();
+
+        assertEquals(100L, deserializedWithPartitions.producerId());
+        assertEquals(50L, deserializedWithPartitions.prevProducerId());
+        assertEquals(200L, deserializedWithPartitions.nextProducerId());
+        assertEquals((short) 5, deserializedWithPartitions.producerEpoch());
+        assertEquals(RecordBatch.NO_PRODUCER_EPOCH, deserializedWithPartitions.lastProducerEpoch());  // not persisted
+        assertEquals((short) 10, deserializedWithPartitions.nextProducerEpoch());
+        assertEquals(TransactionState.PREPARE_COMMIT, deserializedWithPartitions.state());
+        assertEquals(1000, deserializedWithPartitions.txnTimeoutMs());
+        assertEquals(500L, deserializedWithPartitions.txnStartTimestamp());
+        assertEquals(750L, deserializedWithPartitions.txnLastUpdateTimestamp());
+        assertEquals(partitionsWithData, deserializedWithPartitions.topicPartitions());
+    }
+
+    @Test
     void testDeserializeFutureTransactionLogValue() {
         // Copy of TransactionLogValue.PartitionsSchema.SCHEMA_1 with a few
         // additional tagged fields.
