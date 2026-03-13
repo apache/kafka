@@ -1032,10 +1032,9 @@ private[kafka] class Processor(
                   new RequestChannel.Request(processor = id, context = context,
                     startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
                 } catch {
-                  case e: Exception => {
+                  case e: Exception =>
                     receive.close()
                     throw e
-                  }
                 }
 
                 try {
@@ -1053,13 +1052,12 @@ private[kafka] class Processor(
                   selector.mute(connectionId)
                   handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
                 } catch {
-                  case e: Exception => {
+                  case e: Exception =>
                     // non-delayed buffers are released in Request constructor
                     if (header.apiKey.requiresDelayedAllocation) {
                       receive.close()
                     }
                     throw e
-                  }
                 }
               }
             }
