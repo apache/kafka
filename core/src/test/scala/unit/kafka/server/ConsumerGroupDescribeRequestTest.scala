@@ -126,7 +126,8 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       serverAssignor = "range",
       rebalanceTimeoutMs = timeoutMs,
       subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty
+      topicPartitions = List.empty,
+      expectedMemberEpoch = grp2Member1Response.memberEpoch + 1
     )
 
     for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {

@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -277,17 +278,33 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+    val (memberId1, memberEpoch1) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
 
     // Classic member 2 joins the group.
-    val joinGroupResponseData = sendJoinRequest(
-      groupId = groupId
-    )
     val memberId2 = sendJoinRequest(
-      groupId = groupId,
-      memberId = joinGroupResponseData.memberId,
-      metadata = metadata(List.empty)
+      groupId = groupId
     ).memberId
+
+    // Wait until the group's target assignment is updated.
+    TestUtils.waitUntilTrue(() => {
+      val generationId = sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId2,
+        metadata = metadata(List.empty)
+      ).generationId
+
+      if (generationId > memberEpoch1) {
+        true
+      } else {
+        // Member 1 heartbeats to trigger a new assignment.
+        consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId1,
+          memberEpoch = memberEpoch1
+        )
+        false
+      }
+    }, msg = "Target assignment did not update before timeout.")
 
     // Member 2 syncs. The assigned partition is empty.
     assertEquals(

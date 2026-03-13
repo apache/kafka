@@ -99,8 +99,10 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           .setGroupType(if (version >= 5) Group.GroupType.CONSUMER.toString else "")
 
         // Create grp-5 in new protocol. Then member 2 joins grp-5, triggering a rebalance. Grp-5 is in RECONCILING state.
-        memberId1InGroup5 = joinConsumerGroup("grp-5", useNewProtocol = true)._1
-        memberId2InGroup5 = joinConsumerGroup("grp-5", useNewProtocol = true)._1
+        val memberIdAndEpoch1InGroup5 = joinConsumerGroup("grp-5", useNewProtocol = true)
+        memberId1InGroup5 = memberIdAndEpoch1InGroup5._1
+        val memberEpoch1InGroup5 = memberIdAndEpoch1InGroup5._2
+        memberId2InGroup5 = joinConsumerGroup("grp-5", useNewProtocol = true, expectedMemberEpoch = memberEpoch1InGroup5 + 1)._1
         response5 = new ListGroupsResponseData.ListedGroup()
           .setGroupId("grp-5")
           .setProtocolType("consumer")

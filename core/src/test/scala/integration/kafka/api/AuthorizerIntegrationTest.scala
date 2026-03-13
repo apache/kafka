@@ -3178,7 +3178,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // in the broker and client can lead to other issues. This needs to be fixed properly by using
     // member permissions while computing assignments.
     var member2Response = sendAndReceiveFirstRegexHeartbeat("memberWithLimitedAccess", listenerName)
-    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1))
+    TestUtils.retry(15000) {
+      member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1))
+    }
     member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1), fullRequest = true)
     member2Response = sendAndReceiveRegexHeartbeat(member2Response, listenerName, Some(1))
 

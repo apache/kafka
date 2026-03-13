@@ -683,22 +683,31 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     (joinGroupResponseData.memberId, joinGroupResponseData.generationId)
   }
 
-  protected def joinConsumerGroupWithNewProtocol(groupId: String, memberId: String = ""): (String, Int) = {
+  protected def joinConsumerGroupWithNewProtocol(
+    groupId: String,
+    memberId: String = "",
+    expectedMemberEpoch: Int = 0
+  ): (String, Int) = {
     val consumerGroupHeartbeatResponseData = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty
+      topicPartitions = List.empty,
+      expectedMemberEpoch = expectedMemberEpoch
     )
     (consumerGroupHeartbeatResponseData.memberId, consumerGroupHeartbeatResponseData.memberEpoch)
   }
 
-  protected def joinConsumerGroup(groupId: String, useNewProtocol: Boolean): (String, Int) = {
+  protected def joinConsumerGroup(
+    groupId: String,
+    useNewProtocol: Boolean,
+    expectedMemberEpoch: Int = 0
+  ): (String, Int) = {
     if (useNewProtocol) {
       // Note that we heartbeat only once to join the group and assume
       // that the test will complete within the session timeout.
-      joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid().toString)
+      joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid().toString, expectedMemberEpoch = expectedMemberEpoch)
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
@@ -813,6 +822,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     subscribedTopicNames: List[String] = null,
     topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null,
     expectedError: Errors = Errors.NONE,
+    expectedMemberEpoch: Int = 0,
     version: Short = ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
   ): ConsumerGroupHeartbeatResponseData = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
@@ -828,12 +838,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setTopicPartitions(topicPartitions.asJava)
     ).build(version)
 
-    // Send the request until receiving a successful response. There is a delay
-    // here because the group coordinator is loaded in the background.
+    // Send the request until receiving a successful response and the member epoch has updated.
+    // There can be a delay before a successful response because the group coordinator is loaded in the background.
+    // There can be a delay before the member epoch has updated because of assignment batching and offload.
     var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-      consumerGroupHeartbeatResponse.data.errorCode == expectedError.code
+      consumerGroupHeartbeatResponse.data.errorCode == expectedError.code &&
+        (expectedMemberEpoch <= 0 || consumerGroupHeartbeatResponse.data.memberEpoch >= expectedMemberEpoch)
     }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
 
     consumerGroupHeartbeatResponse.data
