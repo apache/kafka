@@ -1120,7 +1120,6 @@ project(':core') {
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
-    testImplementation libs.jqwik
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1320,7 +1319,7 @@ project(':core') {
 
   test {
     useJUnitPlatform {
-      includeEngines 'jqwik', 'junit-jupiter'
+      includeEngines 'junit-jupiter'
     }
   }
 
@@ -2044,6 +2043,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
     include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/utils/Bytes.java"
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"

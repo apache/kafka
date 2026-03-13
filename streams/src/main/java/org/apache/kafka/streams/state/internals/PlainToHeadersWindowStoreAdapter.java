@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -31,28 +30,29 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 
 /**
  * Adapter for backward compatibility between {@link TimestampedWindowStoreWithHeaders}
- * and {@link WindowStore}.
+ * and plain {@link WindowStore}.
  * <p>
- * If a user provides a supplier for {@code WindowStore} (without timestamp and headers) when building
+ * If a user provides a supplier for plain {@code WindowStore} (without timestamp or headers) when building
  * a {@code TimestampedWindowStoreWithHeaders}, this adapter translates between the plain
  * {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  * <p>
  * Format conversion:
  * <ul>
- *   <li>Write: {@code [headers][timestamp][value]} → {@code [value]} (strip timestamp and headers)</li>
- *   <li>Read: {@code [value]} → {@code [headers][timestamp][value]} (add -1 as timestamp and empty headers)</li>
+ *   <li>Write: {@code [headers][timestamp][value]} → {@code [value]} (strip headers and timestamp)</li>
+ *   <li>Read: {@code [value]} → {@code [headers][timestamp][value]} (add empty headers and timestamp=-1)</li>
  * </ul>
  */
 public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
@@ -62,36 +62,15 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
-        this.store = store;
-    }
-
-    /**
-     * Extract raw value (with no timestamp and headers) from serialized ValueTimestampHeaders.
-     * This strips the timestamp and headers portion but keeps the value intact.
-     *
-     * Format conversion:
-     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
-     * Output: [value]
-     */
-    // TODO: should be extract to util class, tracked by KAFKA-20205
-    static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
+        if (store instanceof TimestampedBytesStore) {
+            throw new IllegalArgumentException("Provided store must be a plain (non-timestamped) window store, but it is timestamped.");
         }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // Skip headers and timestamp, keep value
-        buffer.position(buffer.position() + headersSize + 8);
-
-        final byte[] result = new byte[buffer.remaining()];
-        buffer.get(result);
-        return result;
+        this.store = store;
     }
 
     @Override
     public void put(final Bytes key, final byte[] valueWithTimestampAndHeaders, final long windowStartTimestamp) {
-        store.put(key, rawValue(valueWithTimestampAndHeaders), windowStartTimestamp);
+        store.put(key, rawPlainValue(valueWithTimestampAndHeaders), windowStartTimestamp);
     }
 
     @Override
@@ -101,22 +80,22 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return new PlainWindowToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+        return new PlainToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainWindowToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+        return new PlainToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return new PlainWindowToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
+        return new PlainToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainWindowToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
+        return new PlainToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
@@ -173,13 +152,67 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
         return new PlainToHeadersIteratorAdapter<>(store.backwardAll());
     }
 
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+
+        // Handle WindowKeyQuery: wrap iterator to convert from plain to headers format
+        if (query instanceof WindowKeyQuery) {
+            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = store.query(windowKeyQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final WindowStoreIterator<byte[]> wrappedIterator =
+                    new PlainToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else if (query instanceof WindowRangeQuery) {
+            // Handle WindowRangeQuery: wrap iterator to convert values
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                store.query(windowRangeQuery, positionBound, config);
+
+            if (rawResult.isSuccess()) {
+                final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
+                    new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            // For other query types, delegate to the underlying store
+            result = store.query(query, positionBound, config);
+        }
+
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns"
+            );
+        }
+
+        return result;
+    }
+
+    @Override
+    public Position getPosition() {
+        return store.getPosition();
+    }
+
     @Override
     public String name() {
         return store.name();
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
         store.init(context, root);
     }
 
@@ -201,50 +234,5 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     @Override
     public boolean isOpen() {
         return store.isOpen();
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-        final QueryResult<R> result = store.query(query, positionBound, config);
-
-        if (!result.isSuccess()) {
-            return result;
-        }
-
-        // Wrap iterators to convert from plain format to header format
-        if (query instanceof WindowKeyQuery) {
-            final QueryResult<WindowStoreIterator<byte[]>> rawResult = (QueryResult<WindowStoreIterator<byte[]>>) result;
-            final WindowStoreIterator<byte[]> wrappedIterator = new PlainWindowToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
-            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
-        } else if (query instanceof WindowRangeQuery) {
-            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-                (QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>>) result;
-            final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
-                new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
-            return (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
-        }
-
-        return result;
-    }
-
-    @Override
-    public Position getPosition() {
-        return store.getPosition();
-    }
-
-    /**
-     * Iterator adapter for WindowStoreIterator that converts plain values
-     * to timestamp-with-headers format by adding 1- as timestamp and empty headers.
-     */
-    private static class PlainWindowToHeadersWindowStoreIteratorAdapter
-        extends PlainToHeadersIteratorAdapter<Long>
-        implements WindowStoreIterator<byte[]> {
-
-        PlainWindowToHeadersWindowStoreIteratorAdapter(final KeyValueIterator<Long, byte[]> innerIterator) {
-            super(innerIterator);
-        }
     }
 }

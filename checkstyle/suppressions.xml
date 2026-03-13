@@ -303,7 +303,7 @@
     <suppress checks="ParameterNumber"
               files="(LogLoader|UnifiedLog).java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
-              files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest).java"/>
+              files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest|UnifiedLogTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
     <suppress checks="JavaNCSS" files="RemoteLogManagerTest.java"/>
 

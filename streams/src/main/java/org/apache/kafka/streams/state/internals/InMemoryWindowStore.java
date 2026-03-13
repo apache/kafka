@@ -403,6 +403,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         open = false;
     }
 
+    long numEntries() {
+        return segmentMap.values().stream()
+            .mapToLong(Map::size)
+            .sum();
+    }
+
     private void removeExpiredSegments() {
         long minLiveTime = Math.max(0L, observedStreamTime - retentionPeriod + 1);
         for (final InMemoryWindowStoreIteratorWrapper it : openIterators) {
