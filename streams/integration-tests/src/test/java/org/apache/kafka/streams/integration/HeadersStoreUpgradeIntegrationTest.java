@@ -1626,8 +1626,8 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder oldBuilder = new StreamsBuilder();
         oldBuilder.addStateStore(
                 Stores.sessionStoreBuilder(
-                    isPersistent ? Stores.persistentSessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS))
-                        : Stores.inMemorySessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),
+                    isPersistent ? Stores.persistentSessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)) :
+                        Stores.inMemorySessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.String(),
                     Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
@@ -1650,7 +1650,8 @@ public class HeadersStoreUpgradeIntegrationTest {
         AtomicReference<SessionWithHeadersProcessor> processorRef = new AtomicReference<>();
         newBuilder.addStateStore(
                 Stores.sessionStoreBuilderWithHeaders(
-                    Stores.persistentSessionStoreWithHeaders(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),
+                    isPersistent ? Stores.persistentSessionStoreWithHeaders(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)) :
+                        Stores.inMemorySessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.String(),
                     Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
@@ -1763,8 +1764,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             while (cause != null) {
                 if (cause instanceof ProcessorStateException &&
                     cause.getMessage() != null &&
-                    cause.getMessage().contains("headers-aware") &&
-                    cause.getMessage().contains("Downgrade")) {
+                    cause.getMessage().contains("incompatible settings")) {
                     exceptionThrown = true;
                     break;
                 }
@@ -1772,7 +1772,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             }
 
             if (!exceptionThrown) {
-                throw new AssertionError("Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+                throw new AssertionError("Expected ProcessorStateException about incompatible settings, but got: " + e.getMessage(), e);
             }
         } finally {
             kafkaStreams.close(Duration.ofSeconds(30L));
@@ -1932,7 +1932,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 }
                 return false;
             } catch (final Exception e) {
-                e.printStackTrace();
+                LOG.error("Error verifying session value with headers", e);
                 return false;
             }
         }, 60_000L, "Could not verify session value with headers in time.");
