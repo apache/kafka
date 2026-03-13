@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.trogdor.common;
+
+import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;

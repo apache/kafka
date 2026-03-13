@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.JsonNode;

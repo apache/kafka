@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringCredentialRefreshingLogin.LoginContextFactory;
-import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -35,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -281,6 +281,55 @@ public class ExpiringCredentialRefreshingLoginTest {
 
         public Future<?> refresherThreadDoneFuture() {
             return refresherThreadDoneFuture;
+        }
+    }
+
+    /*
+    * */
+    private static class MockScheduler implements MockTime.Listener {
+        /**
+         * The MockTime object.
+         */
+        private final MockTime time;
+
+        /**
+         * Futures which are waiting for a specified wall-clock time to arrive.
+         */
+        private final TreeMap<Long, List<KafkaFutureImpl<Long>>> waiters = new TreeMap<>();
+
+        public MockScheduler(MockTime time) {
+            this.time = time;
+            time.addListener(this);
+        }
+
+        public Time time() {
+            return time;
+        }
+
+        @Override
+        public synchronized void onTimeUpdated() {
+            long timeMs = time.milliseconds();
+            while (true) {
+                Map.Entry<Long, List<KafkaFutureImpl<Long>>> entry = waiters.firstEntry();
+                if ((entry == null) || (entry.getKey() > timeMs)) {
+                    break;
+                }
+                for (KafkaFutureImpl<Long> future : entry.getValue()) {
+                    future.complete(timeMs);
+                }
+                waiters.remove(entry.getKey());
+            }
+        }
+
+        public synchronized void addWaiter(long delayMs, KafkaFutureImpl<Long> waiter) {
+            long timeMs = time.milliseconds();
+            if (delayMs <= 0) {
+                waiter.complete(timeMs);
+            } else {
+                long triggerTimeMs = timeMs + delayMs;
+                List<KafkaFutureImpl<Long>> futures = waiters.computeIfAbsent(triggerTimeMs, k -> new ArrayList<>());
+                futures.add(waiter);
+            }
         }
     }
 
