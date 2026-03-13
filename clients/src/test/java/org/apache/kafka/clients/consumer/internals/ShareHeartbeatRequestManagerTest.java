@@ -52,7 +52,8 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
@@ -216,7 +217,7 @@ public class ShareHeartbeatRequestManagerTest {
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
-        Set<String> set = Collections.singleton(topic);
+        Set<String> set = Set.of(topic);
         when(subscriptions.subscription()).thenReturn(set);
         subscriptions.subscribeToShareGroup(set);
 
@@ -236,7 +237,7 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(0, heartbeatRequest.data().memberEpoch());
 
         // Should include subscription and group basic info to start getting assignments.
-        assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
+        assertEquals(List.of(topic), heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
     }
 
@@ -532,7 +533,7 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals("", data.memberId());
         assertEquals(0, data.memberEpoch());
-        assertEquals(Collections.emptyList(), data.subscribedTopicNames());
+        assertEquals(List.of(), data.subscribedTopicNames());
         membershipManager.onHeartbeatRequestGenerated();
 
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
@@ -549,37 +550,37 @@ public class ShareHeartbeatRequestManagerTest {
 
         // Join the group and subscribe to a topic, but the response has not yet been received
         String topic = "topic1";
-        subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
-        when(subscriptions.subscription()).thenReturn(Collections.singleton(topic));
+        subscriptions.subscribe(Set.of(topic), Optional.empty());
+        when(subscriptions.subscription()).thenReturn(Set.of(topic));
         mockRejoiningMemberData();
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
         assertEquals(0, data.memberEpoch());
-        assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
+        assertEquals(List.of(topic), data.subscribedTopicNames());
         membershipManager.onHeartbeatRequestGenerated();
 
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
         assertEquals(DEFAULT_MEMBER_ID, data.memberId());
         assertEquals(0, data.memberEpoch());
-        assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
+        assertEquals(List.of(topic), data.subscribedTopicNames());
 
         // Mock the response from the group coordinator which returns an assignment
         ShareGroupHeartbeatResponseData.TopicPartitions tpTopic1 =
                 new ShareGroupHeartbeatResponseData.TopicPartitions();
         Uuid topicId = Uuid.randomUuid();
         tpTopic1.setTopicId(topicId);
-        tpTopic1.setPartitions(Collections.singletonList(0));
+        tpTopic1.setPartitions(List.of(0));
         ShareGroupHeartbeatResponseData.Assignment assignmentTopic1 =
                 new ShareGroupHeartbeatResponseData.Assignment();
-        assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
+        assignmentTopic1.setTopicPartitions(List.of(tpTopic1));
         ShareGroupHeartbeatResponse rs1 = new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
                 .setMemberId(DEFAULT_MEMBER_ID)
                 .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
                 .setAssignment(assignmentTopic1));
-        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
+        when(metadata.topicNames()).thenReturn(Map.of(topicId, "topic1"));
         membershipManager.onHeartbeatSuccess(rs1);
     }
 
@@ -811,7 +812,7 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     private void mockStableMemberData() {
-        when(membershipManager.currentAssignment()).thenReturn(new AbstractMembershipManager.LocalAssignment(0, Collections.emptyMap()));
+        when(membershipManager.currentAssignment()).thenReturn(new AbstractMembershipManager.LocalAssignment(0, Map.of()));
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);

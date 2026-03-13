@@ -179,7 +179,7 @@ public class ShareCompletedFetch {
         ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
 
         if (cachedBatchException != null) {
-            // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+            // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
             Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
             inFlightBatch.setException(new ShareInFlightBatchException(cachedBatchException, offsets));
             cachedBatchException = null;
@@ -249,7 +249,7 @@ public class ShareCompletedFetch {
             }
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
-                // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+                // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
                 Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
                 inFlightBatch.setException(new ShareInFlightBatchException(e, offsets));
             } else {
