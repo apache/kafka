@@ -1698,30 +1698,35 @@ class TransactionsTest extends IntegrationTestHarness {
     // Wait for the broker to fully start and metadata to propagate
     TestUtils.waitUntilBrokerMetadataIsPropagated(brokers)
 
-    // Wait until a coordinator is stably available for the transactional ID.
-    // This is needed to avoid flakiness where we try to access coordinator metadata
-    // while leadership is still changing.  We wait for the coordinator ID to remain
-    // stable for a few consecutive checks.
-    var stableCoordinatorId: Option[Int] = None
-    var consecutiveStableChecks = 0
-    val requiredStableChecks = 3
+    // Calculate the transaction partition
+    val transactionPartitionId = org.apache.kafka.common.utils.Utils.abs(transactionalId.hashCode) %
+      brokers.head.metadataCache.numPartitions(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME).get
+    val transactionPartition = new TopicPartition(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME, transactionPartitionId)
 
+    // Wait for the old coordinator to be in ISR before triggering preferred leader election
+    waitUntilTrue(() => {
+      try {
+        val topicDesc = adminClient.describeTopics(java.util.Set.of(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME)).allTopicNames().get()
+        val partitionInfo = topicDesc.get(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME).partitions().asScala
+          .find(_.partition() == transactionPartitionId)
+        partitionInfo.exists(_.isr().asScala.exists(_.id() == oldCoordinatorId))
+      } catch {
+        case _: Exception => false
+      }
+    }, s"Old coordinator $oldCoordinatorId did not rejoin ISR for partition $transactionPartition")
+
+    // Trigger preferred leader election for the transaction state topic partition
+    adminClient.electLeaders(org.apache.kafka.common.ElectionType.PREFERRED,
+      java.util.Set.of(transactionPartition)).all().get()
+
+    // Wait until the old coordinator regains leadership.
     waitUntilTrue(() => {
       try {
         val currentCoordinatorId = findTransactionCoordinatorId(transactionalId)
-        if (stableCoordinatorId.contains(currentCoordinatorId)) {
-          consecutiveStableChecks += 1
-        } else {
-          stableCoordinatorId = Some(currentCoordinatorId)
-          consecutiveStableChecks = 1
-        }
-        consecutiveStableChecks >= requiredStableChecks
+        currentCoordinatorId == oldCoordinatorId
       } catch {
-        case _: Exception =>
-          stableCoordinatorId = None
-          consecutiveStableChecks = 0
-          false
+        case _: Exception => false  // Coordinator not yet available
       }
-    }, s"Transaction coordinator did not stabilize after restarting broker $oldCoordinatorId")
+    }, s"Old coordinator $oldCoordinatorId did not regain leadership after restart")
   }
 }
