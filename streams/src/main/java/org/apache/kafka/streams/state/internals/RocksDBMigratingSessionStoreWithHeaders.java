@@ -67,24 +67,34 @@ public class RocksDBMigratingSessionStoreWithHeaders extends RocksDBStore implem
         final ColumnFamilyHandle withHeadersColumnFamily = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
 
-        final RocksIterator noHeadersIter = db.newIterator(noHeadersColumnFamily);
-        noHeadersIter.seekToFirst();
-        if (noHeadersIter.isValid()) {
-            log.info("Opening store {} in upgrade mode", name);
-            cfAccessor = new DualColumnFamilyAccessor(
-                offsetsCf,
-                noHeadersColumnFamily,
-                withHeadersColumnFamily,
-                HeadersBytesStore::convertToHeaderFormat,
-                this,
-                    open
-            );
-        } else {
-            log.info("Opening store {} in regular mode", name);
-            cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, withHeadersColumnFamily);
-            noHeadersColumnFamily.close();
+        boolean success = false;
+        try {
+            try (final RocksIterator noHeadersIter = db.newIterator(noHeadersColumnFamily)) {
+                noHeadersIter.seekToFirst();
+                if (noHeadersIter.isValid()) {
+                    log.info("Opening store {} in upgrade mode", name);
+                    cfAccessor = new DualColumnFamilyAccessor(
+                        offsetsCf,
+                        noHeadersColumnFamily,
+                        withHeadersColumnFamily,
+                        HeadersBytesStore::convertToHeaderFormat,
+                        this,
+                            open
+                    );
+                } else {
+                    log.info("Opening store {} in regular mode", name);
+                    cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, withHeadersColumnFamily);
+                    noHeadersColumnFamily.close();
+                }
+            }
+            success = true;
+        } finally {
+            if (!success) {
+                for (final ColumnFamilyHandle handle : columnFamilies) {
+                    handle.close();
+                }
+            }
         }
-        noHeadersIter.close();
     }
 
 }
