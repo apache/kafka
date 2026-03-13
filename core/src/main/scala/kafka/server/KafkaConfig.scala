@@ -70,6 +70,10 @@ object KafkaConfig {
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
   private[server] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala
 
+  def clampDynamicConfigs(props: java.util.Map[String, String]): Unit = {
+    GroupCoordinatorConfig.clampDynamicConfigs(props)
+  }
+
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
