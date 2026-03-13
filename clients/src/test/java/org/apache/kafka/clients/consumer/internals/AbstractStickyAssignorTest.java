@@ -39,7 +39,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1269,7 +1268,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformSubscription() {
-        Map<String, Integer> topics = orderedMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
@@ -1336,7 +1335,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithNonEqualSubscription() {
-        Map<String, Integer> topics = orderedMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
         List<String> nonRackAwareAssignment = asList(
@@ -1558,14 +1557,5 @@ public abstract class AbstractStickyAssignorTest {
         this.numBrokerRacks = rackConfig != RackConfig.NO_BROKER_RACK ? 3 : 0;
         this.hasConsumerRack = rackConfig != RackConfig.NO_CONSUMER_RACK;
         AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
-    }
-
-    @SafeVarargs
-    private static <K, V> Map<K, V> orderedMap(Map.Entry<K, V>... entries) {
-        Map<K, V> map = new LinkedHashMap<>();
-        for (Map.Entry<K, V> entry : entries) {
-            map.put(entry.getKey(), entry.getValue());
-        }
-        return map;
     }
 }
