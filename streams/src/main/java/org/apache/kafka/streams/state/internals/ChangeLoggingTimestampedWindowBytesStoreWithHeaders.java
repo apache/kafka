@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -46,33 +49,66 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeL
     public void put(final Bytes key,
                     final byte[] valueTimestampHeaders,
                     final long windowStartTimestamp) {
-        byte[] oldValueTimestampHeaders = null;
         if (valueTimestampHeaders == null) {
-            // Deletion: fetch old value to preserve its headers in the tombstone
-            try (final WindowStoreIterator<byte[]> iter = wrapped().fetch(key, windowStartTimestamp, windowStartTimestamp)) {
-                if (iter.hasNext()) {
-                    oldValueTimestampHeaders = iter.next().value;
-                }
+            // Deletion path - isolate with new context
+            handleDelete(key, windowStartTimestamp);
+        } else {
+            // Normal put path
+            wrapped().put(key, valueTimestampHeaders, windowStartTimestamp);
+            log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), valueTimestampHeaders);
+        }
+    }
+
+    private void handleDelete(final Bytes key, final long windowStartTimestamp) {
+        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+        // Fetch old value to extract its headers (if exists)
+        byte[] oldValueTimestampHeaders = null;
+        try (final WindowStoreIterator<byte[]> iter = wrapped().fetch(key, windowStartTimestamp, windowStartTimestamp)) {
+            if (iter.hasNext()) {
+                oldValueTimestampHeaders = iter.next().value;
             }
         }
 
-        wrapped().put(key, valueTimestampHeaders, windowStartTimestamp);
+        // Create new headers object to isolate delete operation from input record
+        // Copy headers to the new headers object:
+        // - If old value exists, use its headers and timestamp
+        // - Otherwise, use current context's headers and timestamp
+        final Headers newHeaders = oldValueTimestampHeaders != null
+            ? new RecordHeaders(headers(oldValueTimestampHeaders))
+            : new RecordHeaders(currentContext.headers());
 
-        final Bytes changelogKey = keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups());
+        final long timestampToUse = oldValueTimestampHeaders != null
+            ? timestamp(oldValueTimestampHeaders)
+            : currentContext.timestamp();
 
-        if (valueTimestampHeaders == null && oldValueTimestampHeaders != null) {
-            // Deleting an existing record: log tombstone with old value's headers
+        // Create temporary context with new headers
+        final ProcessorRecordContext temporaryContext =
+            new ProcessorRecordContext(
+                timestampToUse,
+                currentContext.offset(),
+                currentContext.partition(),
+                currentContext.topic(),
+                newHeaders
+            );
+
+        internalContext.setRecordContext(temporaryContext);
+
+        try {
+            wrapped().put(key, null, windowStartTimestamp);
+
+            final Bytes changelogKey = keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups());
             internalContext.logChange(
                 name(),
                 changelogKey,
                 null,  // tombstone
-                timestamp(oldValueTimestampHeaders),
-                headers(oldValueTimestampHeaders),
+                temporaryContext.timestamp(),
+                temporaryContext.headers(),
                 wrapped().getPosition()
             );
-        } else {
-            // Normal put or deleting non-existent key: use standard log
-            log(changelogKey, valueTimestampHeaders);
+        } finally {
+            // Always restore original context
+            internalContext.setRecordContext(currentContext);
         }
     }
 

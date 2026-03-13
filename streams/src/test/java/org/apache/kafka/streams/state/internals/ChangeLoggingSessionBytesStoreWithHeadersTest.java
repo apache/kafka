@@ -196,7 +196,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.remove(key1);
 
-        verify(inner).remove(key1);
+        verify(inner).put(key1, null);
         // Should use headers from the old value, not from record context
         verify(context).logChange(
             store.name(),
@@ -221,7 +221,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.remove(key1);
 
-        verify(inner).remove(key1);
+        verify(inner).put(key1, null);
         // Should use headers from record context when key doesn't exist
         verify(context).logChange(
             store.name(),

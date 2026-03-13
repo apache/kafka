@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.SessionStore;
 
 import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.headers;
@@ -43,36 +46,70 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
 
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
+        handleDelete(sessionKey);
+    }
+
+    @Override
+    public void put(final Windowed<Bytes> sessionKey, final byte[] aggregationWithHeaders) {
+        if (aggregationWithHeaders == null) {
+            // Deletion path (put with null) - use same logic as remove()
+            handleDelete(sessionKey);
+        } else {
+            // Normal put path
+            wrapped().put(sessionKey, aggregationWithHeaders);
+            internalContext.logChange(
+                name(),
+                SessionKeySchema.toBinary(sessionKey),
+                rawAggregation(aggregationWithHeaders),
+                internalContext.recordContext().timestamp(),
+                headers(aggregationWithHeaders),
+                wrapped().getPosition()
+            );
+        }
+    }
+
+    private void handleDelete(final Windowed<Bytes> sessionKey) {
+        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+        // Fetch old value to extract its headers (if exists)
         final byte[] oldAggregationWithHeaders = wrapped().fetchSession(
             sessionKey.key(),
             sessionKey.window().start(),
             sessionKey.window().end()
         );
-        wrapped().remove(sessionKey);
-        internalContext.logChange(
-            name(),
-            SessionKeySchema.toBinary(sessionKey),
-            null,
-            internalContext.recordContext().timestamp(),
-            oldAggregationWithHeaders == null
-                ? internalContext.recordContext().headers()
-                : headers(oldAggregationWithHeaders),
-            wrapped().getPosition()
-        );
-    }
 
-    @Override
-    public void put(final Windowed<Bytes> sessionKey, final byte[] aggregationWithHeaders) {
-        wrapped().put(sessionKey, aggregationWithHeaders);
-        internalContext.logChange(
-            name(),
-            SessionKeySchema.toBinary(sessionKey),
-            rawAggregation(aggregationWithHeaders),
-            internalContext.recordContext().timestamp(),
-            aggregationWithHeaders == null
-                ? internalContext.recordContext().headers()
-                : headers(aggregationWithHeaders),
-            wrapped().getPosition()
-        );
+        // Create new headers object to isolate delete operation from input record
+        final Headers newHeaders = oldAggregationWithHeaders != null
+            ? new RecordHeaders(headers(oldAggregationWithHeaders))
+            : new RecordHeaders(currentContext.headers());
+
+        // Create temporary context with new headers
+        final ProcessorRecordContext temporaryContext =
+            new ProcessorRecordContext(
+                currentContext.timestamp(),
+                currentContext.offset(),
+                currentContext.partition(),
+                currentContext.topic(),
+                newHeaders
+            );
+
+        internalContext.setRecordContext(temporaryContext);
+
+        try {
+            wrapped().put(sessionKey, null);
+
+            // Log change - will use temporaryContext.headers()
+            internalContext.logChange(
+                name(),
+                SessionKeySchema.toBinary(sessionKey),
+                null,
+                temporaryContext.timestamp(),
+                temporaryContext.headers(),
+                wrapped().getPosition()
+            );
+        } finally {
+            // Always restore original context
+            internalContext.setRecordContext(currentContext);
+        }
     }
 }

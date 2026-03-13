@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
@@ -46,33 +48,57 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
 
     @Override
     public byte[] delete(final Bytes key) {
-        final byte[] oldValue = wrapped().delete(key);
-        log(key,
-            null,
-            oldValue == null
-                ? internalContext.recordContext().timestamp()
-                : timestamp(oldValue),
-            oldValue == null
-                ? internalContext.recordContext().headers()
-                : headers(oldValue)
-        );
-        return oldValue;
+        final ProcessorRecordContext currentContext = internalContext.recordContext();
+        final byte[] oldValue = wrapped().get(key);
+
+        // Copy headers to the new headers object:
+        // - If old value exists, use its headers
+        // - Otherwise, use current context's headers
+        // Key doesn't exist - use current context headers
+        final RecordHeaders newHeaders = oldValue != null
+            ? new RecordHeaders(headers(oldValue))
+            : new RecordHeaders(currentContext.headers());
+
+        // Create temporary context with new headers to avoid polluting input record's context
+        final ProcessorRecordContext temporaryContext =
+            new ProcessorRecordContext(
+                oldValue != null ? timestamp(oldValue) : currentContext.timestamp(),
+                currentContext.offset(),
+                currentContext.partition(),
+                currentContext.topic(),
+                newHeaders
+            );
+
+        internalContext.setRecordContext(temporaryContext);
+
+        try {
+            final byte[] deletedValue = wrapped().delete(key);
+
+            // Log with null value - will use temporary.headers() which we prepared above
+            log(key, null, temporaryContext.timestamp(), temporaryContext.headers());
+            return deletedValue;
+        } finally {
+            // Always restore original context so user code never notices
+            internalContext.setRecordContext(currentContext);
+        }
     }
 
     @Override
     public void put(final Bytes key,
                     final byte[] valueTimestampHeaders) {
-        wrapped().put(key, valueTimestampHeaders);
-        log(
-            key,
-            rawValue(valueTimestampHeaders),
-            valueTimestampHeaders == null
-                ? internalContext.recordContext().timestamp()
-                : timestamp(valueTimestampHeaders),
-            valueTimestampHeaders == null
-                ? internalContext.recordContext().headers()
-                : headers(valueTimestampHeaders)
-        );
+        if (valueTimestampHeaders == null) {
+            // Deletion path (put with null) - use same logic as delete()
+            delete(key);
+        } else {
+            // Normal put path
+            wrapped().put(key, valueTimestampHeaders);
+            log(
+                key,
+                rawValue(valueTimestampHeaders),
+                timestamp(valueTimestampHeaders),
+                headers(valueTimestampHeaders)
+            );
+        }
     }
 
     @Override
