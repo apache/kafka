@@ -1647,7 +1647,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
         // Phase 2: Restart with SessionStoreWithHeaders (headers-aware supplier)
         final StreamsBuilder newBuilder = new StreamsBuilder();
-        AtomicReference<SessionWithHeadersProcessor> processorRef = new AtomicReference<>();
+        final AtomicReference<SessionWithHeadersProcessor> processorRef = new AtomicReference<>();
         newBuilder.addStateStore(
                 Stores.sessionStoreBuilderWithHeaders(
                     isPersistent ? Stores.persistentSessionStoreWithHeaders(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)) :
@@ -1656,8 +1656,8 @@ public class HeadersStoreUpgradeIntegrationTest {
                     Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(() -> {
-                 SessionWithHeadersProcessor sessionStore = new SessionWithHeadersProcessor();
-                 processorRef.set(sessionStore);
+                final SessionWithHeadersProcessor sessionStore = new SessionWithHeadersProcessor();
+                processorRef.set(sessionStore);
                 return sessionStore;
             }, SESSION_STORE_NAME);
 
