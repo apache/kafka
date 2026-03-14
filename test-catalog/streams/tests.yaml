@@ -1377,7 +1377,7 @@ org.apache.kafka.streams.kstream.internals.NamedInternalTest:
 - shouldGenerateWithPrefixGivenEmptyName
 - shouldNotGenerateWithPrefixGivenValidName
 - shouldSuffixNameOrReturnProviderValue
-org.apache.kafka.streams.kstream.internals.SessionCacheFlushListenerTest:
+org.apache.kafka.streams.kstream.internals.SessionCacheFlushListenerWithHeaderTest:
 - shouldForwardKeyNewValueOldValueAndTimestamp
 org.apache.kafka.streams.kstream.internals.SessionWindowTest:
 - cannotCompareSessionWindowWithDifferentWindowType
@@ -5117,6 +5117,17 @@ org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacadeTest:
 - shouldReturnPlainKeyValuePairsForPrefixScan
 - shouldReturnPlainKeyValuePairsForRangeIterator
 - shouldReturnPlainValueOnGet
+org.apache.kafka.streams.state.internals.ReadOnlySessionStoreFacadeTest:
+- shouldReturnNullOnFetchSessionWhenNull
+- shouldReturnPlainValueOnFetchSession
+- shouldReturnStrippedKeyValuePairsOnBackwardFetch
+- shouldReturnStrippedKeyValuePairsOnBackwardFetchWithKeyRange
+- shouldReturnStrippedKeyValuePairsOnBackwardFindSessions
+- shouldReturnStrippedKeyValuePairsOnBackwardFindSessionsWithKeyRange
+- shouldReturnStrippedKeyValuePairsOnFetch
+- shouldReturnStrippedKeyValuePairsOnFetchWithKeyRange
+- shouldReturnStrippedKeyValuePairsOnFindSessions
+- shouldReturnStrippedKeyValuePairsOnFindSessionsWithKeyRange
 org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacadeTest:
 - shouldReturnPlainKeyValuePairsOnAll
 - shouldReturnPlainKeyValuePairsOnFetchAllInstantParameters
