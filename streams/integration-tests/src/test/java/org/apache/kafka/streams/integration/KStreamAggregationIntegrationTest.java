@@ -942,7 +942,7 @@ public class KStreamAggregationIntegrationTest {
             assertFalse(bob.hasNext());
         }
     }
-
+    
     @Test
     public void shouldCountUnlimitedWindows() throws Exception {
         final long startTime = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;

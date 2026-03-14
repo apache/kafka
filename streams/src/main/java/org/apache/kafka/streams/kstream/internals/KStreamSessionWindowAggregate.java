@@ -383,7 +383,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
 
         private SessionStore<KIn, AggregationWithHeaders<VAgg>> store;
-
+        
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             store = context.getStateStore(storeName);
