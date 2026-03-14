@@ -273,9 +273,6 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             }
 
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
-            if (next == null) {
-                return null;
-            }
 
             final AggregationWithHeaders<AGG> value = serdes.valueFrom(next.value, new RecordHeaders());
             final Headers headers = value != null ? value.headers() : new RecordHeaders();
@@ -302,7 +299,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             if (cachedNext == null) {
                 cachedNext = next();
             }
-            return cachedNext == null ? null : cachedNext.key;
+            return cachedNext.key;
         }
     }
 }
