@@ -755,8 +755,11 @@ public class IQv2StoreIntegrationTest {
 
     @AfterEach
     public void afterTest() {
-        kafkaStreams.close(Duration.ofSeconds(60));
-        kafkaStreams.cleanUp();
+        // only needed because some of the PAPI cases aren't added yet.
+        if (kafkaStreams != null) {
+            kafkaStreams.close(Duration.ofSeconds(60));
+            kafkaStreams.cleanUp();
+        }
     }
 
     @AfterAll
