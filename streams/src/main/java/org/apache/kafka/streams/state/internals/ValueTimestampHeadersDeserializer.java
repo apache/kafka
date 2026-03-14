@@ -104,14 +104,7 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
         if (rawValueTimestampHeaders == null) {
             return null;
         }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // skip headers plus timestamp
-        buffer.position(buffer.position() + headersSize + Long.BYTES);
-        final byte[] bytes = readBytes(buffer, buffer.remaining());
-
-        return deserializer.deserialize("", bytes);
+        return deserializer.deserialize("", Utils.rawPlainValue(rawValueTimestampHeaders));
     }
 
     /**
