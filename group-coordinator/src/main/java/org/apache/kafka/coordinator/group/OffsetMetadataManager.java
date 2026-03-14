@@ -633,7 +633,7 @@ public class OffsetMetadataManager {
 
             if (topic.topicId().equals(Uuid.ZERO_UUID)) {
                 if (validator != CommitPartitionValidator.NO_OP) {
-                    throw Errors.ILLEGAL_GENERATION.exception();
+                    throw Errors.STALE_MEMBER_EPOCH.exception();
                 }
             }
 
