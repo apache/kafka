@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -228,12 +229,16 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final SharePollEvent event) {
-        requestManagers.shareMembershipManager.ifPresent(shareMembershipManager -> {
-            shareMembershipManager.maybeReconcile(true);
-            shareMembershipManager.onConsumerPoll();
+        requestManagers.shareMembershipManager.ifPresent(shareMembershipManager ->
+            shareMembershipManager.maybeReconcile(true));
+
+        requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
+            ShareMembershipManager membershipManager = hrm.membershipManager();
+            membershipManager.onConsumerPoll();
+            hrm.resetPollTimer(event.pollTimeMs());
         });
-        requestManagers.shareHeartbeatRequestManager.ifPresent(hrm ->
-            hrm.resetPollTimer(event.pollTimeMs()));
+
+        event.completeSuccessfully();
     }
 
     private void process(final CreateFetchRequestsEvent event) {
