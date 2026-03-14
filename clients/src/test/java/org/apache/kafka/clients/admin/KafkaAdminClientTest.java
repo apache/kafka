@@ -11836,8 +11836,16 @@ public class KafkaAdminClientTest {
             // Make the call with a short timeout
             ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
 
-            // Advance time to exceed the timeout - this tests that even when timeout occurs,
-            // the OOM error is still propagated instead of being masked by TimeoutException
+            // Wait for the response to be processed by the AdminClient background thread.
+            // This ensures the OOM is thrown and propagated before we advance time past the deadline.
+            // The response processing will fail with OOM, completing the future exceptionally.
+            TestUtils.waitForCondition(
+                () -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Timed out waiting for response to be processed"
+            );
+
+            // Now advance time to exceed the timeout - this tests that even when timeout would occur,
+            // the OOM error that was already processed takes precedence over TimeoutException
             time.sleep(1500);
 
             TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());

@@ -922,8 +922,8 @@ public class KafkaAdminClient extends AdminClient {
             }
             nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
-            // Don't mask OutOfMemoryError as TimeoutException - propagate it directly
-            if (throwable instanceof OutOfMemoryError) {
+            // Don't mask VirtualMachineError as TimeoutException - propagate it directly
+            if (throwable instanceof VirtualMachineError) {
                 handleFailure(throwable);
                 return;
             }
