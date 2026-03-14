@@ -41,7 +41,6 @@ import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
-import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -93,7 +92,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private InternalMockProcessorContext<Windowed<String>, Change<Long>> mockContext;
     private KStreamSessionWindowAggregate<String, String, Long> sessionAggregator;
     private Processor<String, String, Windowed<String>, Change<Long>> processor;
-    private SessionStore<String, AggregationWithHeaders<Long>> sessionStore;
+    private SessionStoreWithHeaders<String, Long> sessionStore;
     
     public EmitStrategy.StrategyType type;
 
@@ -149,7 +148,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.init(mockContext);
     }
 
-    @SuppressWarnings("unchecked")
     private void initStore(final boolean enableCaching) {
         final SessionBytesStoreSupplier supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
             new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, GAP_MS * 3, true) :
@@ -166,7 +164,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         if (sessionStore != null) {
             sessionStore.close();
         }
-        sessionStore = (SessionStore<String, AggregationWithHeaders<Long>>) (SessionStore<?, ?>) storeBuilder.build();
+        sessionStore = storeBuilder.build();
         sessionStore.init(mockContext, sessionStore);
     }
 

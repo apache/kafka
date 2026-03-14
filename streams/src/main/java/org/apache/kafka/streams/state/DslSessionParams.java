@@ -57,7 +57,7 @@ public class DslSessionParams {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.emitStrategy = emitStrategy;
-        this.storeFormat = storeFormat == null ? DslStoreFormat.PLAIN : storeFormat;
+        this.storeFormat = storeFormat;
     }
 
     public String name() {
