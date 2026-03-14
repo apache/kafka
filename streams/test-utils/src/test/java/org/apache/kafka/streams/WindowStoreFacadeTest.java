@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -35,7 +36,6 @@ import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -110,148 +110,67 @@ public class WindowStoreFacadeTest {
     }
 
     @Test
-    public void shouldFetchSingleValueAndConvert() {
-        when(mockedWindowTimestampStore.fetch("key", 100L))
-            .thenReturn(ValueAndTimestamp.make("value", 42L));
-        when(mockedWindowTimestampStore.fetch("key2", 200L))
-            .thenReturn(null);
+    public void shouldReturnPosition() {
+        when(mockedWindowTimestampStore.getPosition())
+            .thenReturn(Position.emptyPosition());
 
-        assertThat(windowStoreFacade.fetch("key", 100L), is("value"));
-        assertNull(windowStoreFacade.fetch("key2", 200L));
+        assertThat(windowStoreFacade.getPosition(), is(Position.emptyPosition()));
+        verify(mockedWindowTimestampStore, times(1)).getPosition();
     }
 
     @Test
     public void shouldFetchTimeRangeAndConvertValues() {
         @SuppressWarnings("unchecked")
         final WindowStoreIterator<ValueAndTimestamp<String>> mockIterator = mock(WindowStoreIterator.class);
-        final Instant from = Instant.ofEpochMilli(100L);
-        final Instant to = Instant.ofEpochMilli(200L);
+        final long from = 100L;
+        final long to = 200L;
 
-        when(mockedWindowTimestampStore.fetch("key", from, to)).thenReturn(mockIterator);
+        when(mockedWindowTimestampStore.fetch("key", Instant.ofEpochMilli(from), Instant.ofEpochMilli(to))).thenReturn(mockIterator);
         when(mockIterator.hasNext()).thenReturn(true, true, false);
         when(mockIterator.next())
             .thenReturn(KeyValue.pair(100L, ValueAndTimestamp.make("value1", 10L)))
             .thenReturn(KeyValue.pair(150L, ValueAndTimestamp.make("value2", 20L)));
 
-        final WindowStoreIterator<String> iterator = windowStoreFacade.fetch("key", from, to);
-        assertThat(iterator.next(), is(KeyValue.pair(100L, "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair(150L, "value2")));
-    }
-
-    @Test
-    public void shouldBackwardFetchTimeRangeAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final WindowStoreIterator<ValueAndTimestamp<String>> mockIterator = mock(WindowStoreIterator.class);
-        final Instant from = Instant.ofEpochMilli(100L);
-        final Instant to = Instant.ofEpochMilli(200L);
-
-        when(mockedWindowTimestampStore.backwardFetch("key", from, to)).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair(150L, ValueAndTimestamp.make("value", 20L)));
-
-        final WindowStoreIterator<String> iterator = windowStoreFacade.backwardFetch("key", from, to);
-        assertThat(iterator.next(), is(KeyValue.pair(150L, "value")));
-    }
-
-    @Test
-    public void shouldFetchKeyRangeAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final Instant from = Instant.ofEpochMilli(100L);
-        final Instant to = Instant.ofEpochMilli(200L);
-        final Windowed<String> windowedKey = new Windowed<>("key1", new TimeWindow(100L, 200L));
-
-        when(mockedWindowTimestampStore.fetch("key1", "key2", from, to)).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
-
-        final KeyValueIterator<Windowed<String>, String> iterator =
-            windowStoreFacade.fetch("key1", "key2", from, to);
-        assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
-    }
-
-    @Test
-    public void shouldBackwardFetchKeyRangeAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final Instant from = Instant.ofEpochMilli(100L);
-        final Instant to = Instant.ofEpochMilli(200L);
-        final Windowed<String> windowedKey = new Windowed<>("key1", new TimeWindow(100L, 200L));
-
-        when(mockedWindowTimestampStore.backwardFetch("key1", "key2", from, to)).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
-
-        final KeyValueIterator<Windowed<String>, String> iterator =
-            windowStoreFacade.backwardFetch("key1", "key2", from, to);
-        assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+        try (final WindowStoreIterator<String> iterator = windowStoreFacade.fetch("key", from, to)) {
+            assertThat(iterator.next(), is(KeyValue.pair(100L, "value1")));
+            assertThat(iterator.next(), is(KeyValue.pair(150L, "value2")));
+        }
     }
 
     @Test
     public void shouldFetchAllTimeRangeAndConvertValues() {
         @SuppressWarnings("unchecked")
         final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final Instant from = Instant.ofEpochMilli(100L);
-        final Instant to = Instant.ofEpochMilli(200L);
+        final long from = 100L;
+        final long to = 200L;
         final Windowed<String> windowedKey = new Windowed<>("key", new TimeWindow(100L, 200L));
 
-        when(mockedWindowTimestampStore.fetchAll(from, to)).thenReturn(mockIterator);
+        when(mockedWindowTimestampStore.fetchAll(Instant.ofEpochMilli(from), Instant.ofEpochMilli(to))).thenReturn(mockIterator);
         when(mockIterator.hasNext()).thenReturn(true, false);
         when(mockIterator.next())
             .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
 
-        final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.fetchAll(from, to);
-        assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+        try (final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.fetchAll(from, to)) {
+            assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+        }
     }
 
     @Test
-    public void shouldBackwardFetchAllTimeRangeAndConvertValues() {
+    public void shouldFetchKeyRangeTimeRangeAndConvertValues() {
         @SuppressWarnings("unchecked")
         final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final Instant from = Instant.ofEpochMilli(100L);
-        final Instant to = Instant.ofEpochMilli(200L);
+        final long from = 100L;
+        final long to = 200L;
         final Windowed<String> windowedKey = new Windowed<>("key", new TimeWindow(100L, 200L));
 
-        when(mockedWindowTimestampStore.backwardFetchAll(from, to)).thenReturn(mockIterator);
+        when(mockedWindowTimestampStore.fetch("key", "key", Instant.ofEpochMilli(from), Instant.ofEpochMilli(to))).thenReturn(mockIterator);
         when(mockIterator.hasNext()).thenReturn(true, false);
         when(mockIterator.next())
             .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
 
-        final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.backwardFetchAll(from, to);
-        assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
-    }
-
-    @Test
-    public void shouldGetAllAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final Windowed<String> windowedKey = new Windowed<>("key", new TimeWindow(100L, 200L));
-
-        when(mockedWindowTimestampStore.all()).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
-
-        final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.all();
-        assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
-    }
-
-    @Test
-    public void shouldBackwardAllAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final Windowed<String> windowedKey = new Windowed<>("key", new TimeWindow(100L, 200L));
-
-        when(mockedWindowTimestampStore.backwardAll()).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair(windowedKey, ValueAndTimestamp.make("value", 10L)));
-
-        final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.backwardAll();
-        assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+        try (final KeyValueIterator<Windowed<String>, String> iterator = windowStoreFacade.fetch("key", "key", from, to)) {
+            assertThat(iterator.next(), is(KeyValue.pair(windowedKey, "value")));
+        }
     }
 
 }

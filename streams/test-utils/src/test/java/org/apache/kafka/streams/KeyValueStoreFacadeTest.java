@@ -17,11 +17,10 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.TopologyTestDriver.KeyValueStoreFacade;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -142,90 +141,11 @@ public class KeyValueStoreFacadeTest {
     }
 
     @Test
-    public void shouldGetAndConvertValue() {
-        when(mockedKeyValueTimestampStore.get("key1"))
-            .thenReturn(ValueAndTimestamp.make("value1", 42L));
-        when(mockedKeyValueTimestampStore.get("key2"))
-            .thenReturn(null);
+    public void shouldReturnPosition() {
+        when(mockedKeyValueTimestampStore.getPosition())
+            .thenReturn(Position.emptyPosition());
 
-        assertThat(keyValueStoreFacade.get("key1"), is("value1"));
-        assertNull(keyValueStoreFacade.get("key2"));
-    }
-
-    @Test
-    public void shouldRangeAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<String, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        when(mockedKeyValueTimestampStore.range("from", "to")).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 10L)))
-            .thenReturn(KeyValue.pair("key2", ValueAndTimestamp.make("value2", 20L)));
-
-        final KeyValueIterator<String, String> iterator = keyValueStoreFacade.range("from", "to");
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
-    }
-
-    @Test
-    public void shouldReverseRangeAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<String, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        when(mockedKeyValueTimestampStore.reverseRange("from", "to")).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 10L)));
-
-        final KeyValueIterator<String, String> iterator = keyValueStoreFacade.reverseRange("from", "to");
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-    }
-
-    @Test
-    public void shouldPrefixScanAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<String, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        final StringSerializer serializer = new StringSerializer();
-        when(mockedKeyValueTimestampStore.prefixScan("prefix", serializer)).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair("prefix-key", ValueAndTimestamp.make("value", 10L)));
-
-        final KeyValueIterator<String, String> iterator = keyValueStoreFacade.prefixScan("prefix", serializer);
-        assertThat(iterator.next(), is(KeyValue.pair("prefix-key", "value")));
-    }
-
-    @Test
-    public void shouldGetAllAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<String, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        when(mockedKeyValueTimestampStore.all()).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 10L)))
-            .thenReturn(KeyValue.pair("key2", ValueAndTimestamp.make("value2", 20L)));
-
-        final KeyValueIterator<String, String> iterator = keyValueStoreFacade.all();
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-        assertThat(iterator.next(), is(KeyValue.pair("key2", "value2")));
-    }
-
-    @Test
-    public void shouldReverseAllAndConvertValues() {
-        @SuppressWarnings("unchecked")
-        final KeyValueIterator<String, ValueAndTimestamp<String>> mockIterator = mock(KeyValueIterator.class);
-        when(mockedKeyValueTimestampStore.reverseAll()).thenReturn(mockIterator);
-        when(mockIterator.hasNext()).thenReturn(true, false);
-        when(mockIterator.next())
-            .thenReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 10L)));
-
-        final KeyValueIterator<String, String> iterator = keyValueStoreFacade.reverseAll();
-        assertThat(iterator.next(), is(KeyValue.pair("key1", "value1")));
-    }
-
-    @Test
-    public void shouldReturnApproximateNumEntries() {
-        when(mockedKeyValueTimestampStore.approximateNumEntries()).thenReturn(42L);
-
-        assertThat(keyValueStoreFacade.approximateNumEntries(), is(42L));
+        assertThat(keyValueStoreFacade.getPosition(), is(Position.emptyPosition()));
+        verify(mockedKeyValueTimestampStore, times(1)).getPosition();
     }
 }

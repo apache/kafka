@@ -31,8 +31,8 @@ import java.util.function.Function;
  * @param <OutV> output value type (exposed by this facade)
  */
 public class GenericReadOnlyKeyValueStoreFacade<K, InV, OutV> implements ReadOnlyKeyValueStore<K, OutV> {
-    protected final ReadOnlyKeyValueStore<K, InV> inner;
-    protected final Function<InV, OutV> valueConverter;
+    private final ReadOnlyKeyValueStore<K, InV> inner;
+    private final Function<InV, OutV> valueConverter;
 
     public GenericReadOnlyKeyValueStoreFacade(final ReadOnlyKeyValueStore<K, InV> inner,
                                               final Function<InV, OutV> valueConverter) {
