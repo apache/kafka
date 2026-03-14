@@ -80,14 +80,14 @@ public class UtilsTest {
 
     @Test
     public void shouldExtractRawValueWithEmptyHeaders() {
-        final byte[] data = new byte[1 + StateSerdes.TIMESTAMP_SIZE + VALUE.length];
-        final ByteBuffer buf = ByteBuffer.wrap(data);
-        buf.put((byte) 0x00); // header size
-        buf.putLong(TIMESTAMP);
-        buf.put(VALUE); // non-header payload
-
-        final byte[] res = rawPlainValue(data);
+        final byte[] res = rawPlainValue(timestampedValueWithEmptyHeaders(VALUE));
         assertArrayEquals(VALUE, res);
+    }
+
+    @Test
+    public void testRawPlainValueWithEmptyHeadersAndInvalidTimestamp() {
+        final byte[] invalid = timestampedValueWithEmptyHeadersInvalidTimestamp();
+        assertThrows(SerializationException.class, () -> rawPlainValue(invalid));
     }
 
     @ParameterizedTest
@@ -100,6 +100,25 @@ public class UtilsTest {
         final byte[] outputBytes = rawTimestampedValue(inputBytes);
 
         assertArrayEquals(timestampedValueOf(value), outputBytes);
+    }
+
+    @Test
+    public void testRawTimestampedValueWithEmptyHeaders() {
+        final byte[] input = timestampedValueWithEmptyHeaders(VALUE);
+        final byte[] res = rawTimestampedValue(input);
+        final ByteBuffer buf = ByteBuffer.wrap(res);
+        assertEquals(TIMESTAMP, buf.getLong());
+
+        assertEquals(VALUE.length, buf.remaining());
+        final byte[] resValue = new byte[buf.remaining()];
+        buf.get(resValue);
+        assertArrayEquals(VALUE, resValue);
+    }
+
+    @Test
+    public void testRawTimestampedValueWithEmptyHeadersAndInvalidTimestamp() {
+        final byte[] invalid = timestampedValueWithEmptyHeadersInvalidTimestamp();
+        assertThrows(SerializationException.class, () -> rawTimestampedValue(invalid));
     }
 
     @ParameterizedTest
@@ -152,6 +171,26 @@ public class UtilsTest {
         assertArrayEquals("-value".getBytes(StandardCharsets.UTF_8), tail);
 
         assertThrows(SerializationException.class, () -> readBytes(buf, 1));
+    }
+
+    private static byte[] timestampedValueWithEmptyHeaders(final byte[] value) {
+        // header size: 1 byte, emtpy headers: 0 byte, timestamp: 8 bytes, plain value length
+        final byte[] res = new byte[1 + 0 + StateSerdes.TIMESTAMP_SIZE + value.length];
+        final ByteBuffer buf = ByteBuffer.wrap(res);
+        buf.put((byte) 0x00); // header size
+        buf.putLong(TIMESTAMP);
+        buf.put(VALUE);
+        return res;
+    }
+
+    private static byte[] timestampedValueWithEmptyHeadersInvalidTimestamp() {
+        // header size: 1 byte, empty headers: 0 bytes, invalid timestamp: 1 byte, value: 1 byte
+        final byte[] invalid = new byte[1 + 0 + 1 + 1];
+        final ByteBuffer buf = ByteBuffer.wrap(invalid);
+        buf.put((byte) 0x00); // header size
+        buf.put((byte) 0x01); // invalid timestamp, should be StateSerde.TIMESTAMP_SIZE
+        buf.put((byte) 0x02); // plain value, small enough for the whole data to go under the min data size
+        return invalid;
     }
 
     private static Stream<Arguments> invalidHeaderSizes() {

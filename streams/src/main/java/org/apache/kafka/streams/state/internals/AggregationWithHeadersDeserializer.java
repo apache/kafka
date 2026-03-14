@@ -112,7 +112,7 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        // Skip the headers bytes without deserizization or copying
+        // Skip the headers bytes without deserializing or copying
         final int headersSize = ByteUtils.readVarint(buffer);
         buffer.position(buffer.position() + headersSize); 
         return readBytes(buffer, buffer.remaining());

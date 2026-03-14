@@ -100,7 +100,7 @@ public class RawBytesExtractionBenchmark {
                 buf.putInt(i + 1); // 4-byte header key
                 ByteUtils.writeVarint(4, buf);  // 1-byte header value size
                 buf.putInt(i + 1); // 4-byte header value
-                buf.putLong((long) i + 1); // non-header payload
+                buf.putLong((long) i + 1); // plain value
             }
         }
     }
