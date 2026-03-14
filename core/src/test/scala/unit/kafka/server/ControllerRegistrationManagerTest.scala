@@ -69,7 +69,6 @@ class ControllerRegistrationManagerTest {
 
   private def newControllerRegistrationManager(
     context: RegistrationTestContext,
-    exponentialBackoff: ExponentialBackoff = new ExponentialBackoff(1, 2, 100, 0.02)
   ): ControllerRegistrationManager = {
     new ControllerRegistrationManager(context.config.nodeId,
       context.clusterId,
@@ -78,7 +77,9 @@ class ControllerRegistrationManagerTest {
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
       ListenerInfo.create(context.config.controllerListeners.asJava),
-      exponentialBackoff
+      new ExponentialBackoff(1, 2, 100, 0)
+      // Use a backoff with no jitter so we can reliably observe the intermediate
+      // state after receiving error responses and before the scheduled retries.
     )
   }
 
@@ -247,13 +248,7 @@ class ControllerRegistrationManagerTest {
   @Test
   def testRetransmitRegistration(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    // Use a large retry backoff with no jitter so we can reliably observe the
-    // intermediate state after receiving the error response before the scheduled retry fires.
-    val retryBackoffMs = 1000L
-    val manager = newControllerRegistrationManager(
-      context,
-      new ExponentialBackoff(retryBackoffMs, 2, context.mockChannelManager.getTimeoutMs, 0.0)
-    )
+    val manager = newControllerRegistrationManager(context)
     try {
       context.controllerNodeProvider.node.set(controller1)
       manager.start(context.mockChannelManager)
@@ -274,7 +269,7 @@ class ControllerRegistrationManagerTest {
       assertEquals((false, 0, 1), rpcStats(manager))
 
       // the retried request will be sent after retryBackoffMs
-      context.time.sleep(retryBackoffMs)
+      context.time.sleep(1)
       assertEquals((true, 0, 1), rpcStats(manager))
 
       // the second response will complete the RPC successfully
@@ -290,13 +285,7 @@ class ControllerRegistrationManagerTest {
   @Test
   def testRetransmitRegistrationAfterTimeout(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    // Use a large retry backoff with no jitter so we can reliably observe the
-    // intermediate state after timeout before the scheduled retry fires.
-    val retryBackoffMs = 1000L
-    val manager = newControllerRegistrationManager(
-      context,
-      new ExponentialBackoff(retryBackoffMs, 2, context.mockChannelManager.getTimeoutMs, 0.0)
-    )
+    val manager = newControllerRegistrationManager(context)
     try {
       context.controllerNodeProvider.node.set(controller1)
 
@@ -321,7 +310,7 @@ class ControllerRegistrationManagerTest {
       assertEquals(0, context.mockChannelManager.unsentQueue.size())
 
       // the retried request will be sent after retryBackoffMs
-      context.time.sleep(retryBackoffMs)
+      context.time.sleep(1)
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 1
       assertEquals((true, 0, 1), rpcStats(manager))
       assertEquals(1, context.mockChannelManager.unsentQueue.size())
