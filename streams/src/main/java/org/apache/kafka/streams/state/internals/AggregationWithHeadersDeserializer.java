@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
@@ -85,9 +86,14 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
     /**
      * Extract headers from serialized AggregationWithHeaders.
      */
-    static Headers headers(final byte[] rawAggregationWithHeaders) {
+    public static Headers headers(final byte[] rawAggregationWithHeaders) {
         if (rawAggregationWithHeaders == null) {
             return null;
+        }
+
+        // If the header is empty, simply return it
+        if (rawAggregationWithHeaders.length > 0 && rawAggregationWithHeaders[0] == 0x00) {
+            return new RecordHeaders();
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);

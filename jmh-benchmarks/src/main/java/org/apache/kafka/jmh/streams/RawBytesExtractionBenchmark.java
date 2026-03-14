@@ -18,6 +18,7 @@
 package org.apache.kafka.jmh.streams;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
@@ -170,11 +171,27 @@ public class RawBytesExtractionBenchmark {
         }
     }
 
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testHeadersWithoutHeaders(IterationStateForEmptyHeaders state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(headersPre20249(randomValue));
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testHeadersWithoutHeadersOpt(IterationStateForEmptyHeaders state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(AggregationWithHeadersDeserializer.headers(randomValue));
+        }
+    }
+
     /**
      * Prior to KAFKA-20249: AggregationWithHeadersDeserializer - Extract the raw aggregation bytes from 
      * serialized AggregationWithHeaders, stripping the headers prefix. 
      */
-    public static byte[] rawAggregationPre20249(final byte[] aggregationWithHeaders) {
+    private static byte[] rawAggregationPre20249(final byte[] aggregationWithHeaders) {
         if (aggregationWithHeaders == null) {
             return null;
         }
@@ -188,7 +205,7 @@ public class RawBytesExtractionBenchmark {
      * Prior to KAFKA-20249: ValueAndTimestampDeserializer - Extract raw value from serialized 
      * ValueTimestampHeaders.
      */
-    public static byte[] rawValuePre20249(final byte[] rawValueTimestampHeaders) {
+    private static byte[] rawValuePre20249(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
             return null;
         }
@@ -228,4 +245,17 @@ public class RawBytesExtractionBenchmark {
         buffer.get(result);
         return result;
     }
+
+    /**
+     * Prior to KAFKA-20249 - AggregationWithHeadersDeserializer - Extract headers from serialized AggregationWithHeaders.
+     */
+    private static Headers headersPre20249(final byte[] rawAggregationWithHeaders) {
+        if (rawAggregationWithHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
+        return readHeaders(buffer);
+    }
+
 }
