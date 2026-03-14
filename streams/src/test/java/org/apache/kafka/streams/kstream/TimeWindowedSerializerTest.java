@@ -39,6 +39,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -130,12 +131,12 @@ public class TimeWindowedSerializerTest {
 
         testSerializer.serialize("dummy", headers, data);
 
-        verify(mockSerializer).serialize(anyString(), eq(headers), eq(key));
+        verify(mockSerializer, times(1)).serialize(anyString(), eq(headers), eq(key));
         verify(mockSerializer, never()).serialize(anyString(), eq(key));
 
         testSerializer.serializeBaseKey("dummy", headers, data);
 
-        verify(mockSerializer).serialize(anyString(), eq(headers), eq(key));
+        verify(mockSerializer, times(2)).serialize(anyString(), eq(headers), eq(key));
         verify(mockSerializer, never()).serialize(anyString(), eq(key));
     }
 }
