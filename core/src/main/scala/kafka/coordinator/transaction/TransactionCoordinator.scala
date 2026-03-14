@@ -141,6 +141,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       // keepPreparedTxn can only be specified in the initial call of InitProducerId, so
       // no expected producerId / epoch should be set
       responseCallback(initTransactionError(Errors.INVALID_REQUEST))
+    } else if (keepPreparedTxn && !txnManager.transactionVersionLevel().supportsEpochBump()) {
+      // keepPreparedTxn requires TV_2+
+      responseCallback(initTransactionError(Errors.UNSUPPORTED_VERSION))
     } else if (!txnManager.validateTransactionTimeoutMs(enableTwoPCFlag, transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))

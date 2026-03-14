@@ -3310,6 +3310,55 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldRejectKeepPreparedTxnWhenTransactionVersionTooLow(): Unit = {
+    // Test that keepPreparedTxn=true is rejected when transaction.version < TV_2.
+    // keepPreparedTxn requires TV_2 to ensure the 2PC metadata (nextProducerEpoch,
+    // prevProducerId, nextProducerId) is properly persisted to the transaction log.
+    // Without TV_2, these fields would be omitted during serialization, causing
+    // silent data corruption on coordinator recovery.
+
+    // Setup: ONGOING transaction at TV_0
+    val txnMetadata = new TransactionMetadata(
+      transactionalId,
+      producerId,
+      RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID,
+      producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      Integer.MAX_VALUE,  // 2PC transaction timeout
+      TransactionState.ONGOING,
+      partitions,
+      time.milliseconds(),
+      time.milliseconds(),
+      TV_0  // Transaction version 0 - doesn't support epoch bump
+    )
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.isTransaction2pcEnabled())
+      .thenReturn(true)
+    when(transactionManager.transactionVersionLevel())
+      .thenReturn(TV_0)  // Cluster finalized feature is TV_0
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+
+    // Attempt InitProducerId with keepPreparedTxn when TV < TV_2
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      None,
+      initProducerIdMockCallback
+    )
+
+    // Verify: Returns UNSUPPORTED_VERSION
+    assertEquals(Errors.UNSUPPORTED_VERSION, result.error,
+      "Should return UNSUPPORTED_VERSION when keepPreparedTxn=true but transaction.version < TV_2")
+  }
+
+  @Test
   def shouldRejectKeepPreparedTxnWithoutOngoingTransaction(): Unit = {
     // Test that keepPreparedTxn=true without an ONGOING transaction returns an
     // appropriate error.  Properly implemented clients call keepPreparedTxn only
