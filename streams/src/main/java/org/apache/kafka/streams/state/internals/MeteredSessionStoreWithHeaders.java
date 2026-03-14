@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -51,6 +52,17 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                                    final Serde<AggregationWithHeaders<AGG>> aggSerde,
                                    final Time time) {
         super(inner, metricsScope, keySerde, aggSerde, time);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    protected Serde<AggregationWithHeaders<AGG>> prepareValueSerdeForStore(
+            final Serde<AggregationWithHeaders<AGG>> valueSerde,
+            final SerdeGetter getter) {
+        if (valueSerde == null) {
+            return new AggregationWithHeadersSerde<>((Serde<AGG>) getter.valueSerde());
+        }
+        return super.prepareValueSerdeForStore(valueSerde, getter);
     }
 
     @Override
