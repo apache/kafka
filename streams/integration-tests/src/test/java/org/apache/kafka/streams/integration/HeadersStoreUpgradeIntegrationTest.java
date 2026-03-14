@@ -390,8 +390,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                     final ValueAndTimestamp<V> result = store.get(key);
                     return result != null && result.value().equals(value) && result.timestamp() == timestamp;
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Error while checking store result", swallow);
                     return false;
                 }
             },
@@ -425,8 +424,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                     final V result = store.get(key);
                     return result != null && result.equals(value);
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Error while verifying legacy value", swallow);
                     return false;
                 }
             },
@@ -452,8 +450,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                     final ValueAndTimestamp<V> result = store.get(key);
                     return result != null && result.value().equals(value) && result.timestamp() == timestamp;
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Error while waiting for expected result", swallow);
                     return false;
                 }
             },
@@ -493,8 +490,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                         && result.timestamp() == timestamp
                         && result.headers().equals(expectedHeaders);
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Failed to retrieve expected result", swallow);
                     return false;
                 }
             },
@@ -535,8 +531,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                         && result.timestamp() == expectedTimestamp
                         && result.headers().equals(expectedHeaders);
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Failed to retrieve expected result", swallow);
                     return false;
                 }
             },
@@ -562,8 +557,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                         && result.timestamp() == timestamp
                         && result.headers().toArray().length == 0;
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Failed to retrieve expected result", swallow);
                     return false;
                 }
             },
@@ -587,8 +581,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                         && result.value().equals(value)
                         && result.headers().toArray().length == 0;
                 } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
+                    LOG.error("Error while verifying legacy value with empty headers", swallow);
                     return false;
                 }
             },
@@ -946,7 +939,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
                 return true;
             } catch (final Exception e) {
-                e.printStackTrace();
+                LOG.error("Error while verifying plain window value with empty headers and timestamp", e);
                 return false;
             }
         }, 60_000L, "Could not verify plain window value with empty headers and timestamp in time.");
@@ -1084,7 +1077,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                     && result.timestamp() == timestamp
                     && result.headers().equals(expectedHeaders);
             } catch (final Exception e) {
-                e.printStackTrace();
+                LOG.error("Error while verifying windowed value with headers", e);
                 return false;
             }
         }, 60_000L, "Could not verify windowed value with headers in time.");
@@ -1129,7 +1122,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
                 return true;
             } catch (final Exception e) {
-                e.printStackTrace();
+                LOG.error("Error while verifying legacy value with empty headers", e);
                 return false;
             }
         }, 60_000L, "Could not verify legacy value with empty headers in time.");

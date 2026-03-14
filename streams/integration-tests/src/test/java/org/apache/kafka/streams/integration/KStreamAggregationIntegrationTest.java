@@ -943,19 +943,6 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    private static void assertHeaderCount(final Headers headers, final int expectedCount) {
-        assertThat("header count", headers.toArray().length, equalTo(expectedCount));
-    }
-
-    private static void assertHeaderContains(final Headers headers, final String key, final String expectedValue) {
-        final byte[] expectedBytes = expectedValue.getBytes(StandardCharsets.UTF_8);
-        for (final Header header : headers) {
-            if (header.key().equals(key) && Arrays.equals(header.value(), expectedBytes)) {
-                return;
-            }
-        }
-        throw new AssertionError("Expected header with key='" + key + "' and value='" + expectedValue + "' not found in " + headers);
-    }
     @Test
     public void shouldCountUnlimitedWindows() throws Exception {
         final long startTime = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;

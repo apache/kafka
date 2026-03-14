@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 
 import org.slf4j.Logger;
@@ -53,10 +54,11 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
-        if (isHeadersAware(store) && isTimestamped(store)) {
+        if (isHeadersAware(store)) {
+            if (store instanceof SessionStore) {
+                return rawValueToSessionHeadersValue();
+            }
             return rawValueToHeadersValue();
-        } else if (isHeadersAware(store)) {
-            return rawValueToSessionHeadersValue();
         } else if (isTimestamped(store) && !isVersioned(store)) {
             // should not prepend timestamp when restoring records for versioned store, as
             // timestamp is used separately during put() process for restore of versioned stores
