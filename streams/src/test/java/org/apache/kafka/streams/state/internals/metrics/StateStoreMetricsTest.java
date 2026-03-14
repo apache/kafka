@@ -301,6 +301,24 @@ public class StateStoreMetricsTest {
     }
 
     @Test
+    public void shouldAddNumKeysGauge() {
+        @SuppressWarnings("unchecked")
+        final org.apache.kafka.common.metrics.Gauge<Long> gauge = mock(org.apache.kafka.common.metrics.Gauge.class);
+
+        StateStoreMetrics.addNumKeysGauge(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics, gauge);
+
+        org.mockito.Mockito.verify(streamsMetrics).addStoreLevelMutableMetric(
+            TASK_ID,
+            STORE_TYPE,
+            STORE_NAME,
+            "num-keys",
+            "The current number of keys in the in-memory state store",
+            RecordingLevel.INFO,
+            gauge
+        );
+    }
+
+    @Test
     public void shouldGetRecordE2ELatencySensor() {
         final String metricName = "record-e2e-latency";
         final String e2eLatencyDescription =

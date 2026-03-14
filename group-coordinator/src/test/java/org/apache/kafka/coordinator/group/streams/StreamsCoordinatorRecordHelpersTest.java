@@ -375,7 +375,7 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewStreamsGroupTargetAssignmentEpochRecord() {
+    public void testNewStreamsGroupTargetAssignmentMetadataRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new StreamsGroupTargetAssignmentMetadataKey()
                 .setGroupId(GROUP_ID),
@@ -391,13 +391,13 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewStreamsGroupTargetAssignmentEpochTombstoneRecord() {
+    public void testNewStreamsGroupTargetAssignmentMetadataTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new StreamsGroupTargetAssignmentMetadataKey()
                 .setGroupId(GROUP_ID)
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(GROUP_ID));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(GROUP_ID));
     }
 
     @Test
@@ -736,16 +736,16 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewStreamsGroupTargetAssignmentEpochRecordNullGroupId() {
+    public void testNewStreamsGroupTargetAssignmentMetadataRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(null, 1, 12345L));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 
     @Test
-    public void testNewStreamsGroupTargetAssignmentEpochTombstoneRecordNullGroupId() {
+    public void testNewStreamsGroupTargetAssignmentMetadataTombstoneRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(null));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(null));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

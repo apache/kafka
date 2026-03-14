@@ -195,6 +195,11 @@ public class PlaintextConsumerPollTest {
         var commitCompleted = new AtomicBoolean(false);
         var committedPosition = new AtomicLong(-1);
 
+        String otherTopic = "otherTopic";
+        TopicPartition tpOther = new TopicPartition(otherTopic, 0);
+        sendRecords(cluster, tp, 1);
+        sendRecords(cluster, tpOther, 1);
+
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             var listener = new TestConsumerReassignmentListener() {
                 @Override
@@ -219,14 +224,17 @@ public class PlaintextConsumerPollTest {
             };
             consumer.subscribe(List.of(topic), listener);
 
-            // rebalance to get the initial assignment
-            awaitRebalance(consumer, listener);
+            // Consume records to ensure the rebalance completed and positions are initialized
+            // (position then used in callback, triggered on next rebalance)
+            awaitNonEmptyRecords(consumer, tp, 100);
 
             // force a rebalance to trigger an invocation of the revocation callback while in the group
-            consumer.subscribe(List.of("otherTopic"), listener);
-            awaitRebalance(consumer, listener);
+            consumer.subscribe(List.of(otherTopic), listener);
+            // Consume records to ensure positions for otherTopic are initialized
+            // (position then used in callback, triggered on close)
+            awaitNonEmptyRecords(consumer, tpOther, 100);
 
-            assertEquals(0, committedPosition.get());
+            assertEquals(1, committedPosition.get());
             assertTrue(commitCompleted.get());
         }
     }

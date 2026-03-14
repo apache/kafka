@@ -16,25 +16,40 @@
  */
 package org.apache.kafka.streams.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -224,7 +239,66 @@ public class MockProcessorContextAPITest {
 
         final KeyValueStore<String, Long> store = storeBuilder.build();
 
-        store.init(context.getStateStoreContext(), store);
+        store.init(
+            new AbstractProcessorContext<>(new TaskId(0, 0), new StreamsConfig(context.appConfigs()), (StreamsMetricsImpl) context.metrics(), null) {
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final Record record, final String childName) { }
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final Record record) { }
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final FixedKeyRecord record, final String childName) { }
+                @SuppressWarnings("rawtypes")
+                @Override
+                public void forward(final FixedKeyRecord record) { }
+                @Override
+                public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+                    return null;
+                }
+                @Override
+                public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
+                    return null;
+                }
+                @Override
+                public void commit() { }
+                @Override
+                public long currentStreamTimeMs() {
+                    return 0;
+                }
+                @Override
+                public void forward(final Object key, final Object value, final To to) { }
+                @Override
+                public void forward(final Object key, final Object value) { }
+                @SuppressWarnings("unchecked")
+                @Override
+                public StateStore getStateStore(final String name) {
+                    return null;
+                }
+                @Override
+                public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) { }
+                @Override
+                public void transitionToStandby(final ThreadCache newCache) { }
+                @Override
+                public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) { }
+                @Override
+                public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) { }
+                @Override
+                protected StateManager stateManager() {
+                    return null;
+                }
+                @Override
+                public String changelogFor(final String storeName) {
+                    return "changelog";
+                }
+                @Override
+                public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+                    context.getStateStoreContext().register(store, stateRestoreCallback);
+                }
+            },
+            store
+        );
 
         processor.init(context);
 

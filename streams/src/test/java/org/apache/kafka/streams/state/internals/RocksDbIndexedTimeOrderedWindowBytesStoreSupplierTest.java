@@ -34,31 +34,31 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplierTest {
 
     @Test
     public void shouldThrowIfStoreNameIsNull() {
-        final Exception e = assertThrows(NullPointerException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(null, ZERO, ZERO, false, false));
+        final Exception e = assertThrows(NullPointerException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(null, ZERO, ZERO, false, false, false));
         assertEquals("name cannot be null", e.getMessage());
     }
 
     @Test
     public void shouldThrowIfRetentionPeriodIsNegative() {
-        final Exception e = assertThrows(IllegalArgumentException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("anyName", ofMillis(-1L), ZERO, false, false));
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("anyName", ofMillis(-1L), ZERO, false, false, false));
         assertEquals("retentionPeriod cannot be negative", e.getMessage());
     }
 
     @Test
     public void shouldThrowIfWindowSizeIsNegative() {
-        final Exception e = assertThrows(IllegalArgumentException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("anyName", ofMillis(0L), ofMillis(-1L), false, false));
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("anyName", ofMillis(0L), ofMillis(-1L), false, false, false));
         assertEquals("windowSize cannot be negative", e.getMessage());
     }
 
     @Test
     public void shouldThrowIfWindowSizeIsLargerThanRetention() {
-        final Exception e = assertThrows(IllegalArgumentException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("anyName", ofMillis(1L), ofMillis(2L), false, false));
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("anyName", ofMillis(1L), ofMillis(2L), false, false, false));
         assertEquals("The retention period of the window store anyName must be no smaller than its window size. Got size=[2], retention=[1]", e.getMessage());
     }
 
     @Test
     public void shouldCreateRocksDbTimeOrderedWindowStoreWithIndex() {
-        final WindowStore store = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("store", ofMillis(1L), ofMillis(1L), false, true).get();
+        final WindowStore store = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("store", ofMillis(1L), ofMillis(1L), false, true, false).get();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(RocksDBTimeOrderedWindowStore.class));
         assertThat(wrapped, instanceOf(RocksDBTimeOrderedWindowSegmentedBytesStore.class));
@@ -67,10 +67,19 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplierTest {
 
     @Test
     public void shouldCreateRocksDbTimeOrderedWindowStoreWithoutIndex() {
-        final WindowStore store = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("store", ofMillis(1L), ofMillis(1L), false, false).get();
+        final WindowStore store = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("store", ofMillis(1L), ofMillis(1L), false, false, false).get();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(RocksDBTimeOrderedWindowStore.class));
         assertThat(wrapped, instanceOf(RocksDBTimeOrderedWindowSegmentedBytesStore.class));
         assertFalse(((RocksDBTimeOrderedWindowSegmentedBytesStore) wrapped).hasIndex());
+    }
+
+    @Test
+    public void shouldCreateRocksDbTimeOrderedWindowStoreWithHeaders() {
+        final WindowStore store = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create("store", ofMillis(1L), ofMillis(1L), false, true, true).get();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertThat(store, instanceOf(RocksDBTimeOrderedWindowStoreWithHeaders.class));
+        assertThat(wrapped, instanceOf(RocksDBTimeOrderedWindowSegmentedBytesStore.class));
+        assertTrue(((RocksDBTimeOrderedWindowSegmentedBytesStore) wrapped).hasIndex());
     }
 }

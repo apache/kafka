@@ -474,7 +474,7 @@ public class StateDirectory implements AutoCloseable {
      * @return directory for the global stores
      * @throws ProcessorStateException if the global store directory does not exists and could not be created
      */
-    File globalStateDir() {
+    public File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (hasPersistentStores) {
             if (!dir.exists() && !dir.mkdir()) {
@@ -644,6 +644,46 @@ public class StateDirectory implements AutoCloseable {
         }
         // Ok to ignore returned exception as it should be swallowed
         maybeCleanEmptyNamedTopologyDirs(true);
+    }
+
+    /**
+     * Purges local state directories and checkpoint files during application startup.
+     *
+     * @param dirMaxAgeMs the time-based threshold in milliseconds. Only state directories
+     * and checkpoint files that have not been modified for at least
+     * this amount of time (corresponding to the
+     * {@code state.cleanup.dir.max.age.ms} property) will be removed.
+     */
+    public synchronized void cleanOutdatedDirsOnStartup(final long dirMaxAgeMs) {
+        try {
+            cleanStateAndTaskDirectoriesOnStartup(dirMaxAgeMs);
+        } catch (final Exception e) {
+            throw new StreamsException(e);
+        }
+    }
+
+    private void cleanStateAndTaskDirectoriesOnStartup(final long dirMaxAgeMs) throws Exception {
+        final AtomicReference<Exception> firstException = new AtomicReference<>();
+        for (final TaskDirectory taskDir : listAllTaskDirectories()) {
+            final String dirName = taskDir.file().getName();
+            try {
+                final long now = time.milliseconds();
+                final long lastModifiedMs = taskDir.file().lastModified();
+                if (now - dirMaxAgeMs > lastModifiedMs) {
+                    log.info("Deleting outdated state directory {} as {}ms has elapsed from last update (max directory age is {}ms).",
+                            dirName, now - lastModifiedMs, dirMaxAgeMs);
+                    Utils.delete(taskDir.file());
+                }
+            } catch (final IOException exception) {
+                log.error("Failed to delete task directory {} with exception:", dirName, exception);
+                firstException.compareAndSet(null, exception);
+            }
+        }
+
+        final Exception exception = firstException.get();
+        if (exception != null) {
+            throw exception;
+        }
     }
 
     /**

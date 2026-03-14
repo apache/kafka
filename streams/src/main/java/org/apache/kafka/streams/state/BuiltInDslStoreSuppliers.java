@@ -53,27 +53,42 @@ public class BuiltInDslStoreSuppliers {
 
         @Override
         public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+            final DslStoreFormat storeFormat = params.dslStoreFormat();
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
+                final boolean withHeaders = (storeFormat == DslStoreFormat.HEADERS);
                 return RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates(),
-                        params.isSlidingWindow());
+                        params.isSlidingWindow(),
+                        withHeaders);
             }
 
-            if (params.isTimestamped()) {
-                return Stores.persistentTimestampedWindowStore(
+            final DslStoreFormat format = (storeFormat == null) ? DslStoreFormat.TIMESTAMPED : storeFormat;
+            switch (format) {
+                case HEADERS:
+                    return Stores.persistentTimestampedWindowStoreWithHeaders(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates()
+                    );
+                case TIMESTAMPED:
+                    return Stores.persistentTimestampedWindowStore(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates());
-            } else {
-                return Stores.persistentWindowStore(
+                case PLAIN:
+                    return Stores.persistentWindowStore(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates());
+                default:
+                    throw new IllegalStateException("Unsupported DslStoreFormat: " + format +
+                        ". Expected one of: HEADERS, TIMESTAMPED, or PLAIN");
             }
         }
 
