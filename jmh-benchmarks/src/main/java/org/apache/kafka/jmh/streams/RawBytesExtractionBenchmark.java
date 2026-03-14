@@ -19,10 +19,12 @@ package org.apache.kafka.jmh.streams;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
 import org.apache.kafka.streams.state.internals.Utils;
+import org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
@@ -48,6 +50,7 @@ import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 @Measurement(iterations = 5, time = 1)
 public class RawBytesExtractionBenchmark {
     private static final int DATA_SET_SAMPLE_SIZE = 16384;
+    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     @State(Scope.Benchmark)
     public static class IterationStateForValues {
@@ -187,6 +190,22 @@ public class RawBytesExtractionBenchmark {
         }
     }
 
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testTimestampWithoutHeaders(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(timestampPre20249(randomValue));
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testTimestampWithoutHeadersOpt(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(ValueTimestampHeadersDeserializer.timestamp(randomValue));
+        }
+    }
+
     /**
      * Prior to KAFKA-20249: AggregationWithHeadersDeserializer - Extract the raw aggregation bytes from 
      * serialized AggregationWithHeaders, stripping the headers prefix. 
@@ -247,7 +266,7 @@ public class RawBytesExtractionBenchmark {
     }
 
     /**
-     * Prior to KAFKA-20249 - AggregationWithHeadersDeserializer - Extract headers from serialized AggregationWithHeaders.
+     * Prior to KAFKA-20249 - AggregationWithHeadersDeserializer - Extract headers from serialized AggregationWithHeaders
      */
     private static Headers headersPre20249(final byte[] rawAggregationWithHeaders) {
         if (rawAggregationWithHeaders == null) {
@@ -258,4 +277,15 @@ public class RawBytesExtractionBenchmark {
         return readHeaders(buffer);
     }
 
+    /**
+     * Prior to KAFKA-20249 - ValueTimestampHeadersDeserializer - Extract timestamp from serialized ValueTimestampHeaders.
+     */
+    private static long timestampPre20249(final byte[] rawValueTimestampHeaders) {
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        buffer.position(buffer.position() + headersSize);
+
+        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
+        return LONG_DESERIALIZER.deserialize("", rawTimestamp);
+    }
 }

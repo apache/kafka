@@ -58,7 +58,7 @@ public class Utils {
         return result;
     }
 
-    private static boolean hasEmptyHeadersAndTimestamp(final byte[] rawValueTimestampHeaders) {
+    public static boolean hasEmptyHeadersAndTimestamp(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
             // Header size (varint 1 byte), empty headers (no bytes), and timestamp
             if (rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE < 0) {

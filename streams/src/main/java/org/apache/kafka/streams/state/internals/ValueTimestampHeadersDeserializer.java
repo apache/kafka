@@ -17,11 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.nio.ByteBuffer;
@@ -110,7 +112,14 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
     /**
      * Extract timestamp from serialized ValueTimestampHeaders.
      */
-    static long timestamp(final byte[] rawValueTimestampHeaders) {
+    public static long timestamp(final byte[] rawValueTimestampHeaders) {
+        // If the headers is empty, then do not need to skip the headers
+        if (Utils.hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
+            final byte[] rawTimestamp = new byte[StateSerdes.TIMESTAMP_SIZE];
+            System.arraycopy(rawValueTimestampHeaders, 1, rawTimestamp, 0, StateSerdes.TIMESTAMP_SIZE);
+            return LONG_DESERIALIZER.deserialize("", rawTimestamp);
+        }
+
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
         buffer.position(buffer.position() + headersSize);
@@ -122,9 +131,14 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
     /**
      * Extract headers from serialized ValueTimestampHeaders.
      */
-    static Headers headers(final byte[] rawValueTimestampHeaders) {
+    public static Headers headers(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
             return null;
+        }
+
+        // If the header is empty, simply return it
+        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
+            return new RecordHeaders();
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
