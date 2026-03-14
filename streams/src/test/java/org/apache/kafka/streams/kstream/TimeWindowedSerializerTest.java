@@ -132,5 +132,10 @@ public class TimeWindowedSerializerTest {
 
         verify(mockSerializer).serialize(anyString(), eq(headers), eq(key));
         verify(mockSerializer, never()).serialize(anyString(), eq(key));
+
+        testSerializer.serializeBaseKey("dummy", headers, data);
+
+        verify(mockSerializer).serialize(anyString(), eq(headers), eq(key));
+        verify(mockSerializer, never()).serialize(anyString(), eq(key));
     }
 }
