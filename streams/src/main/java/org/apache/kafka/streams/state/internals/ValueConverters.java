@@ -26,7 +26,7 @@ import java.util.function.Function;
  * These converters are used to transform between different value representations
  * (e.g., ValueAndTimestamp, ValueTimestampHeaders, plain values).
  */
-final class ValueConverters {
+public final class ValueConverters {
 
     private ValueConverters() {
         // Utility class - prevent instantiation
@@ -38,7 +38,7 @@ final class ValueConverters {
      * @param <V> value type
      * @return converter function that extracts the value or returns null
      */
-    static <V> Function<ValueAndTimestamp<V>, V> extractValue() {
+    public static <V> Function<ValueAndTimestamp<V>, V> extractValue() {
         return ValueAndTimestamp::getValueOrNull;
     }
 
@@ -48,7 +48,7 @@ final class ValueConverters {
      * @param <V> value type
      * @return converter function that extracts the value or returns null
      */
-    static <V> Function<ValueTimestampHeaders<V>, V> extractValueFromHeaders() {
+    public static <V> Function<ValueTimestampHeaders<V>, V> extractValueFromHeaders() {
         return vth -> vth == null ? null : vth.value();
     }
 
@@ -58,7 +58,7 @@ final class ValueConverters {
      * @param <V> value type
      * @return converter function that creates ValueAndTimestamp or returns null
      */
-    static <V> Function<ValueTimestampHeaders<V>, ValueAndTimestamp<V>> headersToValueAndTimestamp() {
+    public static <V> Function<ValueTimestampHeaders<V>, ValueAndTimestamp<V>> headersToValueAndTimestamp() {
         return vth -> vth == null ? null :
             ValueAndTimestamp.make(vth.value(), vth.timestamp());
     }

@@ -93,10 +93,11 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
-import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
+import org.apache.kafka.streams.state.internals.GenericReadOnlyKeyValueStoreFacade;
+import org.apache.kafka.streams.state.internals.GenericReadOnlyWindowStoreFacade;
 import org.apache.kafka.streams.state.internals.SessionStoreIteratorFacade;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ValueConverters;
 import org.apache.kafka.streams.test.TestRecord;
 
 import org.slf4j.Logger;
@@ -1286,10 +1287,12 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    static class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V> implements KeyValueStore<K, V> {
+    static class KeyValueStoreFacade<K, V> extends GenericReadOnlyKeyValueStoreFacade<K, ValueAndTimestamp<V>, V> implements KeyValueStore<K, V> {
+        private final TimestampedKeyValueStore<K, V> inner;
 
-        public KeyValueStoreFacade(final TimestampedKeyValueStore<K, V> inner) {
-            super(inner);
+        public KeyValueStoreFacade(final TimestampedKeyValueStore<K, V> store) {
+            super(store, ValueConverters.extractValue());
+            this.inner = store;
         }
 
         @Override
@@ -1350,22 +1353,17 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    static class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
+    static class WindowStoreFacade<K, V> extends GenericReadOnlyWindowStoreFacade<K, ValueAndTimestamp<V>, V> implements WindowStore<K, V> {
+        private final TimestampedWindowStore<K, V> inner;
 
         public WindowStoreFacade(final TimestampedWindowStore<K, V> store) {
-            super(store);
+            super(store, ValueConverters.extractValue());
+            this.inner = store;
         }
 
         @Override
         public void init(final StateStoreContext stateStoreContext, final StateStore root) {
             inner.init(stateStoreContext, root);
-        }
-
-        @Override
-        public void put(final K key,
-                        final V value,
-                        final long windowStartTimestamp) {
-            inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP), windowStartTimestamp);
         }
 
         @Override
@@ -1376,10 +1374,9 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public WindowStoreIterator<V> backwardFetch(final K key,
-                                                    final long timeFrom,
-                                                    final long timeTo) {
-            return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
+                                                         final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
         }
 
         @Override
@@ -1387,28 +1384,14 @@ public class TopologyTestDriver implements Closeable {
                                                       final K keyTo,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom),
-                Instant.ofEpochMilli(timeTo));
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                              final K keyTo,
-                                                              final long timeFrom,
-                                                              final long timeTo) {
-            return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
-            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
-                                                                 final long timeTo) {
-            return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        public void put(final K key,
+                        final V value,
+                        final long windowStartTimestamp) {
+            inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP), windowStartTimestamp);
         }
 
         @Override
@@ -1451,31 +1434,31 @@ public class TopologyTestDriver implements Closeable {
 
         @Override
         public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
-                                                              final long earliestSessionEndTime,
-                                                              final long latestSessionStartTime) {
+                                                             final long earliestSessionEndTime,
+                                                             final long latestSessionStartTime) {
             return new SessionStoreIteratorFacade<>(inner.findSessions(key, earliestSessionEndTime, latestSessionStartTime));
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K key,
-                                                                      final long earliestSessionEndTime,
-                                                                      final long latestSessionStartTime) {
+                                                                     final long earliestSessionEndTime,
+                                                                     final long latestSessionStartTime) {
             return new SessionStoreIteratorFacade<>(inner.backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime));
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> findSessions(final K keyFrom,
-                                                              final K keyTo,
-                                                              final long earliestSessionEndTime,
-                                                              final long latestSessionStartTime) {
+                                                             final K keyTo,
+                                                             final long earliestSessionEndTime,
+                                                             final long latestSessionStartTime) {
             return new SessionStoreIteratorFacade<>(inner.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K keyFrom,
-                                                                      final K keyTo,
-                                                                      final long earliestSessionEndTime,
-                                                                      final long latestSessionStartTime) {
+                                                                     final K keyTo,
+                                                                     final long earliestSessionEndTime,
+                                                                     final long latestSessionStartTime) {
             return new SessionStoreIteratorFacade<>(inner.backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
         }
 
@@ -1488,7 +1471,7 @@ public class TopologyTestDriver implements Closeable {
 
         @Override
         public KeyValueIterator<Windowed<K>, V> findSessions(final long earliestSessionEndTime,
-                                                              final long latestSessionEndTime) {
+                                                             final long latestSessionEndTime) {
             return new SessionStoreIteratorFacade<>(inner.findSessions(earliestSessionEndTime, latestSessionEndTime));
         }
 

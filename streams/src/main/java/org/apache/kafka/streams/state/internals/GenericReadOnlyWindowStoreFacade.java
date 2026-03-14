@@ -32,12 +32,12 @@ import java.util.function.Function;
  * @param <InV> input value type (from inner store)
  * @param <OutV> output value type (exposed by this facade)
  */
-class GenericReadOnlyWindowStoreFacade<K, InV, OutV> implements ReadOnlyWindowStore<K, OutV> {
+public class GenericReadOnlyWindowStoreFacade<K, InV, OutV> implements ReadOnlyWindowStore<K, OutV> {
     protected final ReadOnlyWindowStore<K, InV> inner;
     protected final Function<InV, OutV> valueConverter;
 
-    GenericReadOnlyWindowStoreFacade(final ReadOnlyWindowStore<K, InV> inner,
-                                     final Function<InV, OutV> valueConverter) {
+    public GenericReadOnlyWindowStoreFacade(final ReadOnlyWindowStore<K, InV> inner,
+                                            final Function<InV, OutV> valueConverter) {
         this.inner = inner;
         this.valueConverter = valueConverter;
     }
