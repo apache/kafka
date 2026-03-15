@@ -84,7 +84,7 @@ public class GenericWindowStoreIteratorFacadeTest {
 
     @Test
     public void shouldDelegatePeekNextKey() {
-        when(mockedInnerIterator.peekNextKey()).thenReturn(100L, null);
+        when(mockedInnerIterator.peekNextKey()).thenReturn(100L, (Long) null);
 
         assertThat(facade.peekNextKey(), is(100L));
         assertNull(facade.peekNextKey());
