@@ -2823,7 +2823,6 @@ kafka.server.share.SharePartitionManagerTest:
 - testNewContextThrowsErrorWhenShareSessionCacheIsFullOnInitialEpoch
 - testNewContextThrowsErrorWhenShareSessionNotFoundOnFinalEpoch
 - testOnShareVersionToggle
-- testOnShareVersionToggleWhenEnabledFromConfig
 - testPartitionLoadTimeMetricWithMultiplePartitions
 - testPendingInitializationShouldCompleteFetchRequest
 - testReleaseSessionCompletesDelayedShareFetchRequest
