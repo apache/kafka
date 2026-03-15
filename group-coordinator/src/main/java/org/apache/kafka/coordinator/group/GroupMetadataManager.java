@@ -189,6 +189,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -8816,10 +8817,10 @@ public class GroupMetadataManager {
             .orElse(config.streamsGroupNumStandbyReplicas());
         final Integer taskOffsetIntervalMs = groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
-        return Map.of(
+        return new TreeMap<>(Map.of(
             "num.standby.replicas", numStandbyReplicas.toString(),
             "task.offset.interval.ms", taskOffsetIntervalMs.toString()
-        );
+        ));
     }
 
     /**
