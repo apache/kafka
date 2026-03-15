@@ -1502,22 +1502,23 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >                                 final Record<?, ?> record,
 >                                 final Exception exception) {
 >
->         return Response.resume(
->             ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords(
->                 deadLetterQueueTopic,
->                 context.sourceRawKey(),
->                 context.sourceRawValue(),
->                 context,
->                 exception
->             )
->         );
->     }
+>       // Example: forward the raw record to a DLQ topic
+>       Record<byte[], byte[]> dlqRecord =
+>           new Record<>(deadLetterQueueTopic,
+>                        context.sourceRawKey(),
+>                        context.sourceRawValue(),
+>                        context.timestamp());
+>
+>       // Applications may choose how to construct DLQ records. For example,
+>       // they may forward the raw key/value bytes, transform the payload,
+>       // or add headers with error metadata.
+>       return Response.resume(List.of(dlqRecord));
+>      }
 >
 >     @Override
 >     public void configure(final Map<String, ?> configs) {
->         deadLetterQueueTopic = (String) configs.get(
->             StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG
->         );
+>         // Retrieve the DLQ topic name from the configs map, or any other source
+>         deadLetterQueueTopic = (String) configs.get("my.dlq.topic.config.key");
 >     }
 > }
 > ```
@@ -1531,10 +1532,12 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >     DlqProcessingExceptionHandler.class
 > );
 >
-> props.put(
->     StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
->     "dlq-topic"
-> );
+>//   Optional: if your custom handler reads the DLQ topic from StreamsConfig,
+>//   set it here. Otherwise, configure the topic name via your own properties.
+> //  props.put(
+> //    StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+> //    "dlq-topic"
+> //  );
 > ```
 ### processing.exception.handler.global.enabled (deprecated)
 
