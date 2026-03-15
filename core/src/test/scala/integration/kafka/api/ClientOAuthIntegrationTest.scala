@@ -275,8 +275,9 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     val privateKeyFile = generatePrivateKeyFile()
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, privateKeyFile.getAbsolutePath)
 
-    val configs = defaultJwtBearerConfigs()
+    val configs = defaultOAuthConfigs()
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "kafka-e2e-test")
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-e2e-test")
     configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
@@ -303,7 +304,7 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     val assertionFile = TestUtils.tempFile(jwt.serialize())
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, assertionFile.getAbsolutePath)
 
-    val configs = defaultJwtBearerConfigs()
+    val configs = defaultOAuthConfigs()
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
 
     val admin = createAdminClient(configOverrides = configs)
@@ -325,8 +326,9 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     val privateKeyFile = generatePrivateKeyFile()
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, privateKeyFile.getAbsolutePath)
 
-    val configs = defaultJwtBearerConfigs()
+    val configs = defaultOAuthConfigs()
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "kafka-admin-test")
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-admin-test")
     configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
