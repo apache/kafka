@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
@@ -119,7 +120,6 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static KeycloakContainer keycloak;
-    private static boolean apiVersionSetByTest;
 
     private static String tokenEndpointUrl;
     private static String shortLivedTokenEndpointUrl;
@@ -130,14 +130,6 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
 
     @BeforeAll
     public static void setUpKeycloak() throws Exception {
-        // Docker 29.x requires minimum API version 1.44. The docker-java 3.4.0 library
-        // (used by testcontainers 1.20.x) defaults to API version 1.32, which is rejected
-        // with HTTP 400. Set to 1.44 for compatibility with Docker Desktop 29.x+.
-        if (System.getProperty("api.version") == null) {
-            System.setProperty("api.version", "1.44");
-            apiVersionSetByTest = true;
-        }
-
         // Skip the entire test class if Docker is not available
         org.junit.jupiter.api.Assumptions.assumeTrue(
             DockerClientFactory.instance().isDockerAvailable(),
@@ -179,9 +171,6 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     public static void tearDown() {
         System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         System.clearProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
-        if (apiVersionSetByTest) {
-            System.clearProperty("api.version");
-        }
         if (rsaPrivateKeyFile != null) rsaPrivateKeyFile.delete();
         if (ecPrivateKeyFile != null) ecPrivateKeyFile.delete();
         if (keycloak != null) {

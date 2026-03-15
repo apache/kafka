@@ -298,6 +298,28 @@ public class AssertionSupplierFactoryTest extends OAuthBearerTest {
     }
 
     /**
+     * When ES256 algorithm is configured, the factory should produce valid assertions
+     * signed with the EC private key.
+     */
+    @Test
+    public void testCreateWithPrivateKeyFileEs256() throws Exception {
+        KeyPair keyPair = generateKeyPair("EC");
+        File privateKeyFile = generatePrivateKey(keyPair.getPrivate());
+
+        ConfigurationUtils cu = mockConfigForLocalAssertion(privateKeyFile);
+        when(cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM)).thenReturn("ES256");
+
+        Time time = new MockTime();
+
+        try (CloseableSupplier<String> supplier = AssertionSupplierFactory.create(cu, time)) {
+            String assertion = supplier.get();
+            assertNotNull(assertion);
+            assertValidJwtFormat(assertion);
+            assertClaims(keyPair.getPublic(), assertion);
+        }
+    }
+
+    /**
      * Minimal structural check that the string is a valid JWT format (three Base64-encoded
      * parts separated by dots). Full claim and signature validation is performed by
      * {@link OAuthBearerTest#assertClaims} where cryptographic verification is needed.

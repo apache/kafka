@@ -277,6 +277,13 @@ public class ClientCredentialsRequestFormatterFactoryTest extends OAuthBearerTes
         assertInstanceOf(ClientSecretRequestFormatter.class, formatter);
     }
 
+    @Test
+    public void testCreateWithNeitherAssertionNorClientCredentials() {
+        ConfigurationUtils cu = new ConfigurationUtils(new HashMap<>());
+        JaasOptionsUtils jou = new JaasOptionsUtils(Map.of());
+        assertThrows(ConfigException.class, () -> ClientCredentialsRequestFormatterFactory.create(cu, jou));
+    }
+
     @ParameterizedTest
     @MethodSource("urlEncodeHeaderSupplier")
     public void testValidateUrlEncodeHeader(Map<String, Object> configs, boolean expectedValue) {

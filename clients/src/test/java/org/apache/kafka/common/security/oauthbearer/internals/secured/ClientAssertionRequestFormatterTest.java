@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.CloseableSupplier;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAssertionRequestFormatter.GRANT_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -192,6 +194,15 @@ public class ClientAssertionRequestFormatterTest extends OAuthBearerTest {
     @Test
     public void testGrantTypeConstant() {
         assertEquals("client_credentials", GRANT_TYPE);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testFormatBodyPropagatesSupplierException() {
+        CloseableSupplier<String> supplier = mock(CloseableSupplier.class);
+        when(supplier.get()).thenThrow(new JwtRetrieverException("supplier failed"));
+        ClientAssertionRequestFormatter formatter = new ClientAssertionRequestFormatter(CLIENT_ID, SCOPE, supplier);
+        assertThrows(JwtRetrieverException.class, formatter::formatBody);
     }
 
     @SuppressWarnings("unchecked")
