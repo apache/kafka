@@ -70,11 +70,17 @@ class HeadersSerializer {
         // we first estimate an upper bound for the buffer we need,
         // so we can allocate the whole buffer at once
 
+        // cache to avoid translating String header-keys to byte[] twice
+        final byte[][] serializedHeaderKeys = new byte[headersArray.length][];
+
         // start with 5 bytes for varint encoding of header count
         int estimatedBufferSize = 5;
+        int i = 0;
         for (final Header header : headersArray) {
             // adding 5 bytes for varint encoding of header-key length
-            estimatedBufferSize += 5 + header.key().length();
+            serializedHeaderKeys[i] = header.key().getBytes(StandardCharsets.UTF_8);
+            estimatedBufferSize += 5 + serializedHeaderKeys[i].length;
+            ++i;
 
             final byte[] value = header.value();
             if (value == null) {
@@ -88,10 +94,11 @@ class HeadersSerializer {
         final ByteBuffer result = ByteBuffer.allocate(estimatedBufferSize);
         ByteUtils.writeVarint(headersArray.length, result);
 
+        i = 0;
         for (final Header header : headersArray) {
             final String headerKey = header.key();
             ByteUtils.writeVarint(headerKey.length(), result);
-            result.put(headerKey.getBytes(StandardCharsets.UTF_8));
+            result.put(serializedHeaderKeys[i++]);
 
             final byte[] headerValue = header.value();
             if (headerValue != null) {
