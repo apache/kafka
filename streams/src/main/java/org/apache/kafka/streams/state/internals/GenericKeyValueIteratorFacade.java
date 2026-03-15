@@ -18,20 +18,30 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import java.util.function.Function;
 
-public class KeyValueIteratorFacade<K, V> implements KeyValueIterator<K, V> {
-    private final KeyValueIterator<K, ValueAndTimestamp<V>> innerIterator;
+/**
+ * Generic iterator facade that wraps a {@link KeyValueIterator} and converts values
+ * using a provided converter function.
+ *
+ * @param <K> key type
+ * @param <InV> input value type (from inner iterator)
+ * @param <OutV> output value type (exposed by this facade)
+ */
+class GenericKeyValueIteratorFacade<K, InV, OutV> implements KeyValueIterator<K, OutV> {
+    private final KeyValueIterator<K, InV> innerIterator;
+    private final Function<InV, OutV> valueConverter;
 
-    public KeyValueIteratorFacade(final KeyValueIterator<K, ValueAndTimestamp<V>> iterator) {
-        innerIterator = iterator;
+    GenericKeyValueIteratorFacade(final KeyValueIterator<K, InV> innerIterator,
+                                  final Function<InV, OutV> valueConverter) {
+        this.innerIterator = innerIterator;
+        this.valueConverter = valueConverter;
     }
 
     @Override
-    public boolean hasNext() {
-        return innerIterator.hasNext();
+    public void close() {
+        innerIterator.close();
     }
 
     @Override
@@ -40,13 +50,13 @@ public class KeyValueIteratorFacade<K, V> implements KeyValueIterator<K, V> {
     }
 
     @Override
-    public KeyValue<K, V> next() {
-        final KeyValue<K, ValueAndTimestamp<V>> innerKeyValue = innerIterator.next();
-        return KeyValue.pair(innerKeyValue.key, getValueOrNull(innerKeyValue.value));
+    public boolean hasNext() {
+        return innerIterator.hasNext();
     }
 
     @Override
-    public void close() {
-        innerIterator.close();
+    public KeyValue<K, OutV> next() {
+        final KeyValue<K, InV> innerKeyValue = innerIterator.next();
+        return KeyValue.pair(innerKeyValue.key, valueConverter.apply(innerKeyValue.value));
     }
 }

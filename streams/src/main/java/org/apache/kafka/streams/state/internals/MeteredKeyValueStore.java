@@ -177,6 +177,10 @@ public class MeteredKeyValueStore<K, V>
                 }
             }
         );
+        if (!persistent()) {
+            StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                    (config, now) -> wrapped().approximateNumEntries());
+        }
     }
 
     @Override
