@@ -1191,6 +1191,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldAllowWhitespacesInRackAwareAssignmentTagsList() {
+        // AbstractConfig is supposed to take care of WS handling for LIST type
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
         props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
         props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
@@ -1203,6 +1204,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithEmptyTag() {
+        // AbstractConfig is supposed to take care of WS handling for LIST type
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
         props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));

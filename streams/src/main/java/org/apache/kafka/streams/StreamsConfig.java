@@ -1674,6 +1674,7 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
             if (rackAwareAssignmentTag.isEmpty()) {
                 throw new ConfigException(
                     RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
