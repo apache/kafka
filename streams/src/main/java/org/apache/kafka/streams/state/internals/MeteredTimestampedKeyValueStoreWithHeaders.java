@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
@@ -312,6 +313,57 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return result;
     }
 
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(final P prefix,
+                                                                                                  final PS prefixKeySerializer) {
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+        return new MeteredValueTimestampHeadersIterator(
+            wrapped().prefixScan(prefix, prefixKeySerializer),
+            prefixScanSensor
+        );
+    }
+
+    @Override
+    public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
+                                                               final K to) {
+        return new MeteredValueTimestampHeadersIterator(
+            wrapped().range(
+                keyBytes(from, new RecordHeaders()),
+                keyBytes(to, new RecordHeaders())
+            ),
+            rangeSensor
+        );
+    }
+
+    @Override
+    public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from,
+                                                                      final K to) {
+        return new MeteredValueTimestampHeadersIterator(
+            wrapped().reverseRange(
+                keyBytes(from, new RecordHeaders()),
+                keyBytes(to, new RecordHeaders())
+            ),
+            rangeSensor
+        );
+    }
+
+    @Override
+    public KeyValueIterator<K, ValueTimestampHeaders<V>> all() {
+        return new MeteredValueTimestampHeadersIterator(
+            wrapped().all(),
+            allSensor
+        );
+    }
+
+    @Override
+    public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseAll() {
+        return new MeteredValueTimestampHeadersIterator(
+            wrapped().reverseAll(),
+            allSensor
+        );
+    }
+
     @SuppressWarnings("unchecked")
     private class MeteredTimestampedKeyValueStoreWithHeadersIterator implements KeyValueIterator<K, V>, MeteredIterator {
 
@@ -322,6 +374,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
         private final boolean returnPlainValue;
+        private KeyValue<K, V> cachedNext;
 
         private MeteredTimestampedKeyValueStoreWithHeadersIterator(final KeyValueIterator<Bytes, byte[]> iter,
                                                                    final Sensor sensor,
@@ -343,11 +396,17 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
         @Override
         public boolean hasNext() {
-            return iter.hasNext();
+            return cachedNext != null || iter.hasNext();
         }
 
         @Override
         public KeyValue<K, V> next() {
+            if (cachedNext != null) {
+                final KeyValue<K, V> result = cachedNext;
+                cachedNext = null;
+                return result;
+            }
+
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = valueTimestampHeadersDeserializer.apply(keyValue.value);
             final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
@@ -383,12 +442,78 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
         @Override
         public K peekNextKey() {
-            return serdes.keyFrom(iter.peekNextKey().get(), new RecordHeaders());
+            if (cachedNext == null) {
+                cachedNext = next();
+            }
+            return cachedNext.key;
+        }
+    }
+
+    private class MeteredValueTimestampHeadersIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>>, MeteredIterator {
+        private final KeyValueIterator<Bytes, byte[]> iter;
+        private final Sensor sensor;
+        private final long startNs;
+        private final long startTimestampMs;
+        private KeyValue<K, ValueTimestampHeaders<V>> cachedNext;
+
+        private MeteredValueTimestampHeadersIterator(final KeyValueIterator<Bytes, byte[]> iter,
+                                                     final Sensor sensor) {
+            this.iter = iter;
+            this.sensor = sensor;
+            this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return startTimestampMs;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cachedNext != null || iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, ValueTimestampHeaders<V>> next() {
+            if (cachedNext != null) {
+                final KeyValue<K, ValueTimestampHeaders<V>> result = cachedNext;
+                cachedNext = null;
+                return result;
+            }
+
+            final KeyValue<Bytes, byte[]> keyValue = iter.next();
+            final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(keyValue.value, new RecordHeaders());
+            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
+            final K key = serdes.keyFrom(keyValue.key.get(), headers);
+            return KeyValue.pair(key, valueTimestampHeaders);
+        }
+
+        @Override
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
+            }
+        }
+
+        @Override
+        public K peekNextKey() {
+            if (cachedNext == null) {
+                cachedNext = next();
+            }
+            return cachedNext.key;
         }
     }
 
     protected Bytes keyBytes(final K key, final Headers headers) {
         return Bytes.wrap(serdes.rawKey(key, headers));
     }
-
 }
