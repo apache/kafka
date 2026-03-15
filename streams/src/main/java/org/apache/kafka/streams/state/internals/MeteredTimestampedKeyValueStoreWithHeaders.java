@@ -408,11 +408,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             }
 
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
-
-            if (keyValue == null) {
-                return null;
-            }
-
             final ValueTimestampHeaders<V> valueTimestampHeaders = valueTimestampHeadersDeserializer.apply(keyValue.value);
             final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
             if (returnPlainValue) {
@@ -450,7 +445,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             if (cachedNext == null) {
                 cachedNext = next();
             }
-            return cachedNext == null ? null : cachedNext.key;
+            return cachedNext.key;
         }
     }
 
@@ -490,11 +485,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             }
 
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
-
-            if (keyValue == null) {
-                return null;
-            }
-
             final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(keyValue.value, new RecordHeaders());
             final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
             final K key = serdes.keyFrom(keyValue.key.get(), headers);
@@ -519,7 +509,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             if (cachedNext == null) {
                 cachedNext = next();
             }
-            return cachedNext == null ? null : cachedNext.key;
+            return cachedNext.key;
         }
     }
 

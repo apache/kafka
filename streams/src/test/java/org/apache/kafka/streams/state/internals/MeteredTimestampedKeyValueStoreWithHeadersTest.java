@@ -100,6 +100,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     );
     private final Metrics metrics = new Metrics();
     private Map<String, String> tags;
+    private Deserializer<String> keyDeserializer;
 
     private void setUpWithoutContext() {
         mockTime = new MockTime();
@@ -499,14 +500,11 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         return this.metrics.metric(metricName);
     }
 
-    @Test
     @SuppressWarnings("unchecked")
-    public void shouldUseHeadersFromValueToDeserializeKeyInRange() {
-        setUp();
-
+    private MeteredTimestampedKeyValueStoreWithHeaders<String, String> createStoreWithMockSerdes() {
         final Serde<String> keySerde = mock(Serde.class);
         final Serializer<String> keySerializer = mock(Serializer.class);
-        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        keyDeserializer = mock(Deserializer.class);
         final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
         final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
 
@@ -522,23 +520,32 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
             .thenReturn(KEY);
 
-        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
-
-        when(inner.range(any(Bytes.class), any(Bytes.class)))
-            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
-
-        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, String> mockStore = new MeteredTimestampedKeyValueStoreWithHeaders<>(
             inner,
             STORE_TYPE,
             new MockTime(),
             keySerde,
             valueSerde
         );
-        metered.init(context, metered);
+        mockStore.init(context, mockStore);
+        return mockStore;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInRange() {
+        setUp();
+
+        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.range(any(Bytes.class), any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        metered = createStoreWithMockSerdes();
 
         final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range("a", "z");
 
         assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
         final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
 
         assertEquals(KEY, result.key);
@@ -555,41 +562,16 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     public void shouldUseHeadersFromValueToDeserializeKeyInReverseRange() {
         setUp();
 
-        final Serde<String> keySerde = mock(Serde.class);
-        final Serializer<String> keySerializer = mock(Serializer.class);
-        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
-        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
-        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
-
-        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
-        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
-        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-
-        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
-
-        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
-            .thenReturn(VALUE_TIMESTAMP_HEADERS);
-
-        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
-            .thenReturn(KEY);
-
         final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
-
         when(inner.reverseRange(any(Bytes.class), any(Bytes.class)))
             .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
 
-        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
-            inner,
-            STORE_TYPE,
-            new MockTime(),
-            keySerde,
-            valueSerde
-        );
-        metered.init(context, metered);
+        metered = createStoreWithMockSerdes();
 
         final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.reverseRange("a", "z");
 
         assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
         final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
 
         assertEquals(KEY, result.key);
@@ -606,41 +588,16 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     public void shouldUseHeadersFromValueToDeserializeKeyInAll() {
         setUp();
 
-        final Serde<String> keySerde = mock(Serde.class);
-        final Serializer<String> keySerializer = mock(Serializer.class);
-        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
-        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
-        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
-
-        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
-        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
-        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-
-        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
-
-        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
-            .thenReturn(VALUE_TIMESTAMP_HEADERS);
-
-        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
-            .thenReturn(KEY);
-
         final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
-
         when(inner.all())
             .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
 
-        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
-            inner,
-            STORE_TYPE,
-            new MockTime(),
-            keySerde,
-            valueSerde
-        );
-        metered.init(context, metered);
+        metered = createStoreWithMockSerdes();
 
         final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all();
 
         assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
         final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
 
         assertEquals(KEY, result.key);
@@ -657,41 +614,16 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     public void shouldUseHeadersFromValueToDeserializeKeyInReverseAll() {
         setUp();
 
-        final Serde<String> keySerde = mock(Serde.class);
-        final Serializer<String> keySerializer = mock(Serializer.class);
-        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
-        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
-        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
-
-        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
-        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
-        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-
-        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
-
-        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
-            .thenReturn(VALUE_TIMESTAMP_HEADERS);
-
-        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
-            .thenReturn(KEY);
-
         final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
-
         when(inner.reverseAll())
             .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
 
-        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
-            inner,
-            STORE_TYPE,
-            new MockTime(),
-            keySerde,
-            valueSerde
-        );
-        metered.init(context, metered);
+        metered = createStoreWithMockSerdes();
 
         final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.reverseAll();
 
         assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
         final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
 
         assertEquals(KEY, result.key);
@@ -708,41 +640,16 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     public void shouldUseHeadersFromValueToDeserializeKeyInPrefixScan() {
         setUp();
 
-        final Serde<String> keySerde = mock(Serde.class);
-        final Serializer<String> keySerializer = mock(Serializer.class);
-        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
-        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
-        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
-
-        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
-        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
-        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-
-        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
-
-        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
-            .thenReturn(VALUE_TIMESTAMP_HEADERS);
-
-        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
-            .thenReturn(KEY);
-
         final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
-
         when(inner.prefixScan(any(), any()))
             .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
 
-        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
-            inner,
-            STORE_TYPE,
-            new MockTime(),
-            keySerde,
-            valueSerde
-        );
-        metered.init(context, metered);
+        metered = createStoreWithMockSerdes();
 
         final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.prefixScan("prefix", Serdes.String().serializer());
 
         assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
         final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
 
         assertEquals(KEY, result.key);

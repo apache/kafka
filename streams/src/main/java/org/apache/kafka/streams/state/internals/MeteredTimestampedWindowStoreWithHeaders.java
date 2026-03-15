@@ -375,11 +375,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             }
 
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
-
-            if (next == null) {
-                return null;
-            }
-
             final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(next.value, new RecordHeaders());
             final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
             final K key = serdes.keyFrom(next.key.key().get(), headers);
@@ -405,7 +400,7 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             if (cachedNext == null) {
                 cachedNext = next();
             }
-            return cachedNext == null ? null : cachedNext.key;
+            return cachedNext.key;
         }
     }
 
