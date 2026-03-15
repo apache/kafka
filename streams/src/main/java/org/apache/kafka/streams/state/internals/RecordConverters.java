@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 
@@ -128,9 +129,15 @@ public final class RecordConverters {
             return null;
         }
 
-        final ByteBuffer rawHeaders = HeadersSerializer.serialize(headers);
-        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + rawValue.length)
-            .put(rawHeaders)
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
+
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + rawValue.length;
+
+        // Format: [headersSize(varint)][headersBytes][value]
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
+
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
             .put(rawValue)
             .array();
     }
@@ -149,9 +156,15 @@ public final class RecordConverters {
             return null;
         }
 
-        final ByteBuffer rawHeaders = HeadersSerializer.serialize(headers);
-        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + 8 + rawValue.length)
-            .put(rawHeaders)
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
+
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + 8 + rawValue.length;
+
+        // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
+
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
             .putLong(timestamp)
             .put(rawValue)
             .array();

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
@@ -80,12 +81,16 @@ class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerialize
             return null;
         }
 
-        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-        final ByteBuffer rawHeaders = HeadersSerializer.serialize(headers);
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
+
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + rawAggregation.length;
 
         // Format: [headersSize(varint)][headersBytes][value]
-        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + rawAggregation.length)
-            .put(rawHeaders)
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
+
+        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
             .put(rawAggregation)
             .array();
     }

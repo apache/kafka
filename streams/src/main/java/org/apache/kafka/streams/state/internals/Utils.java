@@ -28,23 +28,6 @@ import java.nio.ByteBuffer;
 
 public class Utils {
     /**
-     * Create a new ByteBuffer to store {@code bufferSize} bytes, after a var-length encoded prefix.
-     */
-    static ByteBuffer prepareByteBufferWithSizePrefix(final int prefix, final int bufferSize) {
-        final ByteBuffer varLengthBuffer = ByteBuffer.allocate(5); // 5 bytes for max varint encoding
-        ByteUtils.writeVarint(prefix, varLengthBuffer);
-
-        // allocate buffer with _exact_ size
-        final ByteBuffer buffer = ByteBuffer.allocate(varLengthBuffer.position() + bufferSize);
-
-        varLengthBuffer.limit(varLengthBuffer.position());
-        varLengthBuffer.position(0);
-        buffer.put(varLengthBuffer);
-
-        return buffer;
-    }
-
-    /**
      * Extract raw plain value from serialized ValueTimestampHeaders.
      * This strips both the headers and timestamp portions.
      *

@@ -50,11 +50,10 @@ public class HeadersDeserializerTest {
 
     @Test
     public void shouldRoundTripEmptyHeaders() {
-        final Headers original = new RecordHeaders();
-        final ByteBuffer serialized = HeadersSerializer.serialize(original);
-        final Headers deserialized = HeadersDeserializer.deserialize(
-            ByteBuffer.allocate(serialized.limit()).put(serialized).array()
-        );
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(new RecordHeaders());
+        final byte[] serialized = HeadersSerializer.serialize(preSerializedHeaders, ByteBuffer.allocate(0)).array();
+
+        final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
         assertEquals(0, deserialized.toArray().length);
@@ -64,10 +63,13 @@ public class HeadersDeserializerTest {
     public void shouldRoundTripSingleHeader() {
         final Headers original = new RecordHeaders()
             .add("key1", "value1".getBytes());
-        final ByteBuffer serialized = HeadersSerializer.serialize(original);
-        final Headers deserialized = HeadersDeserializer.deserialize(
-            ByteBuffer.allocate(serialized.limit()).put(serialized).array()
-        );
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
+        final byte[] serialized = HeadersSerializer.serialize(
+            preSerializedHeaders,
+            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
+        ).array();
+
+        final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
         assertEquals(1, deserialized.toArray().length);
@@ -84,10 +86,14 @@ public class HeadersDeserializerTest {
             .add("key0", "value0".getBytes())
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
-        final ByteBuffer serialized = HeadersSerializer.serialize(original);
-        final Headers deserialized = HeadersDeserializer.deserialize(
-            ByteBuffer.allocate(serialized.limit()).put(serialized).array()
-        );
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
+        final byte[] serialized = HeadersSerializer.serialize(
+            preSerializedHeaders,
+            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
+        ).array();
+
+        final Headers deserialized = HeadersDeserializer.deserialize(serialized);
+
         assertNotNull(deserialized);
 
         final Header[] headerArray = deserialized.toArray();
@@ -103,10 +109,13 @@ public class HeadersDeserializerTest {
     public void shouldRoundTripHeaderWithNullValue() {
         final Headers original = new RecordHeaders()
             .add("key1", null);
-        final ByteBuffer serialized = HeadersSerializer.serialize(original);
-        final Headers deserialized = HeadersDeserializer.deserialize(
-            ByteBuffer.allocate(serialized.limit()).put(serialized).array()
-        );
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
+        final byte[] serialized = HeadersSerializer.serialize(
+            preSerializedHeaders,
+            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
+        ).array();
+
+        final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
         assertEquals(1, deserialized.toArray().length);
@@ -121,10 +130,13 @@ public class HeadersDeserializerTest {
     public void shouldRoundTripHeaderWithEmptyValue() {
         final Headers original = new RecordHeaders()
             .add("key1", new byte[0]);
-        final ByteBuffer serialized = HeadersSerializer.serialize(original);
-        final Headers deserialized = HeadersDeserializer.deserialize(
-            ByteBuffer.allocate(serialized.limit()).put(serialized).array()
-        );
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
+        final byte[] serialized = HeadersSerializer.serialize(
+            preSerializedHeaders,
+            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
+        ).array();
+
+        final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
         assertEquals(1, deserialized.toArray().length);
@@ -143,10 +155,14 @@ public class HeadersDeserializerTest {
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes())
             .add("key2", "value3".getBytes());
-        final ByteBuffer serialized = HeadersSerializer.serialize(original);
-        final Headers deserialized = HeadersDeserializer.deserialize(
-            ByteBuffer.allocate(serialized.limit()).put(serialized).array()
-        );
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
+        final byte[] serialized = HeadersSerializer.serialize(
+            preSerializedHeaders,
+            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
+        ).array();
+
+        final Headers deserialized = HeadersDeserializer.deserialize(serialized);
+
         assertNotNull(deserialized);
 
         final Header[] headerArray = deserialized.toArray();
