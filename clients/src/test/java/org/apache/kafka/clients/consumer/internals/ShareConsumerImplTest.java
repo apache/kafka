@@ -88,8 +88,6 @@ import java.util.function.Predicate;
 
 import javax.security.auth.login.LoginException;
 
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -254,7 +252,7 @@ public class ShareConsumerImplTest {
         final String topicName = "foo";
         doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
 
-        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        final List<String> subscriptionTopic = List.of(topicName);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
         consumer.subscribe(subscriptionTopic);
 
@@ -271,7 +269,7 @@ public class ShareConsumerImplTest {
 
         // Set up subscription
         final String topicName = "foo";
-        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        final List<String> subscriptionTopic = List.of(topicName);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
         consumer.subscribe(subscriptionTopic);
 
@@ -312,7 +310,7 @@ public class ShareConsumerImplTest {
             return ShareFetch.empty();
         }).doAnswer(invocation -> ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
 
-        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        final List<String> subscriptionTopic = List.of(topicName);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
         consumer.subscribe(subscriptionTopic);
 
@@ -337,7 +335,7 @@ public class ShareConsumerImplTest {
             return fetch;
         }).when(fetchCollector).collect(Mockito.any(ShareFetchBuffer.class));
 
-        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        final List<String> subscriptionTopic = List.of(topicName);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
         consumer.subscribe(subscriptionTopic);
 
@@ -377,7 +375,7 @@ public class ShareConsumerImplTest {
                 .collect(any(ShareFetchBuffer.class));
 
         // Set up subscription
-        List<String> topics = Collections.singletonList(topic);
+        List<String> topics = List.of(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
 
@@ -436,7 +434,7 @@ public class ShareConsumerImplTest {
             .collect(any(ShareFetchBuffer.class));
 
         // Set up subscription
-        List<String> topics = Collections.singletonList(topic);
+        List<String> topics = List.of(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
         assertEquals(Optional.empty(), consumer.acquisitionLockTimeoutMs());
@@ -516,7 +514,7 @@ public class ShareConsumerImplTest {
             .collect(any(ShareFetchBuffer.class));
 
         // Set up subscription
-        List<String> topics = Collections.singletonList(topic);
+        List<String> topics = List.of(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
 
@@ -674,10 +672,10 @@ public class ShareConsumerImplTest {
         consumer = newConsumer(subscriptions);
 
         String topic = "topic1";
-        final List<String> subscriptionTopic = singletonList(topic);
+        final List<String> subscriptionTopic = List.of(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
         consumer.subscribe(subscriptionTopic);
-        assertEquals(singleton(topic), consumer.subscription());
+        assertEquals(Set.of(topic), consumer.subscription());
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
     }
 
@@ -700,7 +698,7 @@ public class ShareConsumerImplTest {
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
-        consumer.subscribe(Collections.emptyList());
+        consumer.subscribe(List.of());
 
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
@@ -714,14 +712,14 @@ public class ShareConsumerImplTest {
     @Test
     public void testSubscriptionOnNullTopic() {
         consumer = newConsumer();
-        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(null)));
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(Collections.singletonList(null)));
     }
 
     @Test
     public void testSubscriptionOnEmptyTopic() {
         consumer = newConsumer();
         String emptyTopic = "  ";
-        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(Collections.singletonList(emptyTopic)));
     }
 
     @Test
@@ -733,7 +731,7 @@ public class ShareConsumerImplTest {
         final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
         final ErrorEvent errorBackgroundEvent = new ErrorEvent(expectedException);
         backgroundEventQueue.add(errorBackgroundEvent);
-        consumer.subscribe(Collections.singletonList("t1"));
+        consumer.subscribe(List.of("t1"));
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
         assertEquals(expectedException.getMessage(), exception.getMessage());
@@ -751,7 +749,7 @@ public class ShareConsumerImplTest {
         final KafkaException expectedException2 = new KafkaException("Spam, Spam, Spam");
         final ErrorEvent errorBackgroundEvent2 = new ErrorEvent(expectedException2);
         backgroundEventQueue.add(errorBackgroundEvent2);
-        consumer.subscribe(Collections.singletonList("t1"));
+        consumer.subscribe(List.of("t1"));
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
         assertEquals(expectedException1.getMessage(), exception.getMessage());
@@ -808,7 +806,7 @@ public class ShareConsumerImplTest {
                 .when(fetchCollector)
                 .collect(Mockito.any(ShareFetchBuffer.class));
 
-        final List<String> subscriptionTopic = singletonList("topic");
+        final List<String> subscriptionTopic = List.of("topic");
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
         consumer.subscribe(subscriptionTopic);
 
@@ -958,7 +956,7 @@ public class ShareConsumerImplTest {
     /**
      * This test ensures that the {@link ShareConsumer} implementation fails on creation when the underlying
      * {@link NetworkClient} fails creation.
-     *
+     * <p>
      * The logic to check for this case is admittedly a bit awkward because the constructor can fail for all
      * manner of reasons. So a failure case is created by specifying an invalid
      * {@link javax.security.auth.spi.LoginModule} class name, which in turn causes the {@link NetworkClient}

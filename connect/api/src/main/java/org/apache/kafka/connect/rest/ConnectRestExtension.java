@@ -18,7 +18,8 @@
 package org.apache.kafka.connect.rest;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.health.ConnectClusterState;
 
 import java.io.Closeable;
@@ -48,7 +49,7 @@ import java.util.Map;
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>rest.extension.classes</code>, and <code>class</code> set to the ConnectRestExtension class name.
  */
-public interface ConnectRestExtension extends Configurable, Versioned, Closeable {
+public interface ConnectRestExtension extends Configurable, ConnectPlugin, Closeable {
 
     /**
      * ConnectRestExtension implementations can register custom JAX-RS resources via this method. The Connect framework
@@ -60,4 +61,14 @@ public interface ConnectRestExtension extends Configurable, Versioned, Closeable
      *                          ConnectRestExtensionContext#configurable()}
      */
     void register(ConnectRestExtensionContext restPluginContext);
+
+    /**
+     * Configuration specification for this rest extension.
+     *
+     * @return the configuration definition for this rest extension; never null
+     */
+    @Override
+    default ConfigDef config() {
+        return new ConfigDef();
+    }
 }
