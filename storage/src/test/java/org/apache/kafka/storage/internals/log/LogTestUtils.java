@@ -35,6 +35,7 @@ import org.apache.kafka.server.storage.log.FetchIsolation;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -267,8 +268,8 @@ public class LogTestUtils {
         segment.append(MemoryRecords.withRecords(baseOffset + Integer.MAX_VALUE - 1, Compression.NONE, 0,
             record.apply(baseOffset + Integer.MAX_VALUE - 1)));
         // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-        java.nio.file.Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath());
-        java.nio.file.Files.createFile(LogFileUtils.timeIndexFile(logDir, baseOffset).toPath());
+        Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath());
+        Files.createFile(LogFileUtils.timeIndexFile(logDir, baseOffset).toPath());
         return baseOffset + Integer.MAX_VALUE;
     }
 
