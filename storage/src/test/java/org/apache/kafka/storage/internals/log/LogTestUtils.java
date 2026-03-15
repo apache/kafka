@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.LongFunction;
@@ -227,15 +228,15 @@ public class LogTestUtils {
         return firstOverflowSegment(log).isPresent();
     }
 
-    public static java.util.Optional<LogSegment> firstOverflowSegment(UnifiedLog log) {
+    public static Optional<LogSegment> firstOverflowSegment(UnifiedLog log) {
         for (LogSegment segment : log.logSegments()) {
             for (RecordBatch batch : segment.log().batches()) {
                 if (batch.lastOffset() > segment.baseOffset() + Integer.MAX_VALUE || batch.baseOffset() < segment.baseOffset()) {
-                    return java.util.Optional.of(segment);
+                    return Optional.of(segment);
                 }
             }
         }
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
     public static FileRecords rawSegment(File logDir, long baseOffset) throws IOException {
@@ -278,12 +279,9 @@ public class LogTestUtils {
     }
 
     private static long writeOverflowSegment(File logDir, long baseOffset) throws IOException {
-        FileRecords segment = rawSegment(logDir, baseOffset);
-        try {
+        try (FileRecords segment = rawSegment(logDir, baseOffset)) {
             long nextOffset = writeSampleBatches(logDir, baseOffset, segment);
             return writeSampleBatches(logDir, nextOffset, segment);
-        } finally {
-            segment.close();
         }
     }
 
