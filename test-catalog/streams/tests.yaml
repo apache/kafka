@@ -4992,6 +4992,11 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHead
 - shouldTimeIteratorDuration
 - shouldTrackOldestOpenIteratorTimestamp
 - shouldTrackOpenIteratorsMetric
+- shouldUseHeadersFromValueToDeserializeKeyInAll
+- shouldUseHeadersFromValueToDeserializeKeyInPrefixScan
+- shouldUseHeadersFromValueToDeserializeKeyInRange
+- shouldUseHeadersFromValueToDeserializeKeyInReverseAll
+- shouldUseHeadersFromValueToDeserializeKeyInReverseRange
 - shouldWriteBytesToInnerStoreAndRecordPutMetric
 - testMetrics
 org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreTest:
