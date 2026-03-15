@@ -403,6 +403,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 final BufferValue bufferValue = next.getValue();
                 final Change<V> value = valueSerde.deserializeParts(
                     changelogTopic,
+                    context.headers(),
                     new Change<>(bufferValue.newValue(), bufferValue.oldValue())
                 );
                 callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
@@ -471,7 +472,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         requireNonNull(recordContext, "recordContext cannot be null");
 
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, recordContext.headers(), record.key()));
-        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, record.value());
+        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, recordContext.headers(), record.value());
 
         final BufferValue buffered = getBuffered(serializedKey);
         final byte[] serializedPriorValue;

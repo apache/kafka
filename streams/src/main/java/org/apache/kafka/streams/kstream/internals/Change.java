@@ -16,32 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
-
 import java.util.Objects;
 
 public class Change<T> {
 
     public final T newValue;
-    public final Headers newHeaders;
     public final T oldValue;
-    public final Headers oldHeaders;
     public final boolean isLatest;
 
     public Change(final T newValue, final T oldValue) {
-        this(newValue, new RecordHeaders(), oldValue, new RecordHeaders(), true);
+        this(newValue, oldValue, true);
     }
 
     public Change(final T newValue, final T oldValue, final boolean isLatest) {
-        this(newValue, new RecordHeaders(), oldValue, new RecordHeaders(), isLatest);
-    }
-
-    public Change(final T newValue, final Headers newHeaders, final T oldValue, final Headers oldHeaders, final boolean isLatest) {
         this.newValue = newValue;
-        this.newHeaders = newHeaders;
         this.oldValue = oldValue;
-        this.oldHeaders = oldHeaders;
         this.isLatest = isLatest;
     }
 
@@ -60,14 +49,12 @@ public class Change<T> {
         }
         final Change<?> change = (Change<?>) o;
         return Objects.equals(newValue, change.newValue)
-            && Objects.equals(newHeaders, change.newHeaders)
             && Objects.equals(oldValue, change.oldValue)
-            && Objects.equals(oldHeaders, change.oldHeaders)
             && isLatest == change.isLatest;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(newValue, newHeaders, oldValue, oldHeaders, isLatest);
+        return Objects.hash(newValue, oldValue, isLatest);
     }
 }
