@@ -45,7 +45,7 @@ import java.nio.charset.StandardCharsets;
  */
 class HeadersSerializer {
 
-    final static class PreSerializedHeaders {
+    static final class PreSerializedHeaders {
         final int requiredBufferSizeForHeaders;
         final byte[][] rawHeaderKeys;
         final byte[][] rawHeaderValues;
@@ -53,11 +53,11 @@ class HeadersSerializer {
         PreSerializedHeaders(
             final int requiredBufferSizeForHeaders,
             final byte[][] rawHeaderKeys,
-            final byte[][] rawHeaderValued
+            final byte[][] rawHeaderValues
         ) {
             this.requiredBufferSizeForHeaders = requiredBufferSizeForHeaders;
             this.rawHeaderKeys = rawHeaderKeys;
-            this.rawHeaderValues = rawHeaderValued;
+            this.rawHeaderValues = rawHeaderValues;
         }
     }
 

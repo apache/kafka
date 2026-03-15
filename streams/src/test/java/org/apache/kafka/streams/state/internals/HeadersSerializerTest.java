@@ -33,26 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class HeadersSerializerTest {
 
     @Test
-    public void test() {
-        final Headers headers = new RecordHeaders()
-            .add("key0", "value0".getBytes())
-            .add("key1", "value1".getBytes())
-            .add("key2", "value2".getBytes());
-
-        long start = System.currentTimeMillis();
-        HeadersSerializer.PreSerializedHeaders preSerializedHeaders = null;
-        for (int i = 0; i < 500000000; i++) {
-            preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
-        }
-        System.out.println("runtime: " + (System.currentTimeMillis() - start));
-        long start2 = System.currentTimeMillis();
-        for (int i = 0; i < 500000000; i++) {
-            HeadersSerializer.serialize(preSerializedHeaders, ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders), headers);
-        }
-        System.out.println("runtime: " + (System.currentTimeMillis() - start2));
-    }
-
-    @Test
     public void shouldSerializeNullHeaders() {
         final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(null);
         assertEquals(0, preSerializedHeaders.requiredBufferSizeForHeaders);
