@@ -22,5 +22,9 @@ import org.apache.kafka.streams.kstream.Windowed;
 
 public interface WindowedSerializer<T> extends Serializer<Windowed<T>> {
 
-    byte[] serializeBaseKey(String topic, Headers headers, Windowed<T> data);
+    byte[] serializeBaseKey(String topic, Windowed<T> data);
+
+    default byte[] serializeBaseKey(String topic, Headers headers, Windowed<T> data) {
+        return serializeBaseKey(topic, data);
+    }
 }

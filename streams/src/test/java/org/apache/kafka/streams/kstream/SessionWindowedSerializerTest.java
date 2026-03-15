@@ -123,20 +123,21 @@ public class SessionWindowedSerializerTest {
         final Serializer<String> mockSerializer = mock(StringSerializer.class);
         when(mockSerializer.serialize(anyString(), any(Headers.class), anyString())).thenReturn("test-value".getBytes());
 
+        final String topic = "dummy";
         final String key = "test-key";
         final Windowed<String> data = new Windowed<>(key, new SessionWindow(0, 1));
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
 
         final SessionWindowedSerializer<String> testSerializer = new SessionWindowedSerializer<>(mockSerializer);
 
-        testSerializer.serialize("dummy", headers, data);
+        testSerializer.serialize(topic, headers, data);
 
-        verify(mockSerializer, times(1)).serialize(anyString(), eq(headers), eq(key));
+        verify(mockSerializer, times(1)).serialize(eq(topic), eq(headers), eq(key));
         verify(mockSerializer, never()).serialize(anyString(), eq(key));
 
-        testSerializer.serializeBaseKey("dummy", headers, data);
+        testSerializer.serializeBaseKey(topic, headers, data);
 
-        verify(mockSerializer, times(2)).serialize(anyString(), eq(headers), eq(key));
+        verify(mockSerializer, times(2)).serialize(eq(topic), eq(headers), eq(key));
         verify(mockSerializer, never()).serialize(anyString(), eq(key));
     }
 }
