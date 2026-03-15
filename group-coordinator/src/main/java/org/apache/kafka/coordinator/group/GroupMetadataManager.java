@@ -8814,7 +8814,12 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        return Map.of("num.standby.replicas", numStandbyReplicas.toString());
+        final Integer taskOffsetIntervalMs = groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
+            .orElse(config.streamsGroupTaskOffsetIntervalMs());
+        return Map.of(
+            "num.standby.replicas", numStandbyReplicas.toString(),
+            "task.offset.interval.ms", taskOffsetIntervalMs.toString()
+        );
     }
 
     /**

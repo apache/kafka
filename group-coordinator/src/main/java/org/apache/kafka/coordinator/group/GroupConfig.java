@@ -445,6 +445,8 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs());
         clampToMax(props, groupId, STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
             groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas());
+        clampToMin(props, groupId, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs());
 
         // Verify that clamping did not break the session > heartbeat invariant.
         checkSessionExceedsHeartbeat(props, groupId,
@@ -542,6 +544,33 @@ public final class GroupConfig extends AbstractConfig {
                     "allowed maximum {}. The effective value will be capped to {}.",
                 key, groupId, value, max, max);
             props.put(key, max);
+        }
+    }
+
+    /**
+     * Clamp a config value to at most min. A WARN log is emitted on adjustment.
+     * No-op when the key is absent from props.
+     *
+     * @param props   The properties to modify in place.
+     * @param groupId The group id.
+     * @param key     The config key.
+     * @param min     The minimum allowed value (inclusive).
+     */
+    private static void clampToMin(
+        Properties props,
+        String groupId,
+        String key,
+        int min
+    ) {
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
+
+        int value = Integer.parseInt(rawValue.toString());
+        if (value < min) {
+            log.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
+                    "allowed minimum {}. The effective value will be capped to {}.",
+                key, groupId, value, min, min);
+            props.put(key, min);
         }
     }
 
