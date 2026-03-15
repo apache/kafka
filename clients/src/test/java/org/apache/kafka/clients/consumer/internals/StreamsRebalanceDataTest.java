@@ -288,7 +288,7 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesClientTagsRackId() {
+    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesClientTags() {
         final UUID processId = UUID.randomUUID();
         final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();

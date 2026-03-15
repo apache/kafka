@@ -650,7 +650,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("provideNonJoiningStates")
-    public void testBuildingHeartbeatRequesClientTagSentWhenJoining(final MemberState memberState) {
+    public void testBuildingHeartbeatRequestClientTagSentWhenJoining(final MemberState memberState) {
         final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
             new StreamsGroupHeartbeatRequestManager.HeartbeatState(
                 streamsRebalanceData,
