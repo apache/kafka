@@ -36,10 +36,12 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStore;
 import org.apache.kafka.streams.state.internals.MeteredSessionStore;
-import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStore;
+import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -227,7 +229,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, Long> store = driver.getSessionStore("count-store");
-            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toListAndCloseIterator(store.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, Long>> data = unwrapAggregations(store.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
                         data,
@@ -255,7 +257,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
 
             if (!emitFinal) {
                 assertThat(
@@ -288,7 +290,7 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("1", "2"));
+            final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
                         data,
@@ -423,11 +425,11 @@ public class SessionWindowedKStreamImplTest {
                 Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final SessionStore<String, String> store = driver.getSessionStore("aggregated");
+            final StateStore store = driver.getAllStateStores().get("aggregated");
             final WrappedStateStore changeLogging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
             assertThat(store, instanceOf(MeteredSessionStore.class));
             assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
-            assertThat(changeLogging.wrapped(), instanceOf(RocksDBTimeOrderedSessionStore.class));
+            assertThat(changeLogging.wrapped(), instanceOf(SessionToHeadersStoreAdapter.class));
         }
     }
 
@@ -439,5 +441,16 @@ public class SessionWindowedKStreamImplTest {
         inputTopic.pipeInput("1", "3", 600);
         inputTopic.pipeInput("2", "1", 600);
         inputTopic.pipeInput("2", "2", 599);
+    }
+
+    private <V> List<KeyValue<Windowed<String>, V>> unwrapAggregations(
+            final KeyValueIterator<Windowed<String>, V> iterator) {
+        final List<KeyValue<Windowed<String>, V>> result = new ArrayList<>();
+        while (iterator.hasNext()) {
+            final KeyValue<Windowed<String>, V> next = iterator.next();
+            result.add(KeyValue.pair(next.key, next.value));
+        }
+        iterator.close();
+        return result;
     }
 }

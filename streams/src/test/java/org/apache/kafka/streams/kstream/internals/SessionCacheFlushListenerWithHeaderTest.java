@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +35,7 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class SessionCacheFlushListenerTest {
+public class SessionCacheFlushListenerWithHeaderTest {
     @Test
     public void shouldForwardKeyNewValueOldValueAndTimestamp() {
         @SuppressWarnings("unchecked")
@@ -44,10 +46,12 @@ public class SessionCacheFlushListenerTest {
                 new Change<>("newValue", "oldValue"),
                 73L));
 
-        new SessionCacheFlushListener<>(context).apply(
+        new SessionCacheFlushListenerWithHeader<>(context).apply(
             new Record<>(
                 new Windowed<>("key", new SessionWindow(21L, 73L)),
-                new Change<>("newValue", "oldValue"),
+                new Change<>(
+                    AggregationWithHeaders.make("newValue", new RecordHeaders()),
+                    AggregationWithHeaders.make("oldValue", new RecordHeaders())),
                 42L));
 
         verify(context, times(2)).setCurrentNode(null);
