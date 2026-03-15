@@ -111,7 +111,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
     }
 
     @Override
-    public byte[] serializeBaseKey(String topic, Windowed<T> data) {
+    public byte[] serializeBaseKey(final String topic, final Windowed<T> data) {
         return serializeBaseKey(topic, new RecordHeaders(), data);
     }
 
