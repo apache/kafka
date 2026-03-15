@@ -55,7 +55,7 @@ class HeadersSerializer {
      * instead of encoding headerCount=0 (1 byte).
      * <p>
      * The returned ByteBuffer may have larger capacity than actual payload size.
-     * It's possition will be set to zero, and its limit marks the payload end.
+     * It's position will be set to zero, and its limit marks the payload end.
      *
      * @param headers the headers to serialize (can be null)
      * @return the serialized byte array (empty array if headers are null or empty)
@@ -67,31 +67,38 @@ class HeadersSerializer {
             return ByteBuffer.allocate(0);
         }
 
-        int size = 0;
+        // we first estimate an upper bound for the buffer we need,
+        // so we can allocate the whole buffer at once
+
+        // start with 5 bytes for varint encoding of header count
+        int estimatedBufferSize = 5;
         for (final Header header : headersArray) {
-            size += 5 + header.key().length();
+            // adding 5 bytes for varint encoding of header-key length
+            estimatedBufferSize += 5 + header.key().length();
 
             final byte[] value = header.value();
             if (value == null) {
-                ++size;
+                ++estimatedBufferSize;
             } else {
-                size += 5 + value.length;
+                // adding 5 bytes for varint encoding of header-value length
+                estimatedBufferSize += 5 + value.length;
             }
         }
 
-        final ByteBuffer result = ByteBuffer.allocate(5 + size);
+        final ByteBuffer result = ByteBuffer.allocate(estimatedBufferSize);
         ByteUtils.writeVarint(headersArray.length, result);
 
         for (final Header header : headersArray) {
-            final String key = header.key();
-            final byte[] value = header.value();
-            ByteUtils.writeVarint(key.length(), result);
-            result.put(key.getBytes(StandardCharsets.UTF_8));
-            if (value != null) {
-                ByteUtils.writeVarint(value.length, result);
-                result.put(value);
+            final String headerKey = header.key();
+            ByteUtils.writeVarint(headerKey.length(), result);
+            result.put(headerKey.getBytes(StandardCharsets.UTF_8));
+
+            final byte[] headerValue = header.value();
+            if (headerValue != null) {
+                ByteUtils.writeVarint(headerValue.length, result);
+                result.put(headerValue);
             } else {
-                result.put((byte) 0x01);
+                result.put((byte) 0x01); // hardcoded varint encoding for `-1`
             }
         }
 
