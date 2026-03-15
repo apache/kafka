@@ -9,6 +9,7 @@ org.apache.kafka.streams.KeyValueStoreFacadeTest:
 - shouldReturnIsOpen
 - shouldReturnIsPersistent
 - shouldReturnName
+- shouldReturnPosition
 org.apache.kafka.streams.MockProcessorContextTest:
 - fullConstructorShouldSetAllExpectedAttributes
 - shouldCaptureAnchoredPunctuator
@@ -140,6 +141,9 @@ org.apache.kafka.streams.TopologyTestDriverEosTest:
 - shouldUseSinkSpecificSerializers
 - shouldUseSourceSpecificDeserializers
 org.apache.kafka.streams.WindowStoreFacadeTest:
+- shouldFetchAllTimeRangeAndConvertValues
+- shouldFetchKeyRangeTimeRangeAndConvertValues
+- shouldFetchTimeRangeAndConvertValues
 - shouldForwardClose
 - shouldForwardCommit
 - shouldForwardInit
@@ -147,6 +151,7 @@ org.apache.kafka.streams.WindowStoreFacadeTest:
 - shouldReturnIsOpen
 - shouldReturnIsPersistent
 - shouldReturnName
+- shouldReturnPosition
 org.apache.kafka.streams.test.MockProcessorContextAPITest:
 - fullConstructorShouldSetAllExpectedAttributes
 - shouldCaptureApplicationAndRecordMetadata
