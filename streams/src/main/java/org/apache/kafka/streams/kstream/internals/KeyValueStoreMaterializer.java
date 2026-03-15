@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -44,8 +45,9 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StoreBuilder<?> builder() {
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), true))
+                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
@@ -55,10 +57,17 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     materialized.keySerde(),
                     materialized.valueSerde());
         } else {
-            builder = Stores.timestampedKeyValueStoreBuilder(
+            if (storeFormat == DslStoreFormat.HEADERS) {
+                builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
+            } else {
+                builder = Stores.timestampedKeyValueStoreBuilder(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+            }
         }
 
         if (materialized.loggingEnabled()) {
@@ -68,10 +77,10 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
         }
 
         if (materialized.cachingEnabled()) {
-            if (!(builder instanceof VersionedKeyValueStoreBuilder)) {
-                builder.withCachingEnabled();
-            } else {
+            if (builder instanceof VersionedKeyValueStoreBuilder) {
                 LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
+            } else {
+                builder.withCachingEnabled();
             }
         }
 

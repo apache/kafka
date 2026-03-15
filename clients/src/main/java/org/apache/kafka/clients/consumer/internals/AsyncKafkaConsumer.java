@@ -2189,7 +2189,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * Process the events—if any—that were produced by the {@link ConsumerNetworkThread network thread}.
+     * Process the events-if any-that were produced by the {@link ConsumerNetworkThread network thread}.
      * It is possible that {@link ErrorEvent an error}
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.

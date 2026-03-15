@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -270,6 +271,8 @@ public class StoreChangelogReaderTest {
             assertNull(callback.storeNameCalledStates.get(RESTORE_SUSPENDED));
             assertEquals(storeName, standbyListener.capturedStore(UPDATE_START));
             assertEquals(tp, standbyListener.updatePartition);
+            assertEquals(storeName, standbyListener.capturedStore(UPDATE_SUSPENDED));
+            assertEquals(SuspendReason.MIGRATED, standbyListener.updateSuspendedReason);
         }
         assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
     }
@@ -330,7 +333,37 @@ public class StoreChangelogReaderTest {
             assertNull(callback.storeNameCalledStates.get(UPDATE_BATCH));
             assertEquals(storeName, standbyListener.capturedStore(UPDATE_START));
             assertEquals(tp, standbyListener.updatePartition);
+            assertEquals(storeName, standbyListener.capturedStore(UPDATE_SUSPENDED));
+            assertEquals(SuspendReason.MIGRATED, standbyListener.updateSuspendedReason);
         }
+    }
+
+    @Test
+    public void shouldPassSuspendReasonToStandbyListener() {
+        setupStateManagerMock(STANDBY);
+        setupStoreMetadata();
+        setupStore();
+        @SuppressWarnings("unchecked")
+        final Map<TaskId, Task> mockTasks = mock(Map.class);
+        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        when(mockTasks.containsKey(null)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(9L);
+        when(storeMetadata.endOffset()).thenReturn(10L);
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+
+        changelogReader.register(tp, stateManager);
+        changelogReader.transitToUpdateStandby();
+        changelogReader.restore(mockTasks);
+
+        changelogReader.unregister(Collections.singleton(tp), SuspendReason.PROMOTED);
+
+        assertEquals(storeName, standbyListener.capturedStore(UPDATE_SUSPENDED));
+        assertEquals(SuspendReason.PROMOTED, standbyListener.updateSuspendedReason);
     }
 
     @ParameterizedTest

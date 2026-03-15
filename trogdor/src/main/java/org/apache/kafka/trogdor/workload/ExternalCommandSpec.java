@@ -35,31 +35,32 @@ import java.util.Set;
  *
  * An example uses the python runner to execute the ProduceBenchSpec task.
  *
- * #{@code
- *   {
- *      "class": "org.apache.kafka.trogdor.workload.ExternalCommandSpec",
- *      "command": ["python", "/path/to/trogdor/python/runner"],
- *      "durationMs": 10000000,
- *      "producerNode": "node0",
- *      "workload": {
- *        "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
- *        "bootstrapServers": "localhost:9092",
- *        "targetMessagesPerSec": 10,
- *        "maxMessages": 100,
- *        "activeTopics": {
- *          "foo[1-3]": {
- *            "numPartitions": 3,
- *            "replicationFactor": 1
- *          }
- *        },
- *        "inactiveTopics": {
- *          "foo[4-5]": {
- *            "numPartitions": 3,
- *            "replicationFactor": 1
- *          }
+ * <pre>{@code
+ * {
+ *    "class": "org.apache.kafka.trogdor.workload.ExternalCommandSpec",
+ *    "command": ["python", "/path/to/trogdor/python/runner"],
+ *    "durationMs": 10000000,
+ *    "producerNode": "node0",
+ *    "workload": {
+ *      "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+ *      "bootstrapServers": "localhost:9092",
+ *      "targetMessagesPerSec": 10,
+ *      "maxMessages": 100,
+ *      "activeTopics": {
+ *        "foo[1-3]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
  *        }
- *     }
+ *      },
+ *      "inactiveTopics": {
+ *        "foo[4-5]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
+ *        }
+ *      }
  *   }
+ * }
+ * }</pre>
  */
 public class ExternalCommandSpec extends TaskSpec {
     private final String commandNode;

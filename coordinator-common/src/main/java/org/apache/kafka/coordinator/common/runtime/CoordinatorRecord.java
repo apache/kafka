@@ -22,8 +22,8 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import java.util.Objects;
 
 /**
- * A Record which contains an {{@link ApiMessage}} as key and
- * an {{@link ApiMessageAndVersion}} as value. The value could be null to
+ * A Record which contains an {@link ApiMessage} as key and
+ * an {@link ApiMessageAndVersion} as value. The value could be null to
  * represent a tombstone.
  *
  * This class is immutable.
@@ -58,7 +58,7 @@ public class CoordinatorRecord {
      * Constructs a CoordinatorRecord.
      *
      * @param key   A non-null key.
-     * @param value A key or null.
+     * @param value A value or null.
      */
     private CoordinatorRecord(
         ApiMessage key,

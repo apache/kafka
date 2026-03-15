@@ -29,8 +29,11 @@ import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
@@ -94,7 +97,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, false, false);
     }
 
     /**
@@ -113,7 +116,33 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, true);
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, false);
+    }
+
+    /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier} that stores headers along with timestamps.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #timestampedKeyValueStoreBuilderWithHeaders(KeyValueBytesStoreSupplier, Serde, Serde)}
+     * to build a {@link TimestampedKeyValueStoreWithHeaders}.
+     * <p>
+     * The store will persist key-value pairs along with record timestamps and headers,
+     * using the format specified in KIP-1271. This allows state stores to maintain
+     * full record context including headers for downstream processing.
+     * <p>
+     * If you want to create a {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or
+     * {@link VersionedKeyValueStore} you should use {@link #persistentKeyValueStore(String)},
+     * {@link #persistentTimestampedKeyValueStore(String)}, or
+     * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
+     * to create a store supplier instead.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent key-(headers/timestamp/value) store
+     */
+    public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStoreWithHeaders(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, true);
     }
 
     /**
@@ -305,6 +334,37 @@ public final class Stores {
         return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true);
     }
 
+    /**
+     * Creates a persistent {@link WindowBytesStoreSupplier} that preserves timestamps and headers.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
+     */
+    public static WindowBytesStoreSupplier persistentTimestampedWindowStoreWithHeaders(final String name,
+                                                                                       final Duration retentionPeriod,
+                                                                                       final Duration windowSize,
+                                                                                       final boolean retainDuplicates) throws IllegalArgumentException {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
+
+        return new RocksDbWindowBytesStoreSupplier(
+            name,
+            retentionMs,
+            defaultSegmentInterval,
+            windowSizeMs,
+            retainDuplicates,
+            RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
+    }
+
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                   final Duration retentionPeriod,
                                                                   final Duration windowSize,
@@ -413,13 +473,38 @@ public final class Stores {
      */
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
+        return persistentSessionStore(name, retentionPeriod, false);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier} with support for record headers.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
+     *
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
+     *                          (note that the retention period must be at least as long enough to
+     *                          contain the inactivity gap of the session and the entire grace period.)
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier persistentSessionStoreWithHeaders(final String name,
+                                                                              final Duration retentionPeriod) {
+        return persistentSessionStore(name, retentionPeriod, true);
+    }
+
+    private static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                    final Duration retentionPeriod,
+                                                                    final boolean withHeaders) {
         Objects.requireNonNull(name, "name cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs, withHeaders);
     }
 
     /**
@@ -547,6 +632,24 @@ public final class Stores {
     }
 
     /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedWindowStoreWithHeaders}.
+     *
+     * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} that can build a {@link TimestampedWindowStoreWithHeaders}
+     */
+    public static <K, V> StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> timestampedWindowStoreWithHeadersBuilder(
+            final WindowBytesStoreSupplier supplier,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new TimestampedWindowStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStore}.
      *
      * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
@@ -562,5 +665,42 @@ public final class Stores {
                                                                               final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStoreWithHeaders}.
+     *
+     * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} than can build a {@link SessionStoreWithHeaders}
+     */
+    public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreBuilderWithHeaders(
+            final SessionBytesStoreSupplier supplier,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new SessionStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedKeyValueStoreWithHeaders}.
+     *
+     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} than can build a {@link KeyValueStore}
+     */
+    public static <K, V> StoreBuilder<TimestampedKeyValueStoreWithHeaders<K, V>> timestampedKeyValueStoreBuilderWithHeaders(final KeyValueBytesStoreSupplier supplier,
+                                                                                                                            final Serde<K> keySerde,
+                                                                                                                            final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 }

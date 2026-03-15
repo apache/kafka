@@ -29,7 +29,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
 public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
     public enum WindowStoreTypes {
         DEFAULT_WINDOW_STORE,
-        INDEXED_WINDOW_STORE
+        INDEXED_WINDOW_STORE,
+        INDEXED_WINDOW_STORE_WITH_HEADERS
     }
 
     private final String name;
@@ -43,7 +44,8 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                                                                            final Duration retentionPeriod,
                                                                            final Duration windowSize,
                                                                            final boolean retainDuplicates,
-                                                                           final boolean hasIndex) {
+                                                                           final boolean hasIndex,
+                                                                           final boolean withHeaders) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -68,7 +70,7 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
         }
 
         return new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(name, retentionMs,
-            defaultSegmentInterval, windowSizeMs, retainDuplicates, hasIndex);
+            defaultSegmentInterval, windowSizeMs, retainDuplicates, hasIndex, withHeaders);
     }
 
     public RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(final String name,
@@ -76,11 +78,20 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                                            final long segmentInterval,
                                            final long windowSize,
                                            final boolean retainDuplicates,
-                                           final boolean withIndex) {
+                                           final boolean withIndex,
+                                           final boolean withHeaders) {
         this(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates,
-            withIndex
-                ? WindowStoreTypes.INDEXED_WINDOW_STORE
-                : WindowStoreTypes.DEFAULT_WINDOW_STORE);
+            determineStoreType(withIndex, withHeaders));
+    }
+
+    private static WindowStoreTypes determineStoreType(final boolean withIndex, final boolean withHeaders) {
+        if (withHeaders) {
+            return WindowStoreTypes.INDEXED_WINDOW_STORE_WITH_HEADERS;
+        } else if (withIndex) {
+            return WindowStoreTypes.INDEXED_WINDOW_STORE;
+        } else {
+            return WindowStoreTypes.DEFAULT_WINDOW_STORE;
+        }
     }
 
     public RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(final String name,
@@ -117,6 +128,16 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                     windowSize);
             case INDEXED_WINDOW_STORE:
                 return new RocksDBTimeOrderedWindowStore(
+                    new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                        name,
+                        metricsScope(),
+                        retentionPeriod,
+                        segmentInterval,
+                        true),
+                    retainDuplicates,
+                    windowSize);
+            case INDEXED_WINDOW_STORE_WITH_HEADERS:
+                return new RocksDBTimeOrderedWindowStoreWithHeaders(
                     new RocksDBTimeOrderedWindowSegmentedBytesStore(
                         name,
                         metricsScope(),

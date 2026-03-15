@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -64,6 +65,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> The key type
  * @param <V> The (raw) value type
  */
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class MeteredVersionedKeyValueStore<K, V>
     extends WrappedStateStore<VersionedBytesStore, K, V>
     implements VersionedKeyValueStore<K, V> {
@@ -142,7 +145,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         public long put(final K key, final V value, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                final long validTo = maybeMeasureLatency(() -> inner.put(keyBytes(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
+                final long validTo = maybeMeasureLatency(() -> inner.put(serializeKey(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
                 maybeRecordE2ELatency();
                 return validTo;
             } catch (final ProcessorStateException e) {
@@ -154,7 +157,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                return maybeMeasureLatency(() -> outerValue(inner.get(keyBytes(key), asOfTimestamp)), time, getSensor);
+                return maybeMeasureLatency(() -> deserializeValue(inner.get(serializeKey(key), asOfTimestamp)), time, getSensor);
             } catch (final ProcessorStateException e) {
                 final String message = String.format(e.getMessage(), key);
                 throw new ProcessorStateException(message, e);
@@ -164,7 +167,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         public ValueAndTimestamp<V> delete(final K key, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                return maybeMeasureLatency(() -> outerValue(inner.delete(keyBytes(key), timestamp)), time, deleteSensor);
+                return maybeMeasureLatency(() -> deserializeValue(inner.delete(serializeKey(key), timestamp)), time, deleteSensor);
             } catch (final ProcessorStateException e) {
                 final String message = String.format(e.getMessage(), key);
                 throw new ProcessorStateException(message, e);
@@ -225,7 +228,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                                                           final QueryConfig config) {
             final QueryResult<R> result;
             final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
-            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(serializeKey(typedKeyQuery.key()));
             if (typedKeyQuery.asOfTimestamp().isPresent()) {
                 rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
             }
@@ -253,7 +256,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             if (fromTime.compareTo(toTime) > 0) {
                 throw new IllegalArgumentException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
             }
-            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(serializeKey(typedKeyQuery.key()));
             rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
             if (typedKeyQuery.resultOrder().equals(ResultOrder.DESCENDING)) {
                 rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
@@ -269,6 +272,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                             iteratorDurationSensor,
                             time,
                             StoreQueryUtils.deserializeValue(plainValueSerdes),
+                            numOpenIterators,
                             openIterators
                         );
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
@@ -346,8 +350,8 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     @Override
-    public void flush() {
-        internal.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        internal.commit(changelogOffsets);
     }
 
     @Override

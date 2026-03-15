@@ -134,8 +134,8 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
         new DescribedGroup()
           .setGroupId("grp-1")
           .setGroupState(ConsumerGroupState.STABLE.toString)
-          .setGroupEpoch(1)
-          .setAssignmentEpoch(1)
+          .setGroupEpoch(2)
+          .setAssignmentEpoch(2)
           .setAssignorName("uniform")
           .setAuthorizedOperations(authorizedOperationsInt)
           .setMembers(List(

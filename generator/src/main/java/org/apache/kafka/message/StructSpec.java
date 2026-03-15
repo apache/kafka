@@ -81,7 +81,7 @@ public final class StructSpec {
             }
         }
         this.fields = Collections.unmodifiableList(newFields);
-        this.hasKeys = this.fields.stream().anyMatch(f -> f.mapKey());
+        this.hasKeys = this.fields.stream().anyMatch(FieldSpec::mapKey);
     }
 
     @JsonProperty

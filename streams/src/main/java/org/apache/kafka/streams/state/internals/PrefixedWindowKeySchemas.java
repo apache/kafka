@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
@@ -30,6 +31,8 @@ import java.util.List;
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;
@@ -167,8 +170,9 @@ public class PrefixedWindowKeySchemas {
         public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
                                                    final long windowSize,
                                                    final Deserializer<K> deserializer,
+                                                   final Headers headers,
                                                    final String topic) {
-            final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+            final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }
@@ -374,8 +378,9 @@ public class PrefixedWindowKeySchemas {
         public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
                                                    final long windowSize,
                                                    final Deserializer<K> deserializer,
+                                                   final Headers headers,
                                                    final String topic) {
-            final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+            final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }

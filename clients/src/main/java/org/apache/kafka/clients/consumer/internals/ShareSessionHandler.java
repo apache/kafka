@@ -35,13 +35,13 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -95,7 +95,7 @@ public class ShareSessionHandler {
     }
 
     public Collection<TopicIdPartition> sessionPartitions() {
-        return Collections.unmodifiableCollection(sessionPartitions.values());
+        return Set.copyOf(sessionPartitions.values());
     }
 
     public void addPartitionToFetch(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
@@ -218,9 +218,9 @@ public class ShareSessionHandler {
         }
     }
 
-    public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, ShareFetchConfig shareFetchConfig) {
+    public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId) {
         if (nextMetadata.isNewSession()) {
-            // A share session cannot be started with a ShareAcknowledge request
+            // A share session cannot be started with a ShareAcknowledge request. The caller handles completing the acks.
             nextPartitions.clear();
             nextAcknowledgements.clear();
             return null;
