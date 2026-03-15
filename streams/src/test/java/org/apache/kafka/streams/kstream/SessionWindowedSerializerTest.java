@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -132,12 +131,12 @@ public class SessionWindowedSerializerTest {
 
         testSerializer.serialize(topic, headers, data);
 
-        verify(mockSerializer, times(1)).serialize(eq(topic), eq(headers), eq(key));
-        verify(mockSerializer, never()).serialize(anyString(), eq(key));
+        verify(mockSerializer, times(1)).serialize(topic, headers, key);
+        verify(mockSerializer, never()).serialize(topic, key);
 
         testSerializer.serializeBaseKey(topic, headers, data);
 
-        verify(mockSerializer, times(2)).serialize(eq(topic), eq(headers), eq(key));
-        verify(mockSerializer, never()).serialize(anyString(), eq(key));
+        verify(mockSerializer, times(2)).serialize(topic, headers, key);
+        verify(mockSerializer, never()).serialize(topic, key);
     }
 }
