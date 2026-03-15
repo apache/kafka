@@ -25,6 +25,8 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -86,5 +88,20 @@ public record TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById, ImmutableMa
     @Override
     public String toString() {
         return new TopicsImageByNameNode(this).stringify();
+    }
+
+    /**
+     * The list of replicas hosting the specified partition
+     * @param topicId        The topic ID
+     * @param partitionId    The partition ID
+     * @return               The list of replicas
+     */
+    public List<Integer> partitionReplicas(Uuid topicId, int partitionId) {
+        PartitionRegistration partition = getPartition(topicId, partitionId);
+        if (partition == null) {
+            return List.of();
+        } else {
+            return Arrays.stream(partition.replicas).boxed().toList();
+        }
     }
 }

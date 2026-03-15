@@ -124,6 +124,9 @@ jobs:
           ref: ${{ github.sha }}  # this is the default, just being explicit.
       - name: Setup Python
         uses: ./.github/actions/setup-python
+      - name: Check Python dependency conflicts
+        shell: bash
+        run: pip install --dry-run ./tests
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:

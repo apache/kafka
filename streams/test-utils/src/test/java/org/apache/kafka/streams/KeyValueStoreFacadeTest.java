@@ -20,11 +20,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.TopologyTestDriver.KeyValueStoreFacade;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.is;
@@ -98,9 +101,9 @@ public class KeyValueStoreFacadeTest {
     }
 
     @Test
-    public void shouldForwardFlush() {
-        keyValueStoreFacade.flush();
-        verify(mockedKeyValueTimestampStore).flush();
+    public void shouldForwardCommit() {
+        keyValueStoreFacade.commit(Map.of());
+        verify(mockedKeyValueTimestampStore).commit(Map.of());
     }
 
     @Test
@@ -135,5 +138,14 @@ public class KeyValueStoreFacadeTest {
         assertThat(keyValueStoreFacade.isOpen(), is(true));
         assertThat(keyValueStoreFacade.isOpen(), is(false));
         verify(mockedKeyValueTimestampStore, times(2)).isOpen();
+    }
+
+    @Test
+    public void shouldReturnPosition() {
+        when(mockedKeyValueTimestampStore.getPosition())
+            .thenReturn(Position.emptyPosition());
+
+        assertThat(keyValueStoreFacade.getPosition(), is(Position.emptyPosition()));
+        verify(mockedKeyValueTimestampStore, times(1)).getPosition();
     }
 }

@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.BytesUtils;
+
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -25,6 +28,7 @@ import java.util.TreeMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BytesTest {
 
@@ -32,14 +36,14 @@ public class BytesTest {
     public void testIncrement() {
         byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
         byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
-        Bytes output = Bytes.increment(Bytes.wrap(input));
+        Bytes output = BytesUtils.increment(Bytes.wrap(input));
         assertArrayEquals(output.get(), expected);
     }
 
     @Test
     public void testIncrementUpperBoundary() {
         byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        assertThrows(IndexOutOfBoundsException.class, () -> Bytes.increment(Bytes.wrap(input)));
+        assertThrows(IndexOutOfBoundsException.class, () -> BytesUtils.increment(Bytes.wrap(input)));
     }
 
     @Test
@@ -62,7 +66,7 @@ public class BytesTest {
         map.put(key5, val);
 
         Bytes prefix = key1;
-        Bytes prefixEnd = Bytes.increment(prefix);
+        Bytes prefixEnd = BytesUtils.increment(prefix);
 
         Comparator<? super Bytes> comparator = map.comparator();
         final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
@@ -80,5 +84,38 @@ public class BytesTest {
         subMapExpected.put(key3, val);
 
         assertEquals(subMapExpected.keySet(), subMapResults.keySet());
+    }
+
+    @Test
+    public void testBytesLexicographicCases() {
+        assertEquals(0, cmp("", ""));
+        assertTrue(cmp("", "aaa") < 0);
+        assertTrue(cmp("aaa", "") > 0);
+
+        assertEquals(0, cmp("aaa", "aaa"));
+        assertTrue(cmp("aaa", "bbb") < 0);
+        assertTrue(cmp("bbb", "aaa") > 0);
+
+        assertTrue(cmp("aaaaaa", "bbb") < 0);
+        assertTrue(cmp("aaa", "bbbbbb") < 0);
+        assertTrue(cmp("bbbbbb", "aaa") > 0);
+        assertTrue(cmp("bbb", "aaaaaa") > 0);
+
+        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbb") < 0);
+        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaa") > 0);
+
+        assertTrue(cmp("common_prefix_aaaaaa", "common_prefix_bbb") < 0);
+        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbbbbb") < 0);
+        assertTrue(cmp("common_prefix_bbbbbb", "common_prefix_aaa") > 0);
+        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaaaaa") > 0);
+
+        assertTrue(cmp("common_prefix", "common_prefix_aaa") < 0);
+        assertTrue(cmp("common_prefix_aaa", "common_prefix") > 0);
+    }
+
+    private int cmp(String l, String r) {
+        return BytesUtils.BYTES_LEXICO_COMPARATOR.compare(
+            l.getBytes(StandardCharsets.UTF_8),
+            r.getBytes(StandardCharsets.UTF_8));
     }
 }

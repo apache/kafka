@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -244,15 +245,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public void remove(final Bytes key, final long timestamp) {
-        final Bytes keyBytes = keySchema.toStoreBinaryKeyPrefix(key, timestamp);
-        final S segment = segments.segmentForTimestamp(timestamp);
-        if (segment != null) {
-            segment.deleteRange(keyBytes, keyBytes);
-        }
-    }
-
-    @Override
     public void put(final Bytes key,
                     final byte[] value) {
         final long timestamp = keySchema.segmentTimestamp(key);
@@ -326,8 +318,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        segments.commit(changelogOffsets);
     }
 
     @Override

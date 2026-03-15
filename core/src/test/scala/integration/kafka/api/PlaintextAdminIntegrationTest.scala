@@ -43,7 +43,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
-import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.record.internal.FileRecords
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
@@ -1158,6 +1158,52 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testGroupConfigEvaluatedAfterBrokerRestart(): Unit = {
+    client = createAdminClient
+    val groupId = "evaluated-config-test-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+    // Set a valid group config (55000 is within default [45000, 60000])
+    val alterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000"), AlterConfigOp.OpType.SET)
+    )
+    val alterResult = client.incrementalAlterConfigs(util.Map.of(groupResource, alterOps))
+    alterResult.all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    // Verify stored value and effective value before restart
+    var describeResult = client.describeConfigs(util.List.of(groupResource))
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
+    assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    // Before restart, 55000 is within [45000, 60000], so no adjustment needed
+    assertEquals(55000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+
+    // Kill all brokers
+    client.close()
+    for (i <- 0 until brokerCount) {
+      killBroker(i)
+    }
+
+    // Change broker-level max to 50000 (making stored 55000 exceed the new max)
+    serverConfig.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+    // Restart brokers with new config (should not block startup)
+    restartDeadBrokers(reconfigure = true)
+    client = createAdminClient
+    ensureConsistentKRaftMetadata()
+
+    // Verify stored value is preserved (describeConfigs returns raw value)
+    describeResult = client.describeConfigs(util.List.of(groupResource))
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
+    assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG,
+      configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+
+    // Verify effective value is adjusted (55000 evaluated to new max 50000)
+    assertEquals(50000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+  }
+
+  @Test
   def testCreatePartitions(): Unit = {
     client = createAdminClient
 
@@ -2023,8 +2069,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertTrue(testGroupDescription.groupEpoch.isEmpty)
           assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
         } else {
-          assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
-          assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
+          assertEquals(Optional.of(4), testGroupDescription.groupEpoch)
+          assertEquals(Optional.of(4), testGroupDescription.targetAssignmentEpoch)
         }
 
         assertEquals(testGroupId, testGroupDescription.groupId())
@@ -4114,8 +4160,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private def disableEligibleLeaderReplicas(admin: Admin): Unit = {
     if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
       admin.updateFeatures(
-        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
-        new UpdateFeaturesOptions()).all().get()
+        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))).all().get()
     }
   }
 
@@ -4429,7 +4474,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
       }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
@@ -4465,10 +4510,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val config = createConfig
     client = Admin.create(config)
 
+    val unavailableReplicationFactorInThisCluster = 9999.toShort
     val streams = createStreamsGroup(
       inputTopics = Set(testTopicName),
       changelogTopics = Set(testTopicName + "-changelog"),
-      streamsGroupId = streamsGroupId
+      streamsGroupId = streamsGroupId,
+      replicationFactor = Optional.of(unavailableReplicationFactorInThisCluster)
     )
     streams.poll(JDuration.ofMillis(500L))
 
@@ -4476,7 +4523,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.NOT_READY
       }, "Streams group did not transition to NOT_READY before timeout")
 
       // Verify the describe call works correctly
@@ -4519,8 +4566,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     try {
       TestUtils.waitUntilTrue(() => {
-        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
       }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
@@ -4681,8 +4729,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       streams.commitSync()
 
       TestUtils.waitUntilTrue(() => {
-        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
       }, "Streams group did not transition to STABLE before timeout")
 
       val allTopicPartitions = client.listStreamsGroupOffsets(

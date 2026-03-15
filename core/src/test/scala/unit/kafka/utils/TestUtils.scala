@@ -26,7 +26,6 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.compress.Compression
@@ -38,21 +37,23 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, TopicIdPartition}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.common.TopicIdPartition
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
@@ -195,7 +196,7 @@ object TestUtils extends Logging {
     val future = Future.traverse(brokers) { s =>
       Future {
         s.shutdown()
-        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
+        if (deleteLogDirs) s.config.logDirs.forEach(f => Utils.delete(new File(f)))
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
@@ -888,7 +889,7 @@ object TestUtils extends Logging {
       controllerServer: ControllerServer,
       msg: String = "Timeout waiting for controller metadata propagating to brokers"
   ): Unit = {
-    val controllerOffset = controllerServer.raftManager.replicatedLog.endOffset().offset - 1
+    val controllerOffset = controllerServer.raftManager.raftLog.endOffset().offset - 1
     TestUtils.waitUntilTrue(
       () => {
         brokers.forall { broker =>
@@ -1517,24 +1518,5 @@ object TestUtils extends Logging {
     )
     envelopRequest.requestDequeueTimeNanos = dequeueTimeNanos
     envelopRequest
-  }
-
-  class TestControllerRequestCompletionHandler(expectedResponse: Option[AbstractResponse] = None)
-    extends ControllerRequestCompletionHandler {
-    var actualResponse: Option[ClientResponse] = Option.empty
-    val completed: AtomicBoolean = new AtomicBoolean(false)
-    val timedOut: AtomicBoolean = new AtomicBoolean(false)
-
-    override def onComplete(response: ClientResponse): Unit = {
-      actualResponse = Some(response)
-      expectedResponse.foreach { expected =>
-        assertEquals(expected, response.responseBody())
-      }
-      completed.set(true)
-    }
-
-    override def onTimeout(): Unit = {
-      timedOut.set(true)
-    }
   }
 }

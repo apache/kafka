@@ -93,4 +93,9 @@ public final class NonMigratedMultiPlugin implements Converter, HeaderConverter,
   public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
     return null;
   }
+
+    @Override
+    public String version() {
+        return "1.0.0";
+    }
 }

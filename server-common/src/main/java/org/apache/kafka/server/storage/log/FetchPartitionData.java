@@ -18,7 +18,7 @@ package org.apache.kafka.server.storage.log;
 
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.Records;
 
 import java.util.List;
 import java.util.Optional;

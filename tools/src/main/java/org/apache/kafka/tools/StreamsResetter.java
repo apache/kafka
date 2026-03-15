@@ -27,10 +27,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -116,6 +118,8 @@ public class StreamsResetter {
             + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
             + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
 
+    private static final int MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES = 3;
+
     private final List<String> allTopics = new LinkedList<>();
 
     public static void main(final String[] args) {
@@ -149,7 +153,7 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
             try (Admin adminClient = Admin.create(properties)) {
-                maybeDeleteActiveConsumers(groupId, adminClient, options);
+                maybeDeleteActiveConsumers(groupId, adminClient, options.hasForce());
 
                 allTopics.clear();
                 allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -177,30 +181,42 @@ public class StreamsResetter {
         }
     }
 
-    private void maybeDeleteActiveConsumers(final String groupId,
-                                            final Admin adminClient,
-                                            final StreamsResetterOptions options)
+    // visible for testing
+    void maybeDeleteActiveConsumers(final String groupId,
+                                    final Admin adminClient,
+                                    final boolean force)
         throws ExecutionException, InterruptedException {
-        final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-            Set.of(groupId),
-            new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        try {
-            final List<MemberDescription> members =
-                new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-            if (!members.isEmpty()) {
-                if (options.hasForce()) {
-                    System.out.println("Force deleting all active members in the group: " + groupId);
-                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
-                } else {
-                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                        + "and has following members: " + members + ". "
-                        + "Make sure to stop all running application instances before running the reset tool."
-                        + " You can use option '--force' to remove active members from the group.");
+        int retries = 0;
+        while (true) {
+            final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
+                    Set.of(groupId),
+                    new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
+            try {
+                final List<MemberDescription> members =
+                        new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+                if (!members.isEmpty()) {
+                    if (force) {
+                        System.out.println("Force deleting all active members in the group: " + groupId);
+                        adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
+                    } else {
+                        throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                                + "and has following members: " + members + ". "
+                                + "Make sure to stop all running application instances before running the reset tool."
+                                + " You can use option '--force' to remove active members from the group.");
+                    }
                 }
-            }
-        } catch (ExecutionException ee) {
-            // If the group ID is not found, this is not an error case
-            if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                break;
+            } catch (ExecutionException ee) {
+                // If the group ID is not found, this is not an error case
+                if (ee.getCause() instanceof GroupIdNotFoundException) {
+                    break;
+                }
+                // if a member is unknown, it may mean that it left the group itself. Retrying to confirm.
+                if (ee.getCause() instanceof KafkaException ke && ke.getCause() instanceof UnknownMemberIdException) {
+                    if (retries++ < MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES) {
+                        continue;
+                    }
+                }
                 throw ee;
             }
         }

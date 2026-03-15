@@ -17,12 +17,12 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.UnalignedFileRecords;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.record.internal.UnalignedFileRecords;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;

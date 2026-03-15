@@ -18,7 +18,6 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -30,7 +29,7 @@ import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R>, AutoCloseable, Versioned {
+public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R>, AutoCloseable {
 
     private static final Pattern TOPIC = Pattern.compile("${topic}", Pattern.LITERAL);
 

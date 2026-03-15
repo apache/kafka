@@ -577,7 +577,7 @@ public abstract class AbstractFetch implements Closeable {
      * </p>
      *
      * <p>
-     * Here's why this is important—in a production system, a given leader node serves as a leader for many partitions.
+     * Here's why this is important-in a production system, a given leader node serves as a leader for many partitions.
      * From the client's perspective, it's possible that a node has a mix of both fetchable and unfetchable partitions.
      * When the client determines which nodes to skip and which to fetch from, it's important that unfetchable
      * partitions don't block fetchable partitions from being fetched.
