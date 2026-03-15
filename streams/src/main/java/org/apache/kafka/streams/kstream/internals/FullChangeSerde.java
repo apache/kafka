@@ -63,9 +63,9 @@ public final class FullChangeSerde<T> {
         final Deserializer<T> innerDeserializer = innerSerde().deserializer();
 
         final T oldValue =
-            serialChange.oldValue == null ? null : innerDeserializer.deserialize(topic, serialChange.oldValue);
+            serialChange.oldValue == null ? null : innerDeserializer.deserialize(topic, headers, serialChange.oldValue);
         final T newValue =
-            serialChange.newValue == null ? null : innerDeserializer.deserialize(topic, serialChange.newValue);
+            serialChange.newValue == null ? null : innerDeserializer.deserialize(topic, headers, serialChange.newValue);
 
         return new Change<>(newValue, oldValue);
     }
