@@ -70,6 +70,11 @@ public class GroupConfigManager implements AutoCloseable {
         Properties evaluatedProps = GroupConfig.evaluate(
             newGroupConfig, groupId, groupCoordinatorConfig, shareGroupConfig);
 
+        if (evaluatedProps.isEmpty()) {
+            configMap.remove(groupId);
+            return;
+        }
+
         final GroupConfig newConfig = GroupConfig.fromProps(
             defaultConfig.originals(),
             evaluatedProps
