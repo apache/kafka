@@ -46,12 +46,14 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangel
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -382,54 +384,45 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<Eviction<K, Change<V>>> callback) {
-        final Iterator<Map.Entry<BufferKey, BufferValue>> delegate = sortedMap.entrySet().iterator();
-        int evictions = 0;
+        final Iterator<Map.Entry<BufferKey, BufferValue>> iterator = sortedMap.entrySet().iterator();
+        final List<Eviction<K, Change<V>>> evictions = new ArrayList<>();
+        int evictionCount = 0;
 
-        if (predicate.get()) {
-            Map.Entry<BufferKey, BufferValue> next = null;
-            if (delegate.hasNext()) {
-                next = delegate.next();
+        while (iterator.hasNext()) {
+            if (!predicate.get()) {
+                break;
             }
 
-            // predicate being true means we read one record, call the callback, and then remove it
-            while (next != null && predicate.get()) {
-                if (next.getKey().time() != minTimestamp) {
-                    throw new IllegalStateException(
-                        "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
-                            next.getKey().time() + "]"
-                    );
-                }
-                final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key().get());
-                final BufferValue bufferValue = next.getValue();
-                final Change<V> value = valueSerde.deserializeParts(
+            final Map.Entry<BufferKey, BufferValue> next = iterator.next();
+            final BufferValue bufferValue = next.getValue();
+
+            // Collect evictions to process them outside the iterator loop
+            final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key().get());
+            final Change<V> value = valueSerde.deserializeParts(
                     changelogTopic,
                     new Change<>(bufferValue.newValue(), bufferValue.oldValue())
-                );
-                callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
+            );
+            evictions.add(new Eviction<>(key, value, bufferValue.context()));
 
-                delegate.remove();
-                index.remove(next.getKey().key());
-
-                if (loggingEnabled) {
-                    dirtyKeys.add(next.getKey().key());
-                }
-
-                memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
-
-                // peek at the next record so we can update the minTimestamp
-                if (delegate.hasNext()) {
-                    next = delegate.next();
-                    minTimestamp = next == null ? Long.MAX_VALUE : next.getKey().time();
-                } else {
-                    next = null;
-                    minTimestamp = Long.MAX_VALUE;
-                }
-
-                evictions++;
+            if (loggingEnabled) {
+                dirtyKeys.add(next.getKey().key());
             }
+
+            memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
+
+            iterator.remove();
+            index.remove(next.getKey().key());
+
+            evictionCount++;
         }
-        if (evictions > 0) {
+
+        if (evictionCount > 0) {
+            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
             updateBufferMetrics();
+        }
+
+        for (final Eviction<K, Change<V>> eviction : evictions) {
+            callback.accept(eviction);
         }
     }
 
