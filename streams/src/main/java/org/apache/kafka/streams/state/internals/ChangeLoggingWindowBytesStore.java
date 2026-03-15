@@ -44,7 +44,7 @@ class ChangeLoggingWindowBytesStore
     private final boolean retainDuplicates;
     InternalProcessorContext<?, ?> internalContext;
     private int seqnum = 0;
-    protected final ChangeLoggingKeySerializer keySerializer;
+    private final ChangeLoggingKeySerializer keySerializer;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
                                   final boolean retainDuplicates,
@@ -133,7 +133,7 @@ class ChangeLoggingWindowBytesStore
         internalContext.logChange(name(), key, value, internalContext.recordContext().timestamp(), new RecordHeaders(), wrapped().getPosition());
     }
 
-    protected int maybeUpdateSeqnumForDups() {
+    private int maybeUpdateSeqnumForDups() {
         if (retainDuplicates) {
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }

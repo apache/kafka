@@ -155,8 +155,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                         newHeaders
                     );
 
-                    internalContext.setRecordContext(temporaryContext);
                     try {
+                        internalContext.setRecordContext(temporaryContext);
                         final byte[] deletedValue = wrapped().delete(keyBytes(key, newHeaders));
                         return deserializeValue(deletedValue);
                     } finally {

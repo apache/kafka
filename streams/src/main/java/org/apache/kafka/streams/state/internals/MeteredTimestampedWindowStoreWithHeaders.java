@@ -102,8 +102,8 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
                             newHeaders
                         );
 
-                        internalContext.setRecordContext(temporaryContext);
                         try {
+                            internalContext.setRecordContext(temporaryContext);
                             wrapped().put(keyBytes(key, newHeaders), null, windowStartTimestamp);
                         } finally {
                             // Restore original context

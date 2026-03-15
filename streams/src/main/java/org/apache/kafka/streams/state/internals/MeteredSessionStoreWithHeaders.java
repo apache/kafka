@@ -105,8 +105,8 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                         newHeaders
                     );
 
-                    internalContext.setRecordContext(temporaryContext);
                     try {
+                        internalContext.setRecordContext(temporaryContext);
                         final Bytes key = keyBytes(sessionKey, newHeaders, serdes);
                         wrapped().remove(new Windowed<>(key, sessionKey.window()));
                     } finally {
