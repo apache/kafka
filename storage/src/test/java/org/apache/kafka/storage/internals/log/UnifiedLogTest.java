@@ -3155,7 +3155,7 @@ public class UnifiedLogTest {
         log.activeSegment().txnIndex().renameTo(log.dir());
         assertThrows(KafkaStorageException.class, () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
             mockTime.milliseconds(), 1, 0, TransactionVersion.TV_0.featureLevel()));
-        assertThrows(KafkaStorageException.class, () -> log.appendAsLeader( LogTestUtils.singletonRecords(null, null), 0));
+        assertThrows(KafkaStorageException.class, () -> log.appendAsLeader(LogTestUtils.singletonRecords(null, null), 0));
         assertThrows(KafkaStorageException.class, () -> LogTestUtils.readLog(log, 0, 4096).records.records().iterator().next().offset());
     }
 

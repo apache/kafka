@@ -25,39 +25,31 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManager, RemoteLogManagerConfig}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, DelayedRemoteListOffsets}
-import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffsetException}
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{MockTime, Scheduler}
-import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
-import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, AsyncOffsetReader, Cleaner, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, Cleaner, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, _}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
-import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.{any, anyLong}
-import org.mockito.Mockito.{doAnswer, doThrow, spy}
-import org.apache.kafka.raft.KRaftConfigs
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{doThrow, spy}
 
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util
-import java.util.concurrent.{Callable, ConcurrentHashMap, Executors, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.{Optional, OptionalLong, Properties}
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -760,22 +752,6 @@ class UnifiedLogTest {
     val log = createLog(logDir,  logConfig)
     log.closeHandlers()
     assertThrows(classOf[KafkaStorageException], () => log.roll(Optional.of(1L)))
-  }
-
-  private def createKafkaConfigWithRLM: KafkaConfig = {
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
-    props.setProperty("listeners", "CONTROLLER://:9093")
-    props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
-    // set log reader threads number to 2
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "2")
-    KafkaConfig.fromProps(props)
   }
 
   @Test
@@ -2405,53 +2381,6 @@ class UnifiedLogTest {
       remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
     logsToClose = logsToClose :+ log
     log
-  }
-
-  private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {
-    LogTestUtils.initializeLogDirWithOverflowedSegment(logDir)
-
-    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
-    val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
-      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
-    }
-
-    (log, segmentWithOverflow)
-  }
-
-  private def assertFetchOffsetByTimestamp(log: UnifiedLog, remoteLogManagerOpt: Option[RemoteLogManager], expected: Option[TimestampAndOffset], timestamp: Long): Unit = {
-    val remoteOffsetReader = getRemoteOffsetReader(remoteLogManagerOpt)
-    val offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader)
-    assertTrue(offsetResultHolder.futureHolderOpt.isPresent)
-    offsetResultHolder.futureHolderOpt.get.taskFuture.get(1, TimeUnit.SECONDS)
-    assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.isDone)
-    assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.get().hasTimestampAndOffset)
-    assertEquals(expected.get, offsetResultHolder.futureHolderOpt.get.taskFuture.get().timestampAndOffset().orElse(null))
-  }
-
-  private def assertFetchOffsetBySpecialTimestamp(log: UnifiedLog, remoteLogManagerOpt: Option[RemoteLogManager], expected: TimestampAndOffset, timestamp: Long): Unit = {
-    val remoteOffsetReader = getRemoteOffsetReader(remoteLogManagerOpt)
-    val offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader)
-    assertEquals(new OffsetResultHolder(expected), offsetResultHolder)
-  }
-
-  private def getRemoteOffsetReader(remoteLogManagerOpt: Option[Any]): Optional[AsyncOffsetReader] = {
-    remoteLogManagerOpt match {
-      case Some(remoteLogManager) => Optional.of(remoteLogManager.asInstanceOf[AsyncOffsetReader])
-      case None => Optional.empty[AsyncOffsetReader]()
-    }
-  }
-
-  private def prepareLogWithSequentialRecords(log: UnifiedLog, recordCount: Int): Seq[TimestampAndEpoch] = {
-    val firstTimestamp = mockTime.milliseconds()
-
-    (0 until recordCount).map { i =>
-      val timestampAndEpoch = TimestampAndEpoch(firstTimestamp + i, i)
-      log.appendAsLeader(
-        TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = timestampAndEpoch.timestamp),
-        timestampAndEpoch.leaderEpoch
-      )
-      timestampAndEpoch
-    }
   }
 
   case class TimestampAndEpoch(timestamp: Long, leaderEpoch: Int)
