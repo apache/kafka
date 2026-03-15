@@ -16,18 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
@@ -88,7 +82,7 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
         }
 
         // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-        final ByteBuffer rawHeaders = HeadersSerializer.serialize3(headers);
+        final ByteBuffer rawHeaders = HeadersSerializer.serialize(headers);
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
         return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + 8 + rawValue.length)

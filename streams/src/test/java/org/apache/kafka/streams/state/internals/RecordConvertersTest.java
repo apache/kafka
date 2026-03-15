@@ -76,21 +76,6 @@ public class RecordConvertersTest {
     }
 
     @Test
-    public void test1() {
-        final byte[] value = new byte[1];
-        final Headers headers = new RecordHeaders().add("header-key", "header-value".getBytes());
-        final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
-            "topic", 1, 0, 10, TimestampType.CREATE_TIME, 0, 0, new byte[0], value,
-            headers, Optional.empty());
-
-        long start = System.currentTimeMillis();
-        for (int i = 0; i < 500000000; i++) {
-            headersValueConverter.convert(inputRecord).value();
-        }
-        System.out.println("runtime: " + (System.currentTimeMillis() - start));
-    }
-
-    @Test
     public void shouldAddHeadersToValueOnConversionWhenValueIsNotNull() {
         final byte[] value = new byte[1];
         final Headers headers = new RecordHeaders().add("header-key", "header-value".getBytes());
@@ -103,22 +88,6 @@ public class RecordConvertersTest {
                 'r', '-', 'v', 'a', 'l', 'u', 'e', value[0]};
         final byte[] actualValue = sessionValueConverter.convert(inputRecord).value();
         assertArrayEquals(expectedValue, actualValue);
-    }
-
-
-    @Test
-    public void test2() {
-        final byte[] value = new byte[1];
-        final Headers headers = new RecordHeaders().add("header-key", "header-value".getBytes());
-        final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
-            "topic", 1, 0, 0, TimestampType.CREATE_TIME, 0, 0, new byte[0], value,
-            headers, Optional.empty());
-
-        long start = System.currentTimeMillis();
-        for (int i = 0; i < 500000000; i++) {
-            sessionValueConverter.convert(inputRecord).value();
-        }
-        System.out.println("runtime: " + (System.currentTimeMillis() - start));
     }
 
 }
