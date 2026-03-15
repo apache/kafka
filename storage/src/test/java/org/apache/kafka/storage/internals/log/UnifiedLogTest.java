@@ -75,8 +75,10 @@ import com.yammer.metrics.core.Meter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -103,7 +105,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -3079,59 +3083,55 @@ public class UnifiedLogTest {
         assertThrows(OffsetsOutOfOrderException.class, () -> log.appendAsFollower(memoryRecords, epoch));
     }
 
-    @Test
-    public void testAppendBelowExpectedOffsetThrowsException() throws IOException {
+    private static Stream<Arguments> magicAndCompressionTypes() {
+        return Stream.of(
+            RecordBatch.MAGIC_VALUE_V0,
+            RecordBatch.MAGIC_VALUE_V1,
+            RecordBatch.MAGIC_VALUE_V2
+        ).flatMap(magic -> Stream.of(CompressionType.NONE, CompressionType.LZ4)
+            .map(compressionType -> Arguments.of(magic, compressionType)));
+    }
+
+    @ParameterizedTest(name = "magic={0}, compressionType={1}")
+    @MethodSource("magicAndCompressionTypes")
+    public void testAppendBelowExpectedOffsetThrowsException(byte magic, CompressionType compressionType) throws IOException {
         UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
         for (int id = 0; id < 2; id++)
             log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(Integer.toString(id).getBytes())), 0);
 
-        byte[] magicVals = {RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2};
-        CompressionType[] compressionTypes = {CompressionType.NONE, CompressionType.LZ4};
-        for (byte magic : magicVals) {
-            for (CompressionType compressionType : compressionTypes) {
-                Compression compression = Compression.of(compressionType).build();
-                MemoryRecords invalidRecord = MemoryRecords.withRecords(magic, compression,
-                    new SimpleRecord(Integer.toString(1).getBytes()));
-                final byte finalMagic = magic;
-                final CompressionType finalCompressionType = compressionType;
-                assertThrows(
-                    UnexpectedAppendOffsetException.class,
-                    () -> log.appendAsFollower(invalidRecord, Integer.MAX_VALUE),
-                    () -> "Magic=" + finalMagic + ", compressionType=" + finalCompressionType
-                );
-            }
-        }
+        Compression compression = Compression.of(compressionType).build();
+        MemoryRecords invalidRecord = MemoryRecords.withRecords(magic, compression,
+            new SimpleRecord(Integer.toString(1).getBytes()));
+        assertThrows(
+            UnexpectedAppendOffsetException.class,
+            () -> log.appendAsFollower(invalidRecord, Integer.MAX_VALUE)
+        );
     }
 
-    @Test
-    public void testAppendEmptyLogBelowLogStartOffsetThrowsException() throws IOException {
+    @ParameterizedTest(name = "magic={0}, compressionType={1}")
+    @MethodSource("magicAndCompressionTypes")
+    public void testAppendEmptyLogBelowLogStartOffsetThrowsException(byte magic, CompressionType compressionType) throws IOException {
         createEmptyLogs(logDir, 7);
         UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
         assertEquals(7L, log.logStartOffset());
         assertEquals(7L, log.logEndOffset());
 
         long firstOffset = 4L;
-        byte[] magicVals = {RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2};
-        CompressionType[] compressionTypes = {CompressionType.NONE, CompressionType.LZ4};
-        for (byte magic : magicVals) {
-            for (CompressionType compressionType : compressionTypes) {
-                MemoryRecords batch = LogTestUtils.records(
-                    List.of(new SimpleRecord("k1".getBytes(), "v1".getBytes()),
-                                  new SimpleRecord("k2".getBytes(), "v2".getBytes()),
-                                  new SimpleRecord("k3".getBytes(), "v3".getBytes())),
-                    magic, Compression.of(compressionType).build(),
-                    RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                    firstOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                UnexpectedAppendOffsetException exception = assertThrows(
-                    UnexpectedAppendOffsetException.class,
-                    () -> log.appendAsFollower(batch, Integer.MAX_VALUE)
-                );
-                assertEquals(firstOffset, exception.firstOffset,
-                    "Magic=" + magic + ", compressionType=" + compressionType + ", UnexpectedAppendOffsetException#firstOffset");
-                assertEquals(firstOffset + 2, exception.lastOffset,
-                    "Magic=" + magic + ", compressionType=" + compressionType + ", UnexpectedAppendOffsetException#lastOffset");
-            }
-        }
+        MemoryRecords batch = LogTestUtils.records(
+            List.of(new SimpleRecord("k1".getBytes(), "v1".getBytes()),
+                    new SimpleRecord("k2".getBytes(), "v2".getBytes()),
+                    new SimpleRecord("k3".getBytes(), "v3".getBytes())),
+            magic, Compression.of(compressionType).build(),
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            firstOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        UnexpectedAppendOffsetException exception = assertThrows(
+            UnexpectedAppendOffsetException.class,
+            () -> log.appendAsFollower(batch, Integer.MAX_VALUE)
+        );
+        assertEquals(firstOffset, exception.firstOffset,
+            "UnexpectedAppendOffsetException#firstOffset");
+        assertEquals(firstOffset + 2, exception.lastOffset,
+            "UnexpectedAppendOffsetException#lastOffset");
     }
 
     @Test
@@ -3351,15 +3351,11 @@ public class UnifiedLogTest {
         };
 
         // Thread 2 watches the log and updates the high watermark
-        Runnable hwUpdateLoop = () -> {
-            try {
-                while (log.logEndOffset() < lastOffset) {
-                    log.updateHighWatermark(log.logEndOffset());
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+        Runnable hwUpdateLoop = () -> assertDoesNotThrow(() -> {
+            while (log.logEndOffset() < lastOffset) {
+                log.updateHighWatermark(log.logEndOffset());
             }
-        };
+        });
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
@@ -3467,13 +3463,13 @@ public class UnifiedLogTest {
     }
 
     private void testDegenerateSplitSegmentWithOverflow(long segmentBaseOffset, List<MemoryRecords> records) throws IOException {
-        FileRecords segment = LogTestUtils.rawSegment(logDir, segmentBaseOffset);
-        // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-        Files.createFile(LogFileUtils.offsetIndexFile(logDir, segmentBaseOffset).toPath());
-        Files.createFile(LogFileUtils.timeIndexFile(logDir, segmentBaseOffset).toPath());
-        for (MemoryRecords record : records)
-            segment.append(record);
-        segment.close();
+        try (FileRecords segment = LogTestUtils.rawSegment(logDir, segmentBaseOffset)) {
+            // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
+            Files.createFile(LogFileUtils.offsetIndexFile(logDir, segmentBaseOffset).toPath());
+            Files.createFile(LogFileUtils.timeIndexFile(logDir, segmentBaseOffset).toPath());
+            for (MemoryRecords record : records)
+                segment.append(record);
+        }
 
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .indexIntervalBytes(1)
@@ -3496,15 +3492,7 @@ public class UnifiedLogTest {
         assertFalse(LogTestUtils.hasOffsetOverflow(log));
     }
 
-    private static class TimestampAndEpoch {
-        final long timestamp;
-        final int leaderEpoch;
-
-        TimestampAndEpoch(long timestamp, int leaderEpoch) {
-            this.timestamp = timestamp;
-            this.leaderEpoch = leaderEpoch;
-        }
-    }
+    private record TimestampAndEpoch(long timestamp, int leaderEpoch) { }
 
     private void prepare(int logStartOffset) throws IOException {
         RemoteLogManagerConfig config = createRemoteLogManagerConfig();
