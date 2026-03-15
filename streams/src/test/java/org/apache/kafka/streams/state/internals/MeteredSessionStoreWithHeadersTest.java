@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -76,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -134,6 +137,8 @@ public class MeteredSessionStoreWithHeadersTest {
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(innerStore.name()).thenReturn(STORE_NAME);
+        lenient().when(context.recordContext()).thenReturn(new ProcessorRecordContext(
+            0L, 0L, 0, "topic", new RecordHeaders()));
     }
 
     private void init() {
@@ -468,7 +473,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         store.recordRestoreTime(100L);
 
-        final Map<MetricName, ? extends org.apache.kafka.common.Metric> allMetrics = metrics.metrics();
+        final Map<MetricName, ? extends Metric> allMetrics = metrics.metrics();
         final List<MetricName> restoreMetrics = allMetrics.keySet().stream()
             .filter(metricName -> metricName.name().equals("restore-rate"))
             .collect(Collectors.toList());

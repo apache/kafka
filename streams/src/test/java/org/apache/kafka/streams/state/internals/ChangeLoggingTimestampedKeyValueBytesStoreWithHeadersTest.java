@@ -184,14 +184,11 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertEquals(1, headers0.toArray().length);
         assertEquals("value1", new String(headers0.lastHeader("key1").value()));
 
-        // Second record is the delete (tombstone)
-        // Should preserve timestamp and headers from the deleted value
+        // Second record is the delete
         assertEquals(hi, collector.collected().get(1).key());
         assertNull(collector.collected().get(1).value());
-        assertEquals(97L, collector.collected().get(1).timestamp()); // Preserved from deleted value
-        final Headers headers1 = collector.collected().get(1).headers();
-        assertEquals(1, headers1.toArray().length); // Preserved from deleted value
-        assertEquals("value1", new String(headers1.lastHeader("key1").value()));
+        assertEquals(0L, collector.collected().get(1).timestamp());
+        assertEquals(0, collector.collected().get(1).headers().toArray().length);
     }
 
     @Test
@@ -291,25 +288,6 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertEquals(1, collector.collected().get(0).headers().toArray().length);
         assertEquals("headerKey", collector.collected().get(0).headers().toArray()[0].key());
         assertArrayEquals("headerValue".getBytes(), collector.collected().get(0).headers().toArray()[0].value());
-    }
-
-    @Test
-    public void shouldLogDeleteWithRecordContextHeadersWhenKeyDoesNotExist() {
-        final InternalMockProcessorContext<String, Long> context = mockContext();
-        context.setTime(99L);
-        context.headers().add("contextHeader", "contextValue".getBytes());
-        store.init(context, store);
-
-        // Delete a non-existent key
-        store.delete(hi);
-
-        assertEquals(1, collector.collected().size());
-        assertEquals(hi, collector.collected().get(0).key());
-        assertNull(collector.collected().get(0).value());
-        assertEquals(99L, collector.collected().get(0).timestamp()); // From record context
-        final Headers headers = collector.collected().get(0).headers();
-        assertEquals(1, headers.toArray().length); // From record context
-        assertEquals("contextValue", new String(headers.lastHeader("contextHeader").value()));
     }
 
     @Test

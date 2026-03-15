@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -66,6 +67,46 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             throw new ProcessorStateException(message, e);
         }
 
+    }
+
+    @Override
+    public void remove(final Windowed<K> sessionKey) {
+        Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        Objects.requireNonNull(sessionKey.key(), "sessionKey.key() can't be null");
+        Objects.requireNonNull(sessionKey.window(), "sessionKey.window() can't be null");
+
+        try {
+            maybeMeasureLatency(
+                () -> {
+                    final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                    // Create new headers object to isolate delete operation from input record
+                    final Headers newHeaders = new RecordHeaders(currentContext.headers());
+
+                    // Create temporary context with new headers
+                    final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                        currentContext.timestamp(),
+                        currentContext.offset(),
+                        currentContext.partition(),
+                        currentContext.topic(),
+                        newHeaders
+                    );
+
+                    internalContext.setRecordContext(temporaryContext);
+                    try {
+                        final Bytes key = keyBytes(sessionKey, newHeaders, serdes);
+                        wrapped().remove(new Windowed<>(key, sessionKey.window()));
+                    } finally {
+                        // Restore original context
+                        internalContext.setRecordContext(currentContext);
+                    }
+                },
+                time,
+                removeSensor
+            );
+        } catch (final ProcessorStateException e) {
+            throw new ProcessorStateException(String.format(e.getMessage(), sessionKey.key()), e);
+        }
     }
 
     @SuppressWarnings("unchecked")

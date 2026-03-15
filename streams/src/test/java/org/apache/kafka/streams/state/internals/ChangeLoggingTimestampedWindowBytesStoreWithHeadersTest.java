@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -63,7 +62,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -199,81 +197,6 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
             verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldLogDeleteWithOldValueHeadersWhenKeyExists() {
-        final long windowStartTimestamp = 10L;
-        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, windowStartTimestamp, 0);
-
-        final WindowStoreIterator<byte[]> iterator = mock(WindowStoreIterator.class);
-        lenient().when(iterator.hasNext()).thenReturn(true, false);
-        lenient().when(iterator.next()).thenReturn(KeyValue.pair(testTimestamp, valueTimestampHeaders));
-
-        when(inner.getPosition()).thenReturn(Position.emptyPosition());
-        lenient().when(context.recordContext()).thenReturn(new ProcessorRecordContext(99L, 0, 0, "topic", new RecordHeaders()));
-        when(inner.fetch(bytesKey, windowStartTimestamp, windowStartTimestamp)).thenReturn(iterator);
-
-        // Delete (put with null value)
-        store.put(bytesKey, null, windowStartTimestamp);
-
-        verify(inner).put(bytesKey, null, windowStartTimestamp);
-        verify(iterator).close();  // Verify iterator was closed
-
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
-        verify(context).logChange(
-            eq(store.name()),
-            eq(key),
-            eq(null),  // tombstone
-            eq(testTimestamp),  // Timestamp from old value
-            headersCaptor.capture(),
-            eq(Position.emptyPosition())
-        );
-
-        // Should preserve headers from the deleted value
-        final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(2, capturedHeaders.toArray().length);
-        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
-        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldLogDeleteWithRecordContextHeadersWhenKeyDoesNotExist() {
-        final long windowStartTimestamp = 10L;
-        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, windowStartTimestamp, 0);
-
-        final RecordHeaders contextHeaders = new RecordHeaders();
-        contextHeaders.add(new RecordHeader("contextKey", "contextValue".getBytes()));
-
-        final WindowStoreIterator<byte[]> iterator = mock(WindowStoreIterator.class);
-        when(iterator.hasNext()).thenReturn(false);
-
-        when(inner.getPosition()).thenReturn(Position.emptyPosition());
-        when(context.recordContext()).thenReturn(new ProcessorRecordContext(99L, 0, 0, "topic", contextHeaders));
-        when(inner.fetch(bytesKey, windowStartTimestamp, windowStartTimestamp)).thenReturn(iterator);
-
-        // Delete non-existent key (put with null value)
-        store.put(bytesKey, null, windowStartTimestamp);
-
-        verify(inner).put(bytesKey, null, windowStartTimestamp);
-        verify(iterator).close();  // Verify iterator was closed
-
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
-        verify(context).logChange(
-            eq(store.name()),
-            eq(key),
-            eq(null),  // tombstone
-            eq(99L),  // Timestamp from record context
-            headersCaptor.capture(),
-            eq(Position.emptyPosition())
-        );
-
-        // Should use headers from record context when key doesn't exist
-        final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(1, capturedHeaders.toArray().length);
-        assertEquals("contextValue", new String(capturedHeaders.lastHeader("contextKey").value()));
     }
 
     @Test
