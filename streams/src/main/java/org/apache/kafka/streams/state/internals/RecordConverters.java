@@ -82,6 +82,34 @@ public final class RecordConverters {
         return RAW_TO_WITH_HEADERS_INSTANCE;
     }
 
+    private static final RecordConverter RAW_TO_SESSION_WITH_HEADERS_INSTANCE = record -> {
+        final byte[] rawValue = record.value();
+
+        // Format: [headersSize(varint)][headersBytes][aggregation] (no timestamp)
+        final byte[] recordValue = reconstructSessionFromRaw(
+            rawValue,
+            record.headers()
+        );
+
+        return new ConsumerRecord<>(
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            record.timestamp(),
+            record.timestampType(),
+            record.serializedKeySize(),
+            record.serializedValueSize(),
+            record.key(),
+            recordValue,
+            record.headers(),
+            record.leaderEpoch()
+        );
+    };
+
+    public static RecordConverter rawValueToSessionHeadersValue() {
+        return RAW_TO_SESSION_WITH_HEADERS_INSTANCE;
+    }
+
     // privatize the constructor so the class cannot be instantiated (only used for its static members)
     private RecordConverters() {}
 
@@ -91,6 +119,33 @@ public final class RecordConverters {
 
     public static RecordConverter identity() {
         return IDENTITY_INSTANCE;
+    }
+
+    /**
+     * Reconstructs the AggregationWithHeaders format from raw value bytes and headers (no timestamp).
+     * Used during state restoration from changelog topics for session stores.
+     *
+     * @param rawValue the raw aggregation bytes
+     * @param headers the headers
+     * @return the serialized AggregationWithHeaders format
+     */
+    static byte[] reconstructSessionFromRaw(final byte[] rawValue, final Headers headers) {
+        if (rawValue == null) {
+            return null;
+        }
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             final DataOutputStream out = new DataOutputStream(baos)) {
+
+            ByteUtils.writeVarint(rawHeaders.length, out);
+            out.write(rawHeaders);
+            out.write(rawValue);
+
+            return baos.toByteArray();
+        } catch (final IOException e) {
+            throw new SerializationException("Failed to reconstruct AggregationWithHeaders", e);
+        }
     }
 
     /**
