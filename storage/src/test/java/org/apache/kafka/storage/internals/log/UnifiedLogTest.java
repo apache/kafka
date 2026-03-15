@@ -3561,7 +3561,7 @@ public class UnifiedLogTest {
                                                       Optional<RemoteLogManager> remoteLogManagerOpt,
                                                       FileRecords.TimestampAndOffset expected, 
                                                       long timestamp) {
-        Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> (AsyncOffsetReader) rlm);
+        Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
         OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
         assertEquals(new OffsetResultHolder(expected), offsetResultHolder);
     }
@@ -3570,7 +3570,7 @@ public class UnifiedLogTest {
                                                Optional<RemoteLogManager> remoteLogManagerOpt,
                                                Optional<FileRecords.TimestampAndOffset> expected,
                                                long timestamp) throws Exception {
-        Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> (AsyncOffsetReader) rlm);
+        Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
         OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
         assertTrue(offsetResultHolder.futureHolderOpt().isPresent());
         offsetResultHolder.futureHolderOpt().get().taskFuture().get(1, TimeUnit.SECONDS);
