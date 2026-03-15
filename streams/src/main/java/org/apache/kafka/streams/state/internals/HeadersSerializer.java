@@ -47,9 +47,9 @@ class HeadersSerializer {
 
     final static class PreSerializedHeaders {
         final int requiredBufferSizeForHeaders;
-        final byte[][][] serializedHeaders;
+        final byte[][] serializedHeaders;
 
-        PreSerializedHeaders(final int requiredBufferSizeForHeaders, final byte[][][] serializedHeaders) {
+        PreSerializedHeaders(final int requiredBufferSizeForHeaders, final byte[][] serializedHeaders) {
             this.requiredBufferSizeForHeaders = requiredBufferSizeForHeaders;
             this.serializedHeaders = serializedHeaders;
         }
@@ -66,23 +66,25 @@ class HeadersSerializer {
         // so we can allocate the whole buffer at once later
 
         // cache to avoid translating String header-keys to byte[] twice
-        final byte[][][] serializedHeaders = new byte[headersArray.length][2][];
+        final byte[][] serializedHeaders = new byte[headersArray.length][];
 
         // start with varint encoding of header count
         int requiredBufferSizeForHeaders = ByteUtils.sizeOfVarint(headersArray.length);
         int i = 0;
 
         for (final Header header : headersArray) {
-            serializedHeaders[i][0] = header.key().getBytes(StandardCharsets.UTF_8);
-            requiredBufferSizeForHeaders += ByteUtils.sizeOfVarint(serializedHeaders[i][0].length) + serializedHeaders[i][0].length;
+            final byte[] rawHeaderKey = header.key().getBytes(StandardCharsets.UTF_8);
+            requiredBufferSizeForHeaders += ByteUtils.sizeOfVarint(rawHeaderKey.length) + rawHeaderKey.length;
 
-            serializedHeaders[i][1] = header.value();
-            if (serializedHeaders[i][1] == null) {
+            final byte[] rawHeaderValue = header.value();
+            if (rawHeaderValue == null) {
                 ++requiredBufferSizeForHeaders;
             } else {
-                requiredBufferSizeForHeaders += ByteUtils.sizeOfVarint(serializedHeaders[i][1].length) + serializedHeaders[i][1].length;
+                requiredBufferSizeForHeaders += ByteUtils.sizeOfVarint(rawHeaderValue.length) + rawHeaderValue.length;
             }
 
+            serializedHeaders[i] = rawHeaderKey;
+//            serializedHeaders[i][1] = rawHeaderValue;
             ++i;
         }
 
@@ -104,24 +106,45 @@ class HeadersSerializer {
      * with corresponding advanced position
      */
     public static ByteBuffer serialize(final PreSerializedHeaders preSerializedHeaders, final ByteBuffer buffer) {
+        return null;
+    }
+    public static ByteBuffer serialize(final PreSerializedHeaders preSerializedHeaders, final ByteBuffer buffer, final Headers headers) {
         if (preSerializedHeaders.requiredBufferSizeForHeaders == 0) {
             return buffer;
         }
 
-        ByteUtils.writeVarint(preSerializedHeaders.serializedHeaders.length, buffer);
+        final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
 
-        for (final byte[][] serializedHeader : preSerializedHeaders.serializedHeaders) {
-            ByteUtils.writeVarint(serializedHeader[0].length, buffer);
-            buffer.put(serializedHeader[0]);
+//        ByteUtils.writeVarint(preSerializedHeaders.serializedHeaders.length, buffer);
+        ByteUtils.writeVarint(headersArray.length, buffer);
 
-            if (serializedHeader[1] != null) {
-                ByteUtils.writeVarint(serializedHeader[1].length, buffer);
-                buffer.put(serializedHeader[1]);
+//        for (final byte[][] serializedHeader : preSerializedHeaders.serializedHeaders) {
+//            ByteUtils.writeVarint(serializedHeader[0].length, buffer);
+//            buffer.put(serializedHeader[0]);
+//
+//            if (serializedHeader[1] != null) {
+//                ByteUtils.writeVarint(serializedHeader[1].length, buffer);
+//                buffer.put(serializedHeader[1]);
+//            } else {
+//                buffer.put((byte) 0x01); // hardcoded varint encoding for `-1`
+//            }
+//        }
+
+        int i = 0;
+        for (final Header header : headersArray) {
+//            final byte[] rawHeaderKey = header.key().getBytes(StandardCharsets.UTF_8);
+            final byte[] rawHeaderKey = preSerializedHeaders.serializedHeaders[i++];
+            ByteUtils.writeVarint(rawHeaderKey.length, buffer);
+            buffer.put(rawHeaderKey);
+
+            final byte[] rawHeaderValue = header.value();
+            if (rawHeaderValue != null) {
+                ByteUtils.writeVarint(rawHeaderValue.length, buffer);
+                buffer.put(rawHeaderValue);
             } else {
                 buffer.put((byte) 0x01); // hardcoded varint encoding for `-1`
             }
         }
-
         return buffer;
     }
 }
