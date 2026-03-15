@@ -51,7 +51,7 @@ public class HeadersSerializerTest {
     public void shouldSerializeSingleHeader() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
-        final byte[] serialized = HeadersSerializer.serialize(headers);
+        final byte[] serialized = HeadersSerializer.serialize2(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
@@ -72,7 +72,7 @@ public class HeadersSerializerTest {
             .add("key0", "value0".getBytes())
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
-        final byte[] serialized = HeadersSerializer.serialize(headers);
+        final byte[] serialized = HeadersSerializer.serialize2(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
@@ -90,10 +90,26 @@ public class HeadersSerializerTest {
     }
 
     @Test
+    public void test() {
+        final Headers headers = new RecordHeaders()
+            .add("key0", "value0".getBytes())
+            .add("key1", "value1".getBytes())
+            .add("key2", "value2".getBytes());
+
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < 500000000; i++) {
+//            HeadersSerializer.serialize(headers);
+//            HeadersSerializer.serialize2(headers);
+            HeadersSerializer.serialize3(headers);
+        }
+        System.out.println("runtime: " + (System.currentTimeMillis() - start));
+    }
+
+    @Test
     public void shouldSerializeHeaderWithNullValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", null);
-        final byte[] serialized = HeadersSerializer.serialize(headers);
+        final byte[] serialized = HeadersSerializer.serialize2(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);

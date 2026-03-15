@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -82,7 +83,7 @@ class HeadersSerializer {
                 // Write value length and value bytes (varint + raw bytes)
                 // null is represented as -1, encoded as varint
                 if (valueBytes == null) {
-                    ByteUtils.writeVarint(-1, out);
+                    out.write(0x00);
                 } else {
                     ByteUtils.writeVarint(valueBytes.length, out);
                     out.write(valueBytes);
@@ -93,5 +94,87 @@ class HeadersSerializer {
         } catch (final IOException e) {
             throw new SerializationException("Failed to serialize headers", e);
         }
+    }
+
+    public static byte[] serialize2(final Headers headers) {
+        final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
+
+        if (headersArray.length == 0) {
+            return new byte[0];
+        }
+
+        final ByteBuffer[][] rawHeaders = new ByteBuffer[headersArray.length][2];
+
+        int i = 0;
+        int size = 0;
+        for (final Header header : headersArray) {
+            final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
+            final byte[] valueBytes = header.value();
+
+            rawHeaders[i][0] = Utils.prepareByteBufferWithSizePrefix(keyBytes.length, keyBytes.length).put(keyBytes);
+            size += rawHeaders[i][0].position();
+
+            // Write value length and value bytes (varint + raw bytes)
+            // null is represented as -1, encoded as varint
+            byte[] value = header.value();
+            if (value == null) {
+                rawHeaders[i][1] = ByteBuffer.allocate(0).put((byte) 0x00);
+            } else {
+                rawHeaders[i][1] = Utils.prepareByteBufferWithSizePrefix(valueBytes.length, valueBytes.length).put(valueBytes);
+            }
+            size += rawHeaders[i][1].position();
+            ++i;
+        }
+
+        final ByteBuffer result = ByteBuffer.allocate(5 + size);
+        ByteUtils.writeVarint(headersArray.length, result);
+
+        for (final ByteBuffer[] rawHeader : rawHeaders) {
+            result.put(rawHeader[0].position(0));
+            result.put(rawHeader[1].position(0));
+        }
+
+        return result.array();
+    }
+
+    public static ByteBuffer serialize3(final Headers headers) {
+        final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
+
+        if (headersArray.length == 0) {
+            return ByteBuffer.allocate(0);
+        }
+
+        int size = 0;
+        for (final Header header : headersArray) {
+            size += 5 + header.key().length();
+
+            byte[] value = header.value();
+            if (value == null) {
+                ++size;
+            } else {
+                size += 5 + value.length;
+            }
+        }
+
+        final ByteBuffer result = ByteBuffer.allocate(5 + size);
+        ByteUtils.writeVarint(headersArray.length, result);
+
+        for (final Header header : headersArray) {
+            String key = header.key();
+            byte[] value = header.value();
+            ByteUtils.writeVarint(key.length(), result);
+            result.put(key.getBytes(StandardCharsets.UTF_8));
+            if (value != null) {
+                ByteUtils.writeVarint(value.length, result);
+                result.put(value);
+            } else {
+                result.put((byte) 0x00);
+            }
+        }
+
+        result.limit(result.position());
+        result.position(0);
+
+        return result;
     }
 }

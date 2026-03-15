@@ -133,19 +133,26 @@ public final class RecordConverters {
         if (rawValue == null) {
             return null;
         }
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+//        final byte[] rawHeaders = HeadersSerializer.serialize2(headers);
+//
+//        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//             final DataOutputStream out = new DataOutputStream(baos)) {
+//
+//            ByteUtils.writeVarint(rawHeaders.length, out);
+//            out.write(rawHeaders);
+//            out.write(rawValue);
+//
+//            return baos.toByteArray();
+//        } catch (final IOException e) {
+//            throw new SerializationException("Failed to reconstruct AggregationWithHeaders", e);
+//        }
 
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
 
-            ByteUtils.writeVarint(rawHeaders.length, out);
-            out.write(rawHeaders);
-            out.write(rawValue);
-
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to reconstruct AggregationWithHeaders", e);
-        }
+        final ByteBuffer rawHeaders = HeadersSerializer.serialize3(headers);
+        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + rawValue.length)
+            .put(rawHeaders)
+            .put(rawValue)
+            .array();
     }
 
     /**
@@ -161,23 +168,30 @@ public final class RecordConverters {
         if (rawValue == null) {
             return null;
         }
-        final byte[] rawTimestamp;
-        try (LongSerializer timestampSerializer = new LongSerializer()) {
-            rawTimestamp = timestampSerializer.serialize("", timestamp);
-        }
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+//        final byte[] rawTimestamp;
+//        try (LongSerializer timestampSerializer = new LongSerializer()) {
+//            rawTimestamp = timestampSerializer.serialize("", timestamp);
+//        }
+//        final byte[] rawHeaders = HeadersSerializer.serialize2(headers);
+//        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//             final DataOutputStream out = new DataOutputStream(baos)) {
+//
+//            ByteUtils.writeVarint(rawHeaders.length, out);
+//            out.write(rawHeaders);
+//            out.write(rawTimestamp);
+//            out.write(rawValue);
+//
+//            return baos.toByteArray();
+//        } catch (final IOException e) {
+//            throw new SerializationException("Failed to reconstruct ValueTimestampHeaders", e);
+//        }
 
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
+        final ByteBuffer rawHeaders = HeadersSerializer.serialize3(headers);
 
-            ByteUtils.writeVarint(rawHeaders.length, out);
-            out.write(rawHeaders);
-            out.write(rawTimestamp);
-            out.write(rawValue);
-
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to reconstruct ValueTimestampHeaders", e);
-        }
+        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + 8 + rawValue.length)
+            .put(rawHeaders)
+            .putLong(timestamp)
+            .put(rawValue)
+            .array();
     }
 }

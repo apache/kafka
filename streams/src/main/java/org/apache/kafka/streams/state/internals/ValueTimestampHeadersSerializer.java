@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -51,18 +52,15 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  */
 class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
     public final Serializer<V> valueSerializer;
-    private final LongSerializer timestampSerializer;
 
     ValueTimestampHeadersSerializer(final Serializer<V> valueSerializer) {
         Objects.requireNonNull(valueSerializer);
         this.valueSerializer = valueSerializer;
-        this.timestampSerializer = new LongSerializer();
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         valueSerializer.configure(configs, isKey);
-        timestampSerializer.configure(configs, isKey);
     }
 
     @Override
@@ -89,30 +87,20 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
             return null;
         }
 
-        final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
-
         // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+        final ByteBuffer rawHeaders = HeadersSerializer.serialize3(headers);
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
-
-            ByteUtils.writeVarint(rawHeaders.length, out);  // headersSize (it may be 0 due to null/empty headers)
-            out.write(rawHeaders);                          // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-            out.write(rawTimestamp);                        // [timestamp(8)]
-            out.write(rawValue);                            // [value]
-
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to serialize ValueTimestampHeaders", e);
-        }
+        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + 8 + rawValue.length)
+            .put(rawHeaders)
+            .putLong(timestamp)
+            .put(rawValue)
+            .array();
     }
 
     @Override
     public void close() {
         valueSerializer.close();
-        timestampSerializer.close();
     }
 
     @Override

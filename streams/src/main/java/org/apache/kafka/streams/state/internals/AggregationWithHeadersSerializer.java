@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.AggregationWithHeaders;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -75,23 +76,23 @@ class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerialize
 
         final byte[] rawAggregation = aggregationSerializer.serialize(topic, headers, plainAggregation);
 
+        // Since we can't control the result of the internal serializer, we make sure that the result
+        // is not null as well.
+        // Serializing non-null values to null can be useful when working with Optional-like values
+        // where the Optional.empty case is serialized to null.
+        // See the discussion here: https://github.com/apache/kafka/pull/7679
         if (rawAggregation == null) {
             return null;
         }
 
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
+        final ByteBuffer rawHeaders = HeadersSerializer.serialize3(headers);
 
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
-
-            ByteUtils.writeVarint(rawHeaders.length, out);
-            out.write(rawHeaders);
-            out.write(rawAggregation);
-
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to serialize AggregationWithHeaders on topic: " + topic, e);
-        }
+        // Format: [headersSize(varint)][headersBytes][value]
+        return Utils.prepareByteBufferWithSizePrefix(rawHeaders.limit(), rawHeaders.limit() + rawAggregation.length)
+            .put(rawHeaders)
+            .put(rawAggregation)
+            .array();
     }
 
     @Override
