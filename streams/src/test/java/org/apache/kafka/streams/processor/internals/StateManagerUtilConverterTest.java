@@ -16,18 +16,25 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
-import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.HeadersBytesStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemorySessionStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
+import org.apache.kafka.streams.state.internals.KeyValueToTimestampedKeyValueByteStoreAdapter;
+import org.apache.kafka.streams.state.internals.MeteredSessionStoreWithHeaders;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStore;
+import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
+import org.apache.kafka.streams.state.internals.WindowToTimestampedWindowByteStoreAdapter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.apache.kafka.test.MockKeyValueStore;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,110 +42,49 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.time.Duration;
-
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StateManagerUtilConverterTest {
 
     @Test
-    public void shouldReturnHeadersConverterForHeadersAwareKeyValueStore() {
-        final TimestampedKeyValueStoreWithHeaders<String, String> store =
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                Stores.inMemoryKeyValueStore("test-store"),
-                Serdes.String(),
-                Serdes.String())
-                .build();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(store);
-
-        assertEquals(rawValueToHeadersValue(), converter);
-    }
-
-    @Test
-    public void shouldReturnHeadersConverterForHeadersAwareWindowStore() {
-        final TimestampedWindowStoreWithHeaders<String, String> store =
-            Stores.timestampedWindowStoreWithHeadersBuilder(
-                Stores.inMemoryWindowStore(
-                    "test-window-store",
-                    Duration.ofMillis(100),
-                    Duration.ofMillis(10),
-                    false),
-                Serdes.String(),
-                Serdes.String())
-                .build();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(store);
-
-        assertEquals(rawValueToHeadersValue(), converter);
-    }
-
-    @Test
-    public void shouldReturnTimestampedConverterForTimestampedKeyValueStore() {
-        final StateStore store = Stores.timestampedKeyValueStoreBuilder(
-            Stores.inMemoryKeyValueStore("test-ts-store"),
-            Serdes.String(),
-            Serdes.String())
-            .build();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(store);
-
-        assertEquals(rawValueToTimestampedValue(), converter);
-    }
-
-    @Test
-    public void shouldReturnTimestampedConverterForTimestampedWindowStore() {
-        final StateStore store = Stores.timestampedWindowStoreBuilder(
-            Stores.inMemoryWindowStore(
-                "test-ts-window-store",
-                Duration.ofMillis(100),
-                Duration.ofMillis(10),
-                false),
-            Serdes.String(),
-            Serdes.String())
-            .build();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(store);
-
-        assertEquals(rawValueToTimestampedValue(), converter);
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void shouldReturnTimestampedConverterForTimestampedToHeadersStoreAdapter() {
+    public void shouldReturnIdentityConverterForPlainToTimestampedPersistentKeyValueStore() {
+        // persistent plain kv -> ts kv
         final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
-        final StateStore mockAdapter = mock(TimestampedToHeadersStoreAdapter.class);
+        final StateStore mockAdapter = mock(KeyValueToTimestampedKeyValueByteStoreAdapter.class);
 
         doReturn(mockAdapter).when(mockWrapper).wrapped();
 
         final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
 
-        assertEquals(rawValueToTimestampedValue(), converter);
+        assertEquals(identity(), converter);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldReturnTimestampedConverterForTimestampedToHeadersWindowStoreAdapter() {
-        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
-        final StateStore mockAdapter = mock(TimestampedToHeadersWindowStoreAdapter.class);
+    public void shouldReturnIdentityConverterForPlainToTimestampedInMemoryKeyValueStore() {
+        // in memory kv -> ts kv (using InMemoryTimestampedKeyValueStoreMarker)
+        final StateStore mockInnerStore = mock(InMemoryKeyValueStore.class);
+        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredTimestampedKeyValueStore.class);
 
-        doReturn(mockAdapter).when(mockWrapper).wrapped();
+        doReturn(mockInnerStore).when(mockMarker).wrapped();
 
-        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
 
-        assertEquals(rawValueToTimestampedValue(), converter);
+        assertEquals(identity(), converter);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    public void shouldReturnIdentityConverterForPlainToHeadersStoreAdapter() {
+    public void shouldReturnIdentityConverterForPlainToHeadersPersistentKeyValueStore() {
+        // persistent plain kv -> headers kv
         final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
         final StateStore mockAdapter = mock(PlainToHeadersStoreAdapter.class);
 
@@ -151,7 +97,62 @@ public class StateManagerUtilConverterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldReturnIdentityConverterForPlainToHeadersWindowStoreAdapter() {
+    public void shouldReturnIdentityConverterForPlainToHeadersInMemoryKeyValueStore() {
+        // in memory kv -> headers kv (using InMemoryTimestampedKeyValueStoreWithHeadersMarker)
+        final StateStore mockInnerStore = mock(InMemoryKeyValueStore.class, withSettings().extraInterfaces(HeadersBytesStore.class));
+        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredTimestampedKeyValueStoreWithHeaders.class);
+
+        doReturn(mockInnerStore).when(mockMarker).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
+
+        assertEquals(rawValueToHeadersValue(), converter);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldReturnTimestampedConverterForTimestampedToHeadersPersistentKeyValueStore() {
+        // ts kv -> headers kv
+        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
+        final StateStore mockAdapter = mock(TimestampedToHeadersStoreAdapter.class);
+
+        doReturn(mockAdapter).when(mockWrapper).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
+
+        assertEquals(rawValueToTimestampedValue(), converter);
+    }
+
+    @Test
+    public void shouldReturnIdentityConverterForPlainToTimestampedPersistentWindowStore() {
+        // persistent plain window -> ts window
+        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
+        final StateStore mockAdapter = mock(WindowToTimestampedWindowByteStoreAdapter.class);
+
+        doReturn(mockAdapter).when(mockWrapper).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
+
+        assertEquals(identity(), converter);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldReturnIdentityConverterForPlainToTimestampedInMemoryWindowStore() {
+        // in memory window -> ts window (using InMemoryTimestampedWindowStoreMarker)
+        final StateStore mockInnerStore = mock(InMemoryKeyValueStore.class);
+        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredTimestampedWindowStore.class);
+
+        doReturn(mockInnerStore).when(mockMarker).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
+
+        assertEquals(identity(), converter);
+    }
+
+    @Test
+    public void shouldReturnIdentityConverterForPlainToHeadersPersistentWindowStore() {
+        // persistent plain window -> headers window
         final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
         final StateStore mockAdapter = mock(PlainToHeadersWindowStoreAdapter.class);
 
@@ -163,39 +164,58 @@ public class StateManagerUtilConverterTest {
     }
 
     @Test
-    public void shouldReturnIdentityConverterForPlainKeyValueStore() {
-        final StateStore store = Stores.keyValueStoreBuilder(
-            Stores.inMemoryKeyValueStore("test-plain-store"),
-            Serdes.String(),
-            Serdes.String())
-            .build();
+    @SuppressWarnings("unchecked")
+    public void shouldReturnIdentityConverterForPlainToHeadersInMemoryWindowStore() {
+        // in memory window -> headers window (using InMemoryTimestampedWindowStoreWithHeadersMarker)
+        final StateStore mockInnerStore = mock(InMemoryWindowStore.class, withSettings().extraInterfaces(HeadersBytesStore.class));
+        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredTimestampedWindowStoreWithHeaders.class);
 
-        final RecordConverter converter = StateManagerUtil.converterForStore(store);
+        doReturn(mockInnerStore).when(mockMarker).wrapped();
 
-        assertEquals(identity(), converter);
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
+
+        assertEquals(rawValueToHeadersValue(), converter);
     }
 
     @Test
-    public void shouldReturnIdentityConverterForMockKeyValueStore() {
-        final StateStore store = new MockKeyValueStore("mock-store", false);
+    @SuppressWarnings("unchecked")
+    public void shouldReturnTimestampedConverterForTimestampedToHeadersPersistentWindowStore() {
+        // ts window -> headers window
+        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
+        final StateStore mockAdapter = mock(TimestampedToHeadersWindowStoreAdapter.class);
 
-        final RecordConverter converter = StateManagerUtil.converterForStore(store);
+        doReturn(mockAdapter).when(mockWrapper).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
+
+        assertEquals(rawValueToTimestampedValue(), converter);
+    }
+
+    @Test
+    public void shouldReturnIdentityConverterForPlainToHeadersPersistentSessionStore() {
+        // persistent plain session -> headers session
+        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
+        final StateStore mockAdapter = mock(SessionToHeadersStoreAdapter.class);
+
+        doReturn(mockAdapter).when(mockWrapper).wrapped();
+
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
 
         assertEquals(identity(), converter);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldHandleNestedWrappedStores() {
-        final WrappedStateStore<?, ?, ?> outerWrapper = mock(WrappedStateStore.class);
-        final WrappedStateStore<?, ?, ?> innerWrapper = mock(WrappedStateStore.class);
-        final StateStore adapter = mock(TimestampedToHeadersStoreAdapter.class);
+    public void shouldReturnIdentityConverterForPlainToHeadersInMemorySessionStore() {
+        // in memory session -> headers session (using InMemorySessionStoreWithHeadersMarker)
+        final StateStore mockInnerStore = mock(InMemorySessionStore.class, withSettings().extraInterfaces(HeadersBytesStore.class));
+        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredSessionStoreWithHeaders.class);
 
-        doReturn(innerWrapper).when(outerWrapper).wrapped();
-        doReturn(adapter).when(innerWrapper).wrapped();
+        doReturn(mockInnerStore).when(mockMarker).wrapped();
 
-        final RecordConverter converter = StateManagerUtil.converterForStore(outerWrapper);
+        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
 
-        assertEquals(rawValueToTimestampedValue(), converter);
+        assertEquals(rawValueToSessionHeadersValue(), converter);
     }
+
 }

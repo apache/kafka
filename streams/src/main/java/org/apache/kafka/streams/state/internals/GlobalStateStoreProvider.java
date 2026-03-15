@@ -51,7 +51,7 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
             if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                 return (List<T>) Collections.singletonList(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders()));
             } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
-                return (List<T>) Collections.singletonList(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.headersToValueAndTimestamp()));
+                return (List<T>) Collections.singletonList(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders()));
             } else {
                 // For custom query types, return the raw store so they can access headers directly
                 return (List<T>) Collections.singletonList(store);
@@ -62,7 +62,7 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
             if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                 return (List<T>) Collections.singletonList(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders()));
             } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
-                return (List<T>) Collections.singletonList(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.headersToValueAndTimestamp()));
+                return (List<T>) Collections.singletonList(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders()));
             } else {
                 // For custom query types, return the raw store so they can access headers directly
                 return (List<T>) Collections.singletonList(store);

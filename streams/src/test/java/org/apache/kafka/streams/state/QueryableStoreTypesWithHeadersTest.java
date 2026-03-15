@@ -145,6 +145,21 @@ public class QueryableStoreTypesWithHeadersTest {
     }
 
     @Test
+    public void shouldAcceptRegularKeyValueStoreForKeyValueStoreType() {
+        final KeyValueStore<String, String> store =
+            Stores.keyValueStoreBuilder(
+                    Stores.inMemoryKeyValueStore("test-store"),
+                    Serdes.String(),
+                    Serdes.String())
+                .build();
+
+        final QueryableStoreType<ReadOnlyKeyValueStore<String, String>> storeType =
+            QueryableStoreTypes.keyValueStore();
+
+        assertTrue(storeType.accepts(store));
+    }
+
+    @Test
     public void shouldAcceptRegularTimestampedWindowStoreForTimestampedWindowStoreType() {
         final TimestampedWindowStore<String, String> store =
             Stores.timestampedWindowStoreBuilder(
@@ -159,6 +174,59 @@ public class QueryableStoreTypesWithHeadersTest {
 
         final QueryableStoreType<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> storeType =
             QueryableStoreTypes.timestampedWindowStore();
+
+        assertTrue(storeType.accepts(store));
+    }
+
+    @Test
+    public void shouldAcceptRegularWindowStoreForWindowStoreType() {
+        final WindowStore<String, String> store =
+            Stores.windowStoreBuilder(
+                    Stores.inMemoryWindowStore(
+                        "test-window-store",
+                        Duration.ofMillis(100),
+                        Duration.ofMillis(10),
+                        false),
+                    Serdes.String(),
+                    Serdes.String())
+                .build();
+
+        final QueryableStoreType<ReadOnlyWindowStore<String, String>> storeType =
+            QueryableStoreTypes.windowStore();
+
+        assertTrue(storeType.accepts(store));
+    }
+
+    @Test
+    public void shouldAcceptSessionStoreWithHeadersForSessionStoreType() {
+        final SessionStoreWithHeaders<String, String> store =
+            Stores.sessionStoreBuilderWithHeaders(
+                Stores.inMemorySessionStore(
+                    "test-session-store",
+                    Duration.ofMillis(100)),
+                Serdes.String(),
+                Serdes.String())
+            .build();
+
+        final QueryableStoreType<ReadOnlySessionStore<String, ValueAndTimestamp<String>>> storeType =
+            QueryableStoreTypes.sessionStore();
+
+        assertTrue(storeType.accepts(store));
+    }
+
+    @Test
+    public void shouldAcceptRegularSessionStoreForSessionStoreType() {
+        final SessionStore<String, String> store =
+            Stores.sessionStoreBuilder(
+                Stores.inMemorySessionStore(
+                    "test-session-store",
+                    Duration.ofMillis(100)),
+                Serdes.String(),
+                Serdes.String())
+            .build();
+
+        final QueryableStoreType<ReadOnlySessionStore<String, String>> storeType =
+            QueryableStoreTypes.sessionStore();
 
         assertTrue(storeType.accepts(store));
     }

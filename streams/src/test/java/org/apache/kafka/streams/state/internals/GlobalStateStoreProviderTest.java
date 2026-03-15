@@ -31,7 +31,9 @@ import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 
@@ -258,8 +260,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.keyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
         }
     }
 
@@ -270,8 +273,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
         }
     }
 
@@ -282,8 +286,9 @@ public class GlobalStateStoreProviderTest {
             provider.stores("ts-w-store-with-headers", QueryableStoreTypes.windowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, String> store : stores) {
-            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
         }
     }
 
@@ -296,6 +301,8 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
         }
     }
 }

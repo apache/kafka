@@ -110,7 +110,7 @@ public class StreamThreadStateStoreProvider {
                 if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                     return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders());
                 } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
-                    return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.headersToValueAndTimestamp());
+                    return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders());
                 } else {
                     // For custom query types, return the raw store so they can access headers directly
                     return (T) store;
@@ -121,7 +121,7 @@ public class StreamThreadStateStoreProvider {
                 if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                     return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders());
                 } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
-                    return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.headersToValueAndTimestamp());
+                    return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders());
                 } else {
                     // For custom query types, return the raw store so they can access headers directly
                     return (T) store;

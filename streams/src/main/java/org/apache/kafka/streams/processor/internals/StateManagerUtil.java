@@ -60,7 +60,6 @@ final class StateManagerUtil {
 
     static RecordConverter converterForStore(final StateStore store) {
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
-        // This handles in-memory stores with marker wrappers
         if (isHeadersAware(store)) {
             if (store instanceof SessionStore) {
                 return rawValueToSessionHeadersValue();
