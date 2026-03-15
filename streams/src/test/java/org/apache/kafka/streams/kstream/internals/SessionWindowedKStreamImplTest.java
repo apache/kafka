@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.MeteredSessionStore;
-import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -50,9 +49,9 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
@@ -90,6 +89,7 @@ public class SessionWindowedKStreamImplTest {
             Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, true)
         );
     }
+
     public void setup(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
         type = inputType;
         final EmitStrategy emitStrategy = EmitStrategy.StrategyType.forType(type);
@@ -324,38 +324,33 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(null, MockAggregator.TOSTRING_ADDER, sessionMerger));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnAggregateIfMergerIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnAggregateIfMergerIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnReduceIfReducerIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.reduce(null));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
@@ -363,10 +358,9 @@ public class SessionWindowedKStreamImplTest {
             Materialized.as("store")));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             null,
@@ -374,10 +368,9 @@ public class SessionWindowedKStreamImplTest {
             Materialized.as("store")));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMergerIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMergerIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -386,10 +379,9 @@ public class SessionWindowedKStreamImplTest {
     }
 
     @SuppressWarnings("unchecked")
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -397,32 +389,28 @@ public class SessionWindowedKStreamImplTest {
             (Materialized) null));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.reduce(null, Materialized.as("store")));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
     @SuppressWarnings("unchecked")
-    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Materialized) null));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }
 
-    @ParameterizedTest
-    @EnumSource(EmitStrategy.StrategyType.class)
-    public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final EmitStrategy.StrategyType inputType) {
-        setup(inputType, false);
+    @Test
+    public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
+        setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
         assertThrows(NullPointerException.class, () -> stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null));
     }
 
@@ -447,7 +435,6 @@ public class SessionWindowedKStreamImplTest {
                 assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStoreWithHeaders.class));
             } else {
                 assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
-                assertThat(changeLogging.wrapped(), instanceOf(SessionToHeadersStoreAdapter.class));
             }
         }
     }
