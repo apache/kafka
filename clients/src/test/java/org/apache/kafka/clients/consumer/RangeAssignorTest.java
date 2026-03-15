@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -387,7 +386,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformSubscription() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = Map.of("t1", 6, "t2", 7, "t3", 2);
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
 
@@ -408,7 +407,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithNonEqualSubscription() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = Map.of("t1", 6, "t2", 7, "t3", 2);
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
 
@@ -429,7 +428,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformPartitions() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 5), Map.entry("t2", 5), Map.entry("t3", 5));
+        Map<String, Integer> topics = Map.of("t1", 5, "t2", 5, "t3", 5);
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
@@ -449,7 +448,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformPartitionsNonEqualSubscription() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 5), Map.entry("t2", 5), Map.entry("t3", 5));
+        Map<String, Integer> topics = Map.of("t1", 5, "t2", 5, "t3", 5);
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
 
@@ -470,7 +469,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithCoPartitioning() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 6), Map.entry("t3", 2), Map.entry("t4", 2));
+        Map<String, Integer> topics = Map.of("t1", 6, "t2", 6, "t3", 2, "t4", 2);
         List<List<String>> consumerTopics = asList(asList("t1", "t2"), asList("t1", "t2"), asList("t3", "t4"), asList("t3", "t4"));
         List<String> consumerRacks = asList(ALL_RACKS[0], ALL_RACKS[1], ALL_RACKS[1], ALL_RACKS[0]);
         List<String> nonRackAwareAssignment = asList(
@@ -505,9 +504,9 @@ public class RangeAssignorTest {
 
     @Test
     public void testCoPartitionedAssignmentWithSameSubscription() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 6),
-                Map.entry("t3", 2), Map.entry("t4", 2),
-                Map.entry("t5", 4), Map.entry("t6", 4));
+        Map<String, Integer> topics = Map.of("t1", 6, "t2", 6,
+                "t3", 2, "t4", 2,
+                "t5", 4, "t6", 4);
         List<String> topicList = asList("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9");
         List<List<String>> consumerTopics = asList(topicList, topicList, topicList);
         List<String> consumerRacks = asList(ALL_RACKS[0], ALL_RACKS[1], ALL_RACKS[2]);

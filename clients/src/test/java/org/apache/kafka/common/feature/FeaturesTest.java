@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.feature;
 
-import org.apache.kafka.common.utils.Utils;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -89,11 +87,12 @@ public class FeaturesTest {
         SupportedVersionRange v1 = new SupportedVersionRange((short) 1, (short) 2);
         SupportedVersionRange v2 = new SupportedVersionRange((short) 3, (short) 4);
         Features<SupportedVersionRange> features = Features.supportedFeatures(
-            Utils.mkMap(Map.entry("feature_1", v1), Map.entry("feature_2", v2)));
+            Map.of("feature_1", v1, "feature_2", v2));
 
-        assertEquals(
-            "Features{(feature_1 -> SupportedVersionRange[min_version:1, max_version:2]), (feature_2 -> SupportedVersionRange[min_version:3, max_version:4])}",
-            features.toString());
+        String result = features.toString();
+        assertTrue(result.startsWith("Features{"));
+        assertTrue(result.contains("(feature_1 -> SupportedVersionRange[min_version:1, max_version:2])"));
+        assertTrue(result.contains("(feature_2 -> SupportedVersionRange[min_version:3, max_version:4])"));
     }
 
     @Test

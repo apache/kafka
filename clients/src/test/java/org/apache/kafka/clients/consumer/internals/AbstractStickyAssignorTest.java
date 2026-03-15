@@ -1268,7 +1268,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformSubscription() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = Map.of("t1", 6, "t2", 7, "t3", 2);
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
@@ -1335,7 +1335,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithNonEqualSubscription() {
-        Map<String, Integer> topics = Utils.mkMap(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = Map.of("t1", 6, "t2", 7, "t3", 2);
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
         List<String> nonRackAwareAssignment = asList(

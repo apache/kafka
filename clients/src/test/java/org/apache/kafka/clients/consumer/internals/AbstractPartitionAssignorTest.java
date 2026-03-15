@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -258,7 +259,7 @@ public class AbstractPartitionAssignorTest {
                                                                        List<String> brokerRacks) {
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         int nextIndex = 0;
-        for (Map.Entry<String, Integer> entry : numPartitionsPerTopic.entrySet()) {
+        for (Map.Entry<String, Integer> entry : new TreeMap<>(numPartitionsPerTopic).entrySet()) {
             String topic = entry.getKey();
             int numPartitions = entry.getValue();
             partitionsPerTopic.put(topic, partitionInfos(topic, numPartitions, replicationFactor, brokerRacks, nextIndex));
