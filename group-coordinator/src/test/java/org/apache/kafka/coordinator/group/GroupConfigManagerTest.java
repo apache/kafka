@@ -116,7 +116,7 @@ public class GroupConfigManagerTest {
     }
 
     @Test
-    public void testUpdateEmptyGroupConfig() {
+    public void testGroupIsRemovedWhenDynamicConfigsAreRemoved() {
         String groupId1 = "foo";
         String groupId2 = "bar";
         Properties props = new Properties();
