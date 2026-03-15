@@ -179,15 +179,16 @@ public class TimeWindowedDeserializerTest {
         final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
         when(mockDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn("test-value");
 
+        final String topic = "dummy";
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
         final Windowed<String> windowed = new Windowed<>("test-key", new TimeWindow(0, 1));
-        final byte[] data = new TimeWindowedSerializer<>(Serdes.String().serializer()).serialize("dummy", headers, windowed);
+        final byte[] data = new TimeWindowedSerializer<>(Serdes.String().serializer()).serialize(topic, headers, windowed);
 
         final TimeWindowedDeserializer<String> testDeserializer = new TimeWindowedDeserializer<>(mockDeserializer, 1L);
 
-        testDeserializer.deserialize("dummy", headers, data);
+        testDeserializer.deserialize(topic, headers, data);
 
-        verify(mockDeserializer).deserialize(anyString(), eq(headers), any(byte[].class));
+        verify(mockDeserializer).deserialize(eq(topic), eq(headers), any(byte[].class));
         verify(mockDeserializer, never()).deserialize(anyString(), any(byte[].class));
     }
 }

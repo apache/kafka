@@ -1237,7 +1237,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 sessionHandler.addPartitionToFetch(entry.getKey(), entry.getValue());
             }
 
-            ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, shareFetchConfig);
+            ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId);
 
             isProcessed = false;
             Node nodeToSend = metadata.fetch().nodeById(nodeId);
