@@ -107,7 +107,7 @@ class HeadersSerializer {
      *
      * @param preSerializedHeaders the preSerializedHeaders
      * @param buffer the buffer to write the serialized header into (it's expected that the buffer position is set correctly)
-     * @return the modified {@code buffer} containing the serializer headers (empty array if headers are null or empty),\
+     * @return the modified {@code buffer} containing the serializer headers (empty array if headers are null or empty),
      * with corresponding advanced position
      */
     public static ByteBuffer serialize(final PreSerializedHeaders preSerializedHeaders, final ByteBuffer buffer) {
