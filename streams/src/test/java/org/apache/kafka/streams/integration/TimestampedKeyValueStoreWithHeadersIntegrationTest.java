@@ -145,8 +145,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest {
             );
 
             // Create output topic for changelog
-            // Note: Changelog logs rawValue (just the value, without timestamp/headers in the value)
-            // Timestamp and headers are in the record metadata
             final String changelogTopic = "test-app-" + STORE_NAME + "-changelog";
             final TestOutputTopic<String, String> changelogOutputTopic =
                 driver.createOutputTopic(
