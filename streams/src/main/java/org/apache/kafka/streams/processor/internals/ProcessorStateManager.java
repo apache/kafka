@@ -327,7 +327,7 @@ public class ProcessorStateManager implements StateManager {
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
         // fail-crash; in this case we would not need to immediately close the state store before throwing
-        if (LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME.equals(storeName)) {
+        if (LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME.startsWith(storeName)) {
             store.close();
             throw new IllegalArgumentException(format("%sIllegal store name: %s, which collides with the pre-defined " +
                 "checkpoint file name", logPrefix, storeName));
