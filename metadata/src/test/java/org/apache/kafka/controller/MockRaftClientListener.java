@@ -36,6 +36,7 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
     public static final String RENOUNCE = "RENOUNCE";
     public static final String SHUTDOWN = "SHUTDOWN";
     public static final String SNAPSHOT = "SNAPSHOT";
+    public static final String BOOTSTRAP_SNAPSHOT = "BOOTSTRAP_SNAPSHOT";
 
     private final int nodeId;
     private final List<String> serializedEvents = new ArrayList<>();
@@ -83,8 +84,20 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
 
     @Override
     public synchronized void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
-        // MockRaftClientListener does not process bootstrap snapshots.
-        reader.close();
+        long lastContainedLogOffset = reader.lastContainedLogOffset();
+        try {
+            while (reader.hasNext()) {
+                Batch<ApiMessageAndVersion> batch = reader.next();
+
+                for (ApiMessageAndVersion messageAndVersion : batch.records()) {
+                    ApiMessage message = messageAndVersion.message();
+                    serializedEvents.add(BOOTSTRAP_SNAPSHOT + " " + message.toString());
+                }
+                serializedEvents.add(LAST_COMMITTED_OFFSET + " " + lastContainedLogOffset);
+            }
+        } finally {
+            reader.close();
+        }
     }
 
     @Override
