@@ -457,7 +457,7 @@ public class LogConfig extends AbstractConfig {
      */
     public static void validateNames(Map<String, String> props) {
         List<String> names = configNames();
-        for (Object name : props.keySet())
+        for (String name : props.keySet())
             if (!names.contains(name))
                 throw new InvalidConfigurationException("Unknown topic config name: " + name);
     }
