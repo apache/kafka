@@ -350,6 +350,10 @@ public final class RaftClientTestContext {
         }
 
         Builder withBootstrapSnapshot(Optional<VoterSet> voters) {
+            return withBootstrapSnapshotRecords(voters, List.of());
+        }
+
+        Builder withBootstrapSnapshotRecords(Optional<VoterSet> voters, List<String> records) {
             startingVoters = voters.orElse(VoterSet.empty());
             isStartingVotersStatic = false;
 
@@ -364,6 +368,9 @@ public final class RaftClientTestContext {
                     .setVoterSet(voters);
 
                 try (RecordsSnapshotWriter<String> writer = builder.build(SERDE)) {
+                    if (!records.isEmpty()) {
+                        writer.append(records);
+                    }
                     writer.freeze();
                 }
             } else {

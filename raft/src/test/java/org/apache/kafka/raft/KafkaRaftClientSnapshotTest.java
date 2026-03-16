@@ -51,6 +51,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -123,7 +124,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
-        // Check that listener was notified of the new snapshot
+        // Check that listener was notified of the committed snapshot, not the bootstrap snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
@@ -177,7 +178,7 @@ public final class KafkaRaftClientSnapshotTest {
             context.client.highWatermark()
         );
 
-        // Check that listener was notified of the new snapshot
+        // Check that listener was notified of the committed snapshot, not the bootstrap snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
@@ -272,7 +273,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
-        // Check that listener was notified of the new snapshot
+        // Check that listener was notified of the committed snapshot, not the bootstrap snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
@@ -2135,11 +2136,12 @@ public final class KafkaRaftClientSnapshotTest {
     public void testListenerReceivesBootstrapSnapshot() throws Exception {
         ReplicaKey localKey = replicaKey(0, true);
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey));
+        List<String> bootstrapRecords = List.of("a", "b", "c");
 
         RaftClientTestContext context = new RaftClientTestContext
             .Builder(localKey.id(), localKey.directoryId().get())
-            .withKip853Rpc(true)
-            .withBootstrapSnapshot(Optional.of(voters))
+            .withRaftProtocol(KIP_853_PROTOCOL)
+            .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
             .build();
 
         // Single voter; poll to let it append control record and advance HWM
@@ -2148,6 +2150,7 @@ public final class KafkaRaftClientSnapshotTest {
         // Bootstrap snapshot should route to handleLoadBootstrap, not handleLoadSnapshot
         try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
             assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
+            SnapshotWriterReaderTest.assertDataSnapshot(List.of(bootstrapRecords), bootstrapSnapshot);
         }
         assertFalse(context.listener.drainHandledSnapshot().isPresent());
     }

@@ -4028,10 +4028,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 lastSent = null;
             }
 
-            logger.debug("Notifying listener {} of snapshot {}", listenerName(), reader.snapshotId());
             if (reader.snapshotId().equals(BOOTSTRAP_SNAPSHOT_ID)) {
+                logger.debug("Notifying listener {} of bootstrap snapshot {}", listenerName(), reader.snapshotId());
                 listener.handleLoadBootstrap(reader);
             } else {
+                logger.debug("Notifying listener {} of committed snapshot {}", listenerName(), reader.snapshotId());
                 listener.handleLoadSnapshot(reader);
             }
         }
