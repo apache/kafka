@@ -25,10 +25,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -208,6 +211,28 @@ public class PodReplicaPlacerTest {
         Assertions.assertEquals(2, assignment.assignments().get(5).replicas().get(0));
         Assertions.assertEquals(3, assignment.assignments().get(6).replicas().get(0));
         Assertions.assertEquals(4, assignment.assignments().get(7).replicas().get(0));
+    }
+
+    @Test
+    public void testOverlappingPodIsolationRulesShouldFail() {
+        Map<String, java.util.function.Predicate<Integer>> rules = new HashMap<>();
+        rules.put("pod0", i -> i == 0);
+        rules.put("pod1", i -> i < 5);  // Also matches partition 0
+
+        PodReplicaPlacer placer = new PodReplicaPlacer(new MockReplicaPlacer(), rules);
+
+        IllegalStateException exception = Assertions.assertThrows(
+            IllegalStateException.class,
+            () -> place(placer, 0, 1, (short) 1, Arrays.asList(
+                new UsableBroker(1, Optional.empty(), Optional.of("pod0"), true),
+                new UsableBroker(2, Optional.empty(), Optional.of("pod1"), true)
+            ))
+        );
+
+        Assertions.assertTrue(exception.getMessage().contains("Partition 0"));
+        Assertions.assertTrue(exception.getMessage().contains("pod0"));
+        Assertions.assertTrue(exception.getMessage().contains("pod1"));
+        Assertions.assertTrue(exception.getMessage().contains("multiple pod isolation rules"));
     }
 
     @Test
