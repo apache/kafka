@@ -2596,15 +2596,7 @@ project(':trogdor') {
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation (libs.jettyServer) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyServlet) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyServlets) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
+    implementation project(path: ':connect:jetty-shadow', configuration: 'shadow')
 
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
@@ -3480,6 +3472,42 @@ project(':jmh-benchmarks') {
   }
 }
 
+project(':connect:jetty-shadow') {
+  base {
+    archivesName = "connect-jetty-shadow"
+  }
+
+  apply plugin: 'com.gradleup.shadow'
+
+  dependencies {
+    implementation libs.jettyServer
+    implementation libs.jettyClient
+    implementation libs.jettyServlet
+    implementation libs.jettyServlets
+    implementation libs.slf4j2Api
+    implementation libs.slf4j2Log4j2
+  }
+
+  shadowJar {
+    archiveClassifier = null
+    // Relocate SLF4J 2.x so it doesn't conflict with Kafka's SLF4J 1.x on the classpath
+    relocate('org.slf4j', 'org.apache.kafka.shaded.org.slf4j')
+    // Relocate log4j-slf4j2-impl so its SLF4J references point to the relocated SLF4J 2.x classes
+    relocate('org.apache.logging.slf4j', 'org.apache.kafka.shaded.org.apache.logging.slf4j')
+    // Exclude Log4j2 core since it's already on Kafka's classpath
+    dependencies {
+      exclude(dependency('org.apache.logging.log4j:log4j-api:.*'))
+      exclude(dependency('org.apache.logging.log4j:log4j-core:.*'))
+    }
+    mergeServiceFiles()
+  }
+
+  jar {
+    enabled false
+    dependsOn 'shadowJar'
+  }
+}
+
 project(':connect:api') {
   base {
     archivesName = "connect-api"
@@ -3616,18 +3644,7 @@ project(':connect:runtime') {
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation (libs.jettyServer) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyServlet) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyServlets) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyClient) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
+    implementation project(path: ':connect:jetty-shadow', configuration: 'shadow')
     implementation libs.classgraph
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
@@ -3855,18 +3872,7 @@ project(':connect:mirror') {
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation (libs.jettyServer) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyServlet) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyServlets) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
-    implementation (libs.jettyClient) {
-      exclude group: 'org.slf4j', module: 'slf4j-api'
-    }
+    implementation project(path: ':connect:jetty-shadow', configuration: 'shadow')
     implementation libs.swaggerAnnotations
 
     testImplementation testLog4j2Libs

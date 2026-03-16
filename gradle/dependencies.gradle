@@ -66,11 +66,7 @@ versions += [
   jacksonAnnotations: "2.21",
   jacoco: "0.8.14",
   javassist: "3.30.2-GA",
-  // Jetty 12.0.30+ introduced SLF4J 2.x fluent API usage (e.g. Logger.atDebug()) in production
-  // code, which causes NoSuchMethodError at runtime since Kafka uses SLF4J 1.7.x.
-  // 12.0.25 is the version that includes the CVE-2025-5115 fix while only using the
-  // SLF4J 2.x fluent API in test code, avoiding the runtime incompatibility.
-  jetty: "12.0.25",
+  jetty: "12.0.32",
   jersey: "3.1.10",
   jgit: "7.5.0.202512021534-r",
   jline: "3.30.4",
@@ -129,6 +125,7 @@ versions += [
   scalafmt: "3.10.2",
   scoverage: "2.5.1",
   slf4j: "1.7.36",
+  slf4j2: "2.0.17",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
   mockOAuth2Server: "2.2.1",
@@ -234,7 +231,9 @@ libs += [
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
+  slf4j2Api: "org.slf4j:slf4j-api:$versions.slf4j2",
   slf4jLog4j2: "org.apache.logging.log4j:log4j-slf4j-impl:$versions.log4j2",
+  slf4j2Log4j2: "org.apache.logging.log4j:log4j-slf4j2-impl:$versions.log4j2",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
