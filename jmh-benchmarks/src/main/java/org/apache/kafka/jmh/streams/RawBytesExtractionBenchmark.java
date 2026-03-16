@@ -17,13 +17,8 @@
 
 package org.apache.kafka.jmh.streams;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.internals.HeadersDeserializer;
-import org.apache.kafka.streams.state.internals.Utils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
@@ -37,7 +32,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -87,22 +81,6 @@ public class RawBytesExtractionBenchmark {
         }
     }
 
-    @Benchmark
-    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testDeserialize(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
-        for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(deserializePre20303(randomValue));
-        }
-    }
-
-    @Benchmark
-    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testDeserializeOpt(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
-        for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(HeadersDeserializer.deserialize(randomValue));
-        }
-    }
-
     /**
      * Prior to KAFKA-20303 - HeadersBytesStore.convertToHeaderFormat
      */
@@ -121,43 +99,5 @@ public class RawBytesExtractionBenchmark {
             .put((byte) 0x00)
             .put(valueAndTimestamp)
             .array();
-    }
-
-    private static Headers deserializePre20303(final byte[] data) {
-        if (data == null || data.length == 0) {
-            return new RecordHeaders();
-        }
-
-        if (data[0] == 0x00) {
-            return new RecordHeaders();
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(data);
-        final int headersCount = ByteUtils.readVarint(buffer);
-
-        /*if (headersCount == 0) {
-            return new RecordHeaders();
-        }*/
-
-        final RecordHeaders headers = new RecordHeaders();
-
-        for (int i = 0; i < headersCount; i++) {
-            final int keyLength = ByteUtils.readVarint(buffer);
-            final byte[] keyBytes = Utils.readBytes(buffer, keyLength);
-            
-            final String key = new String(keyBytes, StandardCharsets.UTF_8);
-
-            final int valueLength = ByteUtils.readVarint(buffer);
-            final byte[] value;
-            if (valueLength == -1) {
-                value = null;
-            } else {
-                value = Utils.readBytes(buffer, valueLength);
-            }
-
-            headers.add(key, value);
-        }
-
-        return headers;
     }
 }

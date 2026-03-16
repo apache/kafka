@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.state.internals.Utils.readBytes;
  *
  * This is used by KIP-1271 to deserialize headers from state stores.
  */
-public class HeadersDeserializer {
+class HeadersDeserializer {
 
     /**
      * Deserializes headers from a byte array using varint encoding per KIP-1271.
@@ -57,16 +57,12 @@ public class HeadersDeserializer {
             return new RecordHeaders();
         }
 
-        if (data[0] == 0x00) {
-            return new RecordHeaders();
-        }
-
         final ByteBuffer buffer = ByteBuffer.wrap(data);
         final int headersCount = ByteUtils.readVarint(buffer);
 
-        /*if (headersCount == 0) {
+        if (headersCount == 0) {
             return new RecordHeaders();
-        }*/
+        }
 
         final RecordHeaders headers = new RecordHeaders();
 
