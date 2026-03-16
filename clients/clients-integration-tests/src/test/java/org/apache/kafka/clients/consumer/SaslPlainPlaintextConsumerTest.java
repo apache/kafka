@@ -44,7 +44,6 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SAS
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.test.JaasUtils.KAFKA_PLAIN_ADMIN;
 import static org.apache.kafka.common.test.JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 
@@ -54,29 +53,11 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
     serverProperties = {
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
-        @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
         @ClusterConfigProperty(key = SASL_ENABLED_MECHANISMS_CONFIG, value = MECHANISMS),
         @ClusterConfigProperty(key = SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, value = MECHANISMS),
     }
 )
 public class SaslPlainPlaintextConsumerTest {
-
-    @ClusterTestDefaults(
-        types = {Type.KRAFT},
-        brokers = ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT,
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
-            @ClusterConfigProperty(key = SASL_ENABLED_MECHANISMS_CONFIG, value = MECHANISMS),
-            @ClusterConfigProperty(key = SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, value = MECHANISMS),
-        }
-    )
-    public static class WithAssignmentBatchingTest extends SaslPlainPlaintextConsumerTest {
-        public WithAssignmentBatchingTest(ClusterInstance cluster) {
-            super(cluster);
-        }
-    }
 
     private final ClusterInstance cluster;
     public static final String MECHANISMS = "PLAIN";

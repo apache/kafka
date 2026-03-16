@@ -25,6 +25,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
@@ -66,27 +67,9 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
         @ClusterConfigProperty(key = GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "60000"),
         @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "10"),
-        @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
     }
 )
 public class PlaintextConsumerSubscriptionTest {
-
-    @ClusterTestDefaults(
-        types = {Type.KRAFT},
-        brokers = PlaintextConsumerSubscriptionTest.BROKER_COUNT,
-        serverProperties = {
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-            @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
-            @ClusterConfigProperty(key = GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "60000"),
-            @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "10"),
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
-        }
-    )
-    public static class WithAssignmentBatchingTest extends PlaintextConsumerSubscriptionTest {
-        public WithAssignmentBatchingTest(ClusterInstance cluster) {
-            super(cluster);
-        }
-    }
 
     public static final int BROKER_COUNT = 3;
     private final ClusterInstance cluster;
@@ -107,7 +90,14 @@ public class PlaintextConsumerSubscriptionTest {
         testPatternSubscription(GroupProtocol.CLASSIC);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerPatternSubscription() throws InterruptedException {
         testPatternSubscription(GroupProtocol.CONSUMER);
     }
@@ -180,7 +170,14 @@ public class PlaintextConsumerSubscriptionTest {
         testSubsequentPatternSubscription(GroupProtocol.CLASSIC);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerSubsequentPatternSubscription() throws InterruptedException {
         testSubsequentPatternSubscription(GroupProtocol.CONSUMER);
     }
@@ -250,7 +247,14 @@ public class PlaintextConsumerSubscriptionTest {
         testPatternUnsubscription(GroupProtocol.CLASSIC);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerPatternUnsubscription() throws InterruptedException {
         testPatternUnsubscription(GroupProtocol.CONSUMER);
     }
@@ -292,7 +296,14 @@ public class PlaintextConsumerSubscriptionTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerRe2JPatternSubscription() throws InterruptedException {
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
@@ -358,7 +369,14 @@ public class PlaintextConsumerSubscriptionTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerRe2JPatternExpandSubscription() throws InterruptedException {
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
@@ -436,7 +454,14 @@ public class PlaintextConsumerSubscriptionTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testRe2JPatternSubscriptionAndTopicSubscription() throws InterruptedException {
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
@@ -500,7 +525,14 @@ public class PlaintextConsumerSubscriptionTest {
         testExpandingTopicSubscriptions(GroupProtocol.CLASSIC);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerExpandingTopicSubscriptions() throws InterruptedException {
         testExpandingTopicSubscriptions(GroupProtocol.CONSUMER);
     }
@@ -533,7 +565,14 @@ public class PlaintextConsumerSubscriptionTest {
         testShrinkingTopicSubscriptions(GroupProtocol.CLASSIC);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerShrinkingTopicSubscriptions() throws InterruptedException {
         testShrinkingTopicSubscriptions(GroupProtocol.CONSUMER);
     }
@@ -571,7 +610,14 @@ public class PlaintextConsumerSubscriptionTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerUnsubscribeTopic() throws InterruptedException {
         testUnsubscribeTopic(Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)));
     }
