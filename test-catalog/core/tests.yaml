@@ -1690,6 +1690,7 @@ kafka.server.ControllerRegistrationManagerTest:
 - testCreateStartAndClose
 - testRegistration
 - testRetransmitRegistration
+- testRetransmitRegistrationAfterTimeout
 - testWrongIncarnationId
 kafka.server.CreateTopicsRequestTest:
 - testCreateClusterMetadataTopic

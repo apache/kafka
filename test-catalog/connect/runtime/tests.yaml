@@ -624,6 +624,7 @@ org.apache.kafka.connect.runtime.WorkerTest:
 - testConnectorGeneratesTooManyTasksAndMaxEnforced
 - testConnectorGeneratesTooManyTasksButMaxNotEnforced
 - testConnectorStatusMetricsGroup_taskStatusCounter
+- testConnectorStatusMetricsGroup_tasksFailedToStart
 - testConsumerConfigsClientOverridesWithNonePolicy
 - testConsumerConfigsWithClientOverrides
 - testConsumerConfigsWithOverrides
