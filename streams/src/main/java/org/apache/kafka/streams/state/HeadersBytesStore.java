@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.nio.ByteBuffer;
 
 /**
  * Marker interface to indicate that a bytes store understands the value-with-headers format

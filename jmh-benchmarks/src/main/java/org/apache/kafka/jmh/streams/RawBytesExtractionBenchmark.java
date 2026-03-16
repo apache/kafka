@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.streams;
 
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.StateSerdes;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
@@ -55,7 +56,7 @@ public class RawBytesExtractionBenchmark {
         @Setup(Level.Iteration)
         public void setup() {
             this.values = new byte[DATA_SET_SAMPLE_SIZE][];
-            for (int i = 0; i < DATA_SET_SAMPLE_SIZE; i++) { 
+            for (int i = 0; i < DATA_SET_SAMPLE_SIZE; i++) {
                 values[i] = new byte[1 + StateSerdes.TIMESTAMP_SIZE + 8];
                 final ByteBuffer buf = ByteBuffer.wrap(values[i]);
                 buf.put((byte) 0x00); // header size
