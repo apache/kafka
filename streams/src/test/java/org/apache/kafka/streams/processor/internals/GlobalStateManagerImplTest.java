@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -175,70 +176,58 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldReadCheckpointOffsets() throws IOException {
-        final Map<TopicPartition, Long> expected = writeCheckpoint();
+        writeCheckpoint();
 
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        processorContext.setStateManger(stateManager);
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
-        assertEquals(expected, offsets);
+        assertEquals(mkMap(
+                mkEntry(t1, 1L),
+                mkEntry(t2, 0L),
+                mkEntry(t3, 0L),
+                mkEntry(t4, 0L),
+                mkEntry(t5, 0L)
+        ), offsets);
     }
 
     @Test
     public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
-        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25_000L);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        processorContext.setStateManger(stateManager);
+        stateManager.setGlobalProcessorContext(processorContext);
         stateManager.initialize();
         stateManager.updateChangelogOffsets(offsets);
 
+        final File storeCheckpointFile = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + "_" + storeName1);
+
         // set readonly to the CHECKPOINT_FILE_NAME.tmp file because we will write data to the .tmp file first
         // and then swap to CHECKPOINT_FILE_NAME by replacing it
-        final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
+        final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + "_" + storeName1 + ".tmp");
         Files.createFile(file.toPath());
         file.setWritable(false);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
-            stateManager.checkpoint();
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
+            stateManager.flush();
             assertThat(appender.getMessages(), hasItem(containsString(
-                "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
+                "Failed to write offset checkpoint file to [" + storeCheckpointFile.getPath() + "]. " +
+                "This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory. " +
+                "This may also occur due to running multiple instances on the same machine using the same state dir. " +
+                "Changing the location of state.dir may resolve the problem.")));
         }
     }
 
     @Test
-    public void shouldThrowStreamsExceptionForOldTopicPartitions() throws IOException {
-        final HashMap<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 1L);
-        expectedOffsets.put(t2, 1L);
-        expectedOffsets.put(t3, 1L);
-        expectedOffsets.put(t4, 1L);
-
-        // add an old topic (a topic not associated with any global state store)
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>(expectedOffsets);
-        final TopicPartition tOld = new TopicPartition("oldTopic", 1);
-        startOffsets.put(tOld, 1L);
-
-        // start with a checkpoint file will all topic-partitions: expected and old (not
-        // associated with any global state store).
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
-        checkpoint.write(startOffsets);
-
-        // initialize will throw exception
-        final StreamsException e = assertThrows(StreamsException.class, () -> stateManager.initialize());
-        assertThat(e.getMessage(), equalTo("Encountered a topic-partition not associated with any global state store"));
-    }
-
-    @Test
-    public void shouldNotDeleteCheckpointFileAfterLoaded() throws IOException {
-        writeCheckpoint();
-        stateManager.initialize();
-        assertTrue(checkpointFile.exists());
-    }
-
-    @Test
     public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws IOException {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         writeCorruptCheckpoint();
         assertThrows(StreamsException.class, stateManager::initialize);
     }
 
     @Test
     public void shouldInitializeStateStores() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         assertTrue(store1.initialized);
         assertTrue(store2.initialized);
@@ -246,12 +235,14 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldReturnInitializedStoreNames() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         final Set<String> storeNames = stateManager.initialize();
         assertEquals(Set.of(storeName1, storeName2, storeName3, storeName4, storeName5), storeNames);
     }
 
     @Test
     public void shouldThrowIllegalArgumentIfTryingToRegisterStoreThatIsNotGlobal() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
 
         try {
@@ -264,6 +255,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfAttemptingToRegisterStoreTwice() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         initializeConsumer(2, 0, t1);
         stateManager.registerStore(store1, stateRestoreCallback, null);
@@ -277,8 +269,8 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowStreamsExceptionIfNoPartitionsFoundForStore() {
-        stateManager.initialize();
         try {
+            stateManager.initialize();
             stateManager.registerStore(store1, stateRestoreCallback, null);
             fail("Should have raised a StreamsException as there are no partition for the store");
         } catch (final StreamsException e) {
@@ -402,7 +394,8 @@ public class GlobalStateManagerImplTest {
 
 
     @Test
-    public void shouldFlushStateStores() {
+    public void shouldCommitStateStores() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
@@ -417,6 +410,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreCommitFailed() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
@@ -431,6 +425,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldCloseStateStores() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
@@ -445,6 +440,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<>(store1.name()) {
@@ -459,6 +455,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         try {
             stateManager.registerStore(store1, null, null);
@@ -470,6 +467,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldNotCloseStoresIfCloseAlreadyCalled() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<>("t1-store") {
@@ -488,8 +486,8 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldAttemptToCloseAllStoresEvenWhenSomeException() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
-        initializeConsumer(1, 0, t1);
         final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<>("t1-store") {
             @Override
             public void close() {
@@ -497,6 +495,7 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
+        initializeConsumer(1, 0, t1);
         stateManager.registerStore(store, stateRestoreCallback, null);
 
         initializeConsumer(1, 0, t2);
@@ -513,19 +512,28 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldCheckpointOffsets() throws IOException {
-        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        stateManager.setGlobalProcessorContext(processorContext);
+        processorContext.setStateManger(stateManager);
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25_000L);
         stateManager.initialize();
 
         stateManager.updateChangelogOffsets(offsets);
-        stateManager.checkpoint();
+        stateManager.flush();
 
-        final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
-        assertThat(result, equalTo(offsets));
-        assertThat(stateManager.changelogOffsets(), equalTo(offsets));
+        assertThat(readOffsetsCheckpoint(storeName1), equalTo(offsets));
+        assertThat(stateManager.changelogOffsets(), equalTo(mkMap(
+                mkEntry(t1, 25_000L),
+                mkEntry(t2, 0L),
+                mkEntry(t3, 0L),
+                mkEntry(t4, 0L),
+                mkEntry(t5, 0L)
+        )));
     }
 
     @Test
     public void shouldNotRemoveOffsetsOfUnUpdatedTablesDuringCheckpoint() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
         initializeConsumer(10, 0, t1);
         stateManager.registerStore(store1, stateRestoreCallback, null);
@@ -534,7 +542,7 @@ public class GlobalStateManagerImplTest {
 
         final Map<TopicPartition, Long> initialCheckpoint = stateManager.changelogOffsets();
         stateManager.updateChangelogOffsets(Collections.singletonMap(t1, 101L));
-        stateManager.checkpoint();
+        stateManager.flush();
 
         final Map<TopicPartition, Long> updatedCheckpoint = stateManager.changelogOffsets();
         assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
@@ -566,10 +574,12 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldCheckpointRestoredOffsetsToFile() throws IOException {
         initializeConsumer(0, 0, t2, t3, t4, t5);
-        initializeConsumer(10, 0, t1);
         processorContext.setStateManger(stateManager);
+        stateManager.setGlobalProcessorContext(processorContext);
+
+        initializeConsumer(10, 0, t1);
         stateManager.initialize();
-        stateManager.checkpoint();
+        stateManager.flush();
         stateManager.close();
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();
@@ -582,26 +592,23 @@ public class GlobalStateManagerImplTest {
                 mkEntry(t5, 0L)
         )));
 
-        // checkpoint file only contains persistent store offsets
-        assertThat(readOffsetsCheckpoint(), equalTo(mkMap(
-                mkEntry(t1, 10L),
-                mkEntry(t2, 0L)
-        )));
+        assertThat(readOffsetsCheckpoint(storeName1), equalTo(mkMap(mkEntry(t1, 10L))));
+        assertThat(readOffsetsCheckpoint(storeName2), equalTo(mkMap(mkEntry(t2, 0L))));
     }
 
     @Test
     public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
-        initializeConsumer(0, 0, t1, t3, t4, t5);
+        initializeConsumer(0, 0, t1, t2, t4, t5);
         initializeConsumer(10, 0, t3);
         stateManager.initialize();
         stateManager.close();
 
-        assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
+        assertThat(readOffsetsCheckpoint(storeName3), equalTo(Collections.emptyMap()));
     }
 
-    private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
+    private Map<TopicPartition, Long> readOffsetsCheckpoint(final String storeName) throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
-                                                                                StateManagerUtil.CHECKPOINT_FILE_NAME));
+                StateManagerUtil.CHECKPOINT_FILE_NAME + "_" + storeName));
         return offsetCheckpoint.read();
     }
 
@@ -1168,6 +1175,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldFailOnDeserializationErrorsWhenReprocessing() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         setUpReprocessing();
         initializeConsumer(0, 0, t1, t2, t3, t4);
         initializeConsumer(2, 0, t5);
@@ -1180,6 +1188,7 @@ public class GlobalStateManagerImplTest {
     public void shouldSkipOnDeserializationErrorsWhenReprocessing() {
         stateManager.setDeserializationExceptionHandler(new LogAndContinueExceptionHandler());
         setUpReprocessing();
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         initializeConsumer(2, 0, t5);
 
         stateManager.initialize();
