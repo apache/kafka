@@ -34,15 +34,35 @@ import java.nio.ByteBuffer
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 
+
+object ConsumerProtocolMigrationTest {
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+    )
+  )
+  class WithAssignmentBatchingTest(cluster: ClusterInstance) extends ConsumerProtocolMigrationTest(cluster) {
+  }
+}
+
 @Timeout(120)
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
   )
 )
 class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+
+  protected def isConsumerAssignmentBatchingEnabled: Boolean = {
+    cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.consumerGroupAssignmentIntervalMs > 0)
+  }
+
   @ClusterTest(
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
@@ -278,33 +298,70 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, memberEpoch1) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
 
     // Classic member 2 joins the group.
-    val memberId2 = sendJoinRequest(
+    val joinGroupResponseData = sendJoinRequest(
       groupId = groupId
-    ).memberId
+    )
+    val joinGroupResponse = sendJoinRequest(
+      groupId = groupId,
+      memberId = joinGroupResponseData.memberId,
+      metadata = metadata(List.empty)
+    )
+    val memberId2 = joinGroupResponse.memberId
 
-    // Wait until the group's target assignment is updated.
-    TestUtils.waitUntilTrue(() => {
-      val generationId = sendJoinRequest(
-        groupId = groupId,
-        memberId = memberId2,
-        metadata = metadata(List.empty)
-      ).generationId
+    if (isConsumerAssignmentBatchingEnabled) {
+      assertEquals(2, joinGroupResponse.generationId)
 
-      if (generationId > memberEpoch1) {
-        true
-      } else {
-        // Member 1 heartbeats to trigger a new assignment.
+      // Member 2 syncs at the unbumped group epoch.
+      assertEquals(
+        new SyncGroupResponseData()
+          .setErrorCode(Errors.NONE.code)
+          .setProtocolType("consumer")
+          .setProtocolName("consumer-range")
+          .setAssignment(assignment(List.empty)),
+        syncGroupWithOldProtocol(
+          groupId = groupId,
+          memberId = memberId2,
+          generationId = 2
+        )
+      )
+
+      // Member 1 heartbeats until a new assignment is computed.
+      TestUtils.waitUntilTrue(() => {
         consumerGroupHeartbeat(
           groupId = groupId,
           memberId = memberId1,
-          memberEpoch = memberEpoch1
+          memberEpoch = 2
+        ).assignment != null
+      }, msg = "Target assignment did not update before timeout.")
+
+      // Member 2 heartbeats and gets REBALANCE_IN_PROGRESS.
+      heartbeat(
+        groupId = groupId,
+        generationId = 2,
+        memberId = memberId2,
+        expectedError = Errors.REBALANCE_IN_PROGRESS
+      )
+
+      // Member 2 re-joins.
+      assertEquals(
+        new JoinGroupResponseData()
+          .setErrorCode(Errors.NONE.code)
+          .setGenerationId(3)
+          .setProtocolType("consumer")
+          .setProtocolName("consumer-range")
+          .setMemberId(memberId2),
+        sendJoinRequest(
+          groupId = groupId,
+          memberId = memberId2,
+          metadata = metadata(List.empty)
         )
-        false
-      }
-    }, msg = "Target assignment did not update before timeout.")
+      )
+    } else {
+      assertEquals(3, joinGroupResponse.generationId)
+    }
 
     // Member 2 syncs. The assigned partition is empty.
     assertEquals(
