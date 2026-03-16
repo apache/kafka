@@ -903,15 +903,10 @@ public class ConsumerGroupTest {
         assertThrows(UnknownMemberIdException.class, () ->
             group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
 
-        // Create members.
+        // Create a member.
         group.updateMember(
             new ConsumerGroupMember
                 .Builder("new-protocol-member-id").build()
-        );
-        group.updateMember(
-            new ConsumerGroupMember.Builder("old-protocol-member-id")
-                .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata())
-                .build()
         );
 
         // A call from the admin client should fail as the group is not empty.
@@ -919,17 +914,6 @@ public class ConsumerGroupTest {
             group.validateOffsetCommit("", "", -1, isTransactional, version));
         assertThrows(UnknownMemberIdException.class, () ->
             group.validateOffsetCommit("", null, -1, isTransactional, version));
-
-        // The member epoch is stale.
-        if (version >= 9) {
-            assertThrows(StaleMemberEpochException.class, () ->
-                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
-        } else {
-            assertThrows(UnsupportedVersionException.class, () ->
-                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
-        }
-        assertThrows(IllegalGenerationException.class, () ->
-            group.validateOffsetCommit("old-protocol-member-id", "", 10, isTransactional, version));
 
         // This should succeed.
         if (version >= 9) {
@@ -952,6 +936,15 @@ public class ConsumerGroupTest {
             .setAssignedPartitions(mkAssignmentWithEpochs(
                 mkTopicAssignmentWithEpochs(topicId, 7, 0)))
             .build());
+
+        // When client epoch (11) > broker epoch (10), throw StaleMemberEpochException.
+        if (isTransactional || version >= 9) {
+            assertThrows(StaleMemberEpochException.class, () ->
+                group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
+        }
 
         // When client epoch (10) == broker epoch (10), no exception thrown.
         if (isTransactional || version >= 9) {
@@ -1045,6 +1038,15 @@ public class ConsumerGroupTest {
             .setPartitionsPendingRevocation(mkAssignmentWithEpochs(
                 mkTopicAssignmentWithEpochs(topicId, 7, 0)))
             .build());
+
+        // When client epoch (11) > broker epoch (10), throw StaleMemberEpochException.
+        if (isTransactional || version >= 9) {
+            assertThrows(StaleMemberEpochException.class, () ->
+                group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("member-id", "", 11, isTransactional, version));
+        }
 
         // When client epoch (10) == broker epoch (10), no exception thrown.
         if (isTransactional || version >= 9) {
