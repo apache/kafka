@@ -27,7 +27,12 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
+import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
+import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -54,6 +59,7 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
+        // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
         if (isHeadersAware(store)) {
             if (store instanceof SessionStore) {
                 return rawValueToSessionHeadersValue();
@@ -64,6 +70,29 @@ final class StateManagerUtil {
             // timestamp is used separately during put() process for restore of versioned stores
             return rawValueToTimestampedValue();
         }
+
+        // If top-level check didn't find the type, unwrap to find adapters
+        // This handles persistent stores that use adapters
+        StateStore current = store;
+        while (current != null) {
+            if (current instanceof TimestampedToHeadersStoreAdapter || current instanceof TimestampedToHeadersWindowStoreAdapter) {
+                // Adapter wraps a timestamped store, so restore in timestamped format
+                return rawValueToTimestampedValue();
+            } else if (current instanceof PlainToHeadersStoreAdapter || current instanceof PlainToHeadersWindowStoreAdapter) {
+                // Adapter wraps a plain store, so restore in plain format
+                return identity();
+            }
+
+            // If not a WrappedStateStore, we've reached the innermost store
+            if (!(current instanceof WrappedStateStore)) {
+                break;
+            }
+
+            // Unwrap one more level
+            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+        }
+
+        // Default to identity if no special handling needed
         return identity();
     }
 
