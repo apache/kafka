@@ -311,7 +311,12 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+        try {
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+        } catch (final RuntimeException e) {
+            throw new ProcessorStateException(format("%sError updating state directory offsets when creating the state manager",
+                logPrefix), e);
+        }
     }
 
     @Override
