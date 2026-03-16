@@ -35,13 +35,16 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.state.internals.Utils.hasEmptyHeadersAndTimestamp;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UtilsTest {
     private static final String TOPIC = "test-topic";
@@ -52,6 +55,8 @@ public class UtilsTest {
     // Header size's varint encoding cannot exceed 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
     private static final int MAX_VARINT_SIZE = 5;
     private static final int OVERFLOW_HEADERS_SIZE = (1 + MAX_VARINT_SIZE) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
+    // 1 byte header size, 0 byte empty headers, and timetsamp
+    private static final int MIN_SIZE = 1 + 0 + StateSerdes.TIMESTAMP_SIZE;
 
     @Test
     public void shouldExtractRawPlainValue() {
@@ -149,6 +154,32 @@ public class UtilsTest {
             assertEquals(TIMESTAMP, output.timestamp());
             assertEquals(VALUE_STR, output.value());
         }
+    }
+
+    @Test
+    public void testEmptyHeadersAndTimestampMinLength() {
+        final byte[] less = new byte[MIN_SIZE - 1];
+        less[0] = (byte) 0x00; // header size
+        assertThrows(SerializationException.class, () -> hasEmptyHeadersAndTimestamp(less));
+    }
+
+    @Test
+    public void testEmptyHeadersAndTimestamp() {
+        final byte[] empty = new byte[MIN_SIZE];
+        empty[0] = (byte) 0x00; // header size
+        assertTrue(hasEmptyHeadersAndTimestamp(empty));
+
+        final byte[] nonEmpty = new byte[MIN_SIZE];
+        nonEmpty[0] = (byte) 0x01; // header size
+        assertFalse(hasEmptyHeadersAndTimestamp(nonEmpty));
+    }
+
+    @ParameterizedTest
+    @ValueSource(bytes = { 0x10, 0x11 })
+    public void testEmptyHeadersAndTimestampWithInvalidHeaderSizes(final int invalidSize) {
+        final byte[] invalid = new byte[MIN_SIZE];
+        invalid[0] = (byte) invalidSize; // header size
+        assertFalse(hasEmptyHeadersAndTimestamp(invalid));
     }
 
     @Test

@@ -28,8 +28,12 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -202,10 +206,9 @@ public class ValueTimestampHeadersDeserializerTest {
         assertNull(value);
     }
 
-    @Test
-    public void shouldExtractTimestamp() {
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes());
+    @ParameterizedTest
+    @MethodSource("headers")
+    public void shouldExtractTimestamp(final Headers headers) {
         final ValueTimestampHeaders<String> original =
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
@@ -213,6 +216,13 @@ public class ValueTimestampHeadersDeserializerTest {
         final long timestamp = ValueTimestampHeadersDeserializer.timestamp(serialized);
 
         assertEquals(123456789L, timestamp);
+    }
+
+    private static Stream<Arguments> headers() {
+        return Stream.of(
+                new RecordHeaders().add("key1", "value1".getBytes()),
+                new RecordHeaders()
+            ).map(Arguments::of);
     }
 
     @Test
