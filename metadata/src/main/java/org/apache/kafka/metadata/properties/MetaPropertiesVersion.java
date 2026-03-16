@@ -34,8 +34,8 @@ public enum MetaPropertiesVersion {
     V1(1),
 
     /**
-     * The second KRaft version of meta.properties. In this version, cluster.id is optional,
-     * while node.id and directory.id are required.
+     * The second KRaft version of meta.properties. The only difference between this and V1 is that
+     * cluster.id is now optional.
      */
     V2(2);
 
