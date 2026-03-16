@@ -3,6 +3,9 @@ integration.kafka.api.ClientOAuthIntegrationTest:
 - testBasicClientCredentials
 - testBasicJwtBearer
 - testBasicJwtBearer2
+- testClientAssertionAdminOperations
+- testClientAssertionFileBasedProduceConsume
+- testClientAssertionProduceConsume
 - testUnsupportedJwtRetriever
 kafka.KafkaConfigTest:
 - testBrokerRequiredProperties

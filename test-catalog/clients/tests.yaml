@@ -4729,6 +4729,33 @@ org.apache.kafka.common.security.oauthbearer.ClaimValidationUtilsTest:
 - testValidateScopesResultThrowsExceptionOnMutation
 - testValidateSubject
 - testValidateSubjectDisallowsEmptyNullAndWhitespace
+org.apache.kafka.common.security.oauthbearer.ClientAssertionKeycloakIntegrationTest:
+- testAssertionConfigOverridesClientSecret
+- testClientAssertionWithExpiredAssertion
+- testClientAssertionWithFileBasedJWT
+- testClientAssertionWithInvalidAudience
+- testClientAssertionWithInvalidSignature
+- testClientAssertionWithLocallyGeneratedJWT_ES256
+- testClientAssertionWithLocallyGeneratedJWT_RS256
+- testClientAssertionWithMalformedAssertionFile
+- testClientCredentialsJwtRetrieverLifecycle
+- testClientSecretFormatterUsesBasicAuth
+- testEncryptedEcPrivateKeyWithPassphrase
+- testEncryptedPrivateKeyWithWrongPassphrase
+- testEncryptedRsaPrivateKeyWithPassphrase
+- testFallbackToClientSecret
+- testFileAssertionTakesPrecedence
+- testHttpRequestFormatCompliance
+- testMissingPrivateKeyFile
+- testMissingTokenEndpointUrl
+- testMultipleTokenRetrievalsProduceDifferentTokens
+- testNetworkFailureUnreachableTokenEndpoint
+- testNonexistentPrivateKeyFile
+- testReconfigureFromAssertionToClientSecret
+- testSwitchFromFileBasedToLocallyGenerated
+- testSwitchFromLocallyGeneratedToFileBased
+- testTokenRefreshWithClientAssertion
+- testUnretryableHttpErrorFailsFast
 org.apache.kafka.common.security.oauthbearer.ClientJwtValidatorTest:
 - testEmptySections
 - testEmptyString
@@ -4744,7 +4771,7 @@ org.apache.kafka.common.security.oauthbearer.DefaultJwtRetrieverTest:
 - testConfigureWithAccessClientCredentials
 - testConfigureWithAccessTokenFile
 - testSaslOauthbearerTokenEndpointUrlIsNotAllowed
-- testUrlencodeHeader
+- testUrlEncodeHeader
 org.apache.kafka.common.security.oauthbearer.DefaultJwtValidatorTest:
 - testConfigureWithJwksUrl
 - testConfigureWithVerificationKeyResolver
@@ -4831,11 +4858,51 @@ org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFileTest:
 - testLastModifiedPolicy
 - testStaticPolicy
 - testTransformerError
-org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterTest:
+org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAssertionRequestFormatterTest:
+- testAssertionValueComesFromSupplier
+- testCloseDelegatesToSupplier
+- testFormatBodyContainsAssertionType
+- testFormatBodyContainsGrantType
+- testFormatBodyMinimal
+- testFormatBodyOmitsClientIdWhenNullOrEmpty
+- testFormatBodyOmitsScopeWhenBlankOrNull
+- testFormatBodyParameterOrder
+- testFormatBodyPropagatesSupplierException
+- testFormatBodyWithClientIdAndScope
+- testFormatHeaders
+- testFormatHeadersDoNotContainAuthorization
+- testGrantTypeConstant
+- testScopeUrlEncoding
+org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactoryTest:
+- testAssertionPathTriggeredByAssertionFileConfig
+- testAssertionPathTriggeredByIssConfig
+- testCreateWithClientAssertionThrowsExceptionForInvalidKeyPath
+- testCreateWithClientSecret
+- testCreateWithClientSecretFromConfig
+- testCreateWithFileClientAssertion
+- testCreateWithLocalClientAssertionWithPassphraseOnUnencryptedKey
+- testCreateWithLocalClientAssertionWithUnencryptedPKCS8
+- testCreateWithNeitherAssertionNorClientCredentials
+- testSecondPreferenceTakesPrecedenceOverThird
+- testThirdPreferenceUsedWhenNoAssertionConfigs
+- testThreeTierFallbackPrecedence
+- testValidateUrlEncodeHeader
+org.apache.kafka.common.security.oauthbearer.internals.secured.ClientSecretRequestFormatterTest:
 - testFormatAuthorizationHeaderEncoding
 - testFormatterMissingValues
 - testMissingScopes
 - testScopeEscaping
+org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigOrJaasTest:
+- testClientIdFromBothPreferConfig
+- testClientIdFromConfigOnly
+- testClientIdFromJaasOnly
+- testClientIdOptionalReturnsNullWhenAbsent
+- testClientIdRequiredThrowsWhenAbsent
+- testClientSecretFromConfigOnly
+- testClientSecretFromJaasOnly
+- testClientSecretThrowsWhenAbsent
+- testScopeFromConfigOnly
+- testScopeReturnsNullWhenAbsent
 org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtilsTest:
 - testFile
 - testFileDoesNotExist
@@ -4858,6 +4925,7 @@ org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtil
 - testUrlWithSuperfluousWhitespace
 org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetrieverTest:
 - test
+- testCloseClosesFormatter
 - testCopy
 - testCopyError
 - testEmptyResponse
@@ -4889,6 +4957,26 @@ org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyRe
 - testConfigureRefreshingFileVerificationKeyResolver
 - testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory
 - testSaslOauthbearerTokenEndpointUrlIsNotAllowed
+org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionSupplierFactoryTest:
+- testCreateWithAssertionFile
+- testCreateWithPassphraseReadsPasswordConfig
+- testCreateWithPrivateKeyFile
+- testCreateWithPrivateKeyFileAndStaticClaims
+- testCreateWithPrivateKeyFileEs256
+- testCreateWithoutPassphraseDoesNotReadPasswordConfig
+- testFileBasedSupplierReturnsSameValueOnMultipleCalls
+- testLocallyGeneratedSupplierProducesConsistentAssertions
+- testSupplierCanBeClosedMultipleTimes
+- testSupplierCloseDoesNotThrow
+- testSupplierGetWrapsExceptionInJwtRetrieverException
+org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtilsTest:
+- testGetSignatureEs256
+- testGetSignatureRs256
+- testGetSignatureUnsupported
+- testKeyAlgorithmCaseInsensitive
+- testKeyAlgorithmEs256
+- testKeyAlgorithmRs256
+- testKeyAlgorithmUnsupported
 org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.DefaultAssertionCreatorTest:
 - testAlgorithm
 - testInvalidAlgorithm
