@@ -747,6 +747,8 @@ org.apache.kafka.streams.kstream.internals.CogroupedKStreamImplTest:
 - testCogroupWithKTableKTableInnerJoin
 - testCogroupWithThreeGroupedStreams
 org.apache.kafka.streams.kstream.internals.FullChangeSerdeTest:
+- shouldPassHeadersToUnderlyingDeserializer
+- shouldPassHeadersToUnderlyingSerializer
 - shouldRoundTripChange
 - shouldRoundTripNewNull
 - shouldRoundTripNull
@@ -4958,7 +4960,6 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreTest:
 - shouldGetAllFromInnerStoreAndRecordAllMetric
 - shouldGetBytesFromInnerStoreAndReturnGetMetric
 - shouldGetRangeFromInnerStoreAndRecordRangeMetric
-- shouldGetWithBinary
 - shouldNotPutIfSameValuesAndGreaterTimestamp
 - shouldNotSetFlushListenerOnWrappedNoneCachingStore
 - shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters
