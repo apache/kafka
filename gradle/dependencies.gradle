@@ -132,6 +132,8 @@ versions += [
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
+  testcontainers: "1.20.2",
+  testcontainersKeycloak: "3.5.1",
   mockOAuth2Server: "2.2.1",
   zinc: "1.11.0",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
@@ -239,6 +241,8 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
+  testcontainersJunitJupiter: "org.testcontainers:junit-jupiter:$versions.testcontainers",
+  testcontainersKeycloak: "com.github.dasniko:testcontainers-keycloak:$versions.testcontainersKeycloak",
   mockOAuth2Server: "no.nav.security:mock-oauth2-server:$versions.mockOAuth2Server",
   jfreechart: "org.jfree:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
