@@ -254,7 +254,6 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .build();
 
         // Subscribing with an invalid regular expression fails.
