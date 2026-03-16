@@ -300,6 +300,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     protected CompletableFuture<Void> signalPartitionsLost(Set<TopicPartition> partitionsLost) {
+        markPendingRevocationToPauseFetching(partitionsLost);
         return invokeOnPartitionsLostCallback(partitionsLost);
     }
 
