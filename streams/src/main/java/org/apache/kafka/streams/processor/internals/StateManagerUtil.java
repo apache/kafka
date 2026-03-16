@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
@@ -41,6 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isHeadersAware;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
@@ -58,8 +60,10 @@ final class StateManagerUtil {
 
     static RecordConverter converterForStore(final StateStore store) {
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
-        // This handles in-memory stores with marker wrappers
         if (isHeadersAware(store)) {
+            if (store instanceof SessionStore) {
+                return rawValueToSessionHeadersValue();
+            }
             return rawValueToHeadersValue();
         } else if (isTimestamped(store) && !isVersioned(store)) {
             // should not prepend timestamp when restoring records for versioned store, as

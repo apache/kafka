@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -107,28 +108,28 @@ public class StreamThreadStateStoreProvider {
             }
             if (store instanceof TimestampedKeyValueStoreWithHeaders) {
                 if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                    return (T) new ReadOnlyKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store);
+                    return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders());
                 } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
-                    // For built-in timestamped query type, wrap in facade that strips headers
-                    return (T) new ReadOnlyTimestampedKeyValueStoreWithHeadersFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store);
+                    return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders());
                 } else {
                     // For custom query types, return the raw store so they can access headers directly
                     return (T) store;
                 }
             } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
+                return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store, ValueConverters.extractValue());
             } else if (store instanceof TimestampedWindowStoreWithHeaders) {
                 if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                    return (T) new ReadOnlyWindowStoreWithHeadersFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store);
+                    return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders());
                 } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
-                    // For built-in timestamped window query type, wrap in facade that strips headers
-                    return (T) new ReadOnlyTimestampedWindowStoreWithHeadersFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store);
+                    return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders());
                 } else {
                     // For custom query types, return the raw store so they can access headers directly
                     return (T) store;
                 }
             } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store);
+                return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store, ValueConverters.extractValue());
+            } else if (store instanceof SessionStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
+                return (T) new ReadOnlySessionStoreFacade<>((SessionStoreWithHeaders<Object, Object>) store);
             } else {
                 return (T) store;
             }

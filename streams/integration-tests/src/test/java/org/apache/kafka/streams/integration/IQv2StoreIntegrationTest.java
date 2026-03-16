@@ -108,6 +108,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
@@ -1498,14 +1499,10 @@ public class IQv2StoreIntegrationTest {
                     throw new AssertionError(queryResult.toString());
                 }
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), is(
-                    "This store"
-                        + " (class org.apache.kafka.streams.state.internals.MeteredSessionStore)"
-                        + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional.empty, timeFrom=Optional[1970-01-01T00:00:00Z], timeTo=Optional[1970-01-01T00:00:00Z]})"
-                        + " because SessionStores only support WindowRangeQuery.withKey."
-                        + " Contact the store maintainer if you need support for a new query type."
-                ));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("doesn't know how to execute the given query"));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("because SessionStores only support WindowRangeQuery.withKey."));
             }
         }
     }
@@ -1571,14 +1568,10 @@ public class IQv2StoreIntegrationTest {
                     throw new AssertionError(queryResult.toString());
                 }
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), is(
-                    "This store"
-                        + " (class org.apache.kafka.streams.state.internals.MeteredSessionStore)"
-                        + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional.empty, timeFrom=Optional[1970-01-01T00:00:00Z], timeTo=Optional[1970-01-01T00:00:00Z]})"
-                        + " because SessionStores only support WindowRangeQuery.withKey."
-                        + " Contact the store maintainer if you need support for a new query type."
-                ));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("doesn't know how to execute the given query"));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("because SessionStores only support WindowRangeQuery.withKey."));
             }
         }
     }
