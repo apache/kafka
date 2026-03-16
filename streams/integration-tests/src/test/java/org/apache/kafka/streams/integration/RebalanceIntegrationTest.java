@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -73,7 +74,8 @@ public class RebalanceIntegrationTest {
         NUM_BROKERS,
         Utils.mkProperties(mkMap(
             mkEntry("auto.create.topics.enable", "true"),
-            mkEntry("transaction.max.timeout.ms", "" + Integer.MAX_VALUE)
+            mkEntry("transaction.max.timeout.ms", "" + Integer.MAX_VALUE),
+            mkEntry(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0")
         ))
     );
 
@@ -87,6 +89,12 @@ public class RebalanceIntegrationTest {
         CLUSTER.stop();
     }
 
+    public static class WithAssignmentBatchingTest extends RebalanceIntegrationTest {
+        @BeforeAll
+        public static void enableAssignmentBatching() {
+            IntegrationTestUtils.setStreamsGroupAssignmentIntervalMs(CLUSTER, 1000);
+        }
+    }
 
     private String applicationId;
     private static final int NUM_TOPIC_PARTITIONS = 2;

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -60,7 +61,9 @@ public class SmokeTestDriverIntegrationTest {
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        cluster = new EmbeddedKafkaCluster(3);
+        final Properties brokerConfig = new Properties();
+        brokerConfig.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0);
+        cluster = new EmbeddedKafkaCluster(3, brokerConfig);
         cluster.start();
     }
 
@@ -68,6 +71,13 @@ public class SmokeTestDriverIntegrationTest {
     public static void closeCluster() {
         cluster.stop();
         cluster = null;
+    }
+
+    public static class WithAssignmentBatchingTest extends SmokeTestDriverIntegrationTest {
+        @BeforeAll
+        public static void enableAssignmentBatching() {
+            IntegrationTestUtils.setStreamsGroupAssignmentIntervalMs(cluster, 1000);
+        }
     }
 
     @BeforeEach

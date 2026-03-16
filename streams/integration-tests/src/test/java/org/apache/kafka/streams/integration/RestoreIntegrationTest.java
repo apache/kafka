@@ -37,6 +37,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -128,7 +129,8 @@ public class RestoreIntegrationTest {
 
     private static final int NUM_BROKERS = 2;
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
+        mkObjectProperties(Map.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)));
 
     private static Admin admin;
 
@@ -145,6 +147,13 @@ public class RestoreIntegrationTest {
     public static void closeCluster() {
         Utils.closeQuietly(admin, "admin");
         CLUSTER.stop();
+    }
+
+    public static class WithAssignmentBatchingTest extends RestoreIntegrationTest {
+        @BeforeAll
+        public static void enableAssignmentBatching() {
+            IntegrationTestUtils.setStreamsGroupAssignmentIntervalMs(CLUSTER, 1000);
+        }
     }
 
     private String appId;
@@ -1015,4 +1024,5 @@ public class RestoreIntegrationTest {
             }
         }
     }
+
 }

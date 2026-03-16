@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -51,6 +52,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -61,7 +63,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
     public static final String INPUT_TOPIC = "migration-input";
     public static final String OUTPUT_TOPIC = "migration-output";
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1,
+        mkObjectProperties(Map.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)));
 
     private String inputTopic;
     private String outputTopic;
@@ -76,6 +79,13 @@ public class RebalanceProtocolMigrationIntegrationTest {
     @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
+    }
+
+    public static class WithAssignmentBatchingTest extends RebalanceProtocolMigrationIntegrationTest {
+        @BeforeAll
+        public static void enableAssignmentBatching() {
+            IntegrationTestUtils.setStreamsGroupAssignmentIntervalMs(CLUSTER, 1000);
+        }
     }
 
     @BeforeEach

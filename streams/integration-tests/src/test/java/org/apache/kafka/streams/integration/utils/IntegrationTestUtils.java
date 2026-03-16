@@ -17,7 +17,11 @@
 package org.apache.kafka.streams.integration.utils;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -1388,6 +1392,23 @@ public class IntegrationTestUtils {
         public Map<TopicPartition, Long> changelogToRestoreTime() {
             return changelogToRestoreStartTime.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> changelogToRestoreEndTime.get(e.getKey()).get() - e.getValue().get()));
+        }
+    }
+
+    public static void setStreamsGroupAssignmentIntervalMs(final EmbeddedKafkaCluster cluster,
+                                                           final int assignmentIntervalMs) {
+        try (Admin adminClient = cluster.createAdminClient()) {
+            final ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "");
+            final Map<ConfigResource, Collection<AlterConfigOp>> newConfigs = Map.of(
+                configResource,
+                List.of(new AlterConfigOp(
+                    new ConfigEntry(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, String.valueOf(assignmentIntervalMs)),
+                    AlterConfigOp.OpType.SET
+                ))
+            );
+            adminClient.incrementalAlterConfigs(newConfigs).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
     }
 
