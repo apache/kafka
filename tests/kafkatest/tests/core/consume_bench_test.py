@@ -68,9 +68,19 @@ class ConsumeBenchTest(Test):
             ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
         ],
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=[consumer_group.classic_group_protocol],
+        enable_assignment_batching=[False]
     )
-    def test_consume_bench(self, topics, metadata_quorum, group_protocol=None):
+    @matrix(
+        topics=[
+            ["consume_bench_topic[0-5]"], # topic subscription
+            ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
+        ],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False, True]
+    )
+    def test_consume_bench(self, topics, metadata_quorum, group_protocol=None, enable_assignment_batching=True):
         """
         Runs a ConsumeBench workload to consume messages
         """
@@ -93,9 +103,15 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=[consumer_group.classic_group_protocol],
+        enable_assignment_batching=[False]
     )
-    def test_single_partition(self, metadata_quorum, group_protocol=None):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False, True]
+    )
+    def test_single_partition(self, metadata_quorum, group_protocol=None, enable_assignment_batching=True):
         """
         Run a ConsumeBench against a single partition
         """
@@ -119,9 +135,15 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=[consumer_group.classic_group_protocol],
+        enable_assignment_batching=[False]
     )
-    def test_multiple_consumers_random_group_topics(self, metadata_quorum, group_protocol=None):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False, True]
+    )
+    def test_multiple_consumers_random_group_topics(self, metadata_quorum, group_protocol=None, enable_assignment_batching=True):
         """
         Runs multiple consumers group to read messages from topics.
         Since a consumerGroup isn't specified, each consumer should read from all topics independently
@@ -146,9 +168,15 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=[consumer_group.classic_group_protocol],
+        enable_assignment_batching=[False]
     )
-    def test_two_consumers_specified_group_topics(self, metadata_quorum, group_protocol=None):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False, True]
+    )
+    def test_two_consumers_specified_group_topics(self, metadata_quorum, group_protocol=None, enable_assignment_batching=True):
         """
         Runs two consumers in the same consumer group to read messages from topics.
         Since a consumerGroup is specified, each consumer should dynamically get assigned a partition from group
@@ -174,9 +202,15 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=[consumer_group.classic_group_protocol],
+        enable_assignment_batching=[False]
     )
-    def test_multiple_consumers_random_group_partitions(self, metadata_quorum, group_protocol=None):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False, True]
+    )
+    def test_multiple_consumers_random_group_partitions(self, metadata_quorum, group_protocol=None, enable_assignment_batching=True):
         """
         Runs multiple consumers in to read messages from specific partitions.
         Since a consumerGroup isn't specified, each consumer will get assigned a random group
@@ -202,9 +236,15 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=[consumer_group.classic_group_protocol],
+        enable_assignment_batching=[False]
     )
-    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum, group_protocol=None):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False, True]
+    )
+    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum, group_protocol=None, enable_assignment_batching=True):
         """
         Runs multiple consumers in the same group to read messages from specific partitions.
         It is an invalid configuration to provide a consumer group and specific partitions.
