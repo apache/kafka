@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -172,7 +172,7 @@ public class ShareFetchCollector<K, V> {
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             // Log the actual partition and not just the topic to help with ACL propagation issues in large clusters
             log.warn("Not authorized to read from partition {}.", tp.topicPartition());
-            throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            throw new TopicAuthorizationException(Set.of(tp.topic()));
         } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
             log.debug("Received unknown leader epoch error in fetch for partition {}.", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {

@@ -813,9 +813,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             val isRetry = retryOnEpochBump || retryOnOverflow
 
             def generateTxnTransitMetadataForTxnCompletion(nextState: TransactionState, noPartitionAdded: Boolean): ApiResult[(Int, TxnTransitMetadata)] = {
-              // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
+              // EndTxn completion on TV2 bumps epoch, so rotate producer ID whenever the current epoch is exhausted.
+              // This must also apply to the epoch-fence path.
               val nextProducerIdOrErrors =
-                if (!isEpochFence && txnMetadata.isProducerEpochExhausted) {
+                if (txnMetadata.isProducerEpochExhausted) {
                   try {
                     Right(producerIdManager.generateProducerId())
                   } catch {

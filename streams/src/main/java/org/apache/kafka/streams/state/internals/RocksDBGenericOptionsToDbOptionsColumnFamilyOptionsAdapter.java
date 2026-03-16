@@ -1512,7 +1512,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setAtomicFlush(final boolean atomicFlush) {
-        dbOptions.setAtomicFlush(atomicFlush);
+        log.warn("AtomicFlush is explicitly set to True by Streams in RocksDB. Setting this option to '{}' will be ignored", atomicFlush);
         return this;
     }
 

@@ -68,7 +68,11 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
 
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
-                store = new TimestampedToHeadersWindowStoreAdapter(store);
+                if (store instanceof TimestampedBytesStore) {
+                    store = new TimestampedToHeadersWindowStoreAdapter(store);
+                } else {
+                    store = new PlainToHeadersWindowStoreAdapter(store);
+                }
             } else {
                 store = new InMemoryTimestampedWindowStoreWithHeadersMarker(store);
             }

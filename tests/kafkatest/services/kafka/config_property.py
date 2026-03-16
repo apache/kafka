@@ -78,7 +78,6 @@ CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
 
 SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
-SHARE_GROUP_ENABLE = "group.share.enable"
 
 UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
 UNSTABLE_FEATURE_VERSIONS_ENABLE = "unstable.feature.versions.enable"
