@@ -2147,10 +2147,42 @@ public final class KafkaRaftClientSnapshotTest {
         // Single voter; poll to let it append control record and advance HWM
         context.pollUntil(() -> context.client.highWatermark().isPresent());
 
-        // Bootstrap snapshot should route to handleLoadBootstrap, not handleLoadSnapshot
+        assertBootstrapSnapshot(context, bootstrapRecords);
+    }
+
+    @Test
+    public void testListenerReceivesBootstrapSnapshotViaFollowerFetch() throws Exception {
+        ReplicaKey localKey = replicaKey(0, true);
+        ReplicaKey otherNodeKey = replicaKey(localKey.id() + 1, true);
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey));
+        List<String> bootstrapRecords = List.of("a", "b", "c");
+
+        RaftClientTestContext context = new RaftClientTestContext
+            .Builder(localKey.id(), localKey.directoryId().get())
+            .withRaftProtocol(KIP_853_PROTOCOL)
+            .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Advance HWM via follower fetch
+        long localLogEndOffset = context.log.endOffset().offset();
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, localLogEndOffset, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localKey.id()));
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+
+        assertBootstrapSnapshot(context, bootstrapRecords);
+    }
+
+    private static void assertBootstrapSnapshot(
+            RaftClientTestContext context,
+            List<String> expectedRecords) throws Exception {
         try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
             assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
-            SnapshotWriterReaderTest.assertDataSnapshot(List.of(bootstrapRecords), bootstrapSnapshot);
+            SnapshotWriterReaderTest.assertDataSnapshot(List.of(expectedRecords), bootstrapSnapshot);
         }
         assertFalse(context.listener.drainHandledSnapshot().isPresent());
     }
