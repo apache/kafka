@@ -57,6 +57,10 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
 
+    protected final void writePosition() {
+        segments.forEach((id, segment) -> segment.writePosition());
+    }
+
     protected abstract S createSegment(long segmentId, String segmentName);
 
     protected abstract void openSegmentDB(final S segment, final StateStoreContext context);

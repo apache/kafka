@@ -260,7 +260,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> { } // Nothing to do?
+            segments::writePosition
         );
 
         open = true;

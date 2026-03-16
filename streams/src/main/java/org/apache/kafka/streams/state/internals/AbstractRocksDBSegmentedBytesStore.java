@@ -302,7 +302,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> { } // Nothing to do?
+                segments::writePosition
         );
 
         open = true;

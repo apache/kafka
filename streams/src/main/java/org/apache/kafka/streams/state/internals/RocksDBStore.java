@@ -247,7 +247,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         openRocksDB(dbOptions, columnFamilyOptions);
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         try {
-            position = cfAccessor.open(dbAccessor, !eosEnabled);
+            final Position existingPositionOrEmpty = cfAccessor.open(dbAccessor, !eosEnabled);
+            if (position == null) {
+                position = existingPositionOrEmpty;
+            } else {
+                // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
+                position.merge(existingPositionOrEmpty);
+            }
         } catch (final StreamsException fatal) {
             final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
             throw new ProcessorStateException(fatalMessage, fatal);
@@ -391,13 +397,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         return columnFamilies;
     }
 
-    private void writePosition() {
+    public final void writePosition() {
         validateStoreOpen();
         try {
             cfAccessor.commit(dbAccessor, position);
         } catch (final RocksDBException e) {
-            // TODO: fatal error?
-            throw new RuntimeException(e);
+            log.warn("Error while commiting position for store {}", name, e);
         }
     }
 

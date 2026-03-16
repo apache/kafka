@@ -372,7 +372,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) RocksDBVersionedStore.this::restoreBatch,
-                () -> { } // Nothing to do?
+                segmentStores::writePosition
         );
 
         open = true;

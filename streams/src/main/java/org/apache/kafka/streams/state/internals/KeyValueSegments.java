@@ -43,7 +43,6 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
     @Override
     protected void openSegmentDB(final KeyValueSegment segment, final StateStoreContext context) {
         segment.openDB(context.appConfigs(), context.stateDir());
-        position.merge(segment.getPosition());
     }
 
     @Override
