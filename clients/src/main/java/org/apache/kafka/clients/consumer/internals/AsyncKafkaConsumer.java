@@ -246,7 +246,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         /**
          * Send event to the background to update the assignment in the subscription state.
-         * BLock on it to complete to ensure the assignment change happens within a call to
+         * Block on it to complete to ensure the assignment change happens within a call to
          * consumer.poll.
          * Note that this event only happens when there is a pending assignment (reconciliation
          * completed in the background)

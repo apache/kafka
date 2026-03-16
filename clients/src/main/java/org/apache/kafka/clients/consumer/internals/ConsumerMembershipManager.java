@@ -373,24 +373,15 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Assignment changes are not allowed outside of consumer.poll() for the KafkaConsumer,
-     * to ensure that consumer.assignment() only changes within a call to consumer.poll().
-     */
-    @Override
-    protected boolean allowAssignmentChangeOutsidePoll() {
-        return false;
-    }
-
-    /**
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> fullAssignment,
-                                                            SortedSet<TopicPartition> addedPartitions) {
+    protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                               SortedSet<TopicPartition> addedPartitions) {
         // Send an event to notify the app thread that the assignment changed with new partitions.
         // The app thread is expected to trigger the assignment update (within a call to poll),
         // and to run the onPartitionsAssigned callback if needed.
-        return enqueuePartitionsAssignedEvent(fullAssignment, addedPartitions);
+        return enqueuePartitionsAssignedEvent(assignedPartitions.topicPartitions(), addedPartitions);
     }
 
     /**

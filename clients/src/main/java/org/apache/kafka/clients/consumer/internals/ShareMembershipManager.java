@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -32,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -176,11 +178,15 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     }
 
     /**
-     * Assignment changes can be applied outside of consumer.poll() for the ShareConsumer.
+     * {@inheritDoc}
+     * <p>
+     * For the ShareConsumer, assignment changes are applied immediately in the background thread.
      */
     @Override
-    protected boolean allowAssignmentChangeOutsidePoll() {
-        return true;
+    protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                               SortedSet<TopicPartition> addedPartitions) {
+        updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

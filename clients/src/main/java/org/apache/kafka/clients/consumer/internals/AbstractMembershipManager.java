@@ -513,8 +513,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * @param assignedPartitions Full assignment, to update in the subscription state
      * @param addedPartitions    Newly added partitions
      */
-    private void updateSubscriptionAwaitingCallback(TopicIdPartitionSet assignedPartitions,
-                                                    SortedSet<TopicPartition> addedPartitions) {
+    protected void updateSubscriptionAwaitingCallback(TopicIdPartitionSet assignedPartitions,
+                                                      SortedSet<TopicPartition> addedPartitions) {
         subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
         notifyAssignmentChange(assignedPartitions.topicPartitions());
     }
@@ -1192,20 +1192,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             TopicIdPartitionSet assignedPartitions,
             SortedSet<TopicPartition> addedPartitions) {
 
-        Set<TopicPartition> fullAssignment = assignedPartitions.topicPartitions();
-        CompletableFuture<Void> result;
-
-        if (allowAssignmentChangeOutsidePoll()) {
-            // Update assignment in the subscription state immediately, and ensure that no fetching
-            // or positions initialization happens for the newly added partitions while the callback runs.
-            updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
-        }
-
-        // Signal to the app thread that new partitions have been reconciled so it can take the necessary actions.
-        // In the case of the share consumer/manager, no further action is needed (signal completes right away).
-        // In the case of the async consumer, the app thread will apply the assignment change
-        // within a call to consumer.poll(), and run the onPartitionsAssigned callback if present.
-        result = signalPartitionsAssigned(fullAssignment, addedPartitions);
+        // Signal that new partitions have been reconciled so that type-specific actions can be taken.
+        // - ShareMembershipManager: updates subscription immediately and returns completed future
+        // - ConsumerMembershipManager: enqueues event for app thread to apply assignment within poll() and run callbacks
+        CompletableFuture<Void> result = signalPartitionsAssigned(assignedPartitions, addedPartitions);
 
         // Enable newly added partitions to start fetching and updating positions for them.
         result.whenComplete((__, exception) -> {
@@ -1237,25 +1227,14 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
-     * Returns true if assignment changes can happen outside of consumer.poll().
-     * When false, the assignment update will be deferred to the application thread and applied
-     * during poll, ensuring that consumer.assignment() only changes within a call to consumer.poll().
-     *
-     * @return true if assignment changes can happen outside poll, false to defer to poll
-     */
-    protected abstract boolean allowAssignmentChangeOutsidePoll();
-
-    /**
      * Signals to the membership manager that partitions are being assigned so that actions
      * specific to the group type can be taken.
      *
-     * @param fullAssignment The full assignment to apply (null if assignment already applied)
+     * @param assignedPartitions The full assignment to apply
      * @param addedPartitions The newly added partitions (used for callback and subscription update)
      */
-    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> fullAssignment,
-                                                            SortedSet<TopicPartition> addedPartitions) {
-        return CompletableFuture.completedFuture(null);
-    }
+    protected abstract CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                                        SortedSet<TopicPartition> addedPartitions);
 
     /**
      * Signals to the membership manager that partitions are being revoked so that actions
