@@ -166,8 +166,7 @@ public abstract class TopicCommand {
         }
 
         Map<String, String> props = new HashMap<>();
-        configsToBeAdded.stream()
-            .forEach(pair -> props.put(pair.get(0).trim(), pair.get(1).trim()));
+        configsToBeAdded.forEach(pair -> props.put(pair.get(0).trim(), pair.get(1).trim()));
         LogConfig.validate(props);
         return props;
     }
