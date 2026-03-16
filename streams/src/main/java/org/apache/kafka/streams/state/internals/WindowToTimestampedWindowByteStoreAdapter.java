@@ -36,7 +36,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 
-class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]> {
+public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]> {
     final WindowStore<Bytes, byte[]> store;
 
     WindowToTimestampedWindowByteStoreAdapter(final WindowStore<Bytes, byte[]> store) {

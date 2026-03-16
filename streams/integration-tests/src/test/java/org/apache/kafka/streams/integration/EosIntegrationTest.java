@@ -927,7 +927,7 @@ public class EosIntegrationTest {
             streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
             task00.toString(),
-            ".checkpoint"
+            ".checkpoint_" + stateStoreName
         ).toFile();
         assertTrue(checkpointFile.exists());
         final Map<TopicPartition, Long> checkpoints = new OffsetCheckpoint(checkpointFile).read();

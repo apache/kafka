@@ -39,9 +39,9 @@ public class ShareGroupConfigProvider {
      * @return The record lock duration for the group.
      */
     public int recordLockDurationMsOrDefault(String groupId, int defaultValue) {
-        return manager.groupConfig(groupId).
-            map(GroupConfig::shareRecordLockDurationMs).
-            orElse(defaultValue);
+        return manager.groupConfig(groupId)
+            .map(GroupConfig::shareRecordLockDurationMs)
+            .orElse(defaultValue);
     }
 
     /**

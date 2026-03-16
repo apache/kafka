@@ -889,13 +889,9 @@ public class PlaintextConsumerTest {
             assertNotNull(fetchLead0);
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
     }
 
@@ -957,13 +953,9 @@ public class PlaintextConsumerTest {
             var expectedLag = numMessages - records.count();
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
     }
 
@@ -1749,6 +1741,20 @@ public class PlaintextConsumerTest {
         }, "Timed out waiting for non-empty records from topic " + tp.topic() + " partition " + tp.partition());
 
         return result.get();
+    }
+
+    private void awaitMetricsCleanup(
+        Consumer<?, ?> consumer,
+        String metricName,
+        Map<String, String> tags1,
+        Map<String, String> tags2
+    ) throws InterruptedException {
+        var metric1 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags1);
+        var metric2 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags2);
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return consumer.metrics().get(metric1) == null && consumer.metrics().get(metric2) == null;
+        }, "Metrics for removed partitions should be cleaned up");
     }
 
     public static class SerializerImpl implements Serializer<byte[]> {

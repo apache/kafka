@@ -381,6 +381,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         open = false;
     }
 
+    long numEntries() {
+        return endTimeMap.values().stream()
+            .flatMap(keyMap -> keyMap.values().stream())
+            .mapToLong(Map::size)
+            .sum();
+    }
+
     private void removeExpiredSegments() {
         long minLiveTime = Math.max(0L, observedStreamTime - retentionPeriod + 1);
 

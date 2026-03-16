@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -77,7 +78,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
 /**
@@ -263,7 +263,7 @@ public class StateDirectory implements AutoCloseable {
                     try {
                         // We only handle TaskCorruptedException at this point. Any other exception is considered fatal.
                         StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, temporaryStateManager, this, initContext);
-                        temporaryStateManager.checkpoint();
+                        temporaryStateManager.flush();
                     } catch (final TaskCorruptedException tce) {
                         // At this point, we only log a warning and continue with the startup store initialization.
                         // The task-corrupted exception will be handled in the first Task assignment phase.
@@ -427,13 +427,6 @@ public class StateDirectory implements AutoCloseable {
     }
 
     /**
-     * @return The File handle for the checkpoint in the given task's directory
-     */
-    File checkpointFileFor(final TaskId taskId) {
-        return new File(getOrCreateDirectoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME);
-    }
-
-    /**
      * Decide if the directory of the task is empty or not
      */
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
@@ -444,7 +437,7 @@ public class StateDirectory implements AutoCloseable {
 
     private boolean taskDirIsEmpty(final File taskDir) {
         final File[] storeDirs = taskDir.listFiles(pathname ->
-                !pathname.getName().equals(CHECKPOINT_FILE_NAME));
+                !pathname.getName().startsWith(LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME));
 
         boolean taskDirEmpty = true;
 

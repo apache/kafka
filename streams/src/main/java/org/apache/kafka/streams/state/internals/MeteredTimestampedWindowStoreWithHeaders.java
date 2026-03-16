@@ -375,11 +375,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             }
 
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
-
-            if (next == null) {
-                return null;
-            }
-
             final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(next.value, new RecordHeaders());
             final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
             final K key = serdes.keyFrom(next.key.key().get(), headers);
@@ -405,19 +400,30 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             if (cachedNext == null) {
                 cachedNext = next();
             }
-            return cachedNext == null ? null : cachedNext.key;
+            return cachedNext.key;
         }
     }
 
     private boolean isUnderlyingStoreTimestamped() {
         Object store = wrapped();
         do {
-            if (store instanceof TimestampedBytesStore
-                    || store instanceof TimestampedToHeadersWindowStoreAdapter) {
+            // Check adapters first before attempting to unwrap
+            if (store instanceof TimestampedToHeadersWindowStoreAdapter) {
                 return true;
             }
-            store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        } while ((store instanceof WrappedStateStore));
+            if (store instanceof PlainToHeadersWindowStoreAdapter) {
+                return false; // Plain store doesn't preserve timestamps
+            }
+            if (store instanceof TimestampedBytesStore) {
+                return true;
+            }
+            // Only unwrap if it's a WrappedStateStore
+            if (store instanceof WrappedStateStore) {
+                store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
+            } else {
+                break;
+            }
+        } while (true);
         return store instanceof TimestampedBytesStore;
     }
 }
