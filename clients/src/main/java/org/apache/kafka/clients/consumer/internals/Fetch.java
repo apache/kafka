@@ -44,7 +44,7 @@ public class Fetch<K, V> {
             OffsetAndMetadata nextOffsetAndMetadata
     ) {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
-                ? new HashMap<>()
+                ? Map.of()
                 : Map.of(partition, records);
         Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap = Map.of(partition, nextOffsetAndMetadata);
         return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextOffsetAndMetadataMap);
