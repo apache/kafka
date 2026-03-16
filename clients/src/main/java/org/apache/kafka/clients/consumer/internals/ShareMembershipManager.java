@@ -185,7 +185,8 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     @Override
     protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
                                                                SortedSet<TopicPartition> addedPartitions) {
-        updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
+        notifyAssignmentChange(assignedPartitions.topicPartitions());
         return CompletableFuture.completedFuture(null);
     }
 
