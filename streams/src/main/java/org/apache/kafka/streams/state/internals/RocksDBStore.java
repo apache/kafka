@@ -402,7 +402,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         try {
             cfAccessor.commit(dbAccessor, position);
         } catch (final RocksDBException e) {
-            log.warn("Error while commiting position for store {}", name, e);
+            log.warn("Error while committing position for store {}", name, e);
         }
     }
 
