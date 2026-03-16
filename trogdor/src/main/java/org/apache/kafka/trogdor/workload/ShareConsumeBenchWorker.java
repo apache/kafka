@@ -47,8 +47,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -65,6 +67,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
     private final String id;
     private final ShareConsumeBenchSpec spec;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final Queue<ThreadSafeShareConsumer> consumers = new ConcurrentLinkedQueue<>();
     private ScheduledExecutorService executor;
     private WorkerStatusTracker workerStatus;
     private StatusUpdater statusUpdater;
@@ -114,7 +117,9 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             Set<String> topics = new HashSet<>(spec.expandTopicNames());
 
             for (int i = 0; i < consumerCount; i++) {
-                tasks.add(new ConsumeMessages(consumer(shareGroup, clientId(i)), spec.recordProcessor(), topics));
+                ThreadSafeShareConsumer consumer = consumer(shareGroup, clientId(i));
+                consumers.add(consumer);
+                tasks.add(new ConsumeMessages(consumer, spec.recordProcessor(), topics));
             }
 
             return tasks;
@@ -425,6 +430,10 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         doneFuture.complete("");
         executor.shutdownNow();
         executor.awaitTermination(1, TimeUnit.DAYS);
+        for (ThreadSafeShareConsumer consumer : consumers) {
+            consumer.close();
+        }
+        this.consumers.clear();
         this.executor = null;
         this.statusUpdater = null;
         this.statusUpdaterFuture = null;

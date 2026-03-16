@@ -112,9 +112,14 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serializeBaseKey(final String topic, final Windowed<T> data) {
+        return serializeBaseKey(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public byte[] serializeBaseKey(final String topic, final Headers headers, final Windowed<T> data) {
         WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
 
-        return inner.serialize(topic, data.key());
+        return inner.serialize(topic, headers, data.key());
     }
 
     // Only for testing

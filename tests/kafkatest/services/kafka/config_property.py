@@ -79,7 +79,6 @@ CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS = "group.consumer.assignment.interval.ms"
 
 SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
-SHARE_GROUP_ENABLE = "group.share.enable"
 SHARE_GROUP_ASSIGNMENT_INTERVAL_MS = "group.share.assignment.interval.ms"
 
 STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS = "group.streams.assignment.interval.ms"

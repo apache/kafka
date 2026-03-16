@@ -14,31 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
 
-import java.util.Iterator;
-import java.util.function.Function;
+package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
+
+import java.io.Closeable;
+import java.util.function.Supplier;
 
 /**
- * An iterator that maps another iterator's elements from type `F` to type `T`.
+ * A {@link Supplier} that also implements {@link Closeable}, allowing the supplier to hold
+ * resources that need to be properly cleaned up.
+ *
+ * <p>
+ * This interface is particularly useful when a supplier needs to manage resources like file
+ * handles, network connections, or cryptographic resources that must be released when no
+ * longer needed.
+ * </p>
+ *
+ * @param <T> The type of object supplied by this supplier
  */
-public final class MappedIterator<F, T> implements Iterator<T> {
-    private final Iterator<? extends F> underlyingIterator;
-    private final Function<F, T> mapper;
-
-    public MappedIterator(Iterator<? extends F> underlyingIterator, Function<F, T> mapper) {
-        this.underlyingIterator = underlyingIterator;
-        this.mapper = mapper;
-    }
-
-    @Override
-    public boolean hasNext() {
-        return underlyingIterator.hasNext();
-    }
-
-    @Override
-    public T next() {
-        return mapper.apply(underlyingIterator.next());
-    }
-
+public interface CloseableSupplier<T> extends Supplier<T>, Closeable {
 }

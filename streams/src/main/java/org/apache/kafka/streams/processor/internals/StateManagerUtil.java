@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 
 import org.slf4j.Logger;
@@ -36,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isHeadersAware;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
@@ -53,6 +55,9 @@ final class StateManagerUtil {
 
     static RecordConverter converterForStore(final StateStore store) {
         if (isHeadersAware(store)) {
+            if (store instanceof SessionStore) {
+                return rawValueToSessionHeadersValue();
+            }
             return rawValueToHeadersValue();
         } else if (isTimestamped(store) && !isVersioned(store)) {
             // should not prepend timestamp when restoring records for versioned store, as

@@ -88,9 +88,9 @@ public class MeteredKeyValueStore<K, V>
     protected Sensor getSensor;
     protected Sensor deleteSensor;
     private Sensor putAllSensor;
-    private Sensor allSensor;
-    private Sensor rangeSensor;
-    private Sensor prefixScanSensor;
+    protected Sensor allSensor;
+    protected Sensor rangeSensor;
+    protected Sensor prefixScanSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
