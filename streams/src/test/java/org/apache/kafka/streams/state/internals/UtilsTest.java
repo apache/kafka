@@ -80,7 +80,7 @@ public class UtilsTest {
 
     @Test
     public void shouldReturnNullForNullRawTimestampedValue() {
-        assertNull(rawPlainValue(null));
+        assertNull(rawTimestampedValue(null));
     }
 
     @Test
