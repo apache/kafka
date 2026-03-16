@@ -2359,16 +2359,21 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleLoadSnapshot(SnapshotReader<String> reader) {
-            snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
-            commits.clear();
-            savedBatches.clear();
-            snapshot = Optional.of(reader);
+            snapshot = handleLoadSnapshotOrBootstrap(snapshot, reader);
         }
 
         @Override
         public void handleLoadBootstrap(SnapshotReader<String> reader) {
-            bootstrapSnapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
-            bootstrapSnapshot = Optional.of(reader);
+            bootstrapSnapshot = handleLoadSnapshotOrBootstrap(bootstrapSnapshot, reader);
+        }
+
+        private Optional<SnapshotReader<String>> handleLoadSnapshotOrBootstrap(
+                Optional<SnapshotReader<String>> previousSnapshot,
+                SnapshotReader<String> reader) {
+            previousSnapshot.ifPresent(s -> assertDoesNotThrow(s::close));
+            commits.clear();
+            savedBatches.clear();
+            return Optional.of(reader);
         }
 
         Optional<SnapshotReader<String>> drainHandledBootstrapSnapshot() {
