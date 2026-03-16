@@ -69,6 +69,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -137,6 +138,7 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
@@ -146,6 +148,29 @@ import static org.junit.jupiter.api.Assertions.fail;
     }
 )
 public class ShareConsumerTest {
+
+    @ClusterTestDefaults(
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1")
+        }
+    )
+    public static class WithAssignmentBatchingTest extends ShareConsumerTest {
+        public WithAssignmentBatchingTest(ClusterInstance cluster) {
+            super(cluster);
+        }
+    }
+
     private final ClusterInstance cluster;
     private final TopicPartition tp = new TopicPartition("topic", 0);
     private Uuid tpId;
