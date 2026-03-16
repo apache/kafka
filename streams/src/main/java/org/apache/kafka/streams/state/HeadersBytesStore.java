@@ -56,12 +56,6 @@ public interface HeadersBytesStore {
         // res[0] is initialized to 0x00 per Java Specification
         System.arraycopy(valueAndTimestamp, 0, res, 1, valueAndTimestamp.length);
         return res;
-
-        /*return ByteBuffer
-            .allocate(1 + valueAndTimestamp.length)
-            .put((byte) 0x00)
-            .put(valueAndTimestamp)
-            .array();*/
     }
 
     static byte[] convertFromPlainToHeaderFormat(final byte[] value) {
