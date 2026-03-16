@@ -147,7 +147,7 @@ final class StateManagerUtil {
         // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
         // the state stores have been registered; we should not try to load at the state manager construction time.
         // See https://issues.apache.org/jira/browse/KAFKA-8574
-        stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
+        stateMgr.initializeStoreOffsets(storeDirsEmpty);
         log.debug("Initialized state stores");
     }
 
