@@ -419,7 +419,7 @@ public class MockLog implements RaftLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchSizeBytes) {
+    public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
         verifyOffsetInRange(startOffset);
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
@@ -449,7 +449,7 @@ public class MockLog implements RaftLog {
             if (batch.lastOffset() >= startOffset
                     && batch.lastOffset() < maxOffset
                     && !batch.entries.isEmpty()
-                    && (bufferSizeBytes - buffer.remaining()) < maxTotalBatchSizeBytes) {
+                    && (bufferSizeBytes - buffer.remaining()) < maxTotalBatchBytes) {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
@@ -519,9 +519,9 @@ public class MockLog implements RaftLog {
         }
 
         long baseOffset = read(
-                snapshotId.offset(),
-                Isolation.COMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(

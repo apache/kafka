@@ -1102,9 +1102,9 @@ public class KafkaRaftLogTest {
         append(log, recordsPerBatch, 1);
 
         LogFetchInfo info = log.read(
-                0,
-                Isolation.UNCOMMITTED,
-                magicMaxBatchSizeBytes * expectedBatches
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxBatchSizeBytes * expectedBatches
         );
         // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
         // [0..R-1] converted to an utf-8 string with empty keys and headers.

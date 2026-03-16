@@ -133,9 +133,9 @@ public class KafkaRaftClientReconfigTest {
 
         // check if leader writes 3 bootstrap records to the log
         Records records = context.log.read(
-                0,
-                Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            0,
+            Isolation.UNCOMMITTED,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -200,9 +200,9 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
 
         Records records = context.log.read(
-                0,
-                Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_BATCH_SIZE_BYTES
+            0,
+            Isolation.UNCOMMITTED,
+            KafkaRaftClient.MAX_BATCH_SIZE_BYTES
         ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -2460,9 +2460,9 @@ public class KafkaRaftClientReconfigTest {
         // one for the kraft version and one for the voter set
         var updatedVoters = VoterSetTest.voterSet(Stream.of(local, voter1, voter2));
         var records = context.log.read(
-                localLogEndOffset,
-                Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            localLogEndOffset,
+            Isolation.UNCOMMITTED,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -2572,9 +2572,9 @@ public class KafkaRaftClientReconfigTest {
 
         // check that the leader wrote voters control record to the log;
         var records = context.log.read(
-                localLogEndOffset,
-                Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            localLogEndOffset,
+            Isolation.UNCOMMITTED,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());

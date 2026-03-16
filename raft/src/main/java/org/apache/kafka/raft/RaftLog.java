@@ -57,15 +57,15 @@ public interface RaftLog extends AutoCloseable {
     LogAppendInfo appendAsFollower(Records records, int epoch);
 
     /**
-     * Read a set of records within a range of offsets.
+     * Read a set of records from startOffsetInclusive. Always returns at least one records batch if one exists.
      *
-     * @param startOffsetInclusive Records later than this offset will be returned.
-     * @param isolation Whether to read committed (up to high watermark) or uncommitted data.
-     * @param maxTotalBatchSizeBytes Soft max for number of bytes to retrieve. Will stop returning batches once the
-     *                               size of previously returned batches exceeds maxTotalBatchSizeBytes
-     * @return List or records and start offset information wrapped in a LogFetchInfo
+     * @param startOffsetInclusive Records later and including this offset are returned.
+     * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read.
+     * @param maxTotalBatchBytes Soft max for number of bytes to retrieve. Will stop returning batches once the
+     *                               size of previously returned batches exceeds maxTotalBatchBytes
+     * @return Records and start offset information wrapped in a LogFetchInfo
      */
-    LogFetchInfo read(long startOffsetInclusive, Isolation isolation, int maxTotalBatchSizeBytes);
+    LogFetchInfo read(long startOffsetInclusive, Isolation isolation, int maxTotalBatchBytes);
 
 
     /**

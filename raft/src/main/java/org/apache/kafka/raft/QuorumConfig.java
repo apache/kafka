@@ -113,7 +113,8 @@ public class QuorumConfig {
     public static final int DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES = 1048576;
 
     public static final String QUORUM_FETCH_MAX_BYTES_CONFIG = QUORUM_PREFIX + "fetch.max.bytes";
-    public static final String QUORUM_FETCH_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each Fetch request. Always returns at least one batch even if it is greater than QUORUM_FETCH_MAX_BYTES_CONFIG.";
+    public static final String QUORUM_FETCH_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each Fetch request. " +
+            "Always returns at least one batch even if it is greater than controller.quorum.fetch.max.bytes.";
     public static final int DEFAULT_QUORUM_FETCH_MAX_BYTES = 1048576;
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
@@ -138,8 +139,8 @@ public class QuorumConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
     private final boolean autoJoin;
-    private final int fetchSnapshotSizeMaxBytes;
-    private final int fetchMaxSizeBytes;
+    private final int fetchSnapshotMaxBytes;
+    private final int fetchMaxBytes;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
         this.voters = abstractConfig.getList(QUORUM_VOTERS_CONFIG);
@@ -151,8 +152,8 @@ public class QuorumConfig {
         this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
         this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
         this.autoJoin = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE_CONFIG);
-        this.fetchSnapshotSizeMaxBytes = abstractConfig.getInt(QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG);
-        this.fetchMaxSizeBytes = abstractConfig.getInt(QUORUM_FETCH_MAX_BYTES_CONFIG);
+        this.fetchSnapshotMaxBytes = abstractConfig.getInt(QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG);
+        this.fetchMaxBytes = abstractConfig.getInt(QUORUM_FETCH_MAX_BYTES_CONFIG);
     }
 
     public List<String> voters() {
@@ -192,11 +193,11 @@ public class QuorumConfig {
     }
 
     public int fetchSnapshotMaxBytes() {
-        return fetchSnapshotSizeMaxBytes;
+        return fetchSnapshotMaxBytes;
     }
 
     public int fetchMaxBytes() {
-        return fetchMaxSizeBytes;
+        return fetchMaxBytes;
     }
 
     private static Integer parseVoterId(String idString) {

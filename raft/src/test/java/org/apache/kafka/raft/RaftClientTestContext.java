@@ -394,8 +394,8 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withFetchMaxBytes(int fetchMaxSizeBytes) {
-            this.fetchMaxBytes = fetchMaxSizeBytes;
+        Builder withFetchMaxBytes(int fetchMaxBytes) {
+            this.fetchMaxBytes = fetchMaxBytes;
             return this;
         }
 
@@ -504,8 +504,8 @@ public final class RaftClientTestContext {
                 metrics,
                 externalKRaftMetrics,
                 listener,
-                    fetchSnapshotMaxBytes,
-                    fetchMaxBytes
+                fetchSnapshotMaxBytes,
+                fetchMaxBytes
             );
 
             context.electionTimeoutMs = electionTimeoutMs;

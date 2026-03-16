@@ -435,9 +435,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < highWatermark) {
                     LogFetchInfo readInfo = log.read(
-                            nextExpectedOffset,
-                            Isolation.COMMITTED,
-                            MAX_FETCH_SIZE_BYTES
+                        nextExpectedOffset,
+                        Isolation.COMMITTED,
+                        MAX_FETCH_SIZE_BYTES
                     );
                     listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
                 }

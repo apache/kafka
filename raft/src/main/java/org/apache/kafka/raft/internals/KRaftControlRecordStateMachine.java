@@ -235,9 +235,9 @@ public final class KRaftControlRecordStateMachine {
     private void maybeLoadLog() {
         while (log.endOffset().offset() > nextOffset) {
             LogFetchInfo info = log.read(
-                    nextOffset,
-                    Isolation.UNCOMMITTED,
-                    KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                nextOffset,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
             );
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,
