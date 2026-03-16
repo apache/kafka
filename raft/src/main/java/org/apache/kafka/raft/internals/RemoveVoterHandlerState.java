@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 public final class RemoveVoterHandlerState {
     private final long lastOffset;
@@ -36,11 +37,20 @@ public final class RemoveVoterHandlerState {
         return timeout.remainingMs();
     }
 
-    public CompletableFuture<RemoveRaftVoterResponseData> future() {
-        return future;
+    /**
+     * Completes the future with the provided response.
+     *
+     * @param response the response to complete the future with
+     */
+    public void completeFuture(RemoveRaftVoterResponseData response) {
+        future.complete(response);
     }
 
     public long lastOffset() {
         return lastOffset;
+    }
+
+    CompletionStage<RemoveRaftVoterResponseData> future() {
+        return future;
     }
 }

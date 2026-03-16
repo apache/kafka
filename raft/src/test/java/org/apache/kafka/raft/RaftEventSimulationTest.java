@@ -20,14 +20,19 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -36,6 +41,7 @@ import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -63,6 +69,8 @@ import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -975,6 +983,40 @@ public class RaftEventSimulationTest {
             }
         }
 
+        CompletionStage<RaftResponse.Outbound> handle(RaftRequest.Inbound request) {
+            var apiKey = ApiKeys.forId(request.data().apiKey());
+            switch (apiKey) {
+                case API_VERSIONS:
+                    // KRaft doesn't handle ApiVersions request. These are handle by the "node".
+                    // This creates a simple implementation that simply replies with the
+                    // supported kraft versions.
+                    var apiVersionsResponse = new ApiVersionsResponse.Builder()
+                        .setSupportedFeatures(
+                            Features.supportedFeatures(
+                                Map.of(
+                                    KRaftVersion.FEATURE_NAME,
+                                    new SupportedVersionRange(
+                                        KRaftVersion.KRAFT_VERSION_0.featureLevel(),
+                                        KRaftVersion.LATEST_PRODUCTION.featureLevel()
+                                    )
+                                )
+                            )
+                        )
+                        .setApiVersions(new ApiVersionsResponseData.ApiVersionCollection())
+                        .setFinalizedFeatures(Map.of())
+                        .build()
+                        .data();
+                    var apiVersions = new RaftResponse.Outbound(
+                        request.correlationId(),
+                        apiVersionsResponse
+                    );
+                    return CompletableFuture.completedFuture(apiVersions);
+
+                default:
+                    return client.handle(request);
+            }
+        }
+
         long highWatermark() {
             return client.quorum().highWatermark()
                 .map(LogOffsetMetadata::offset)
@@ -1405,7 +1447,7 @@ public class RaftEventSimulationTest {
             cluster.nodeIfRunning(destination.id()).ifPresent(node -> {
                 inflight.put(correlationId, new InflightRequest(senderId, destination));
 
-                node.client.handle(inbound).whenComplete((response, exception) -> {
+                node.handle(inbound).whenComplete((response, exception) -> {
                     if (response != null && filters.get(destination.id()).acceptOutbound(response)) {
                         deliver(response);
                     }

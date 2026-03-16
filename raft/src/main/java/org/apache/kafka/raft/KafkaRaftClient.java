@@ -397,6 +397,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void maybeNotifyVoterHandlerOnHWmUpdate(LeaderState<T> state, long highWatermark) {
         addVoterHandler.highWatermarkUpdated(state, highWatermark);
         removeVoterHandler.highWatermarkUpdated(state, highWatermark);
+        updateVoterHandler.highWatermarkUpdated(state, highWatermark);
     }
 
     private void updateListenersProgress(long highWatermark) {
@@ -580,15 +581,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             onBecomeFollower(currentTimeMs);
         }
 
+        var requestSender = new DefaultRequestSender(
+            requestManager,
+            channel,
+            messageQueue,
+            logContext
+        );
+
         // Specialized add voter handler
         this.addVoterHandler = new AddVoterHandler(
             partitionState,
-            new DefaultRequestSender(
-                requestManager,
-                channel,
-                messageQueue,
-                logContext
-            ),
+            requestSender,
             time,
             logContext
         );
@@ -606,7 +609,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // Specialized update voter handler
         this.updateVoterHandler = new UpdateVoterHandler(
             partitionState,
-            channel.listenerName(),
+            requestSender,
+            time,
             logContext
         );
     }
@@ -2318,19 +2322,37 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return true;
         }
 
+        var leaderState = quorum.leaderStateOrThrow();
+
         ApiVersionsResponseData response = (ApiVersionsResponseData) responseMetadata.data();
 
         Errors error = Errors.forCode(response.errorCode());
         Optional<ApiVersionsResponseData.SupportedFeatureKey> supportedKraftVersions =
             Optional.ofNullable(response.supportedFeatures().find(KRaftVersion.FEATURE_NAME));
 
-        return addVoterHandler.handleApiVersionsResponse(
-            quorum.leaderStateOrThrow(),
-            responseMetadata.source(),
-            error,
-            supportedKraftVersions,
-            currentTimeMs
-        );
+        if (leaderState.changeVoterState().addVoterHandlerState().isPresent()) {
+            return addVoterHandler.handleApiVersionsResponse(
+                leaderState,
+                responseMetadata.source(),
+                error,
+                supportedKraftVersions,
+                currentTimeMs
+            );
+        } else if (leaderState.changeVoterState().updateVoterHandlerState().isPresent()) {
+            return updateVoterHandler.handleApiVersionsResponse(
+                leaderState,
+                responseMetadata.source(),
+                error,
+                supportedKraftVersions,
+                currentTimeMs
+            );
+        } else {
+            logger.debug(
+                "Received API_VERSIONS response from {} but no voter change operation is pending",
+                responseMetadata.source()
+            );
+            return true;
+        }
     }
 
     private boolean handleAddVoterResponse(
@@ -3183,7 +3205,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         long timeUntilVoterChangeExpires = state
             .changeVoterState()
-            .maybeExpirePendingOperation(currentTimeMs);
+            .maybeExpirePendingOperation(
+                quorum.leaderAndEpoch(),
+                quorum.leaderEndpoints(),
+                currentTimeMs
+            );
 
         long timeUntilFlush = maybeAppendBatches(
             state,

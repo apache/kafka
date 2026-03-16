@@ -17,7 +17,9 @@
 
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.ReplicaKey;
@@ -26,36 +28,57 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-public final class AddVoterHandlerState {
+public final class UpdateVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
-    private final boolean ackWhenCommitted;
+    private final ListenerName requestListenerName;
+    private final SupportedVersionRange supportedKraftVersions;
     private final Timer timeout;
-    private final CompletableFuture<AddRaftVoterResponseData> future = new CompletableFuture<>();
+    private final CompletableFuture<UpdateRaftVoterResponseData> future = new CompletableFuture<>();
 
     private OptionalLong lastOffset = OptionalLong.empty();
 
-    AddVoterHandlerState(
+    UpdateVoterHandlerState(
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
-        boolean ackWhenCommitted,
+        ListenerName requestListenerName,
+        SupportedVersionRange supportedKraftVersions,
         Timer timeout
     ) {
         this.voterKey = voterKey;
         this.voterEndpoints = voterEndpoints;
-        this.ackWhenCommitted = ackWhenCommitted;
+        this.requestListenerName = requestListenerName;
+        this.supportedKraftVersions = supportedKraftVersions;
         this.timeout = timeout;
     }
 
+    /**
+     * Returns the time in milliseconds until this operation expires.
+     *
+     * @param currentTimeMs the current time in milliseconds
+     * @return the remaining time in milliseconds until expiration
+     */
     public long timeUntilOperationExpiration(long currentTimeMs) {
         timeout.update(currentTimeMs);
         return timeout.remainingMs();
     }
 
+    /**
+     * Checks whether this handler state is expecting an API_VERSIONS response from the given replica.
+     *
+     * @param replicaId the replica id to check
+     * @return true if expecting a response from this replica, false otherwise
+     */
     public boolean expectingApiResponse(int replicaId) {
         return lastOffset.isEmpty() && replicaId == voterKey.id();
     }
 
+    /**
+     * Sets the last offset for this update voter operation.
+     *
+     * @param lastOffset the offset of the VotersRecord that was appended to the log
+     * @throws IllegalStateException if the last offset has already been set
+     */
     public void setLastOffset(long lastOffset) {
         if (this.lastOffset.isPresent()) {
             throw new IllegalStateException(
@@ -72,18 +95,47 @@ public final class AddVoterHandlerState {
         this.lastOffset = OptionalLong.of(lastOffset);
     }
 
+    /**
+     * Returns the voter key for the voter being updated.
+     *
+     * @return the voter key
+     */
     public ReplicaKey voterKey() {
         return voterKey;
     }
 
+    /**
+     * Returns the endpoints for the voter being updated.
+     *
+     * @return the voter endpoints
+     */
     public Endpoints voterEndpoints() {
         return voterEndpoints;
     }
 
-    public boolean ackWhenCommitted() {
-        return ackWhenCommitted;
+    /**
+     * Returns the listener name from the update voter request.
+     *
+     * @return the listener name
+     */
+    public ListenerName requestListenerName() {
+        return requestListenerName;
     }
 
+    /**
+     * Returns the kraft version range supported by the voter being updated.
+     *
+     * @return the supported kraft version range
+     */
+    public SupportedVersionRange supportedKraftVersions() {
+        return supportedKraftVersions;
+    }
+
+    /**
+     * Returns the offset of the VotersRecord if it has been appended to the log.
+     *
+     * @return the last offset, or empty if not yet appended
+     */
     public OptionalLong lastOffset() {
         return lastOffset;
     }
@@ -93,11 +145,11 @@ public final class AddVoterHandlerState {
      *
      * @param response the response to complete the future with
      */
-    public void completeFuture(AddRaftVoterResponseData response) {
+    public void completeFuture(UpdateRaftVoterResponseData response) {
         future.complete(response);
     }
 
-    CompletionStage<AddRaftVoterResponseData> future() {
+    CompletionStage<UpdateRaftVoterResponseData> future() {
         return future;
     }
 }

@@ -93,7 +93,13 @@ public final class AddVoterHandler {
     ) {
         var changeVoterState = leaderState.changeVoterState();
         // Check if there are any pending voter change requests
-        if (changeVoterState.isOperationPending(currentTimeMs)) {
+        if (
+            changeVoterState.isOperationPending(
+                leaderState.leaderAndEpoch(),
+                leaderState.leaderEndpoints(),
+                currentTimeMs
+            )
+        ) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -199,6 +205,16 @@ public final class AddVoterHandler {
         return state.future();
     }
 
+    /**
+     * Handle the API_VERSIONS response for an add voter operation.
+     *
+     * @param leaderState the leader state
+     * @param source the node that sent the response
+     * @param error the error from the response
+     * @param supportedKraftVersions the supported kraft version range from the response
+     * @param currentTimeMs the current time in milliseconds
+     * @return true if the add voter operation should continue, false if it was aborted
+     */
     public boolean handleApiVersionsResponse(
         LeaderState<?> leaderState,
         Node source,
@@ -329,7 +345,7 @@ public final class AddVoterHandler {
         if (!current.ackWhenCommitted()) {
             // complete the future to send response, but do not reset the state,
             // since the new voter set is not yet committed
-            current.future().complete(RaftUtil.addVoterResponse(Errors.NONE, null));
+            current.completeFuture(RaftUtil.addVoterResponse(Errors.NONE, null));
         }
         return true;
     }

@@ -82,7 +82,13 @@ public final class RemoveVoterHandler {
     ) {
         var changeVoterState = leaderState.changeVoterState();
         // Check if there are any pending voter change requests
-        if (changeVoterState.isOperationPending(currentTimeMs)) {
+        if (
+            changeVoterState.isOperationPending(
+                leaderState.leaderAndEpoch(),
+                leaderState.leaderEndpoints(),
+                currentTimeMs
+            )
+        ) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
