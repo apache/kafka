@@ -2144,7 +2144,6 @@ public final class KafkaRaftClientSnapshotTest {
             .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
             .build();
 
-        // Single voter; poll to let it append control record and advance HWM
         context.pollUntil(() -> context.client.highWatermark().isPresent());
 
         assertBootstrapSnapshot(context, bootstrapRecords);

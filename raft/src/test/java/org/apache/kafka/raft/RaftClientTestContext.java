@@ -2375,8 +2375,9 @@ public final class RaftClientTestContext {
         }
 
         private Optional<SnapshotReader<String>> handleLoadSnapshotOrBootstrap(
-                Optional<SnapshotReader<String>> previousSnapshot,
-                SnapshotReader<String> reader) {
+            Optional<SnapshotReader<String>> previousSnapshot,
+            SnapshotReader<String> reader
+        ) {
             previousSnapshot.ifPresent(s -> assertDoesNotThrow(s::close));
             commits.clear();
             savedBatches.clear();
