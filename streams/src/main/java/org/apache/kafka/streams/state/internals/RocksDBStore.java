@@ -926,6 +926,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         /**
          * Initializes the ColumnFamily.
+         * @return the position of the store based on the data in the ColumnFamily. If no offset position is found, an empty position is returned.
          * @throws StreamsException if an invalid state is found and ignoreInvalidState is false
          */
         Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
