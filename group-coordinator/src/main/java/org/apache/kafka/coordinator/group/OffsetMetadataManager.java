@@ -699,16 +699,14 @@ public class OffsetMetadataManager {
             final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic().setName(topic.name());
             response.topics().add(topicResponse);
 
-            // Resolve topic ID if it's ZERO_UUID
+            // Resolve topicId from the metadata image.
             final Uuid resolvedTopicId = metadataImage
                 .topicMetadata(topic.name())
                 .map(CoordinatorMetadataImage.TopicMetadata::id)
                 .orElse(Uuid.ZERO_UUID);
 
-            if (resolvedTopicId.equals(Uuid.ZERO_UUID)) {
-                if (validator != CommitPartitionValidator.NO_OP) {
-                    throw Errors.ILLEGAL_GENERATION.exception();
-                }
+            if (resolvedTopicId.equals(Uuid.ZERO_UUID) && validator != CommitPartitionValidator.NO_OP) {
+                throw Errors.ILLEGAL_GENERATION.exception();
             }
 
             topic.partitions().forEach(partition -> {
