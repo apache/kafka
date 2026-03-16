@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -55,12 +57,12 @@ import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.MirrorUtils;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.mirror.TestUtils;
-import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
+import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestCondition;
 
 import org.junit.jupiter.api.AfterEach;
@@ -89,10 +91,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.LongUnaryOperator;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_LEGACY;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_TOPIC_CONFIG_PREFIX;
@@ -208,7 +212,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Config = new MirrorMakerConfig(mm2Props);
         primaryWorkerProps = mm2Config.workerConfig(new SourceAndTarget(BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS));
         backupWorkerProps.putAll(mm2Config.workerConfig(new SourceAndTarget(PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS)));
-        
+        // Add the custom reporter to the worker configuration to collect MirrorMarker metrics with the new formats
+        backupWorkerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, CollectAllMetricsReporter.class.getName());
+
         primary = new EmbeddedConnectCluster.Builder()
                 .name(PRIMARY_CLUSTER_ALIAS + "-connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -1008,10 +1014,35 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
-    public void testConnectorMetrics() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsNew() throws InterruptedException, ExecutionException {
+        testConnectorMetrics(METRIC_NAMES_NEW, () -> assertMetrics(false));
+    }
+
+    @Test
+    public void testConnectorMetricsLegacy() throws InterruptedException, ExecutionException {
+        testConnectorMetrics(METRIC_NAMES_LEGACY, () -> assertMetrics(true));
+    }
+
+    @Test
+    public void testConnectorMetricsDefault() throws InterruptedException, ExecutionException {
+        testConnectorMetrics(null, () -> assertMetrics(true));
+    }
+
+    @Test
+    public void testConnectorMetricsNewAndLegacy() throws InterruptedException, ExecutionException {
+        testConnectorMetrics(METRIC_NAMES_NEW + "," + METRIC_NAMES_LEGACY, () -> assertMetrics(true) && assertMetrics(false));
+    }
+
+    private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException, ExecutionException {
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
-        mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + "." + MirrorConnectorConfig.METRIC_NAMES_FORMAT, METRIC_NAMES_NEW);
+        if (format != null) {
+            mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + "." + MirrorConnectorConfig.METRIC_NAMES_FORMAT, format);
+        }
+        // Add the custom reporter to the connector configuration to collect MirrorMarker metrics with the old formats
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + "." + CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, CollectAllMetricsReporter.class.getName());
+
+        backupWorkerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, CollectAllMetricsReporter.class.getName());
         mm2Config = new MirrorMakerConfig(mm2Props);
 
         String topic = "test-topic-metrics";
@@ -1041,8 +1072,18 @@ public class MirrorConnectorsIntegrationBaseTest {
             }
         }
 
-        Set<String> expectedSourceTags = Set.of("connector", "task", "source", "target", "topic", "partition");
-        Set<String> expectedCheckpointTags = Set.of("connector", "task", "source", "target", "group", "topic", "partition");
+        waitForCondition(assertions::get, 30_000L, "Unable to find the MirrorMaker metrics");
+    }
+
+    private boolean assertMetrics(boolean legacy) {
+        Set<String> expectedSourceTags = legacy
+                ? Set.of("source", "target", "topic", "partition")
+                : Set.of("connector", "task", "source", "target", "topic", "partition");
+        Set<String> expectedCheckpointTags = legacy
+                ? Set.of("source", "target", "group", "topic", "partition")
+                : Set.of("connector", "task", "source", "target", "group", "topic", "partition");
+        String source = MirrorSourceConnector.class.getSimpleName();
+        String checkpoint = MirrorCheckpointConnector.class.getSimpleName();
         // We have 4 topics totalling 13 partitions
         // primary.test-topic - 10 partitions
         // primary.test-topic-no-checkpoints - 1 partition
@@ -1053,28 +1094,25 @@ public class MirrorConnectorsIntegrationBaseTest {
         // We have 1 consumer group (consumer-group-metrics)
         // There are 4 metrics per group
         int expectedCheckpointCount = 4;
-        waitForCondition(() -> {
-            Set<ConnectMetrics> allConnectMetrics = backup.allConnectMetrics();
-            int sourceMetrics = 0;
-            int checkpointMetrics = 0;
-            for (ConnectMetrics connectMetrics : allConnectMetrics) {
-                Set<MetricName> metrics = connectMetrics.metrics().metrics().keySet();
-                for (MetricName metricName : metrics) {
-                    if (metricName.group().equals("plugins")) {
-                        Map<String, String> tags = metricName.tags();
-                        if (MirrorSourceConnector.class.getSimpleName().equals(tags.get("connector"))) {
-                            assertEquals(expectedSourceTags, tags.keySet());
-                            sourceMetrics++;
-                        }
-                        if (MirrorCheckpointConnector.class.getSimpleName().equals(tags.get("connector"))) {
-                            assertEquals(expectedCheckpointTags, tags.keySet());
-                            checkpointMetrics++;
-                        }
-                    }
-                }
+
+        int sourceMetrics = 0;
+        int checkpointMetrics = 0;
+        for (MetricName metricName : CollectAllMetricsReporter.METRICS.keySet()) {
+            Map<String, String> tags = metricName.tags();
+            if ((legacy && metricName.group().equals(source)) ||
+                    (!legacy && metricName.group().equals("plugins") && source.equals(tags.get("connector")))) {
+                assertEquals(expectedSourceTags, tags.keySet());
+                sourceMetrics++;
             }
-            return sourceMetrics == expectedSourceCount && checkpointMetrics == expectedCheckpointCount;
-        }, 30_000L, "Unable to find the MirrorMaker metrics");
+
+
+            if ((legacy && metricName.group().equals(checkpoint)) ||
+                    (!legacy && metricName.group().equals("plugins") && checkpoint.equals(tags.get("connector")))) {
+                assertEquals(expectedCheckpointTags, tags.keySet());
+                checkpointMetrics++;
+            }
+        }
+        return sourceMetrics == expectedSourceCount && checkpointMetrics == expectedCheckpointCount;
     }
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {
@@ -1572,6 +1610,23 @@ public class MirrorConnectorsIntegrationBaseTest {
                     .get(topicName).partitions().size() == totalNumPartitions, TOPIC_SYNC_DURATION_MS,
                 "Topic: " + topicName + "'s partitions didn't get created on cluster: " + cluster.getName()
             );
+        }
+    }
+
+    public static class CollectAllMetricsReporter extends MockMetricsReporter {
+
+        public static final Map<MetricName, KafkaMetric> METRICS = new  HashMap<>();
+
+        @Override
+        public void init(List<KafkaMetric> metrics) {
+            for (KafkaMetric metric : metrics) {
+                METRICS.put(metric.metricName(), metric);
+            }
+        }
+
+        @Override
+        public void metricChange(KafkaMetric metric) {
+            METRICS.put(metric.metricName(), metric);
         }
     }
 }
