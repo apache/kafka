@@ -23,7 +23,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Endpoints;
-import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.RaftUtil;
@@ -34,8 +33,8 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * This type implements the protocol for updating a voter from a KRaft partition.
@@ -55,24 +54,21 @@ import java.util.concurrent.CompletableFuture;
  * 7. Send the UpdateVoter successful response to the voter.
  */
 public final class UpdateVoterHandler {
-    private final OptionalInt localId;
     private final KRaftControlRecordStateMachine partitionState;
     private final ListenerName defaultListenerName;
     private final Logger log;
 
     public UpdateVoterHandler(
-        OptionalInt localId,
         KRaftControlRecordStateMachine partitionState,
         ListenerName defaultListenerName,
         LogContext logContext
     ) {
-        this.localId = localId;
         this.partitionState = partitionState;
         this.defaultListenerName = defaultListenerName;
         this.log = logContext.logger(getClass());
     }
 
-    public CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
+    public CompletionStage<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
         LeaderState<?> leaderState,
         ListenerName requestListenerName,
         ReplicaKey voterKey,
@@ -81,15 +77,12 @@ public final class UpdateVoterHandler {
         long currentTimeMs
     ) {
         // Check if there are any pending voter change requests
-        if (leaderState.isOperationPending(currentTimeMs)) {
+        if (leaderState.changeVoterState().isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
+                    leaderState.leaderAndEpoch(),
                     leaderState.leaderEndpoints()
                 )
             );
@@ -102,10 +95,7 @@ public final class UpdateVoterHandler {
                 RaftUtil.updateVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
+                    leaderState.leaderAndEpoch(),
                     leaderState.leaderEndpoints()
                 )
             );
@@ -135,10 +125,7 @@ public final class UpdateVoterHandler {
                     RaftUtil.updateVoterResponse(
                         Errors.REQUEST_TIMED_OUT,
                         requestListenerName,
-                        new LeaderAndEpoch(
-                            localId,
-                            leaderState.epoch()
-                        ),
+                        leaderState.leaderAndEpoch(),
                         leaderState.leaderEndpoints()
                     )
                 );
@@ -151,10 +138,7 @@ public final class UpdateVoterHandler {
                 RaftUtil.updateVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
+                    leaderState.leaderAndEpoch(),
                     leaderState.leaderEndpoints()
                 )
             );
@@ -165,10 +149,7 @@ public final class UpdateVoterHandler {
                 RaftUtil.updateVoterResponse(
                     Errors.INVALID_REQUEST,
                     requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
+                    leaderState.leaderAndEpoch(),
                     leaderState.leaderEndpoints()
                 )
             );
@@ -180,10 +161,7 @@ public final class UpdateVoterHandler {
                 RaftUtil.updateVoterResponse(
                     Errors.INVALID_REQUEST,
                     requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
+                    leaderState.leaderAndEpoch(),
                     leaderState.leaderEndpoints()
                 )
             );
@@ -207,10 +185,7 @@ public final class UpdateVoterHandler {
                 RaftUtil.updateVoterResponse(
                     Errors.VOTER_NOT_FOUND,
                     requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
+                    leaderState.leaderAndEpoch(),
                     leaderState.leaderEndpoints()
                 )
             );
@@ -244,7 +219,7 @@ public final class UpdateVoterHandler {
             voters.updateVoterIgnoringDirectoryId(updatedVoter);
     }
 
-    private CompletableFuture<UpdateRaftVoterResponseData> storeUpdatedVoters(
+    private CompletionStage<UpdateRaftVoterResponseData> storeUpdatedVoters(
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
         Optional<KRaftVersionUpgrade.Voters> inMemoryVoters,
@@ -277,10 +252,7 @@ public final class UpdateVoterHandler {
                     RaftUtil.updateVoterResponse(
                         Errors.REQUEST_TIMED_OUT,
                         requestListenerName,
-                        new LeaderAndEpoch(
-                            localId,
-                            leaderState.epoch()
-                        ),
+                        leaderState.leaderAndEpoch(),
                         leaderState.leaderEndpoints()
                     )
                 );
@@ -294,10 +266,7 @@ public final class UpdateVoterHandler {
             RaftUtil.updateVoterResponse(
                 Errors.NONE,
                 requestListenerName,
-                new LeaderAndEpoch(
-                    localId,
-                    leaderState.epoch()
-                ),
+                leaderState.leaderAndEpoch(),
                 leaderState.leaderEndpoints()
             )
         );

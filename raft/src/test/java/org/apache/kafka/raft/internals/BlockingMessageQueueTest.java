@@ -17,44 +17,64 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.raft.RaftMessage;
+import org.apache.kafka.raft.RaftMessageQueue;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockingMessageQueueTest {
 
     @Test
     public void testOfferAndPoll() {
-        BlockingMessageQueue queue = new BlockingMessageQueue();
+        var queue = new BlockingMessageQueue();
         assertTrue(queue.isEmpty());
-        assertNull(queue.poll(0));
+        assertEquals(Optional.empty(), queue.poll(0));
 
-        RaftMessage message1 = Mockito.mock(RaftMessage.class);
+        var message1 = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
         queue.add(message1);
         assertFalse(queue.isEmpty());
-        assertEquals(message1, queue.poll(0));
+        assertEquals(Optional.of(message1), queue.poll(0));
         assertTrue(queue.isEmpty());
 
-        RaftMessage message2 = Mockito.mock(RaftMessage.class);
-        RaftMessage message3 = Mockito.mock(RaftMessage.class);
+        var message2 = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
+        var message3 = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
         queue.add(message2);
         queue.add(message3);
         assertFalse(queue.isEmpty());
-        assertEquals(message2, queue.poll(0));
-        assertEquals(message3, queue.poll(0));
+        assertEquals(Optional.of(message2), queue.poll(0));
+        assertEquals(Optional.of(message3), queue.poll(0));
 
     }
 
     @Test
     public void testWakeupFromPoll() {
-        BlockingMessageQueue queue = new BlockingMessageQueue();
+        var queue = new BlockingMessageQueue();
         queue.wakeup();
-        assertNull(queue.poll(Long.MAX_VALUE));
+        assertEquals(Optional.empty(), queue.poll(Long.MAX_VALUE));
     }
 
+    @Test
+    public void testWakeupsAreTransparentToIsEmptyAndDrainedOnPoll() {
+        var queue = new BlockingMessageQueue();
+
+        // Wakeups alone should not affect isEmpty
+        queue.wakeup();
+        queue.wakeup();
+        assertTrue(queue.isEmpty());
+
+        // Adding a real message makes the queue non-empty
+        var message = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
+        queue.add(message);
+        assertFalse(queue.isEmpty());
+
+        // Poll should drain all wakeups and return the message in one call
+        assertEquals(Optional.of(message), queue.poll(0));
+        assertTrue(queue.isEmpty());
+    }
 }

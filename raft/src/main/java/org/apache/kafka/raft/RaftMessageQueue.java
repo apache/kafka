@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+
 /**
  * This class is used to serialize inbound requests or responses to outbound requests.
  * It basically just allows us to wrap a blocking queue so that we can have a mocked
@@ -29,18 +32,18 @@ public interface RaftMessageQueue {
      * Block for the arrival of a new message.
      *
      * @param timeoutMs timeout in milliseconds to wait for a new event
-     * @return the event or null if either the timeout was reached or there was
+     * @return the event or {@code Optional.empty()} if either the timeout was reached or there was
      *     a call to {@link #wakeup()} before any events became available
      */
-    RaftMessage poll(long timeoutMs);
+    Optional<QueueEntry> poll(long timeoutMs);
 
     /**
      * Add a new message to the queue.
      *
-     * @param message the message to deliver
+     * @param entry the message to deliver
      * @throws IllegalStateException if the queue cannot accept the message
      */
-    void add(RaftMessage message);
+    void add(QueueEntry entry);
 
     /**
      * Check whether there are pending messages awaiting delivery.
@@ -55,4 +58,20 @@ public interface RaftMessageQueue {
      */
     void wakeup();
 
+    public static final class QueueEntry {
+        private final CompletableFuture<RaftMessage> future = new CompletableFuture<>();
+        private final RaftMessage message;
+
+        public QueueEntry(RaftMessage message) {
+            this.message = message;
+        }
+
+        public RaftMessage message() {
+            return message;
+        }
+
+        public CompletableFuture<RaftMessage> future() {
+            return future;
+        }
+    }
 }

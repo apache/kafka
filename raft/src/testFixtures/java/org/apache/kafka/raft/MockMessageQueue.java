@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import java.util.ArrayDeque;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,19 +27,19 @@ import java.util.concurrent.atomic.AtomicLong;
  * Mocked implementation which does not block in {@link #poll(long)}..
  */
 public class MockMessageQueue implements RaftMessageQueue {
-    private final Queue<RaftMessage> messages = new ArrayDeque<>();
+    private final Queue<QueueEntry> messages = new ArrayDeque<>();
     private final AtomicBoolean wakeupRequested = new AtomicBoolean(false);
     private final AtomicLong lastPollTimeout = new AtomicLong(-1);
 
     @Override
-    public RaftMessage poll(long timeoutMs) {
+    public Optional<QueueEntry> poll(long timeoutMs) {
         wakeupRequested.set(false);
         lastPollTimeout.set(timeoutMs);
-        return messages.poll();
+        return Optional.ofNullable(messages.poll());
     }
 
     @Override
-    public void add(RaftMessage message) {
+    public void add(QueueEntry message) {
         messages.offer(message);
     }
 

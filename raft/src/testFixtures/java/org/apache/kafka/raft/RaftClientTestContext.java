@@ -968,14 +968,14 @@ public final class RaftClientTestContext {
             versionedRequest,
             time.milliseconds()
         );
-        inboundRequest.completion.whenComplete((response, exception) -> {
+        client.handle(inboundRequest).whenComplete((response, exception) -> {
             if (exception != null) {
+                // TODO: this doesn't do anything interesting. Figure out a way to fail the test
                 throw new RuntimeException(exception);
             } else {
                 sentResponses.add(response);
             }
         });
-        client.handle(inboundRequest);
     }
 
     void deliverResponse(int correlationId, Node source, ApiMessage response) {
@@ -989,7 +989,7 @@ public final class RaftClientTestContext {
      * This is used to expire the update voter set timer without also expiring the fetch timer,
      * which is needed for add, remove, and update voter tests.
      * For voters and observers, polling after exiting this method expires the update voter set timer.
-     * @param epoch - the current epoch 
+     * @param epoch - the current epoch
      * @param leaderId - the leader id
      * @param expireUpdateVoterSetTimer - if true, advance time again to expire this timer
      */

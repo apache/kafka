@@ -22,6 +22,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
@@ -157,7 +158,7 @@ class KafkaRaftManager[T](
     header: RequestHeader,
     request: ApiMessage,
     createdTimeMs: Long
-  ): CompletableFuture[ApiMessage] = {
+  ): CompletionStage[ApiMessage] = {
     clientDriver.handleRequest(context, header, request, createdTimeMs)
   }
 
