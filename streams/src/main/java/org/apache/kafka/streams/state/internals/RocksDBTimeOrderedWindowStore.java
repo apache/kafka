@@ -36,7 +36,7 @@ import java.util.Objects;
 
 
 public class RocksDBTimeOrderedWindowStore
-    extends WrappedStateStore<RocksDBTimeOrderedWindowSegmentedBytesStore, Object, Object>
+    extends WrappedStateStore<AbstractRocksDBTimeOrderedSegmentedBytesStore<? extends Segment>, Object, Object>
     implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 
     private final boolean retainDuplicates;
@@ -46,7 +46,7 @@ public class RocksDBTimeOrderedWindowStore
     private StateStoreContext stateStoreContext;
 
     RocksDBTimeOrderedWindowStore(
-        final RocksDBTimeOrderedWindowSegmentedBytesStore store,
+        final AbstractRocksDBTimeOrderedSegmentedBytesStore<? extends Segment> store,
         final boolean retainDuplicates,
         final long windowSize
     ) {

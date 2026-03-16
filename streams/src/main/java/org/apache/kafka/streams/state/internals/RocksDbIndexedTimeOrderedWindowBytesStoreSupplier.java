@@ -138,7 +138,7 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                     windowSize);
             case INDEXED_WINDOW_STORE_WITH_HEADERS:
                 return new RocksDBTimeOrderedWindowStoreWithHeaders(
-                    new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                    new RocksDBTimeOrderedWindowSegmentedBytesStoreWithHeaders(
                         name,
                         metricsScope(),
                         retentionPeriod,
