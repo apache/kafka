@@ -236,6 +236,181 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
+  def testCoordinatorFailoverAfterCompactingPartitionWithStreamsGroupMemberJoiningAndLeaving(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a streams group grp1s with one member. The member joins and leaves. This creates
+      // a mix of group records with tombstones to delete the member.
+      withStreamsApp(applicationId = "grp1s", inputTopic = "foo")
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeStreamsGroups(java.util.List.of("grp1s"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      val group = groups("grp1s").get(10, TimeUnit.SECONDS)
+      assertEquals("grp1s", group.groupId)
+      assertEquals(GroupState.EMPTY, group.groupState)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testCoordinatorFailoverCompactingPartitionWithStreamsGroupMemberLeavingAndRejoining(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a streams group grp2s with one member. The member joins, leaves, and rejoins.
+      // This creates a mix of group records with tombstones and ensures that all the offset
+      // commit records are before the streams group records due to the rebalance after rejoining.
+      withStreamsApp(applicationId = "grp2s", inputTopic = "foo")
+      withStreamsApp(applicationId = "grp2s", inputTopic = "foo")
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeStreamsGroups(java.util.List.of("grp2s"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      val group = groups("grp2s").get(10, TimeUnit.SECONDS)
+      assertEquals("grp2s", group.groupId)
+      assertEquals(GroupState.EMPTY, group.groupState)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testCoordinatorFailoverAfterCompactingPartitionWithStreamsGroupDeleted(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Create a streams group grp3s with one member. The member joins and leaves the group. Then
+      // the group is deleted. This creates tombstones to delete the member, the group and the offsets.
+      withStreamsApp(applicationId = "grp3s", inputTopic = "foo")
+
+      admin
+        .deleteConsumerGroups(java.util.List.of("grp3s"))
+        .deletedGroups()
+        .get("grp3s")
+        .get(10, TimeUnit.SECONDS)
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeStreamsGroups(java.util.List.of("grp3s"))
+        .describedGroups()
+        .asScala
+        .toMap
+
+      assertDescribedDeadStreamsGroup(groups, "grp3s")
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testRecreatingConsumerOffsetsTopicWithStreamsGroup(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      withStreamsApp(applicationId = "groups", inputTopic = "foo")
+
+      admin
+        .deleteTopics(TopicCollection.ofTopicNames(List(Topic.GROUP_METADATA_TOPIC_NAME).asJava))
+        .all()
+        .get()
+
+      TestUtils.waitUntilTrue(() => {
+        try {
+          admin
+            .describeTopics(TopicCollection.ofTopicNames(List(Topic.GROUP_METADATA_TOPIC_NAME).asJava))
+            .topicNameValues()
+            .get(Topic.GROUP_METADATA_TOPIC_NAME)
+            .get(JTestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS)
+          false
+        } catch {
+          case e: ExecutionException =>
+            e.getCause.isInstanceOf[UnknownTopicOrPartitionException]
+        }
+      }, msg = s"${Topic.GROUP_METADATA_TOPIC_NAME} was not deleted")
+
+      withStreamsApp(applicationId = "groups", inputTopic = "foo")
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
   def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedConsumerGroup(): Unit = {
     withAdmin { admin =>
       TestUtils.createTopicWithAdminRaw(
@@ -727,6 +902,20 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
 
   private def assertDescribedDeadGroup(
     groups: Map[String, KafkaFuture[ConsumerGroupDescription]],
+    groupId: String
+  ): Unit = {
+    try {
+      groups(groupId).get(10, TimeUnit.SECONDS)
+      fail(s"Group $groupId should not be found")
+    } catch {
+      case e: java.util.concurrent.ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[GroupIdNotFoundException])
+        assertEquals(s"Group $groupId not found.", e.getCause.getMessage)
+    }
+  }
+
+  private def assertDescribedDeadStreamsGroup(
+    groups: Map[String, KafkaFuture[org.apache.kafka.clients.admin.StreamsGroupDescription]],
     groupId: String
   ): Unit = {
     try {
