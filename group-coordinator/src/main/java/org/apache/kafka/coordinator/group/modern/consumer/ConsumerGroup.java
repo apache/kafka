@@ -673,22 +673,20 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 "by members using the consumer group protocol");
         }
 
-        // For members using the classic protocol, the epoch must match the last epoch sent
-        // in a heartbeat.
-        if (member.useClassicProtocol()) {
-            validateMemberEpoch(memberEpoch, member.memberEpoch(), true);
-            return CommitPartitionValidator.NO_OP;
-        }
-
-        // For members using the consumer protocol, the epoch must either match the last epoch sent
+        // For members in a consumer group, the epoch must either match the last epoch sent
         // in a heartbeat or be greater than or equal to the partition's assignment epoch.
         if (memberEpoch == member.memberEpoch()) {
             return CommitPartitionValidator.NO_OP;
         }
 
         if (memberEpoch > member.memberEpoch()) {
-            throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than "
-                + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            if (member.useClassicProtocol()) {
+                throw new IllegalGenerationException(String.format("Received generation id %d is newer than "
+                    + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            } else {
+                throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than "
+                    + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            }
         }
 
         // Member epoch is older; validate against per-partition assignment epochs.
@@ -876,16 +874,29 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             }
 
             if (assignmentEpoch == null) {
-                throw new StaleMemberEpochException(String.format(
-                    "Partition %s-%d is not assigned or pending revocation for member.",
-                    topicName, partitionId));
+                if (member.useClassicProtocol()) {
+                    throw new IllegalGenerationException(String.format(
+                        "Partition %s-%d is not assigned or pending revocation for member.",
+                        topicName, partitionId));
+                } else {
+                    throw new StaleMemberEpochException(String.format(
+                        "Partition %s-%d is not assigned or pending revocation for member.",
+                        topicName, partitionId));
+                }
             }
 
             if (receivedMemberEpoch < assignmentEpoch) {
-                throw new StaleMemberEpochException(
-                    String.format("Received member epoch %d is older than assignment epoch %d for partition %s-%d.",
+                if (member.useClassicProtocol()) {
+                    throw new IllegalGenerationException(String.format(
+                        "Received generation id %d is older than assignment epoch %d for partition %s-%d.",
                         receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
-                );
+                    );
+                } else {
+                    throw new StaleMemberEpochException(String.format(
+                        "Received member epoch %d is older than assignment epoch %d for partition %s-%d.",
+                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
+                    );
+                }
             }
         };
     }

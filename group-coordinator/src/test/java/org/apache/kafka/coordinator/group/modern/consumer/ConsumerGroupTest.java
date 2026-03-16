@@ -1013,9 +1013,11 @@ public class ConsumerGroupTest {
         );
         assertEquals(CommitPartitionValidator.NO_OP, validator);
 
-        // When client epoch (7) != broker epoch (10), IllegalGenerationException is thrown.
-        assertThrows(IllegalGenerationException.class, () ->
-            group.validateOffsetCommit("member-id", "", 7, isTransactional, version));
+        // When assignment epoch (7) <= client epoch (7) <= broker epoch (10), no exception thrown.
+        CommitPartitionValidator newValidator = group.validateOffsetCommit(
+            "member-id", "", 7, isTransactional, version
+        );
+        assertDoesNotThrow(() -> newValidator.validate("foo", topicId, 0));
     }
 
     @ParameterizedTest

@@ -287,10 +287,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetCommitRequest.data.topics.forEach { topic =>
           metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
         }
-      } else {
-        offsetCommitRequest.data.topics.forEach { topic =>
-          topic.setTopicId(metadataCache.getTopicId(topic.name))
-        }
       }
 
       val authorizedTopics = authHelper.filterByAuthorized(
@@ -313,32 +309,37 @@ class KafkaApis(val requestChannel: RequestChannel,
           // to the response with TOPIC_AUTHORIZATION_FAILED.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
             topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
-        } else if (!metadataCache.contains(topic.name)) {
-          // If the topic is unknown, we add the topic and all its partitions
-          // to the response with UNKNOWN_TOPIC_OR_PARTITION.
-          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         } else {
-          // Otherwise, we check all partitions to ensure that they all exist.
-          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setTopicId(topic.topicId)
-            .setName(topic.name)
+          val currentTopicId = metadataCache.getTopicId(topic.name)
+          topic.setTopicId(currentTopicId)
 
-          topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
-              topicWithValidPartitions.partitions.add(partition)
-            } else {
-              responseBuilder.addPartition(
-                topic.topicId,
-                topic.name,
-                partition.partitionIndex,
-                Errors.UNKNOWN_TOPIC_OR_PARTITION
-              )
+          if (currentTopicId == Uuid.ZERO_UUID) {
+            // If the topic is unknown, we add the topic and all its partitions
+            // to the response with UNKNOWN_TOPIC_OR_PARTITION.
+            responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+              topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          } else {
+            // Otherwise, we check all partitions to ensure that they all exist.
+            val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
+              .setTopicId(currentTopicId)
+              .setName(topic.name)
+
+            topic.partitions.forEach { partition =>
+              if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
+                topicWithValidPartitions.partitions.add(partition)
+              } else {
+                responseBuilder.addPartition(
+                  currentTopicId,
+                  topic.name,
+                  partition.partitionIndex,
+                  Errors.UNKNOWN_TOPIC_OR_PARTITION
+                )
+              }
             }
-          }
 
-          if (!topicWithValidPartitions.partitions.isEmpty) {
-            authorizedTopicsRequest += topicWithValidPartitions
+            if (!topicWithValidPartitions.partitions.isEmpty) {
+              authorizedTopicsRequest += topicWithValidPartitions
+            }
           }
         }
       }

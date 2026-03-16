@@ -1304,8 +1304,10 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
-    addTopicToMetadataCache("foo", numPartitions = 2)
-    addTopicToMetadataCache("bar", numPartitions = 2)
+    val fooId = Uuid.randomUuid()
+    val barId = Uuid.randomUuid()
+    addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
+    addTopicToMetadataCache("bar", numPartitions = 2, topicId = barId)
 
     val offsetCommitRequest = new OffsetCommitRequestData()
       .setGroupId("group")

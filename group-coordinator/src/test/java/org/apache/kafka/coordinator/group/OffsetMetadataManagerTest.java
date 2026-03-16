@@ -1207,7 +1207,6 @@ public class OffsetMetadataManagerTest {
             .setTopics(List.of(
                 new OffsetCommitRequestData.OffsetCommitRequestTopic()
                     .setName("bar")
-                    .setTopicId(Uuid.randomUuid())
                     .setPartitions(List.of(
                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                             .setPartitionIndex(0)
@@ -3893,7 +3892,6 @@ public class OffsetMetadataManagerTest {
                 .setGenerationIdOrMemberEpoch(5)
                 .setTopics(List.of(new OffsetCommitRequestData.OffsetCommitRequestTopic()
                     .setName("bar")
-                    .setTopicId(Uuid.randomUuid())
                     .setPartitions(List.of(
                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                             .setPartitionIndex(0)
@@ -3932,7 +3930,6 @@ public class OffsetMetadataManagerTest {
                 .setGenerationIdOrMemberEpoch(3)
                 .setTopics(List.of(new OffsetCommitRequestData.OffsetCommitRequestTopic()
                     .setName("bar")
-                    .setTopicId(Uuid.randomUuid())
                     .setPartitions(List.of(
                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                             .setPartitionIndex(0)

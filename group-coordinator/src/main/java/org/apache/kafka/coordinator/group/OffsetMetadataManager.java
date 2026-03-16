@@ -631,12 +631,6 @@ public class OffsetMetadataManager {
                 .setName(topic.name());
             response.topics().add(topicResponse);
 
-            if (topic.topicId().equals(Uuid.ZERO_UUID)) {
-                if (validator != CommitPartitionValidator.NO_OP) {
-                    throw Errors.STALE_MEMBER_EPOCH.exception();
-                }
-            }
-
             topic.partitions().forEach(partition -> {
                 if (isMetadataInvalid(partition.committedMetadata())) {
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
