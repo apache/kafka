@@ -80,8 +80,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.security.DigestException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -147,7 +149,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldApplyEpochToMessageOnAppendIfLeader() throws IOException {
-        SimpleRecord[] records = java.util.stream.IntStream.range(0, 50)
+        SimpleRecord[] records = IntStream.range(0, 50)
             .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
             .toArray(SimpleRecord[]::new);
 
@@ -172,7 +174,7 @@ public class UnifiedLogTest {
 
     @Test
     public void followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache() throws IOException {
-        int[] messageIds = java.util.stream.IntStream.range(0, 50).toArray();
+        int[] messageIds = IntStream.range(0, 50).toArray();
         SimpleRecord[] records = Arrays.stream(messageIds)
             .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
             .toArray(SimpleRecord[]::new);
@@ -1694,7 +1696,7 @@ public class UnifiedLogTest {
     }
 
     @Test
-    public void testCompactionDeletesProducerStateSnapshots() throws IOException, java.security.DigestException {
+    public void testCompactionDeletesProducerStateSnapshots() throws IOException, DigestException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(TEN_KB)
                 .cleanupPolicy(TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -2042,7 +2044,7 @@ public class UnifiedLogTest {
 
         FetchDataInfo fetchedData = log.read(0, Integer.MAX_VALUE, FetchIsolation.LOG_END, true);
 
-        java.util.Iterator<? extends RecordBatch> origIterator = memoryRecords.batches().iterator();
+        Iterator<? extends RecordBatch> origIterator = memoryRecords.batches().iterator();
         for (RecordBatch batch : fetchedData.records.batches()) {
             assertTrue(origIterator.hasNext());
             RecordBatch origEntry = origIterator.next();
