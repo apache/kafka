@@ -103,8 +103,6 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
-        private final long retentionPeriod;
-
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -115,7 +113,7 @@ public class ProcessorStateManager implements StateManager {
             this.changelogPartition = null;
             this.corrupted = false;
             this.offset = null;
-            this.retentionPeriod = -1L; 
+            this.retentionPeriod = -1L;
         }
 
         private StateStoreMetadata(final StateStore stateStore,
@@ -159,7 +157,7 @@ public class ProcessorStateManager implements StateManager {
         Long endOffset() {
             return this.endOffset;
         }
-        
+
         // the retentionPeriod is exposed to the changelog reader for window restoration
         long retentionPeriod() {
             return retentionPeriod;
