@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -1428,6 +1429,51 @@ public class StoreChangelogReaderTest {
                 new byte[0],
                 new byte[0]));
         }
+    }
+
+    @Test
+    public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long offsetForTimestamp = 42L;
+
+        // Use a MockConsumer subclass that supports offsetsForTimes
+        final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                final Map<TopicPartition, OffsetAndTimestamp> result = new java.util.HashMap<>();
+                for (final Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+                    result.put(entry.getKey(), new OffsetAndTimestamp(offsetForTimestamp, entry.getValue()));
+                }
+                return result;
+            }
+        };
+
+        // Set up mocks - storeMetadata returns null offset (no checkpoint) and positive retentionPeriod
+        final StateStoreMetadata windowStoreMetadata = mock(StateStoreMetadata.class);
+        final ProcessorStateManager windowStateManager = mock(ProcessorStateManager.class);
+        final StateStore windowStore = mock(StateStore.class);
+        when(windowStoreMetadata.changelogPartition()).thenReturn(tp);
+        when(windowStoreMetadata.store()).thenReturn(windowStore);
+        when(windowStoreMetadata.offset()).thenReturn(null);
+        when(windowStoreMetadata.retentionPeriod()).thenReturn(retentionMs);
+        when(windowStore.name()).thenReturn(storeName);
+        when(windowStateManager.storeMetadata(tp)).thenReturn(windowStoreMetadata);
+        when(windowStateManager.taskType()).thenReturn(ACTIVE);
+
+        final TaskId taskId = new TaskId(0, 0);
+        when(windowStateManager.taskId()).thenReturn(taskId);
+
+        timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
+
+        reader.register(tp, windowStateManager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        // The consumer should be seeked to the offset returned by offsetsForTimes, not to the beginning
+        assertEquals(offsetForTimestamp, timestampConsumer.position(tp));
     }
 
     private void assignPartition(final long messages,

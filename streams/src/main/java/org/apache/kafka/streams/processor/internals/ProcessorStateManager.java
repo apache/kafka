@@ -31,10 +31,15 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore;
+import org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
+import org.apache.kafka.streams.state.internals.InMemorySessionStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -101,6 +106,8 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
+        private final long retentionPeriod;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -111,6 +118,7 @@ public class ProcessorStateManager implements StateManager {
             this.changelogPartition = null;
             this.corrupted = false;
             this.offset = null;
+            this.retentionPeriod = -1L; 
         }
 
         private StateStoreMetadata(final StateStore stateStore,
@@ -128,10 +136,34 @@ public class ProcessorStateManager implements StateManager {
             this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
+            this.retentionPeriod = extractRetentionPeriod(stateStore);
         }
 
         private void setOffset(final Long offset) {
             this.offset = offset;
+        }
+
+        private static long extractRetentionPeriod(final StateStore stateStore) {
+            // Peel off the wrapping layers one by one
+            StateStore current = stateStore;
+            while (current instanceof WrappedStateStore) {
+                current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+            }
+            // Now 'current' is the innermost store. Check what type it is.
+            if (current instanceof AbstractRocksDBSegmentedBytesStore) {
+                return ((AbstractRocksDBSegmentedBytesStore<?>) current).retentionPeriod();
+            }
+            if (current instanceof AbstractDualSchemaRocksDBSegmentedBytesStore) {
+                return ((AbstractDualSchemaRocksDBSegmentedBytesStore<?>) current).retentionPeriod();
+            }
+            if (current instanceof InMemoryWindowStore) {
+                return ((InMemoryWindowStore) current).retentionPeriod();
+            }
+            if (current instanceof InMemorySessionStore) {
+                return ((InMemorySessionStore) current).retentionPeriod();
+            }
+            // Not a windowed/session store 
+            return -1L;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed
@@ -141,6 +173,11 @@ public class ProcessorStateManager implements StateManager {
 
         Long endOffset() {
             return this.endOffset;
+        }
+        
+        // the retentionPeriod is exposed to the changelog reader for window restoration
+        long retentionPeriod() {
+            return retentionPeriod;
         }
 
         public void setEndOffset(final Long endOffset) {
