@@ -181,8 +181,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         }
 
         final StateStore store = stateManager.store(name);
-        final StateStore wrappedStore = wrapWithReadWriteStore(store);
-        return (S) wrappedStore;
+        return (S) wrapWithReadWriteStore(store);
     }
 
     @Override

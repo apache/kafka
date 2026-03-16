@@ -189,7 +189,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
                 // here either, to not introduce a regression later on
                 -1,
                 null, // we don't know the upstream input topic
-                new RecordHeaders()
+                valueTimestampHeaders == null ? new RecordHeaders() : valueTimestampHeaders.headers()
             ));
 
             final ValueTimestampHeaders<VOut> result = ValueTimestampHeaders.make(

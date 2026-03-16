@@ -448,7 +448,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
             // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
             // buffer something.
-            return Maybe.defined(ValueTimestampHeaders.make(deserializedValue, RecordQueue.UNKNOWN, null));
+            return Maybe.defined(ValueTimestampHeaders.make(deserializedValue, RecordQueue.UNKNOWN, new RecordHeaders()));
         } else {
             return Maybe.undefined();
         }

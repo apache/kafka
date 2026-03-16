@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -51,22 +52,13 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     private TimestampedKeyValueStoreWithHeaders<K, V> headersStore = null;
     private VersionedKeyValueStore<K, V> versionedStore = null;
 
+    // same as either timestampedStore or versionedStore above. kept merely as a convenience
+    // to simplify implementation for methods which do not depend on store type.
     private StateStore store;
 
     @SuppressWarnings("unchecked")
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
         final StateStore rawStore = context.getStateStore(storeName);
-
-        // Check if it's an OLD TimestampedKeyValueStore that needs adaptation
-        if (rawStore instanceof TimestampedKeyValueStore &&
-            !(rawStore instanceof TimestampedKeyValueStoreWithHeaders)) {
-            // Adapt OLD store to NEW type for backward compatibility
-            headersStore = new TimestampedKeyValueStoreToHeadersAdapter<>(
-                (TimestampedKeyValueStore<K, V>) rawStore
-            );
-            store = headersStore;
-            return;
-        }
 
         // Try headers-aware timestamped store
         try {
@@ -106,7 +98,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             throw new UnsupportedOperationException("get(key, timestamp) is only supported for versioned stores");
         }
         final VersionedRecord<V> versionedRecord = versionedStore.get(key, asOfTimestamp);
-        return versionedRecord == null ? null : ValueTimestampHeaders.make(versionedRecord.value(), versionedRecord.timestamp(), null);
+        return versionedRecord == null ? null : ValueTimestampHeaders.make(versionedRecord.value(), versionedRecord.timestamp(), new RecordHeaders());
     }
 
     /**

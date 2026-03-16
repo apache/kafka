@@ -368,8 +368,7 @@ public class ProcessorStateManager implements StateManager {
     @Override
     public StateStore store(final String name) {
         if (stores.containsKey(name)) {
-            final StateStore stateStore = stores.get(name).stateStore;
-            return stateStore;
+            return stores.get(name).stateStore;
         } else {
             return null;
         }
