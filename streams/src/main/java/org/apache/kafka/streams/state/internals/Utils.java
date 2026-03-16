@@ -88,7 +88,7 @@ public class Utils {
      * @return the byte array containing the read bytes
      * @throws SerializationException if buffer doesn't have enough bytes or length is negative
      */
-    static byte[] readBytes(final ByteBuffer buffer, final int length) {
+    public static byte[] readBytes(final ByteBuffer buffer, final int length) {
         if (length < 0) {
             throw new SerializationException(
                 "Invalid format: negative length " + length
