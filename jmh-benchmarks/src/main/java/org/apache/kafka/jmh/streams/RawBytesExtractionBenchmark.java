@@ -82,7 +82,7 @@ public class RawBytesExtractionBenchmark {
     }
 
     /**
-     * Prior to KAFKA-20303
+     * Prior to KAFKA-20303 - HeadersBytesStore
      */
     private static byte[] convertToHeaderFormatPre20303(final byte[] valueAndTimestamp) {
         if (valueAndTimestamp == null) {
