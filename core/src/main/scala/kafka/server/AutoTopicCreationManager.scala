@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, RequestContext, RequestHeader}
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -125,6 +125,8 @@ class DefaultAutoTopicCreationManager(
 
       val creatableTopicResponses = Option(topicErrors.get) match {
         case Some(errors) =>
+          logAutoTopicCreationResults(errors.map { case (topic, apiError) => topic -> apiError.error })
+
           errors.toSeq.map { case (topic, apiError) =>
             val error = apiError.error match {
               case Errors.TOPIC_ALREADY_EXISTS | Errors.REQUEST_TIMED_OUT =>
@@ -182,6 +184,17 @@ class DefaultAutoTopicCreationManager(
         } else if (response.versionMismatch() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
+          // Use pattern matching instead of asInstanceOf to safely handle both a null
+          // response body and an unexpected response type without throwing NPE or ClassCastException.
+          response.responseBody() match {
+            case createTopicsResponse: CreateTopicsResponse =>
+              logAutoTopicCreationResults(createTopicsResponse.data.topics.asScala
+                .map(t => t.name() -> Errors.forCode(t.errorCode)).toMap)
+            case null =>
+              warn(s"AutoTopicCreation: Received null response body for topics: ${creatableTopics.keys}")
+            case unexpected =>
+              warn(s"AutoTopicCreation: Unexpected response type ${unexpected.getClass.getName} for topics: ${creatableTopics.keys}")
+          }
           debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
@@ -223,6 +236,39 @@ class DefaultAutoTopicCreationManager(
 
     info(s"Sent auto-creation request for ${creatableTopics.keys} to the active controller.")
     creatableTopicResponses
+  }
+
+  /**
+   * As part of the effort to disable auto-topic creation, we need to identify which topics are genuinely
+   * being created through this mechanism before reaching out to clients to stop relying on it.
+   *
+   * The existing "Automatically creating topic:" log fires before the creation attempt and cannot
+   * distinguish true new creations from false positives — cases where the broker triggers auto-creation
+   * because its metadata cache hasn't fully loaded yet (e.g., at pod startup), but the topic already
+   * exists in the cluster. This inflates observed counts and makes it impossible to identify real usage.
+   *
+   */
+  private def logAutoTopicCreationResults(topicErrors: Map[String, Errors]): Unit = {
+    // REQUEST_TIMED_OUT is treated as success: it means the topic metadata was written to ZooKeeper
+    // but leader election did not complete within the timeout.
+    val successfulCreations = mutable.Buffer.empty[String]
+    val topicAlreadyExists = mutable.Buffer.empty[String]
+    val otherErrors = mutable.Buffer.empty[String]
+
+    topicErrors.foreach { case (topic, error) =>
+      error match {
+        case Errors.NONE | Errors.REQUEST_TIMED_OUT => successfulCreations += topic
+        case Errors.TOPIC_ALREADY_EXISTS => topicAlreadyExists += topic
+        case _ => otherErrors += s"$topic:$error"
+      }
+    }
+
+    if (successfulCreations.nonEmpty)
+      info(s"AutoTopicCreation: Topics successfully created: ${successfulCreations.mkString(", ")}")
+    if (topicAlreadyExists.nonEmpty)
+      info(s"AutoTopicCreation: Topics already exist: ${topicAlreadyExists.mkString(", ")}")
+    if (otherErrors.nonEmpty)
+      warn(s"AutoTopicCreation: Topics failed to create: ${otherErrors.mkString(", ")}")
   }
 
   private def clearInflightRequests(creatableTopics: Map[String, CreatableTopic]): Unit = {
