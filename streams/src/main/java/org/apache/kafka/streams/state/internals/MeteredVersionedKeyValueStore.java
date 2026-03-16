@@ -65,8 +65,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> The key type
  * @param <V> The (raw) value type
  */
-// TODO: replace with new method in follow-up PR of KIP-1271
-@SuppressWarnings("deprecation")
 public class MeteredVersionedKeyValueStore<K, V>
     extends WrappedStateStore<VersionedBytesStore, K, V>
     implements VersionedKeyValueStore<K, V> {
@@ -145,7 +143,15 @@ public class MeteredVersionedKeyValueStore<K, V>
         public long put(final K key, final V value, final long timestamp) {
             Objects.requireNonNull(key, "key cannot be null");
             try {
-                final long validTo = maybeMeasureLatency(() -> inner.put(serializeKey(key), plainValueSerdes.rawValue(value), timestamp), time, putSensor);
+                final long validTo = maybeMeasureLatency(
+                    () -> inner.put(
+                        serializeKey(key),
+                        plainValueSerdes.rawValue(value, internalContext.headers()),
+                        timestamp
+                    ),
+                    time,
+                    putSensor
+                );
                 maybeRecordE2ELatency();
                 return validTo;
             } catch (final ProcessorStateException e) {

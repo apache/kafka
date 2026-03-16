@@ -529,6 +529,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
             keySerde,
             valueSerde
         );
+        when(context.headers()).thenReturn(new RecordHeaders());
         mockStore.init(context, mockStore);
         return mockStore;
     }

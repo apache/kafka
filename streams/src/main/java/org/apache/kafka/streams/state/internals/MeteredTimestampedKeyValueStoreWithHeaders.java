@@ -43,6 +43,8 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -57,7 +59,7 @@ import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDese
  * A Metered {@link TimestampedKeyValueStoreWithHeaders} wrapper that is used for recording operation metrics, and hence
  * its inner KeyValueStore implementation does not need to provide its own metrics collecting functionality.
  *
- * The inner {@link KeyValueStore} of this class is of type &lt;Bytes, byte[]&gt;,
+ * <p> The inner {@link KeyValueStore} of this class is of type &lt;Bytes, byte[]&gt;,
  * hence we use {@link Serde}s to convert from &lt;K, ValueTimestampHeaders&lt;V&gt;&gt; to &lt;Bytes, byte[]&gt;.
  *
  * @param <K> key type
@@ -108,6 +110,17 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     @Override
+    public ValueTimestampHeaders<V> get(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
+        try {
+            return maybeMeasureLatency(() -> deserializeValue(wrapped().get(serializeKey(key, internalContext.headers()))), time, getSensor);
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
+        }
+    }
+
+    @Override
     public void put(final K key,
                     final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
@@ -118,7 +131,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                         final ProcessorRecordContext currentContext = internalContext.recordContext();
 
                         // Create new headers object to isolate tombstone operation from input record
-                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+                        final Headers tombstoneHeaders = new RecordHeaders(currentContext.headers());
 
                         // Create temporary context with new headers
                         final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
@@ -126,19 +139,21 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                             currentContext.offset(),
                             currentContext.partition(),
                             currentContext.topic(),
-                            deleteHeaders
+                            tombstoneHeaders
                         );
 
                         try {
                             internalContext.setRecordContext(temporaryContext);
-                            wrapped().put(keyBytes(key, deleteHeaders), serdes.rawValue(null, deleteHeaders));
+                            wrapped().put(serializeKey(key, tombstoneHeaders), serializeValue(null));
                         } finally {
                             // Restore original context
                             internalContext.setRecordContext(currentContext);
                         }
                     } else {
+                        // it's ok to only pass header into `serializeKey`, because for the value case passed-in headers are
+                        // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
                         final Headers headers = value.headers();
-                        wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers));
+                        wrapped().put(serializeKey(key, headers), serializeValue(value));
                     }
                 },
                 time,
@@ -161,7 +176,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                     final ProcessorRecordContext currentContext = internalContext.recordContext();
 
                     // Create new headers object to isolate tombstone operation from input record
-                    final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+                    final Headers tombstoneHeaders = new RecordHeaders(currentContext.headers());
 
                     // Create temporary context with new headers
                     final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
@@ -169,19 +184,23 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                         currentContext.offset(),
                         currentContext.partition(),
                         currentContext.topic(),
-                        deleteHeaders
+                        tombstoneHeaders
                     );
 
                     try {
                         internalContext.setRecordContext(temporaryContext);
-                        return deserializeValue(wrapped().putIfAbsent(keyBytes(key, deleteHeaders), serdes.rawValue(null, deleteHeaders)));
+                        return deserializeValue(wrapped().putIfAbsent(serializeKey(key, tombstoneHeaders), serializeValue(null)));
                     } finally {
                         // Restore original context
                         internalContext.setRecordContext(currentContext);
                     }
                 } else {
+                    // it's ok to only pass header into `serializeKey`, because for the value case passed-in headers are
+                    // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
                     final Headers headers = value.headers();
-                    return deserializeValue(wrapped().putIfAbsent(keyBytes(key, headers), serdes.rawValue(value, headers)));
+                    // `rawOldValue` returned from `wrapped().putIfAbsent(...)` is type ValueTimestampHeader
+                    // -> no need to pass in Headers into `deserializeValue()`
+                    return deserializeValue(wrapped().putIfAbsent(serializeKey(key, headers), serializeValue(value)));
                 }
             },
             time,
@@ -192,7 +211,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     @Override
-    public void putAll(final java.util.List<KeyValue<K, ValueTimestampHeaders<V>>> entries) {
+    public void putAll(final List<KeyValue<K, ValueTimestampHeaders<V>>> entries) {
         entries.forEach(entry -> Objects.requireNonNull(entry.key, "key cannot be null"));
 
         final boolean hasNullValue = entries.stream().anyMatch(entry -> entry.value == null);
@@ -200,9 +219,19 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         if (hasNullValue) {
             entries.forEach(entry -> put(entry.key, entry.value));
         } else {
-            // If no null values, use parent's batch optimization
-            super.putAll(entries);
+            maybeMeasureLatency(() -> wrapped().putAll(innerEntries(entries)), time, putAllSensor);
         }
+    }
+
+    private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, ValueTimestampHeaders<V>>> from) {
+        final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
+        for (final KeyValue<K, ValueTimestampHeaders<V>> entry : from) {
+            // it's ok to only pass header into `serializeKey`, because for the value case passed-in headers are
+            // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
+            final Headers headers = entry.value != null ? entry.value.headers() : internalContext.headers();
+            byteEntries.add(KeyValue.pair(serializeKey(entry.key, headers), serializeValue(entry.value)));
+        }
+        return byteEntries;
     }
 
     @Override
@@ -214,7 +243,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                     final ProcessorRecordContext currentContext = internalContext.recordContext();
 
                     // Create new headers object to isolate delete operation from input record
-                    final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+                    final Headers tombstoneHeaders = new RecordHeaders(currentContext.headers());
 
                     // Create temporary context with new headers
                     final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
@@ -222,12 +251,12 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                         currentContext.offset(),
                         currentContext.partition(),
                         currentContext.topic(),
-                        deleteHeaders
+                        tombstoneHeaders
                     );
 
                     try {
                         internalContext.setRecordContext(temporaryContext);
-                        final byte[] deletedValue = wrapped().delete(keyBytes(key, deleteHeaders));
+                        final byte[] deletedValue = wrapped().delete(serializeKey(key, tombstoneHeaders));
                         return deserializeValue(deletedValue);
                     } finally {
                         // Restore original context
@@ -294,10 +323,11 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey(), new RecordHeaders()));
+            KeyQuery.withKey(serializeKey(typedKeyQuery.getKey(), internalContext.headers()));
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
+            // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
             final V plainValue = valueTimestampHeaders == null ? null : valueTimestampHeaders.value();
@@ -318,10 +348,11 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.key(), new RecordHeaders()));
+                KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
         final QueryResult<byte[]> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
+            // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
             // Convert ValueTimestampHeaders to ValueAndTimestamp for the result
@@ -348,8 +379,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().orElse(null), new RecordHeaders()),
-                keyBytes(typedQuery.getUpperBound().orElse(null), new RecordHeaders())
+            serializeKey(typedQuery.getLowerBound().orElse(null), internalContext.headers()),
+            serializeKey(typedQuery.getUpperBound().orElse(null), internalContext.headers())
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -361,9 +392,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
-            final KeyValueIterator<K, V> resultIterator = new MeteredTimestampedKeyValueStoreWithHeadersIterator(
+            final KeyValueIterator<K, V> resultIterator = new MeteredTimestampedKeyValueStoreWithHeadersQueryIterator(
                     iterator,
                     getSensor,
+                    // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
                     StoreQueryUtils.deserializeValue(serdes, wrapped()),
                     true
             );
@@ -390,8 +422,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.lowerBound().orElse(null), new RecordHeaders()),
-                keyBytes(typedQuery.upperBound().orElse(null), new RecordHeaders())
+            serializeKey(typedQuery.lowerBound().orElse(null), internalContext.headers()),
+            serializeKey(typedQuery.upperBound().orElse(null), internalContext.headers())
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -404,9 +436,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
             final KeyValueIterator<K, ValueAndTimestamp<V>> resultIterator =
-                    (KeyValueIterator<K, ValueAndTimestamp<V>>) new MeteredTimestampedKeyValueStoreWithHeadersIterator(
+                    (KeyValueIterator<K, ValueAndTimestamp<V>>) new MeteredTimestampedKeyValueStoreWithHeadersQueryIterator(
                             iterator,
                             getSensor,
+                            // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
                             StoreQueryUtils.deserializeValue(serdes, wrapped()),
                             false
             );
@@ -428,7 +461,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                                                                                                   final PS prefixKeySerializer) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
-        return new MeteredValueTimestampHeadersIterator(
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().prefixScan(prefix, prefixKeySerializer),
             prefixScanSensor
         );
@@ -437,10 +470,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
                                                                final K to) {
-        return new MeteredValueTimestampHeadersIterator(
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().range(
-                keyBytes(from, new RecordHeaders()),
-                keyBytes(to, new RecordHeaders())
+                serializeKey(from, internalContext.headers()),
+                serializeKey(to, internalContext.headers())
             ),
             rangeSensor
         );
@@ -449,10 +482,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from,
                                                                       final K to) {
-        return new MeteredValueTimestampHeadersIterator(
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().reverseRange(
-                keyBytes(from, new RecordHeaders()),
-                keyBytes(to, new RecordHeaders())
+                serializeKey(from, internalContext.headers()),
+                serializeKey(to, internalContext.headers())
             ),
             rangeSensor
         );
@@ -460,7 +493,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> all() {
-        return new MeteredValueTimestampHeadersIterator(
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().all(),
             allSensor
         );
@@ -468,14 +501,14 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseAll() {
-        return new MeteredValueTimestampHeadersIterator(
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().reverseAll(),
             allSensor
         );
     }
 
     @SuppressWarnings("unchecked")
-    private class MeteredTimestampedKeyValueStoreWithHeadersIterator implements KeyValueIterator<K, V>, MeteredIterator {
+    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator implements KeyValueIterator<K, V>, MeteredIterator {
 
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
@@ -486,10 +519,12 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         private final boolean returnPlainValue;
         private KeyValue<K, V> cachedNext;
 
-        private MeteredTimestampedKeyValueStoreWithHeadersIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                                                   final Sensor sensor,
-                                                                   final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer,
-                                                                   final boolean returnPlainValue) {
+        private MeteredTimestampedKeyValueStoreWithHeadersQueryIterator(
+            final KeyValueIterator<Bytes, byte[]> iter,
+            final Sensor sensor,
+            final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer,
+            final boolean returnPlainValue
+        ) {
             this.iter = iter;
             this.sensor = sensor;
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
@@ -519,21 +554,15 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = valueTimestampHeadersDeserializer.apply(keyValue.value);
-            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
+            final Headers headers = valueTimestampHeaders.headers();
+
             if (returnPlainValue) {
-                final V plainValue = valueTimestampHeaders == null ? null : valueTimestampHeaders.value();
-                return KeyValue.pair(
-                    serdes.keyFrom(keyValue.key.get(), headers),
-                    plainValue
-                );
+                return KeyValue.pair(deserializeKey(keyValue.key.get(), headers), valueTimestampHeaders.value());
             } else {
                 // Return as ValueAndTimestamp
-                final ValueAndTimestamp<V> valueAndTimestamp = valueTimestampHeaders == null
-                    ? null
-                    : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
                 return KeyValue.pair(
-                    serdes.keyFrom(keyValue.key.get(), headers),
-                    (V) valueAndTimestamp
+                    deserializeKey(keyValue.key.get(), headers),
+                    (V) ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp())
                 );
             }
         }
@@ -559,15 +588,17 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         }
     }
 
-    private class MeteredValueTimestampHeadersIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>>, MeteredIterator {
+    private class MeteredTimestampedKeyValueStoreWithHeadersIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>>, MeteredIterator {
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
         private final long startTimestampMs;
         private KeyValue<K, ValueTimestampHeaders<V>> cachedNext;
 
-        private MeteredValueTimestampHeadersIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                                     final Sensor sensor) {
+        private MeteredTimestampedKeyValueStoreWithHeadersIterator(
+            final KeyValueIterator<Bytes, byte[]> iter,
+            final Sensor sensor
+        ) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();
@@ -595,9 +626,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             }
 
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
-            final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(keyValue.value, new RecordHeaders());
-            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
-            final K key = serdes.keyFrom(keyValue.key.get(), headers);
+            final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(keyValue.value);
+            final K key = deserializeKey(keyValue.key.get(), valueTimestampHeaders.headers());
             return KeyValue.pair(key, valueTimestampHeaders);
         }
 
@@ -623,7 +653,21 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         }
     }
 
-    protected Bytes keyBytes(final K key, final Headers headers) {
+    @Override
+    protected Bytes serializeKey(final K key) {
+        throw new UnsupportedOperationException("MeteredTimestampedKeyValueStoreWithHeaders required to pass in Headers when serializing a key.");
+    }
+
+    protected Bytes serializeKey(final K key, final Headers headers) {
         return Bytes.wrap(serdes.rawKey(key, headers));
+    }
+
+    @Override
+    protected K deserializeKey(final byte[] rawKey) {
+        throw new UnsupportedOperationException("MeteredTimestampedKeyValueStoreWithHeaders required to pass in Headers when deserializing a key.");
+    }
+
+    protected K deserializeKey(final byte[] rawKey, final Headers headers) {
+        return serdes.keyFrom(rawKey, headers);
     }
 }
