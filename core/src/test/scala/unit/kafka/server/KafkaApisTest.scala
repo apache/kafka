@@ -1356,6 +1356,7 @@ class KafkaApisTest extends Logging {
       .setTopics(util.List.of(
         // foo exists but only has 2 partitions.
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setTopicId(fooId)
           .setName("foo")
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -1365,6 +1366,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setCommittedOffset(20))),
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setTopicId(barId)
           .setName("bar")
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
