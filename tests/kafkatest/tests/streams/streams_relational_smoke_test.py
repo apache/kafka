@@ -94,8 +94,13 @@ class StreamsRelationalSmokeTest(BaseStreamsTest):
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
             metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic", "streams"])
-    def test_streams(self, crash, metadata_quorum, group_protocol):
+            group_protocol=["classic"],
+            enable_assignment_batching=[False])
+    @matrix(crash=[False, True],
+            metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["streams"],
+            enable_assignment_batching=[False, True])
+    def test_streams(self, crash, metadata_quorum, group_protocol, enable_assignment_batching):
         driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored", "ignored")
         processing_guarantee='exactly_once_v2'
 

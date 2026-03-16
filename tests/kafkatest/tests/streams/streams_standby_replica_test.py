@@ -48,8 +48,12 @@ class StreamsStandbyTask(BaseStreamsTest):
 
     @cluster(num_nodes=10)
     @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic", "streams"])
-    def test_standby_tasks_rebalance(self, metadata_quorum, group_protocol):
+            group_protocol=["classic"],
+            enable_assignment_batching=[False])
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["streams"],
+            enable_assignment_batching=[False, True])
+    def test_standby_tasks_rebalance(self, metadata_quorum, group_protocol, enable_assignment_batching):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
             group_protocol=group_protocol,
