@@ -542,6 +542,7 @@ public class ConfigurationControlManager {
         if (!supportedConfigChecker.isSupported(configResource.type(), record.name())) {
             // We skip unsupported configs during replay. This can happen when the config was
             // deprecated and removed, but old records still exist in the log.
+            log.info("Skipping unsupported config {} for resource {} during replay", record.name(), configResource);
             return;
         }
         
