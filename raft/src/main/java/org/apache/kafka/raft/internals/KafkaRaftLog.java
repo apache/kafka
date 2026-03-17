@@ -72,7 +72,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -674,19 +673,19 @@ public class KafkaRaftLog implements RaftLog {
             Scheduler scheduler,
             MetadataLogConfig config,
             int nodeId) throws IOException {
-        Properties props = new Properties();
-        props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(config.internalMaxBatchSizeInBytes()));
+        Map<String, String> props = new HashMap<>();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(config.internalMaxBatchSizeInBytes()));
         if (config.internalSegmentBytes() != null) {
-            props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(config.internalSegmentBytes()));
+            props.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(config.internalSegmentBytes()));
         } else {
-            props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.logSegmentBytes()));
+            props.put(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.logSegmentBytes()));
         }
-        props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(config.logSegmentMillis()));
-        props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT));
+        props.put(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(config.logSegmentMillis()));
+        props.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT));
 
         // Disable time and byte retention when deleting segments
-        props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1");
-        props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1");
+        props.put(TopicConfig.RETENTION_MS_CONFIG, "-1");
+        props.put(TopicConfig.RETENTION_BYTES_CONFIG, "-1");
         LogConfig.validate(props);
         LogConfig defaultLogConfig = new LogConfig(props);
 

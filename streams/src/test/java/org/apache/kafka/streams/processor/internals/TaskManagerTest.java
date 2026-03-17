@@ -117,7 +117,6 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -4992,7 +4991,6 @@ public class TaskManagerTest {
         final Path checkpointFilePath = checkpointFile.toPath();
         Files.createFile(checkpointFilePath);
         new OffsetCheckpoint(checkpointFile).write(offsets);
-        lenient().when(stateDirectory.checkpointFileFor(task)).thenReturn(checkpointFile);
         expectDirectoryNotEmpty(task);
     }
 

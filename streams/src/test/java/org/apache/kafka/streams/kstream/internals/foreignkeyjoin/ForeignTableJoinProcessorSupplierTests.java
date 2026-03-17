@@ -27,8 +27,8 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -61,7 +61,7 @@ public class ForeignTableJoinProcessorSupplierTests {
     );
 
     private MockInternalProcessorContext<String, SubscriptionResponseWrapper<String>> context = null;
-    private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = null;
+    private TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>> stateStore = null;
     private Processor<String, Change<String>, String, SubscriptionResponseWrapper<String>> processor = null;
     private File stateDir;
 
@@ -71,7 +71,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         context = new MockInternalProcessorContext<>(props, new TaskId(0, 0), stateDir);
 
-        final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
+        final StoreBuilder<TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
         processor = new ForeignTableJoinProcessorSupplier<String, String, String>(
             StoreBuilderWrapper.wrapStoreBuilder(storeBuilder()),
             COMBINED_KEY_SCHEMA
@@ -200,16 +200,16 @@ public class ForeignTableJoinProcessorSupplierTests {
             SubscriptionWrapper.VERSION_0,
             null
         );
-        final ValueAndTimestamp<SubscriptionWrapper<String>> oldValue = ValueAndTimestamp.make(oldWrapper, 0);
+        final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, null);
 
         final Bytes key = COMBINED_KEY_SCHEMA.toBytes(fk, pk);
         stateStore.put(key, oldValue);
     }
 
-    private StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>>> storeBuilder() {
+    private StoreBuilder<TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>>> storeBuilder() {
         final Serde<SubscriptionWrapper<String>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(
             PK_SERDE_TOPIC_SUPPLIER, Serdes.String());
-        return Stores.timestampedKeyValueStoreBuilder(
+        return Stores.timestampedKeyValueStoreBuilderWithHeaders(
             Stores.persistentTimestampedKeyValueStore(
                 "Store"
             ),
