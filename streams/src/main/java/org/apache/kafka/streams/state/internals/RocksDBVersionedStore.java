@@ -107,7 +107,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
-    private OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     RocksDBVersionedStore(final String name, final String metricsScope, final long historyRetention, final long segmentInterval) {
@@ -367,6 +366,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         segmentStores.openExisting(internalProcessorContext, observedStreamTime);
         this.position = segmentStores.position;
+        StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), this.position);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
