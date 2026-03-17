@@ -95,7 +95,7 @@ object TransactionMarkerChannelManager {
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
       time,
-      false,
+      true,
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE
