@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.test.MockInternalProcessorContext;
 
@@ -61,8 +61,8 @@ public class ResponseJoinProcessorSupplierTest {
                 }
 
                 @Override
-                public ValueAndTimestamp<V> get(final K key) {
-                    return ValueAndTimestamp.make(map.get(key), -1);
+                public ValueTimestampHeaders<V> get(final K key) {
+                    return ValueTimestampHeaders.make(map.get(key), -1, null);
                 }
 
                 @Override

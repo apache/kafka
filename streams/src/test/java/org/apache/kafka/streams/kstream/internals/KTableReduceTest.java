@@ -20,9 +20,9 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.test.InternalMockProcessorContext;
 
 import org.junit.jupiter.api.Test;
@@ -48,19 +48,19 @@ public class KTableReduceTest {
                 this::differenceNotNullArgs
             ).get();
 
-        final TimestampedKeyValueStore<String, Set<String>> myStore =
-            new GenericInMemoryTimestampedKeyValueStore<>("myStore");
+        final TimestampedKeyValueStoreWithHeaders<String, Set<String>> myStore =
+            new GenericInMemoryTimestampedKeyValueStoreWithHeaders<>("myStore");
 
         context.register(myStore, null);
         reduceProcessor.init(context);
         context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));
 
         reduceProcessor.process(new Record<>("A", new Change<>(singleton("a"), null), 10L));
-        assertEquals(ValueAndTimestamp.make(singleton("a"), 10L), myStore.get("A"));
+        assertEquals(ValueTimestampHeaders.make(singleton("a"), 10L, null), myStore.get("A"));
         reduceProcessor.process(new Record<>("A", new Change<>(singleton("b"), singleton("a")), 15L));
-        assertEquals(ValueAndTimestamp.make(singleton("b"), 15L), myStore.get("A"));
+        assertEquals(ValueTimestampHeaders.make(singleton("b"), 15L, null), myStore.get("A"));
         reduceProcessor.process(new Record<>("A", new Change<>(null, singleton("b")), 12L));
-        assertEquals(ValueAndTimestamp.make(emptySet(), 15L), myStore.get("A"));
+        assertEquals(ValueTimestampHeaders.make(emptySet(), 15L, null), myStore.get("A"));
     }
 
     private Set<String> differenceNotNullArgs(final Set<String> left, final Set<String> right) {

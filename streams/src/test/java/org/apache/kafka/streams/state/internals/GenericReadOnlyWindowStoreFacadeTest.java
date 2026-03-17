@@ -91,7 +91,7 @@ public class GenericReadOnlyWindowStoreFacadeTest {
     @Test
     public void shouldConvertToValueAndTimestamp() {
         final Function<ValueTimestampHeaders<String>, ValueAndTimestamp<String>> converter =
-            ValueConverters.headersToValueAndTimestamp();
+            ValueConverters.extractValueAndTimestampFromHeaders();
         final GenericReadOnlyWindowStoreFacade<String, ValueTimestampHeaders<String>, ValueAndTimestamp<String>> facade =
             new GenericReadOnlyWindowStoreFacade<>(mockedHeadersStore, converter);
 

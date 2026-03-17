@@ -111,11 +111,6 @@ public class StandbyTask extends AbstractTask implements Task {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
-            // with and without EOS we would check for checkpointing at each commit during running,
-            // and the file may be deleted in which case we should checkpoint immediately,
-            // therefore we initialize the snapshot as empty
-            offsetSnapshotSinceLastFlush = Collections.emptyMap();
-
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
             transitionTo(State.RESTORING);
@@ -216,7 +211,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                maybeCheckpoint(enforceCheckpoint);
+                maybeCheckpoint();
 
                 log.debug("Finalized commit for {} task", state());
 
@@ -305,9 +300,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        // for standby tasks committing is the same as checkpointing,
-        // so we only need to commit if we want to checkpoint
-        return StateManagerUtil.checkpointNeeded(false, offsetSnapshotSinceLastFlush, stateMgr.changelogOffsets());
+        return true;
     }
 
     @Override

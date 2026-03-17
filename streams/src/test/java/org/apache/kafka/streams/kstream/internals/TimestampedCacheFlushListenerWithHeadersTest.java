@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class TimestampedCacheFlushListenerTest {
+public class TimestampedCacheFlushListenerWithHeadersTest {
 
     @Test
     public void shouldForwardValueTimestampIfNewValueExists() {
@@ -45,12 +45,12 @@ public class TimestampedCacheFlushListenerTest {
                 new Change<>("newValue", "oldValue"),
                 42L));
 
-        new TimestampedCacheFlushListener<>(context).apply(
+        new TimestampedCacheFlushListenerWithHeaders<>(context).apply(
             new Record<>(
                 "key",
                 new Change<>(
-                    ValueAndTimestamp.make("newValue", 42L),
-                    ValueAndTimestamp.make("oldValue", 21L)),
+                    ValueTimestampHeaders.make("newValue", 42L, null),
+                    ValueTimestampHeaders.make("oldValue", 21L, null)),
                 73L));
 
         verify(context, times(2)).setCurrentNode(null);
@@ -66,10 +66,10 @@ public class TimestampedCacheFlushListenerTest {
                 new Change<>(null, "oldValue"),
                 73L));
 
-        new TimestampedCacheFlushListener<>(context).apply(
+        new TimestampedCacheFlushListenerWithHeaders<>(context).apply(
             new Record<>(
                 "key",
-                new Change<>(null, ValueAndTimestamp.make("oldValue", 21L)),
+                new Change<>(null, ValueTimestampHeaders.make("oldValue", 21L, null)),
                 73L));
 
         verify(context, times(2)).setCurrentNode(null);

@@ -136,6 +136,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                         .setPort(userEndpoint.port())
                     );
                 });
+                streamsRebalanceData.rackId().ifPresent(data::setRackId);
                 data.setClientTags(streamsRebalanceData.clientTags().entrySet().stream()
                     .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
                         .setKey(entry.getKey())

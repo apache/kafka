@@ -17,12 +17,17 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.TopologyTestDriver.WindowStoreFacade;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -36,6 +41,9 @@ import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -62,6 +70,13 @@ public class WindowStoreFacadeTest {
             .init(context, store);
     }
 
+    @Deprecated
+    @Test
+    public void shouldForwardFlush() {
+        windowStoreFacade.flush();
+        verify(mockedWindowTimestampStore).flush();
+    }
+
     @Test
     public void shouldPutWindowStartTimestampWithUnknownTimestamp() {
         windowStoreFacade.put("key", "value", 21L);
@@ -73,6 +88,24 @@ public class WindowStoreFacadeTest {
     public void shouldForwardCommit() {
         windowStoreFacade.commit(Map.of());
         verify(mockedWindowTimestampStore).commit(Map.of());
+    }
+
+    @Test
+    public void shouldReturnCommitOffsets() {
+        final TopicPartition topicPartition = new TopicPartition("topic", 0);
+        when(mockedWindowTimestampStore.committedOffset(any())).thenReturn(42L);
+
+        assertEquals(42L, windowStoreFacade.committedOffset(topicPartition));
+        verify(mockedWindowTimestampStore).committedOffset(topicPartition);
+    }
+
+    @Deprecated
+    @Test
+    public void shouldReturnManagedOffsets() {
+        when(mockedWindowTimestampStore.managesOffsets()).thenReturn(true);
+
+        assertTrue(windowStoreFacade.managesOffsets());
+        verify(mockedWindowTimestampStore).managesOffsets();
     }
 
     @Test
@@ -107,15 +140,6 @@ public class WindowStoreFacadeTest {
         assertThat(windowStoreFacade.isOpen(), is(true));
         assertThat(windowStoreFacade.isOpen(), is(false));
         verify(mockedWindowTimestampStore, times(2)).isOpen();
-    }
-
-    @Test
-    public void shouldReturnPosition() {
-        when(mockedWindowTimestampStore.getPosition())
-            .thenReturn(Position.emptyPosition());
-
-        assertThat(windowStoreFacade.getPosition(), is(Position.emptyPosition()));
-        verify(mockedWindowTimestampStore, times(1)).getPosition();
     }
 
     @Test
@@ -173,4 +197,29 @@ public class WindowStoreFacadeTest {
         }
     }
 
+    @Test
+    public void shouldReturnPosition() {
+        when(mockedWindowTimestampStore.getPosition())
+            .thenReturn(Position.emptyPosition());
+
+        assertThat(windowStoreFacade.getPosition(), is(Position.emptyPosition()));
+        verify(mockedWindowTimestampStore).getPosition();
+    }
+
+    @Test
+    public void shouldReturnQueryResult() {
+        final Query<Object> query = new Query<>() { };
+        final QueryConfig queryConfig = new QueryConfig(true);
+        final QueryResult<Integer> queryResult = QueryResult.forResult(42);
+        when(mockedWindowTimestampStore.<Integer>query(any(), any(), any())).thenReturn(queryResult);
+
+        assertThat(
+            windowStoreFacade.query(
+                query,
+                PositionBound.unbounded(),
+                queryConfig
+            ),
+            is(queryResult));
+        verify(mockedWindowTimestampStore).query(query, PositionBound.unbounded(), queryConfig);
+    }
 }
