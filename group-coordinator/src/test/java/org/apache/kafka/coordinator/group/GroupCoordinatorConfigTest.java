@@ -408,7 +408,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals("group.streams.max.session.timeout.ms must be greater than or equal to group.streams.min.session.timeout.ms",
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
-        // other case for `streams.group.mix.sessoion.timeout.ms` are covered in section `session.timeout.ms` above
+        // other case for `streams.group.min.session.timeout.ms` are covered in section `session.timeout.ms` above
 
 
         // group.streams.max.session.timeout.ms
@@ -489,7 +489,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals("group.streams.max.heartbeat.interval.ms must be greater than or equal to group.streams.min.heartbeat.interval.ms",
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
-        // other case for `streams.group.mix.heartbeat.interval.ms` covered in `session.timeout.ms` section
+        // other case for `streams.group.min.heartbeat.interval.ms` covered in `session.timeout.ms` section
 
 
         // group.streams.max.heartbeat.interval.ms

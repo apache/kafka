@@ -512,7 +512,7 @@ public class GroupConfigTest {
 
     @ParameterizedTest(name = "testEvaluateMinBoundedValueBelowMinIsCapped[{0}]")
     @MethodSource("minBoundedConfigs")
-    public void testEvaluateMinBoundedValueAboveMinIsCapped(
+    public void testEvaluateMinBoundedValueBelowMinIsCapped(
         String key,
         int tooLow,
         int expectedMin

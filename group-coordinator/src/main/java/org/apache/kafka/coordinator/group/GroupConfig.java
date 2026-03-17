@@ -548,7 +548,7 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Clamp a config value to at most min. A WARN log is emitted on adjustment.
+     * Clamp a config value to at least min. A WARN log is emitted on adjustment.
      * No-op when the key is absent from props.
      *
      * @param props   The properties to modify in place.
@@ -567,7 +567,7 @@ public final class GroupConfig extends AbstractConfig {
 
         int value = Integer.parseInt(rawValue.toString());
         if (value < min) {
-            log.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
+            log.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
                     "allowed minimum {}. The effective value will be capped to {}.",
                 key, groupId, value, min, min);
             props.put(key, min);
