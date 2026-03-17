@@ -132,9 +132,7 @@ public class Utils {
             );
         }
         final byte[] bytes = new byte[length];
-        // Use native copy method when the buffer is backed by an array
-        System.arraycopy(buffer.array(), buffer.position(), bytes, 0, length);
-        buffer.position(buffer.position() + length);
+        buffer.get(bytes);
         return bytes;
     }
 
