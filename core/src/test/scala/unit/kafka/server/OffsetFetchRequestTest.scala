@@ -838,7 +838,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
                   .setTopicId(barTopicId)
                   .setPartitionIndexes(List[Integer](0, 1).asJava)
               ).asJava),
-            requireStable = true,
+            requireStable = false,
             version = version.toShort
           )
         },
