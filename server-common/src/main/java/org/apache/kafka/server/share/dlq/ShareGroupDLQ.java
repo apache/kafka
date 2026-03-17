@@ -23,6 +23,13 @@ import java.util.concurrent.CompletableFuture;
  * The main interface to identify implementations of dead letter queues for share groups.
  */
 public interface ShareGroupDLQ {
+    Throwable STALE_BATCH = new Exception("Offset part of stale batch.");
+    Throwable BEHIND_LSO = new Exception("Offset before LSO.");
+    Throwable ABORTED_TRANSACTION = new Exception("Offset part of aborted transaction.");
+    Throwable CLIENT_REJECT = new Exception("Offset rejected by client.");
+    Throwable DELIVERY_COUNT_EXCEEDED = new Exception("Offset delivery count exceeded the threshold.");
+    Throwable ACQUISITION_LOCK_TIMEOUT = new Exception("Acquisition lock timed out.");
+
     /**
      * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
      *
