@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -167,30 +168,30 @@ public class KTableFilterTest {
             assertNull(getter2.get("B"));
             assertNull(getter2.get("C"));
 
-            assertEquals(ValueTimestampHeaders.make(1, 5L, null), getter3.get("A"));
-            assertEquals(ValueTimestampHeaders.make(1, 10L, null), getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 15L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(1, 5L, new RecordHeaders()), getter3.get("A"));
+            assertEquals(ValueTimestampHeaders.make(1, 10L, new RecordHeaders()), getter3.get("B"));
+            assertEquals(ValueTimestampHeaders.make(1, 15L, new RecordHeaders()), getter3.get("C"));
 
             inputTopic.pipeInput("A", 2, 10L);
             inputTopic.pipeInput("B", 2, 5L);
 
-            assertEquals(ValueTimestampHeaders.make(2, 10L, null), getter2.get("A"));
-            assertEquals(ValueTimestampHeaders.make(2, 5L, null), getter2.get("B"));
+            assertEquals(ValueTimestampHeaders.make(2, 10L, new RecordHeaders()), getter2.get("A"));
+            assertEquals(ValueTimestampHeaders.make(2, 5L, new RecordHeaders()), getter2.get("B"));
             assertNull(getter2.get("C"));
 
             assertNull(getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 15L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(1, 15L, new RecordHeaders()), getter3.get("C"));
 
             inputTopic.pipeInput("A", 3, 15L);
 
             assertNull(getter2.get("A"));
-            assertEquals(ValueTimestampHeaders.make(2, 5L, null), getter2.get("B"));
+            assertEquals(ValueTimestampHeaders.make(2, 5L, new RecordHeaders()), getter2.get("B"));
             assertNull(getter2.get("C"));
 
-            assertEquals(ValueTimestampHeaders.make(3, 15L, null), getter3.get("A"));
+            assertEquals(ValueTimestampHeaders.make(3, 15L, new RecordHeaders()), getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 15L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(1, 15L, new RecordHeaders()), getter3.get("C"));
 
             inputTopic.pipeInput("A", null, 10L);
             inputTopic.pipeInput("B", null, 20L);
@@ -201,7 +202,7 @@ public class KTableFilterTest {
 
             assertNull(getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 15L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(1, 15L, new RecordHeaders()), getter3.get("C"));
         }
     }
 

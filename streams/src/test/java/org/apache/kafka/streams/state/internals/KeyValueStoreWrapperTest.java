@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -55,7 +56,7 @@ public class KeyValueStoreWrapperTest {
     private static final String STORE_NAME = "kvStore";
     private static final String KEY = "k";
     private static final ValueTimestampHeaders<String> VALUE_TIMESTAMP_HEADERS
-        = ValueTimestampHeaders.make("v", 8L, null);
+        = ValueTimestampHeaders.make("v", 8L, new RecordHeaders());
 
     @Mock
     private TimestampedKeyValueStoreWithHeaders<String, String> headersStore;

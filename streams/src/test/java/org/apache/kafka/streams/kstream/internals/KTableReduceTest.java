@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -56,11 +57,11 @@ public class KTableReduceTest {
         context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));
 
         reduceProcessor.process(new Record<>("A", new Change<>(singleton("a"), null), 10L));
-        assertEquals(ValueTimestampHeaders.make(singleton("a"), 10L, null), myStore.get("A"));
+        assertEquals(ValueTimestampHeaders.make(singleton("a"), 10L, new RecordHeaders()), myStore.get("A"));
         reduceProcessor.process(new Record<>("A", new Change<>(singleton("b"), singleton("a")), 15L));
-        assertEquals(ValueTimestampHeaders.make(singleton("b"), 15L, null), myStore.get("A"));
+        assertEquals(ValueTimestampHeaders.make(singleton("b"), 15L, new RecordHeaders()), myStore.get("A"));
         reduceProcessor.process(new Record<>("A", new Change<>(null, singleton("b")), 12L));
-        assertEquals(ValueTimestampHeaders.make(emptySet(), 15L, null), myStore.get("A"));
+        assertEquals(ValueTimestampHeaders.make(emptySet(), 15L, new RecordHeaders()), myStore.get("A"));
     }
 
     private Set<String> differenceNotNullArgs(final Set<String> left, final Set<String> right) {

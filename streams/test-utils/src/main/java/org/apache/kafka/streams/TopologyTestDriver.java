@@ -1581,7 +1581,7 @@ public class TopologyTestDriver implements Closeable {
         public void put(final K key,
                         final V value,
                         final long windowStartTimestamp) {
-            inner.put(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, null), windowStartTimestamp);
+            inner.put(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, new RecordHeaders()), windowStartTimestamp);
         }
 
         @Override

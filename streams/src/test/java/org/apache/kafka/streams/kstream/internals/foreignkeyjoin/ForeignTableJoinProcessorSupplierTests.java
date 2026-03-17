@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -200,7 +201,7 @@ public class ForeignTableJoinProcessorSupplierTests {
             SubscriptionWrapper.VERSION_0,
             null
         );
-        final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, null);
+        final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
         final Bytes key = COMBINED_KEY_SCHEMA.toBytes(fk, pk);
         stateStore.put(key, oldValue);
