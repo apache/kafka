@@ -120,7 +120,7 @@ public class GroupConfigTest {
     @Test
     public void testValidShareAutoOffsetResetValues() {
 
-        Properties props = createValidGroupConfig();
+        Map<String, String> props = createValidGroupConfig();
 
         // Check for value "latest"
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
@@ -139,7 +139,7 @@ public class GroupConfigTest {
     @Test
     public void testValidShareIsolationLevelValues() {
         // Check for value READ_UNCOMMITTED
-        Properties props = createValidGroupConfig();
+        Map<String, String> props = createValidGroupConfig();
         props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_committed");
         doTestValidProps(props);
 
@@ -152,7 +152,7 @@ public class GroupConfigTest {
     @Test
     public void testInvalidProps() {
 
-        Properties props = createValidGroupConfig();
+        Map<String, String> props = createValidGroupConfig();
 
         // Check for invalid consumerSessionTimeoutMs, < MIN
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "1");
@@ -276,11 +276,11 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
     }
 
-    private void doTestInvalidProps(Properties props, Class<? extends Exception> exceptionClassName) {
+    private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
         assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
-    private void doTestValidProps(Properties props) {
+    private void doTestValidProps(Map<String, String> props) {
         assertDoesNotThrow(() -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
@@ -324,7 +324,7 @@ public class GroupConfigTest {
 
     @Test
     public void testInvalidConfigName() {
-        Properties props = new Properties();
+        Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
@@ -347,7 +347,7 @@ public class GroupConfigTest {
         ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
         assertDoesNotThrow(() ->
-            GroupConfig.validate(new Properties(), groupCoordinatorConfig, shareGroupConfig));
+            GroupConfig.validate(new HashMap<>(), groupCoordinatorConfig, shareGroupConfig));
     }
 
     @Test
@@ -487,8 +487,8 @@ public class GroupConfigTest {
         assertEquals(expectedMax, result.get(key));
     }
 
-    private Properties createValidGroupConfig() {
-        Properties props = new Properties();
+    private Map<String, String> createValidGroupConfig() {
+        Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000");
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
         props.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "45000");
