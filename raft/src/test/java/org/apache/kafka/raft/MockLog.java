@@ -428,8 +428,7 @@ public class MockLog implements RaftLog {
                 startOffset, metadataForOffset(startOffset)));
         }
 
-        int bufferSizeBytes = 512;
-        ByteBuffer buffer = ByteBuffer.allocate(bufferSizeBytes);
+        ByteBuffer buffer = ByteBuffer.allocate(512);
         int batchCount = 0;
         LogOffsetMetadata batchStartOffset = null;
 
