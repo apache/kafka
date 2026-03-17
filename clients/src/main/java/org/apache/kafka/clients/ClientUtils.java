@@ -105,6 +105,11 @@ public final class ClientUtils {
             final String host = getHost(url);
             final Integer port = getPort(url);
 
+            if (host == null || port == null) {
+                log.warn("Skipping invalid bootstrap URL: {}", url);
+                return;
+            }
+
             try {
                 addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));
             } catch (UnknownHostException e) {

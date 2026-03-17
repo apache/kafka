@@ -676,7 +676,7 @@ public class ReplicaVerificationTool {
             NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
                 consumerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(consumerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                consumerConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
+                consumerConfig.getLong(ConsumerConfig.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
             this.networkClient = new NetworkClient(
                 selector,
                 new ManualMetadataUpdater(),

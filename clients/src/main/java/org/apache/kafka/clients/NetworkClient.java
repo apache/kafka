@@ -1262,7 +1262,12 @@ public class NetworkClient implements KafkaClient {
         if (bootstrapState.isDisabled() || metadataUpdater.isBootstrapped())
             return;
 
-        long pollDeadlineMs = currentTimeMs + pollTimeoutMs;
+        // Handle potential overflow when adding timeout to current time
+        long pollDeadlineMs;
+        if (currentTimeMs > Long.MAX_VALUE - pollTimeoutMs)
+            pollDeadlineMs = Long.MAX_VALUE;
+        else
+            pollDeadlineMs = currentTimeMs + pollTimeoutMs;
 
         while (true) {
             long now = time.milliseconds();
