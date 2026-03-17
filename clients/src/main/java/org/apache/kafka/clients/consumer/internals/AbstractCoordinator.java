@@ -1515,6 +1515,11 @@ public abstract class AbstractCoordinator implements Closeable {
                             // probably make sure the coordinator is still healthy.
                             markCoordinatorUnknown("session timed out without receiving a "
                                     + "heartbeat response");
+                            // KAFKA-20253: Reset the session timer to prevent a tight loop where the
+                            // coordinator is rediscovered but immediately marked unknown again because
+                            // the session timer remains expired. This can happen after a transient
+                            // authentication failure where heartbeats could not be sent.
+                            heartbeat.resetSessionTimeout();
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll().
