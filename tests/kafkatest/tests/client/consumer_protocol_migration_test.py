@@ -132,7 +132,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["disabled"],
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
-        assignment_strategy=[COOPERATIVE_STICKEY],
+        assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
         enable_assignment_batching=[False]
     )
     def test_consumer_offline_migration(self, static_membership, metadata_quorum,
@@ -214,7 +214,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
-        assignment_strategy=[COOPERATIVE_STICKEY],
+        assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
         enable_assignment_batching=[False]
     )
     def test_consumer_rolling_upgrade(self, static_membership, metadata_quorum,
@@ -287,7 +287,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
-        assignment_strategy=[COOPERATIVE_STICKEY],
+        assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
         enable_assignment_batching=[False]
     )
     def test_consumer_rolling_downgrade(self, static_membership, metadata_quorum,
