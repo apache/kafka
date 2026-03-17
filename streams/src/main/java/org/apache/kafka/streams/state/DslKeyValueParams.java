@@ -27,7 +27,6 @@ import java.util.Objects;
 public class DslKeyValueParams {
 
     private final String name;
-    private final boolean isTimestamped;
     private final DslStoreFormat dslStoreFormat;
 
     /**
@@ -39,7 +38,6 @@ public class DslKeyValueParams {
     public DslKeyValueParams(final String name, final boolean isTimestamped) {
         Objects.requireNonNull(name);
         this.name = name;
-        this.isTimestamped = isTimestamped;
         // If isTimestamped is false and the user is still calling the old deprecated constructor, we should assume they mean plain.
         this.dslStoreFormat = isTimestamped ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.PLAIN;
     }
@@ -51,7 +49,6 @@ public class DslKeyValueParams {
     public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
         this.name =  Objects.requireNonNull(name);
         this.dslStoreFormat = Objects.requireNonNull(dslStoreFormat);
-        this.isTimestamped = dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
 
     public String name() {
@@ -85,21 +82,19 @@ public class DslKeyValueParams {
             return false;
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
-        return isTimestamped == that.isTimestamped
-                && dslStoreFormat == that.dslStoreFormat
+        return dslStoreFormat == that.dslStoreFormat
                 && Objects.equals(name, that.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, isTimestamped, dslStoreFormat);
+        return Objects.hash(name, dslStoreFormat);
     }
 
     @Override
     public String toString() {
         return "DslKeyValueParams{" +
                 "name='" + name + '\'' +
-                "isTimestamped=" + isTimestamped +
                 "dslStoreFormat=" + dslStoreFormat +
                 '}';
     }
