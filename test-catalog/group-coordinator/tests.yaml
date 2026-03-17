@@ -1,6 +1,7 @@
 org.apache.kafka.coordinator.group.GroupConfigManagerTest:
 - testClampWithCustomBrokerBounds
 - testGetNonExistentGroupConfig
+- testGroupIsRemovedWhenDynamicConfigsAreRemoved
 - testUpdateConfigWithInvalidGroupId
 - testUpdateConfigWithNullGroupId
 - testUpdateGroupConfig
