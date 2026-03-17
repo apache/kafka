@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.DslStoreFormat;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -44,8 +45,8 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     }
 
     @Override
-    public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
+    public StoreBuilder<?> builder() { 
+        final DslStoreFormat storeFormat = dslStoreFormatValue().equalsIgnoreCase(StreamsConfig.DSL_STORE_FORMAT_HEADERS) ? DslStoreFormat.HEADERS : DslStoreFormat.TIMESTAMPED;
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();

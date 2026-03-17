@@ -27,10 +27,11 @@ import java.util.Set;
 public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private final Set<String> connectedProcessorNames = new HashSet<>();
     private DslStoreSuppliers dslStoreSuppliers;
-    private DslStoreFormat dslStoreFormat;
+    private String dslStoreFormatValue;
 
     public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers) {
         this.dslStoreSuppliers = initialStoreSuppliers;
+        this.dslStoreFormatValue = StreamsConfig.DSL_STORE_FORMAT_DEFAULT;
     }
 
     @Override
@@ -42,11 +43,7 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
                 config.originals()
             );
         }
-        final String dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-        if (dslStoreFormatValue.equalsIgnoreCase(StreamsConfig.DSL_STORE_FORMAT_HEADERS)) {
-            dslStoreFormat = DslStoreFormat.HEADERS;
-        }
-        // else dslStoreFormat remains null and the lower layers decide between PLAIN and TIMESTAMPED
+        dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
     }
 
     @Override
@@ -54,8 +51,8 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
         return connectedProcessorNames;
     }
 
-    public DslStoreFormat dslStoreFormat() {
-        return dslStoreFormat;
+    public String dslStoreFormatValue() {
+        return dslStoreFormatValue;
     }
 
     protected DslStoreSuppliers dslStoreSuppliers() {
