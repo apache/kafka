@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Integration test to verify that key serializers can modify headers as a side-effect,
+ * Test to verify that key serializers can modify headers as a side-effect,
  * and that this side-effect makes it into the changelog topic for window stores.
  *
  * This test verifies the core assumption of the headers-aware state store implementation:
@@ -54,10 +54,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * serializer will add metadata to those headers, and those headers
  * will be used when logging the change to the changelog topic.
  */
-public class TimestampedWindowStoreWithHeadersIntegrationTest {
+public class TimestampedWindowStoreWithHeadersSerializerSideEffectTest {
 
     private static final String STORE_NAME = "test-window-store";
     private static final String INPUT_TOPIC = "input";
+    private static final String OUTPUT_TOPIC = "output";
     private static final long WINDOW_SIZE_MS = 10000L;
 
     /**
@@ -92,12 +93,13 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest {
 
     /**
      * Processor that puts and deletes from a timestamped window store with headers.
+     * Uses command value "put(null)" to test deletion via put(key, null, windowStartTimestamp).
      */
-    private static class WindowStoreProcessor extends ContextualProcessor<String, String, Void, Void> {
+    private static class WindowStoreProcessor extends ContextualProcessor<String, String, String, String> {
         private TimestampedWindowStoreWithHeaders<String, String> store;
 
         @Override
-        public void init(final ProcessorContext<Void, Void> context) {
+        public void init(final ProcessorContext<String, String> context) {
             super.init(context);
             store = context.getStateStore(STORE_NAME);
         }
@@ -105,7 +107,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest {
         @Override
         public void process(final Record<String, String> record) {
             final long windowStartTimestamp = record.timestamp();
-            if (record.value() == null) {
+            if ("put(null)".equals(record.value())) {
                 // Delete using put(key, null, windowStartTimestamp)
                 store.put(record.key(), null, windowStartTimestamp);
             } else {
@@ -116,6 +118,8 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest {
                     windowStartTimestamp
                 );
             }
+
+            context().forward(record);
         }
     }
 
@@ -137,24 +141,25 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest {
             )
         );
 
-        // Add a processor that uses the store
+        // Add a processor that uses the store and forwards to output
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-            .process(WindowStoreProcessor::new, STORE_NAME);
+            .process(WindowStoreProcessor::new, STORE_NAME)
+            .to(OUTPUT_TOPIC);
 
         final Properties props = new Properties();
         props.put("application.id", "test-window-app");
         props.put("bootstrap.servers", "dummy:1234");
         props.put("state.dir", TestUtils.tempDirectory().getAbsolutePath());
+        props.put("default.key.serde", Serdes.StringSerde.class);
+        props.put("default.value.serde", Serdes.StringSerde.class);
 
         try (TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            // Create input topic
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic(
                 INPUT_TOPIC,
                 Serdes.String().serializer(),
                 Serdes.String().serializer()
             );
 
-            // Create output topic for changelog
             final String changelogTopic = "test-window-app-" + STORE_NAME + "-changelog";
             final TestOutputTopic<String, String> changelogOutputTopic =
                 driver.createOutputTopic(
@@ -163,32 +168,51 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest {
                     Serdes.String().deserializer()
                 );
 
+            final TestOutputTopic<String, String> outputTopic =
+                driver.createOutputTopic(
+                    OUTPUT_TOPIC,
+                    Serdes.String().deserializer(),
+                    Serdes.String().deserializer()
+                );
+
             inputTopic.pipeInput("key1", "value1", 1000L);
 
             // Verify changelog has the put record with header
-            final var putRecord = changelogOutputTopic.readRecord();
-            assertNotNull(putRecord.key());
-            assertEquals("value1", putRecord.value());
+            final var putChangelogRecord = changelogOutputTopic.readRecord();
+            assertNotNull(putChangelogRecord.key());
+            assertEquals("value1", putChangelogRecord.value());
 
-            // Verify the serializer added metadata header as side-effect
-            final Header putMetadataHeader = putRecord.headers().lastHeader("serializer-metadata");
-            assertNotNull(putMetadataHeader, "metadata header should be present in put record");
+            // Verify the serializer added metadata header to changelog
+            final Header putMetadataHeader = putChangelogRecord.headers().lastHeader("serializer-metadata");
+            assertNotNull(putMetadataHeader, "metadata header should be present in changelog put record");
             assertEquals("window-test-value", new String(putMetadataHeader.value(), StandardCharsets.UTF_8));
 
-            inputTopic.pipeInput("key1", (String) null, 1000L);
+            final var putOutputRecord = outputTopic.readRecord();
+            assertEquals("key1", putOutputRecord.key());
+            assertEquals("value1", putOutputRecord.value());
+            final Header outputMetadataHeader = putOutputRecord.headers().lastHeader("serializer-metadata");
+            assertNotNull(outputMetadataHeader,
+                "Output record SHOULD contain serializer-metadata header for normal put operations");
+            assertEquals("window-test-value", new String(outputMetadataHeader.value(), StandardCharsets.UTF_8));
+
+            inputTopic.pipeInput("key1", "put(null)", 1000L);
 
             // Verify changelog has the delete record (tombstone) with header
-            final var deleteRecord = changelogOutputTopic.readRecord();
-            assertNotNull(deleteRecord.key());
-            assertNull(deleteRecord.value(), "Delete should produce tombstone (null value)");
+            final var putNullChangelogRecord = changelogOutputTopic.readRecord();
+            assertNotNull(putNullChangelogRecord.key());
+            assertNull(putNullChangelogRecord.value(), "put(null) should produce tombstone");
 
-            // CRITICAL: Verify the serializer's side-effect made it into the changelog
-            // This is the core assumption we're testing!
-            final Header deleteMetadataHeader = deleteRecord.headers().lastHeader("serializer-metadata");
-            assertNotNull(deleteMetadataHeader,
-                "metadata header should be present in tombstone - serializer side-effect must propagate to changelog");
-            assertEquals("window-test-value", new String(deleteMetadataHeader.value(), StandardCharsets.UTF_8),
-                "Tombstone should have metadata from serializer side-effect");
+            // Verify the serializer's side-effect made it into the changelog
+            final Header putNullMetadataHeader = putNullChangelogRecord.headers().lastHeader("serializer-metadata");
+            assertNotNull(putNullMetadataHeader, "metadata header should be present in changelog tombstone from put(null)");
+            assertEquals("window-test-value", new String(putNullMetadataHeader.value(), StandardCharsets.UTF_8));
+
+            // CRITICAL: Verify output record does NOT contain the serializer-added header
+            final var putNullOutputRecord = outputTopic.readRecord();
+            assertEquals("key1", putNullOutputRecord.key());
+            assertEquals("put(null)", putNullOutputRecord.value());
+            final Header outputPutNullMetadataHeader = putNullOutputRecord.headers().lastHeader("serializer-metadata");
+            assertNull(outputPutNullMetadataHeader, "Output record should NOT contain serializer-metadata header - side-effect should be isolated to changelog");
         }
     }
 }

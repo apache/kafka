@@ -91,7 +91,7 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
                         final ProcessorRecordContext currentContext = internalContext.recordContext();
 
                         // Create new headers object to isolate delete operation from input record
-                        final Headers newHeaders = new RecordHeaders(currentContext.headers());
+                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
 
                         // Create temporary context with new headers
                         final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
@@ -99,12 +99,12 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
                             currentContext.offset(),
                             currentContext.partition(),
                             currentContext.topic(),
-                            newHeaders
+                            deleteHeaders
                         );
 
                         try {
                             internalContext.setRecordContext(temporaryContext);
-                            wrapped().put(keyBytes(key, newHeaders), null, windowStartTimestamp);
+                            wrapped().put(keyBytes(key, deleteHeaders), null, windowStartTimestamp);
                         } finally {
                             // Restore original context
                             internalContext.setRecordContext(currentContext);
