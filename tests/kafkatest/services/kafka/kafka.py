@@ -781,9 +781,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
-        if self.use_share_groups is not None and self.use_share_groups is True:
-            override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-
         if self.use_streams_groups is True:
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
             override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.nio.ByteBuffer;
 
 /**
  * Marker interface to indicate that a bytes store understands the value-with-headers format
@@ -52,11 +51,10 @@ public interface HeadersBytesStore {
         //   headersSize = varint(0) = [0x00]
         //   headersBytes = [] (empty, 0 bytes)
         // Result: [0x00][payload]
-        return ByteBuffer
-            .allocate(1 + valueAndTimestamp.length)
-            .put((byte) 0x00)
-            .put(valueAndTimestamp)
-            .array();
+        final byte[] res = new byte[1 + valueAndTimestamp.length];
+        // res[0] is initialized to 0x00 per Java Specification
+        System.arraycopy(valueAndTimestamp, 0, res, 1, valueAndTimestamp.length);
+        return res;
     }
 
     static byte[] convertFromPlainToHeaderFormat(final byte[] value) {

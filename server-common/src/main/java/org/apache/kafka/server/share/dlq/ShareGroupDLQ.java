@@ -14,31 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
 
-import java.util.Iterator;
-import java.util.function.Function;
+package org.apache.kafka.server.share.dlq;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
- * An iterator that maps another iterator's elements from type `F` to type `T`.
+ * The main interface to identify implementations of dead letter queues for share groups.
  */
-public final class MappedIterator<F, T> implements Iterator<T> {
-    private final Iterator<? extends F> underlyingIterator;
-    private final Function<F, T> mapper;
-
-    public MappedIterator(Iterator<? extends F> underlyingIterator, Function<F, T> mapper) {
-        this.underlyingIterator = underlyingIterator;
-        this.mapper = mapper;
-    }
-
-    @Override
-    public boolean hasNext() {
-        return underlyingIterator.hasNext();
-    }
-
-    @Override
-    public T next() {
-        return mapper.apply(underlyingIterator.next());
-    }
-
+public interface ShareGroupDLQ {
+    /**
+     * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
+     *
+     * @param param A java record encapsulating required and optional information about the kafka record
+     *              being dead letter queued.
+     * @return A completable future of Void type, mainly to signal exceptions.
+     */
+    CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param);
 }

@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,44 +35,24 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class TimestampedCacheFlushListenerTest {
-
+public class SessionCacheFlushListenerWithHeaderTest {
     @Test
-    public void shouldForwardValueTimestampIfNewValueExists() {
+    public void shouldForwardKeyNewValueOldValueAndTimestamp() {
         @SuppressWarnings("unchecked")
-        final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
+        final InternalProcessorContext<Windowed<String>, Change<String>> context = mock(InternalProcessorContext.class);
         doNothing().when(context).forward(
             new Record<>(
-                "key",
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
                 new Change<>("newValue", "oldValue"),
-                42L));
+                73L));
 
-        new TimestampedCacheFlushListener<>(context).apply(
+        new SessionCacheFlushListenerWithHeader<>(context).apply(
             new Record<>(
-                "key",
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
                 new Change<>(
-                    ValueAndTimestamp.make("newValue", 42L),
-                    ValueAndTimestamp.make("oldValue", 21L)),
-                73L));
-
-        verify(context, times(2)).setCurrentNode(null);
-    }
-
-    @Test
-    public void shouldForwardParameterTimestampIfNewValueIsNull() {
-        @SuppressWarnings("unchecked")
-        final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
-        doNothing().when(context).forward(
-            new Record<>(
-                "key",
-                new Change<>(null, "oldValue"),
-                73L));
-
-        new TimestampedCacheFlushListener<>(context).apply(
-            new Record<>(
-                "key",
-                new Change<>(null, ValueAndTimestamp.make("oldValue", 21L)),
-                73L));
+                    AggregationWithHeaders.make("newValue", new RecordHeaders()),
+                    AggregationWithHeaders.make("oldValue", new RecordHeaders())),
+                42L));
 
         verify(context, times(2)).setCurrentNode(null);
     }

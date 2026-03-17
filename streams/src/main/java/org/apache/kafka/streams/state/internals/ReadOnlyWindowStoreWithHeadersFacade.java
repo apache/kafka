@@ -20,25 +20,31 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+/**
+ * A facade that wraps {@link TimestampedWindowStoreWithHeaders} to provide a
+ * {@link ReadOnlyWindowStore} interface with plain values.
+ * This facade converts {@link ValueTimestampHeaders} to plain values, discarding both timestamps and headers.
+ *
+ * @param <K> key type
+ * @param <V> value type
+ */
+public class ReadOnlyWindowStoreWithHeadersFacade<K, V> implements ReadOnlyWindowStore<K, V> {
+    protected final TimestampedWindowStoreWithHeaders<K, V> inner;
 
-public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V> {
-    protected final TimestampedWindowStore<K, V> inner;
-
-    protected ReadOnlyWindowStoreFacade(final TimestampedWindowStore<K, V> store) {
+    protected ReadOnlyWindowStoreWithHeadersFacade(final TimestampedWindowStoreWithHeaders<K, V> store) {
         inner = store;
     }
 
     @Override
-    public V fetch(final K key,
-                   final long time) {
-        return getValueOrNull(inner.fetch(key, time));
+    public V fetch(final K key, final long time) {
+        final ValueTimestampHeaders<V> valueTimestampHeaders = inner.fetch(key, time);
+        return valueTimestampHeaders == null ? null : valueTimestampHeaders.value();
     }
 
     @Override
@@ -94,9 +100,9 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
     }
 
     private static class WindowStoreIteratorFacade<V> implements WindowStoreIterator<V> {
-        final KeyValueIterator<Long, ValueAndTimestamp<V>> innerIterator;
+        final KeyValueIterator<Long, ValueTimestampHeaders<V>> innerIterator;
 
-        WindowStoreIteratorFacade(final KeyValueIterator<Long, ValueAndTimestamp<V>> iterator) {
+        WindowStoreIteratorFacade(final KeyValueIterator<Long, ValueTimestampHeaders<V>> iterator) {
             innerIterator = iterator;
         }
 
@@ -117,8 +123,39 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
 
         @Override
         public KeyValue<Long, V> next() {
-            final KeyValue<Long, ValueAndTimestamp<V>> innerKeyValue = innerIterator.next();
-            return KeyValue.pair(innerKeyValue.key, getValueOrNull(innerKeyValue.value));
+            final KeyValue<Long, ValueTimestampHeaders<V>> innerKeyValue = innerIterator.next();
+            final V value = innerKeyValue.value == null ? null : innerKeyValue.value.value();
+            return KeyValue.pair(innerKeyValue.key, value);
+        }
+    }
+
+    private static class KeyValueIteratorFacade<K, V> implements KeyValueIterator<Windowed<K>, V> {
+        private final KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> innerIterator;
+
+        KeyValueIteratorFacade(final KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> iterator) {
+            innerIterator = iterator;
+        }
+
+        @Override
+        public void close() {
+            innerIterator.close();
+        }
+
+        @Override
+        public Windowed<K> peekNextKey() {
+            return innerIterator.peekNextKey();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return innerIterator.hasNext();
+        }
+
+        @Override
+        public KeyValue<Windowed<K>, V> next() {
+            final KeyValue<Windowed<K>, ValueTimestampHeaders<V>> innerKeyValue = innerIterator.next();
+            final V value = innerKeyValue.value == null ? null : innerKeyValue.value.value();
+            return KeyValue.pair(innerKeyValue.key, value);
         }
     }
 }

@@ -98,9 +98,13 @@ public class BuiltInDslStoreSuppliers {
                 return new RocksDbTimeOrderedSessionBytesStoreSupplier(
                         params.name(),
                         params.retentionPeriod().toMillis(),
-                        true);
+                        true,
+                        params.storeFormat() == DslStoreFormat.HEADERS);
             }
 
+            if (params.storeFormat() == DslStoreFormat.HEADERS) {
+                return Stores.persistentSessionStoreWithHeaders(params.name(), params.retentionPeriod());
+            }
             return Stores.persistentSessionStore(params.name(), params.retentionPeriod());
         }
     }

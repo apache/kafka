@@ -16,43 +16,46 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+class SessionCacheFlushListenerWithHeader<KOut, VOut>
+    implements CacheFlushListener<Windowed<KOut>, AggregationWithHeaders<VOut>> {
 
-class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, ValueAndTimestamp<VOut>> {
-
-    private final InternalProcessorContext<KOut, Change<VOut>> context;
+    private final InternalProcessorContext<Windowed<KOut>, Change<VOut>> context;
 
     @SuppressWarnings("rawtypes")
     private final ProcessorNode myNode;
 
-    TimestampedCacheFlushListener(final ProcessorContext<KOut, Change<VOut>> context) {
-        this.context = (InternalProcessorContext<KOut, Change<VOut>>) context;
+    SessionCacheFlushListenerWithHeader(final ProcessorContext<Windowed<KOut>, Change<VOut>> context) {
+        this.context = (InternalProcessorContext<Windowed<KOut>, Change<VOut>>) context;
         myNode = this.context.currentNode();
     }
 
     @Override
-    public void apply(final Record<KOut, Change<ValueAndTimestamp<VOut>>> record) {
+    public void apply(final Record<Windowed<KOut>, Change<AggregationWithHeaders<VOut>>> record) {
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
+            final VOut newValue = AggregationWithHeaders.getAggregationOrNull(record.value().newValue);
+            final VOut oldValue = AggregationWithHeaders.getAggregationOrNull(record.value().oldValue);
+
+            final Headers headers = record.value().newValue != null
+                ? record.value().newValue.headers()
+                : new RecordHeaders();
+
             context.forward(
                 record
-                    .withValue(
-                        new Change<>(
-                            getValueOrNull(record.value().newValue),
-                            getValueOrNull(record.value().oldValue),
-                            record.value().isLatest))
-                    .withTimestamp(
-                        record.value().newValue != null ? record.value().newValue.timestamp()
-                            : record.timestamp())
-            );
+                    .withValue(new Change<>(newValue, oldValue, record.value().isLatest))
+                    .withTimestamp(record.key().window().end())
+                    .withHeaders(headers));
         } finally {
             context.setCurrentNode(prev);
         }

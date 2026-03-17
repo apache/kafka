@@ -8698,6 +8698,22 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Get the interval between assignment updates of the provided consumer group.
+     */
+    // package private for testing
+    int consumerGroupAssignmentIntervalMs(String groupId) {
+        return config.consumerGroupAssignmentIntervalMs();
+    }
+
+    /**
+     * Get whether to offload assignment for the provided consumer group.
+     */
+    // package private for testing
+    boolean consumerGroupAssignorOffloadEnable(String groupId) {
+        return config.consumerGroupAssignorOffloadEnable();
+    }
+
+    /**
      * Get the session timeout of the provided share group.
      */
     private int shareGroupSessionTimeoutMs(String groupId) {
@@ -8716,6 +8732,22 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Get the interval between assignment updates of the provided share group.
+     */
+    // package private for testing
+    int shareGroupAssignmentIntervalMs(String groupId) {
+        return config.shareGroupAssignmentIntervalMs();
+    }
+
+    /**
+     * Get whether to offload assignment for the provided share group.
+     */
+    // package private for testing
+    boolean shareGroupAssignorOffloadEnable(String groupId) {
+        return config.shareGroupAssignorOffloadEnable();
+    }
+
+    /**
      * Get the session timeout of the provided streams group.
      */
     private int streamsGroupSessionTimeoutMs(String groupId) {
@@ -8731,6 +8763,22 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.map(GroupConfig::streamsHeartbeatIntervalMs)
             .orElse(config.streamsGroupHeartbeatIntervalMs());
+    }
+
+    /**
+     * Get the interval between assignment updates of the provided streams group.
+     */
+    // package private for testing
+    int streamsGroupAssignmentIntervalMs(String groupId) {
+        return config.streamsGroupAssignmentIntervalMs();
+    }
+
+    /**
+     * Get whether to offload assignment for the provided streams group.
+     */
+    // package private for testing
+    boolean streamsGroupAssignorOffloadEnable(String groupId) {
+        return config.streamsGroupAssignorOffloadEnable();
     }
 
     /**

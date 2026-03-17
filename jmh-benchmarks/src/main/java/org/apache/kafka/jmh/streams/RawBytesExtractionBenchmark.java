@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
 import org.apache.kafka.streams.state.internals.Utils;
@@ -204,6 +205,42 @@ public class RawBytesExtractionBenchmark {
         for (byte[] randomValue : state.getRandomValues()) {
             bh.consume(ValueTimestampHeadersDeserializer.timestamp(randomValue));
         }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testConvertToHeaderFormat(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(convertToHeaderFormatPre20303(randomValue));
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testConvertToHeaderFormatOpt(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
+        for (byte[] randomValue : state.getRandomValues()) {
+            bh.consume(HeadersBytesStore.convertToHeaderFormat(randomValue));
+        }
+    }
+
+    /**
+     * Prior to KAFKA-20303 - HeadersBytesStore.convertToHeaderFormat
+     */
+    private static byte[] convertToHeaderFormatPre20303(final byte[] valueAndTimestamp) {
+        if (valueAndTimestamp == null) {
+            return null;
+        }
+
+        // Format: [headersSize(varint)][headersBytes][payload]
+        // For empty headers:
+        //   headersSize = varint(0) = [0x00]
+        //   headersBytes = [] (empty, 0 bytes)
+        // Result: [0x00][payload]
+        return ByteBuffer
+            .allocate(1 + valueAndTimestamp.length)
+            .put((byte) 0x00)
+            .put(valueAndTimestamp)
+            .array();
     }
 
     /**

@@ -42,8 +42,9 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
@@ -100,7 +101,7 @@ public class KTableTransformValuesTest {
     @Mock
     private KTableValueGetter<String, String> parentGetter;
     @Mock
-    private TimestampedKeyValueStore<String, String> stateStore;
+    private TimestampedKeyValueStoreWithHeaders<String, String> stateStore;
     @Mock
     private ValueTransformerWithKeySupplier<String, String, String> mockSupplier;
     @Mock
@@ -209,7 +210,7 @@ public class KTableTransformValuesTest {
 
         when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
         when(parentGetterSupplier.get()).thenReturn(parentGetter);
-        when(parentGetter.get("Key")).thenReturn(ValueAndTimestamp.make("Value", 73L));
+        when(parentGetter.get("Key")).thenReturn(ValueTimestampHeaders.make("Value", 73L, null));
         final ProcessorRecordContext recordContext = new ProcessorRecordContext(
             42L,
             23L,
@@ -241,7 +242,7 @@ public class KTableTransformValuesTest {
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         when(context.getStateStore(QUERYABLE_NAME)).thenReturn(stateStore);
-        when(stateStore.get("Key")).thenReturn(ValueAndTimestamp.make("something", 0L));
+        when(stateStore.get("Key")).thenReturn(ValueTimestampHeaders.make("something", 0L, null));
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);
