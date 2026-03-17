@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
@@ -49,6 +50,7 @@ import java.util.function.Function;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
 
 
 /**
@@ -110,8 +112,38 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                     final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            final Headers headers = value != null ? value.headers() : new RecordHeaders();
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers)), time, putSensor);
+            maybeMeasureLatency(
+                () -> {
+                    if (value == null) {
+                        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                        // Create new headers object to isolate tombstone operation from input record
+                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                        // Create temporary context with new headers
+                        final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                            currentContext.timestamp(),
+                            currentContext.offset(),
+                            currentContext.partition(),
+                            currentContext.topic(),
+                            deleteHeaders
+                        );
+
+                        try {
+                            internalContext.setRecordContext(temporaryContext);
+                            wrapped().put(keyBytes(key, deleteHeaders), serdes.rawValue(null, deleteHeaders));
+                        } finally {
+                            // Restore original context
+                            internalContext.setRecordContext(currentContext);
+                        }
+                    } else {
+                        final Headers headers = value.headers();
+                        wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers));
+                    }
+                },
+                time,
+                putSensor
+            );
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -123,14 +155,92 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     public ValueTimestampHeaders<V> putIfAbsent(final K key,
                                                 final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Headers headers = value != null ? value.headers() : new RecordHeaders();
         final ValueTimestampHeaders<V> currentValue = maybeMeasureLatency(
-            () -> deserializeValue(wrapped().putIfAbsent(keyBytes(key, headers), serdes.rawValue(value, headers))),
+            () -> {
+                if (value == null) {
+                    final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                    // Create new headers object to isolate tombstone operation from input record
+                    final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                    // Create temporary context with new headers
+                    final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                        currentContext.timestamp(),
+                        currentContext.offset(),
+                        currentContext.partition(),
+                        currentContext.topic(),
+                        deleteHeaders
+                    );
+
+                    try {
+                        internalContext.setRecordContext(temporaryContext);
+                        return deserializeValue(wrapped().putIfAbsent(keyBytes(key, deleteHeaders), serdes.rawValue(null, deleteHeaders)));
+                    } finally {
+                        // Restore original context
+                        internalContext.setRecordContext(currentContext);
+                    }
+                } else {
+                    final Headers headers = value.headers();
+                    return deserializeValue(wrapped().putIfAbsent(keyBytes(key, headers), serdes.rawValue(value, headers)));
+                }
+            },
             time,
             putIfAbsentSensor
         );
         maybeRecordE2ELatency();
         return currentValue;
+    }
+
+    @Override
+    public void putAll(final java.util.List<KeyValue<K, ValueTimestampHeaders<V>>> entries) {
+        entries.forEach(entry -> Objects.requireNonNull(entry.key, "key cannot be null"));
+
+        final boolean hasNullValue = entries.stream().anyMatch(entry -> entry.value == null);
+
+        if (hasNullValue) {
+            entries.forEach(entry -> put(entry.key, entry.value));
+        } else {
+            // If no null values, use parent's batch optimization
+            super.putAll(entries);
+        }
+    }
+
+    @Override
+    public ValueTimestampHeaders<V> delete(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
+        try {
+            return maybeMeasureLatency(
+                () -> {
+                    final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                    // Create new headers object to isolate delete operation from input record
+                    final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                    // Create temporary context with new headers
+                    final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                        currentContext.timestamp(),
+                        currentContext.offset(),
+                        currentContext.partition(),
+                        currentContext.topic(),
+                        deleteHeaders
+                    );
+
+                    try {
+                        internalContext.setRecordContext(temporaryContext);
+                        final byte[] deletedValue = wrapped().delete(keyBytes(key, deleteHeaders));
+                        return deserializeValue(deletedValue);
+                    } finally {
+                        // Restore original context
+                        internalContext.setRecordContext(currentContext);
+                    }
+                },
+                time,
+                deleteSensor
+            );
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
+        }
     }
 
     /**
