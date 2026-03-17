@@ -740,7 +740,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId))
@@ -777,7 +777,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, removedMemberId));
         });
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
@@ -896,11 +896,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
+        } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
             for (ModernGroupMember member : members.values()) {
-                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
+                if (!member.isReconciledTo(assignmentEpoch())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -1043,20 +1043,20 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
-     * Removes the partition epochs based on the provided assignment.
+     * Removes the partition epochs based on the provided assignment and member epoch.
      *
-     * @param assignment    The assignment.
-     * @param expectedEpoch The expected epoch.
+     * @param assignment    The assignment with epochs. The assignment epochs are ignored.
+     * @param expectedEpoch The expected member epoch.
      * package-private for testing.
      */
     void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
+        Map<Uuid, Map<Integer, Integer>> assignment,
         int expectedEpoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionId -> {
+                    partitionEpochs.keySet().forEach(partitionId -> {
                         Integer prevValue = partitionsOrNull.get(partitionId);
                         if (prevValue != null && prevValue == expectedEpoch) {
                             partitionsOrNull.remove(partitionId);
@@ -1080,23 +1080,23 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
-     * Adds the partitions epoch based on the provided assignment.
+     * Adds the partitions epoch based on the provided assignment and member epoch.
      *
-     * @param assignment    The assignment.
-     * @param epoch         The new epoch.
-     * @throws IllegalStateException if updating a partition with a smaller or equal epoch.
+     * @param assignment    The assignment with epochs. The assignment epochs are ignored.
+     * @param epoch         The new member epoch.
+     * @throws IllegalStateException if updating a partition with a smaller or equal member epoch.
      * package-private for testing.
      */
     void addPartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
+        Map<Uuid, Map<Integer, Integer>> assignment,
         int epoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, partitionEpochs.size());
                 }
-                for (Integer partitionId : assignedPartitions) {
+                for (Integer partitionId : partitionEpochs.keySet()) {
                     Integer prevValue = partitionsOrNull.get(partitionId);
                     if (prevValue == null || prevValue < epoch) {
                         partitionsOrNull.put(partitionId, epoch);
@@ -1121,7 +1121,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
@@ -1156,7 +1156,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
-        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
+        consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
             // The assigned partition can be empty if the member just joined and has never synced.
@@ -1194,7 +1194,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(assignedPartitions)
+                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, classicGroup.generationId()))
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
@@ -1238,7 +1238,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             ))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId(), assignmentEpoch(), assignmentTimestamp()));
 
         members().forEach((__, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId(), consumerGroupMember))
@@ -1305,10 +1305,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Set.of());
+                Map<Integer, Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Map.of());
 
                 for (int partition : entry.getValue()) {
-                    if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                    if (!assignedPartitions.containsKey(partition) && currentPartitionEpoch(topicId, partition) != -1) {
                         return true;
                     }
                 }

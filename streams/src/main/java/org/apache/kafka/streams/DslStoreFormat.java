@@ -14,31 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.streams;
 
-import java.util.Iterator;
-import java.util.function.Function;
+import java.util.Locale;
 
-/**
- * An iterator that maps another iterator's elements from type `F` to type `T`.
- */
-public final class MappedIterator<F, T> implements Iterator<T> {
-    private final Iterator<? extends F> underlyingIterator;
-    private final Function<F, T> mapper;
+public enum DslStoreFormat {
 
-    public MappedIterator(Iterator<? extends F> underlyingIterator, Function<F, T> mapper) {
-        this.underlyingIterator = underlyingIterator;
-        this.mapper = mapper;
+    /** The non-timestamped state stores */
+    PLAIN("PLAIN"),
+
+    /** The timestamped state stores */
+    TIMESTAMPED("TIMESTAMPED"),
+
+    /** The headers-aware state stores */
+    HEADERS("HEADERS");
+
+    /**
+     * String representation of the DSL store format.
+     */
+    public final String name;
+
+    DslStoreFormat(final String name) {
+        this.name = name;
     }
 
-    @Override
-    public boolean hasNext() {
-        return underlyingIterator.hasNext();
+    /**
+     * Case-insensitive DSL store format lookup by string name.
+     */
+    public static DslStoreFormat of(final String name) {
+        return DslStoreFormat.valueOf(name.toUpperCase(Locale.ROOT));
     }
-
-    @Override
-    public T next() {
-        return mapper.apply(underlyingIterator.next());
-    }
-
 }

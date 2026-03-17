@@ -29,6 +29,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,12 +42,16 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupMemberTest {
+    private static final Logger LOG = LoggerFactory.getLogger(ConsumerGroupMemberTest.class);
+    private static final String GROUP_ID = "test-group";
 
     @Test
     public void testNewMember() {
@@ -63,10 +69,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -81,8 +87,14 @@ public class ConsumerGroupMemberTest {
         assertEquals(Set.of("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.partitionsPendingRevocation());
+        assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), 10), member.assignedPartitions());
+        assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), 9), member.partitionsPendingRevocation());
+        assertEquals(Integer.valueOf(10), member.assignmentEpoch(topicId1, 1));
+        assertEquals(Integer.valueOf(10), member.assignmentEpoch(topicId1, 2));
+        assertEquals(Integer.valueOf(10), member.assignmentEpoch(topicId1, 3));
+        assertEquals(Integer.valueOf(9), member.pendingRevocationEpoch(topicId2, 4));
+        assertEquals(Integer.valueOf(9), member.pendingRevocationEpoch(topicId2, 5));
+        assertEquals(Integer.valueOf(9), member.pendingRevocationEpoch(topicId2, 6));
         assertEquals(
             new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")),
@@ -107,10 +119,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -126,10 +138,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -153,10 +165,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -238,13 +250,40 @@ public class ConsumerGroupMemberTest {
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .updateWith(record)
+            .updateWith(LOG, GROUP_ID, record)
             .build();
 
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
+        assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10), member.assignedPartitions());
+        assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 10), member.partitionsPendingRevocation());
+    }
+
+    @Test
+    public void testUpdateWithConsumerGroupCurrentMemberAssignmentValueWithNegativeEpoch() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH) // -2
+            .setPreviousMemberEpoch(5)
+            .setAssignedPartitions(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId1)
+                .setPartitions(Arrays.asList(0, 1, 2))))
+            .setPartitionsPendingRevocation(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId2)
+                .setPartitions(Arrays.asList(3, 4, 5))));
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .updateWith(LOG, GROUP_ID, record)
+            .build();
+
+        assertEquals(-2, member.memberEpoch());
+        assertEquals(5, member.previousMemberEpoch());
+
+        // Assignment epochs should be 0, not -2.
+        assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 0), member.assignedPartitions());
+        assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 0), member.partitionsPendingRevocation());
     }
 
     @ParameterizedTest(name = "{displayName}.withClassicMemberMetadata={0}")
@@ -282,7 +321,7 @@ public class ConsumerGroupMemberTest {
         assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
         Assignment targetAssignment = new Assignment(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
-            .updateWith(record)
+            .updateWith(LOG, GROUP_ID, record)
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
@@ -344,7 +383,7 @@ public class ConsumerGroupMemberTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Arrays.asList(0, 1, 2))));
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId.toString())
-            .updateWith(record)
+            .updateWith(LOG, GROUP_ID, record)
             .build();
 
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()

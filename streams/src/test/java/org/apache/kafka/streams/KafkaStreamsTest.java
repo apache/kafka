@@ -126,6 +126,7 @@ import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -1873,6 +1874,42 @@ public class KafkaStreamsTest {
                 assertTrue(appender.getMessages().stream()
                     .anyMatch(msg -> msg.contains("A non-default kafka client supplier was supplied. " +
                         "Note that supplying a custom main consumer is not supported with the STREAMS protocol.")));
+            }
+        }
+    }
+
+    @Test
+    public void shouldCallCleanOnStartupOnlyWhenEnabled() {
+        props.put(StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG, 100);
+
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                streams.start();
+                verify(stateDirectory).cleanOutdatedDirsOnStartup(100);
+            }
+        }
+    }
+
+    @Test
+    public void shouldNotCallCleanOnStartupByDefault() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                streams.start();
+                verify(stateDirectory, never()).cleanOutdatedDirsOnStartup(anyLong());
             }
         }
     }

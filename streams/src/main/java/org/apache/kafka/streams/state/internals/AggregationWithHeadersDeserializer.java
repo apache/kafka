@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -29,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 /**
  * Deserializer for AggregationWithHeaders.
@@ -80,32 +80,6 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
     @Override
     public void setIfUnset(final SerdeGetter getter) {
         initNullableDeserializer(aggregationDeserializer, getter);
-    }
-
-
-    /**
-     * Reads the specified number of bytes from the buffer with validation.
-     *
-     * @param buffer the ByteBuffer to read from
-     * @param length the number of bytes to read
-     * @return the byte array containing the read bytes
-     * @throws SerializationException if buffer doesn't have enough bytes or length is negative
-     */
-    private static byte[] readBytes(final ByteBuffer buffer, final int length) {
-        if (length < 0) {
-            throw new SerializationException(
-                "Invalid AggregationWithHeaders format: negative length " + length
-            );
-        }
-        if (buffer.remaining() < length) {
-            throw new SerializationException(
-                "Invalid AggregationWithHeaders format: expected " + length +
-                    " bytes but only " + buffer.remaining() + " bytes remaining"
-            );
-        }
-        final byte[] bytes = new byte[length];
-        buffer.get(bytes);
-        return bytes;
     }
 
     /**

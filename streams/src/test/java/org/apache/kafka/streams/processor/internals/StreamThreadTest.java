@@ -1456,7 +1456,7 @@ public class StreamThreadTest {
 
         assertThat(thrown.getCause(), isA(IllegalStateException.class));
         // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
-        assertEquals("No current assignment for partition topic1-1", thrown.getCause().getMessage());
+        assertEquals("Cannot add records for a partition that is not assigned to the consumer", thrown.getCause().getMessage());
         assertFalse(consumer.shouldRebalance());
 
         verify(taskManager).handleLostAll();

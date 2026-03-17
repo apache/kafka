@@ -22,12 +22,15 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
@@ -71,10 +74,14 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
+        } else if (store instanceof TimestampedWindowStoreWithHeaders) {
+            return new TimestampedWindowStoreWithHeadersReadWriteDecorator<>((TimestampedWindowStoreWithHeaders<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
             return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
+        } else if (store instanceof SessionStoreWithHeaders) {
+            return new SessionStoreWithHeadersReadWriteDecorator<>((SessionStoreWithHeaders<?, ?>) store);
         } else if (store instanceof SessionStore) {
             return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
         } else {
@@ -268,6 +275,24 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         implements TimestampedWindowStore<K, V> {
 
         TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner) {
+            super(inner);
+        }
+    }
+
+    static class TimestampedWindowStoreWithHeadersReadWriteDecorator<K, V>
+        extends WindowStoreReadWriteDecorator<K, ValueTimestampHeaders<V>>
+        implements TimestampedWindowStoreWithHeaders<K, V> {
+
+        TimestampedWindowStoreWithHeadersReadWriteDecorator(final TimestampedWindowStoreWithHeaders<K, V> inner) {
+            super(inner);
+        }
+    }
+
+    static class SessionStoreWithHeadersReadWriteDecorator<K, AGG>
+        extends SessionStoreReadWriteDecorator<K, AggregationWithHeaders<AGG>>
+        implements SessionStoreWithHeaders<K, AGG> {
+
+        SessionStoreWithHeadersReadWriteDecorator(final SessionStoreWithHeaders<K, AGG> inner) {
             super(inner);
         }
     }

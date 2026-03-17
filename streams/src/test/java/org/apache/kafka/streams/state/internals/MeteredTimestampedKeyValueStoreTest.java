@@ -187,6 +187,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_AND_TIMESTAMP_BYTES)).thenReturn(VALUE_AND_TIMESTAMP);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE_AND_TIMESTAMP)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
         metered = new MeteredTimestampedKeyValueStore<>(
             inner,
@@ -241,7 +242,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(KEY);
         assertEquals(VALUE_AND_TIMESTAMP, valueWithBinary.value);
-        assertArrayEquals(VALUE_AND_TIMESTAMP_BYTES, valueWithBinary.serializedValue);
+        assertArrayEquals(VALUE_AND_TIMESTAMP_BYTES, valueWithBinary.rawValue);
     }
 
     @Test

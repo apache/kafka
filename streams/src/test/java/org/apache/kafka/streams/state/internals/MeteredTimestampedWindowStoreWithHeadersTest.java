@@ -28,14 +28,19 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.KeyValueIteratorStub;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -47,8 +52,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -275,5 +288,314 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
 
         verify(innerStoreMock).fetch(KEY_BYTES, TIMESTAMP);
         verify(innerStoreMock).put(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES, TIMESTAMP);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInFetchAll() {
+        setUp();
+
+        final Serde<String> keySerde = mock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        when(innerStoreMock.fetchAll(0, 100))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.fetchAll(0, 100);
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInAll() {
+        setUp();
+
+        final Serde<String> keySerde = mock(Serde.class);
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        when(innerStoreMock.all())
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all();
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInFetchRange() {
+        setUp();
+
+        final Serde<String> keySerde = mock(Serde.class);
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        when(innerStoreMock.fetch(any(Bytes.class), any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator =
+            store.fetch(KEY, KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result =
+            iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchAll() {
+        setUp();
+
+        final Serde<String> keySerde = mock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        when(innerStoreMock.backwardFetchAll(0, 100))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.backwardFetchAll(0, 100);
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardAll() {
+        setUp();
+
+        final Serde<String> keySerde = mock(Serde.class);
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        when(innerStoreMock.backwardAll())
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.backwardAll();
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchRange() {
+        setUp();
+
+        final Serde<String> keySerde = mock(Serde.class);
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        when(innerStoreMock.backwardFetch(any(Bytes.class), any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator =
+            store.backwardFetch(KEY, KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result =
+            iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
     }
 }

@@ -70,6 +70,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -879,6 +880,45 @@ class ShareCoordinatorShardTest {
         ).value().message()), shard.getShareStateMapValue(SHARE_PARTITION_KEY));
         assertEquals(0, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
         verify(shard.getMetricsShard(), times(5)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+    }
+
+    @Test
+    public void testSnapshotUpdateCountBoundary() {
+        shard = new ShareCoordinatorShardBuilder()
+            .setConfigOverrides(Map.of(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "2"))
+            .build();
+
+        initSharePartition(shard, SHARE_PARTITION_KEY);
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        // Write 1: update count 0 < limit 2, should produce update record.
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
+        assertInstanceOf(ShareUpdateKey.class, result.records().get(0).key());
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        // Write 2: update count 1 < limit 2, should produce update record.
+        result = shard.writeState(request);
+        assertInstanceOf(ShareUpdateKey.class, result.records().get(0).key());
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        // Write 3: update count 2 >= limit 2, should produce snapshot record.
+        result = shard.writeState(request);
+        assertInstanceOf(ShareSnapshotKey.class, result.records().get(0).key());
     }
 
     @Test

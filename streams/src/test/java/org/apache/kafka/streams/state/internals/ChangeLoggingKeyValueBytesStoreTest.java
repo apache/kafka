@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BytesUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -220,7 +221,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldGetRecordsWithPrefixKey() {
         store.put(hi, there);
-        store.put(Bytes.increment(hi), world);
+        store.put(BytesUtils.increment(hi), world);
 
         final List<Bytes> keys = new ArrayList<>();
         final List<Bytes> values = new ArrayList<>();

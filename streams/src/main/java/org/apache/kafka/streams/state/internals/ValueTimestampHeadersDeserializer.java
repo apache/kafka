@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -30,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 /**
  * Deserializer for ValueTimestampHeaders.
@@ -95,26 +95,6 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         // ValueTimestampHeadersDeserializer never wraps a null deserializer (or configure would throw),
         // but it may wrap a deserializer that itself wraps a null deserializer.
         initNullableDeserializer(valueDeserializer, getter);
-    }
-
-    /**
-     * Reads the specified number of bytes from the buffer with validation.
-     *
-     * @param buffer the ByteBuffer to read from
-     * @param length the number of bytes to read
-     * @return the byte array containing the read bytes
-     * @throws SerializationException if buffer doesn't have enough bytes
-     */
-    private static byte[] readBytes(final ByteBuffer buffer, final int length) {
-        if (buffer.remaining() < length) {
-            throw new SerializationException(
-                "Invalid ValueTimestampHeaders format: expected " + length +
-                " bytes but only " + buffer.remaining() + " bytes remaining"
-            );
-        }
-        final byte[] bytes = new byte[length];
-        buffer.get(bytes);
-        return bytes;
     }
 
     /**
