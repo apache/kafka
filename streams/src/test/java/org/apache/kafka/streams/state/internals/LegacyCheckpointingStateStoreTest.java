@@ -49,7 +49,6 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore.OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
-import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -307,8 +306,9 @@ public class LegacyCheckpointingStateStoreTest {
     }
 
     @Test
-    public void shouldMapOffsetUnknownToNullOnInit() throws IOException {
-        writeCheckpointFile(Collections.singletonMap(partition, OFFSET_UNKNOWN));
+    public void shouldReturnNullForPartitionNotInCheckpointOnInit() throws IOException {
+        // write a checkpoint with no entry for our partition
+        writeCheckpointFile(Collections.emptyMap());
 
         final LegacyCheckpointingStateStore<MockKeyValueStore, Object, Object> store = createStore(false);
         store.init(context, persistentStore);
@@ -464,15 +464,21 @@ public class LegacyCheckpointingStateStoreTest {
     }
 
     @Test
-    public void shouldWriteOffsetUnknownSentinelWhenOffsetIsNull() throws IOException {
+    public void shouldRemoveOffsetWhenCommittedWithNull() throws IOException {
         final LegacyCheckpointingStateStore<MockKeyValueStore, Object, Object> store = createStore(false);
+        // first commit a real offset
+        store.commit(Collections.singletonMap(partition, 42L));
+        store.checkpoint();
+        assertEquals(42L, (long) readCheckpointFile().get(partition));
+
+        // now commit null for the same partition — should remove it
         final Map<TopicPartition, Long> nullOffset = new HashMap<>();
         nullOffset.put(partition, null);
         store.commit(nullOffset);
         store.checkpoint();
 
-        final Map<TopicPartition, Long> checkpointed = readCheckpointFile();
-        assertEquals(OFFSET_UNKNOWN, (long) checkpointed.get(partition));
+        assertFalse(readCheckpointFile().containsKey(partition));
+        assertNull(store.committedOffset(partition));
     }
 
     @Test

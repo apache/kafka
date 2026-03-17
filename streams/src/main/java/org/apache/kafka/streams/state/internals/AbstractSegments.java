@@ -184,6 +184,23 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return true;
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        for (final S segment : segments.values()) {
+            final Long offset = segment.committedOffset(partition);
+            if (offset != null) {
+                return offset;
+            }
+        }
+        return null;
+    }
+
     @Override
     public void close() {
         for (final S segment : segments.values()) {
