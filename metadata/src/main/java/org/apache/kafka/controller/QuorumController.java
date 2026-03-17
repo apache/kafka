@@ -117,6 +117,7 @@ import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -1621,6 +1622,13 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setFeatureControl(featureControl).
             build();
+        this.featureControl.setPreDowngradeValidator(newVersion -> {
+            if (!newVersion.isCidrAclSupported() && aclControlManager.hasCidrAcls()) {
+                return Optional.of("Cannot downgrade below " + MetadataVersion.IBP_4_3_IV0 +
+                    " while CIDR-based ACL host patterns exist. Remove all CIDR ACLs first.");
+            }
+            return Optional.empty();
+        });
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
         this.maxRecordsPerBatch = maxRecordsPerBatch;

@@ -319,6 +319,10 @@ public class AclControlManager {
         log.info("Replayed RemoveAccessControlEntryRecord for {}, removing {}", record.id(), acl);
     }
 
+    boolean hasCidrAcls() {
+        return idToAcl.values().stream().anyMatch(acl -> acl.host().contains("/"));
+    }
+
     Map<Uuid, StandardAcl> idToAcl() {
         return Collections.unmodifiableMap(idToAcl);
     }

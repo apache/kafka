@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -28,6 +29,8 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -449,16 +452,16 @@ public class AclControlManagerTest {
 
     @Test
     public void testValidateHostPatternValid() {
-        // Wildcard - works with or without CIDR support
+        // Wildcard, this works with or without CIDR support
         AclControlManager.validateHostPattern("*", false);
         AclControlManager.validateHostPattern("*", true);
 
-        // Regular IPv4 addresses - works with or without CIDR support
+        // Regular IPv4 addresses this works with or without CIDR support
         AclControlManager.validateHostPattern("192.168.1.1", false);
         AclControlManager.validateHostPattern("10.0.0.1", false);
         AclControlManager.validateHostPattern("127.0.0.1", true);
 
-        // Regular IPv6 addresses - works with or without CIDR support
+        // Regular IPv6 addresses, this works with or without CIDR support
         AclControlManager.validateHostPattern("2001:db8::1", false);
         AclControlManager.validateHostPattern("::1", false);
         AclControlManager.validateHostPattern("fe80::1", true);
@@ -485,32 +488,32 @@ public class AclControlManagerTest {
         assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("", true));
 
-        // Invalid IPv4 CIDR - prefix too large
+        // Invalid IPv4 CIDR, prefix too large
         InvalidRequestException e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.0/33", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
 
-        // Invalid IPv4 CIDR - negative prefix
+        // Invalid IPv4 CIDR, negative prefix
         e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.0/-1", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
 
-        // Invalid IPv4 CIDR - malformed address
+        // Invalid IPv4 CIDR, malformed address
         e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.256/24", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
 
-        // Invalid IPv4 CIDR - non-numeric prefix
+        // Invalid IPv4 CIDR, non-numeric prefix
         e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.0/abc", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
 
-        // Invalid IPv6 CIDR - prefix too large
+        // Invalid IPv6 CIDR, prefix too large
         e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("2001:db8::/129", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
 
-        // Invalid - just a slash with no prefix
+        // Invalid, just a slash with no prefix
         e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.0/", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
@@ -528,9 +531,6 @@ public class AclControlManagerTest {
         assertTrue(e.getMessage().contains("CIDR-based ACL host patterns require metadata version"));
     }
 
-    /**
-     * Verify that validateCidrNotation validates IPv4 CIDR patterns correctly.
-     */
     @Test
     public void testValidateCidrNotationIpv4() {
         // Valid patterns
@@ -623,7 +623,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testCreateAclWithCidrHostUnsupportedVersion() {
-        // Use a metadata version that doesn't support CIDR ACLs
+        // Use a metadata version that does not support CIDR ACLs
         AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_0_IV0);
 
         // Create ACL with valid CIDR but unsupported metadata version
@@ -660,5 +660,67 @@ public class AclControlManagerTest {
         result = manager.createAcls(List.of(wildcardAcl));
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
+    }
+
+    @Test
+    public void testDowngradeBelowCidrVersionWithExistingCidrAcls() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder()
+            .setSnapshotRegistry(snapshotRegistry)
+            .setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of()))
+            .build();
+        featureControl.replay(new FeatureLevelRecord()
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setFeatureLevel(MetadataVersion.IBP_4_3_IV0.featureLevel()));
+        AclControlManager aclManager = new AclControlManager.Builder()
+            .setSnapshotRegistry(snapshotRegistry)
+            .setFeatureControl(featureControl)
+            .build();
+
+        featureControl.setPreDowngradeValidator(newVersion -> {
+            if (!newVersion.isCidrAclSupported() && aclManager.hasCidrAcls()) {
+                return Optional.of("Cannot downgrade below " + MetadataVersion.IBP_4_3_IV0 +
+                    " while CIDR-based ACL host patterns exist. Remove all CIDR ACLs first.");
+            }
+            return Optional.empty();
+        });
+
+        AclBinding cidrAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic", LITERAL),
+            new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
+        ControllerResult<List<AclCreateResult>> createResult = aclManager.createAcls(List.of(cidrAcl));
+        assertEquals(1, createResult.response().size());
+        assertFalse(createResult.response().get(0).exception().isPresent(),
+            "CIDR ACL creation should succeed on IBP_4_3_IV0");
+
+        for (ApiMessageAndVersion record : createResult.records()) {
+            aclManager.replay((AccessControlEntryRecord) record.message());
+        }
+
+        assertTrue(aclManager.hasCidrAcls(), "hasCidrAcls() should detect CIDR ACL");
+
+        ControllerResult<ApiError> downgradeResult = featureControl.updateFeatures(
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_2_IV1.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+            false, 0);
+        assertEquals(Errors.INVALID_UPDATE_VERSION, downgradeResult.response().error());
+        assertTrue(downgradeResult.response().message().contains("CIDR-based ACL host patterns exist"),
+            "Downgrade should be blocked with CIDR ACL error message");
+
+        ControllerResult<List<AclDeleteResult>> deleteResult = aclManager.deleteAcls(
+            List.of(cidrAcl.toFilter()));
+        for (ApiMessageAndVersion record : deleteResult.records()) {
+            aclManager.replay((RemoveAccessControlEntryRecord) record.message());
+        }
+        assertFalse(aclManager.hasCidrAcls(), "hasCidrAcls() should return false after removal");
+
+        downgradeResult = featureControl.updateFeatures(
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_2_IV1.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+            false, 0);
+        assertEquals(Errors.NONE, downgradeResult.response().error(),
+            "Downgrade should succeed after CIDR ACLs are removed");
     }
 }
