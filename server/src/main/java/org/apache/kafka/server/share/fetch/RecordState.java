@@ -27,7 +27,7 @@ public enum RecordState {
     AVAILABLE((byte) 0),
     ACQUIRED((byte) 1),
     ACKNOWLEDGED((byte) 2),
-    ARCHIVING((byte) 3),
+    ARCHIVING((byte) 3),    // Per KIP-1191
     ARCHIVED((byte) 4);
 
     public final byte id;
