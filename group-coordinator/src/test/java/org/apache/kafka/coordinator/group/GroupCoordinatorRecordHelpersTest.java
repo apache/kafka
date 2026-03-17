@@ -183,6 +183,39 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
+    public void testNewConsumerGroupEpochRecordWithCreationTimeMs() {
+        long creationTimeMs = 99999L;
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupMetadataKey()
+                .setGroupId("group-id"),
+            new ApiMessageAndVersion(
+                new ConsumerGroupMetadataValue()
+                    .setEpoch(10)
+                    .setMetadataHash(10)
+                    .setCreationTimeMs(creationTimeMs),
+                (short) 0
+            )
+        );
+
+        assertEquals(expectedRecord, newConsumerGroupEpochRecord(
+            "group-id",
+            10,
+            10,
+            creationTimeMs
+        ));
+    }
+
+    @Test
+    public void testNewConsumerGroupEpochRecordWithUnknownCreationTimeMs() {
+        // 3-arg overload delegates with -1L; the resulting record must equal the one
+        // produced by the 4-arg overload with creationTimeMs = -1.
+        assertEquals(
+            newConsumerGroupEpochRecord("group-id", 10, 10, -1L),
+            newConsumerGroupEpochRecord("group-id", 10, 10)
+        );
+    }
+
+    @Test
     public void testNewConsumerGroupEpochTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new ConsumerGroupMetadataKey()

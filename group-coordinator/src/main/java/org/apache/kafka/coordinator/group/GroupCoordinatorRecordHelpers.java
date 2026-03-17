@@ -154,6 +154,16 @@ public class GroupCoordinatorRecordHelpers {
         return newConsumerGroupEpochRecord(groupId, newGroupEpoch, metadataHash, -1L);
     }
 
+    /**
+     * Creates a ConsumerGroupMetadata record.
+     *
+     * @param groupId        The consumer group id.
+     * @param newGroupEpoch  The consumer group epoch.
+     * @param metadataHash   The consumer group metadata hash.
+     * @param creationTimeMs The consumer group creation time in milliseconds. This field can be set to -1 
+     *                       if the creation time is unknown.
+     * @return The record.
+     */
     public static CoordinatorRecord newConsumerGroupEpochRecord(
         String groupId,
         int newGroupEpoch,

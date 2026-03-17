@@ -2112,6 +2112,19 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testCreationTimeMsDefaultsToUnknown() {
+        ConsumerGroup group = createConsumerGroup("foo");
+        assertEquals(-1L, group.creationTimeMs());
+    }
+
+    @Test
+    public void testSetAndGetCreationTimeMs() {
+        ConsumerGroup group = createConsumerGroup("foo");
+        group.setCreationTimeMs(12345L);
+        assertEquals(12345L, group.creationTimeMs());
+    }
+
+    @Test
     public void testComputeMetadataHashIgnoreTopicHashIfItIsNotInMetadataImage() {
         // Use hash map because topic hash cache cannot be immutable.
         // The zar is not in metadata image, so it should not be used.
