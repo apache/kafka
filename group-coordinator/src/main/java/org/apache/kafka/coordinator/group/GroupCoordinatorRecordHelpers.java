@@ -151,13 +151,23 @@ public class GroupCoordinatorRecordHelpers {
         int newGroupEpoch,
         long metadataHash
     ) {
+        return newConsumerGroupEpochRecord(groupId, newGroupEpoch, metadataHash, -1L);
+    }
+
+    public static CoordinatorRecord newConsumerGroupEpochRecord(
+        String groupId,
+        int newGroupEpoch,
+        long metadataHash,
+        long creationTimeMs
+    ) {
         return CoordinatorRecord.record(
             new ConsumerGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(newGroupEpoch)
-                    .setMetadataHash(metadataHash),
+                    .setMetadataHash(metadataHash)
+                    .setCreationTimeMs(creationTimeMs),
                 (short) 0
             )
         );

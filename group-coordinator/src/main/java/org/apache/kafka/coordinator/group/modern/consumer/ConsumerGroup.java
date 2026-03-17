@@ -156,6 +156,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
 
+    private long creationTimeMs = -1L;
+
     public ConsumerGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -188,6 +190,20 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     @Override
     public String protocolType() {
         return ConsumerProtocol.PROTOCOL_TYPE;
+    }
+
+    /**
+     * @return The epoch-ms when this consumer group was first created, or -1 if unknown.
+     */
+    public long creationTimeMs() {
+        return creationTimeMs;
+    }
+
+    /**
+     * Sets the epoch-ms when this consumer group was first created.
+     */
+    public void setCreationTimeMs(long creationTimeMs) {
+        this.creationTimeMs = creationTimeMs;
     }
 
     /**
