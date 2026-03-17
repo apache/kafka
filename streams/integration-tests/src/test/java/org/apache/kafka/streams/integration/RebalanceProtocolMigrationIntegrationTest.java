@@ -37,22 +37,18 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -63,44 +59,44 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
     public static final String INPUT_TOPIC = "migration-input";
     public static final String OUTPUT_TOPIC = "migration-output";
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1,
-        mkObjectProperties(Map.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)));
 
+    public EmbeddedKafkaCluster cluster;
     private String inputTopic;
     private String outputTopic;
     private KafkaStreams kafkaStreams;
     private String safeTestName;
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        CLUSTER.start();
-    }
-
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
+    protected Properties brokerConfig() {
+        final Properties props = new Properties();
+        props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0);
+        return props;
     }
 
     public static class WithAssignmentBatchingTest extends RebalanceProtocolMigrationIntegrationTest {
-        @BeforeAll
-        public static void enableAssignmentBatching() {
-            IntegrationTestUtils.setStreamsGroupAssignmentIntervalMs(CLUSTER, 1000);
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000);
+            return props;
         }
     }
 
     @BeforeEach
-    public void createTopics(final TestInfo testInfo) throws Exception {
+    public void setup(final TestInfo testInfo) throws Exception {
+        cluster = new EmbeddedKafkaCluster(1, brokerConfig());
+        cluster.start();
         safeTestName = safeUniqueTestName(testInfo);
         inputTopic = INPUT_TOPIC + safeTestName;
         outputTopic = OUTPUT_TOPIC + safeTestName;
-        CLUSTER.createTopic(inputTopic);
-        CLUSTER.createTopic(outputTopic);
+        cluster.createTopic(inputTopic);
+        cluster.createTopic(outputTopic);
     }
 
     private Properties props() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
             Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
@@ -118,6 +114,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
             kafkaStreams.close(Duration.ofSeconds(30L));
             kafkaStreams.cleanUp();
         }
+        cluster.stop();
+        cluster = null;
     }
 
 
@@ -133,7 +131,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
         processExactlyOneRecord(streamsBuilder, props, "1", "A");
 
         // Wait for session to time out
-        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
+        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
             waitForEmptyConsumerGroup(adminClient, props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 1000);
         }
 
@@ -159,7 +157,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
         processExactlyOneRecord(streamsBuilder, props, "2", "B");
 
         // Wait for session to time out
-        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
+        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
             waitForEmptyConsumerGroup(adminClient, props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 1000);
         }
 
@@ -176,7 +174,7 @@ public class RebalanceProtocolMigrationIntegrationTest {
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
-        final long currentTimeNew = CLUSTER.time.milliseconds();
+        final long currentTimeNew = cluster.time.milliseconds();
 
         processKeyValueAndVerify(
             key,
@@ -202,14 +200,14 @@ public class RebalanceProtocolMigrationIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+            TestUtils.producerConfig(cluster.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class),
             timestamp);
 
 
         final Properties consumerProperties = new Properties();
-        consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
