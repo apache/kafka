@@ -310,15 +310,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
             topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
         } else {
-          val currentTopicId = metadataCache.getTopicId(topic.name)
+          val resolvedTopicId = metadataCache.getTopicId(topic.name)
 
-          if (useTopicIds) {
-            topic.setTopicId(currentTopicId)
-          } else {
-            topic.setTopicId(Uuid.ZERO_UUID)
-          }
-
-          if (currentTopicId == Uuid.ZERO_UUID) {
+          if (resolvedTopicId == Uuid.ZERO_UUID) {
             // If the topic is unknown, we add the topic and all its partitions
             // to the response with UNKNOWN_TOPIC_OR_PARTITION.
             responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
@@ -326,7 +320,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // Otherwise, we check all partitions to ensure that they all exist.
             val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
-              .setTopicId(if (useTopicIds) currentTopicId else Uuid.ZERO_UUID)
+              .setTopicId(topic.topicId())
               .setName(topic.name)
 
             topic.partitions.forEach { partition =>
@@ -334,7 +328,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 topicWithValidPartitions.partitions.add(partition)
               } else {
                 responseBuilder.addPartition(
-                  if (useTopicIds) currentTopicId else Uuid.ZERO_UUID,
+                  topic.topicId(),
                   topic.name,
                   partition.partitionIndex,
                   Errors.UNKNOWN_TOPIC_OR_PARTITION
