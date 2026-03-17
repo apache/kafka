@@ -125,7 +125,7 @@ public class ConsumerMembershipManagerTest {
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
         time = new MockTime(0);
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class)));
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
@@ -326,7 +326,7 @@ public class ConsumerMembershipManagerTest {
 
         // First transition to LEAVING (required before transitioning to STALE)
         membershipManager.transitionToSendingLeaveGroup(true);
-        clearInvocations(subscriptionState);
+        clearInvocations(subscriptionState, backgroundEventHandler);
         when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
@@ -2855,7 +2855,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
-        clearInvocations(subscriptionState, membershipManager, commitRequestManager);
+        clearInvocations(subscriptionState, membershipManager, commitRequestManager, backgroundEventHandler);
         return membershipManager;
     }
 
