@@ -43,7 +43,7 @@ public class Utils {
         // If the header is empty, then copy the value bytes directly
         if (hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
             // Strip header size (varint 1 byte), empty headers (no bytes), and timestamp
-            final byte[] res = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
+            final byte[] rawValue = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
             System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, res, 0, res.length);
             return res;
         }
