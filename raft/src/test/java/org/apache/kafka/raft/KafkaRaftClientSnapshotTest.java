@@ -273,7 +273,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
-        // Check that listener was notified of the committed snapshot, not the bootstrap snapshot
+        // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
@@ -2134,7 +2134,7 @@ public final class KafkaRaftClientSnapshotTest {
 
     @Test
     public void testListenerReceivesBootstrapSnapshot() throws Exception {
-        ReplicaKey localKey = replicaKey(0, true);
+        ReplicaKey localKey = replicaKey(randomReplicaId(), true);
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey));
         List<String> bootstrapRecords = List.of("a", "b", "c");
 
@@ -2151,7 +2151,7 @@ public final class KafkaRaftClientSnapshotTest {
 
     @Test
     public void testListenerReceivesBootstrapSnapshotViaFollowerFetch() throws Exception {
-        ReplicaKey localKey = replicaKey(0, true);
+        ReplicaKey localKey = replicaKey(randomReplicaId(), true);
         ReplicaKey otherNodeKey = replicaKey(localKey.id() + 1, true);
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey));
         List<String> bootstrapRecords = List.of("a", "b", "c");
@@ -2177,8 +2177,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     private static void assertBootstrapSnapshot(
-            RaftClientTestContext context,
-            List<String> expectedRecords) throws Exception {
+        RaftClientTestContext context,
+        List<String> expectedRecords
+    ) throws Exception {
         try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
             assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(expectedRecords), bootstrapSnapshot);
