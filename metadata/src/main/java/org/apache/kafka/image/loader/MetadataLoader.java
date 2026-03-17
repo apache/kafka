@@ -231,7 +231,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             logContext,
             time,
             faultHandler,
-            this::maybePublishMetadata);
+            this::maybePublishMetadata,
+            supportedConfigChecker);
         this.eventQueue = new KafkaEventQueue(
             time,
             logContext,
@@ -422,6 +423,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     snapshotName, numLoaded);
                 MetadataDelta delta = new MetadataDelta.Builder().
                     setImage(image).
+                    setSupportedConfigChecker(supportedConfigChecker).
                     build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
                 log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +

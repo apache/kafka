@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -148,7 +149,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testAlignedTransactionBatches"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -184,7 +186,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testSingletonBeginAndEnd"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // All in one commit
@@ -233,7 +236,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         Batch<ApiMessageAndVersion> batch1 = Batch.data(
@@ -263,7 +267,8 @@ public class MetadataBatchLoaderTest {
                 new LogContext(),
                 new MockTime(),
                 faultHandler,
-                updater
+                updater,
+                SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -296,7 +301,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -333,7 +339,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -417,7 +424,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testOneTransactionInMultipleBatches"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
