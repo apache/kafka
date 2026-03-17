@@ -1036,10 +1036,10 @@ public final class KafkaRaftClientSnapshotTest {
         // In the test scenario, we will fetch the max snapshot size 2 times and then fetch the remaining bits.
         int fetchSnapshotMaxBytes = 118;
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .appendToLog(snapshotId.epoch(), List.of("a"))
-                .withFetchSnapshotMaxBytes(fetchSnapshotMaxBytes)
-                .withKip853Rpc(true)
-                .build();
+            .appendToLog(snapshotId.epoch(), List.of("a"))
+            .withFetchSnapshotMaxBytes(fetchSnapshotMaxBytes)
+            .withKip853Rpc(true)
+            .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
@@ -1060,13 +1060,13 @@ public final class KafkaRaftClientSnapshotTest {
         int position = 0;
         for (int i = 0; i < expectedNumberOfReads; i++) {
             context.deliverRequest(
-                    fetchSnapshotRequest(
-                            context.metadataPartition,
-                            epoch,
-                            snapshotId,
-                            fetchSnapshotMaxBytes,
-                            position
-                    )
+                fetchSnapshotRequest(
+                    context.metadataPartition,
+                    epoch,
+                    snapshotId,
+                    fetchSnapshotMaxBytes,
+                    position
+                )
             );
             context.client.poll();
 
@@ -1087,17 +1087,17 @@ public final class KafkaRaftClientSnapshotTest {
             totalBytesRead < snapshotSizeBytes,
             "Total bytes read should be less than snapshot size");
         context.deliverRequest(
-                fetchSnapshotRequest(
-                        context.metadataPartition,
-                        epoch,
-                        snapshotId,
-                        fetchSnapshotMaxBytes,
-                        position
-                )
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                fetchSnapshotMaxBytes,
+                position
+            )
         );
         context.client.poll();
         FetchSnapshotResponseData.PartitionSnapshot response =
-                context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+            context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(epoch, response.currentLeader().leaderEpoch());
         assertEquals(localId, response.currentLeader().leaderId());
         assertEquals(snapshotSizeBytes - totalBytesRead, response.unalignedRecords().sizeInBytes());

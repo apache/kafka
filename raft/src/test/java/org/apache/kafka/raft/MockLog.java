@@ -445,9 +445,9 @@ public class MockLog implements RaftLog {
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
             if (batch.lastOffset() >= startOffset
-                    && batch.lastOffset() < maxOffset
-                    && !batch.entries.isEmpty()
-                    && buffer.position() < maxTotalBatchBytes) {
+                && batch.lastOffset() < maxOffset
+                && !batch.entries.isEmpty()
+                && buffer.position() < maxTotalBatchBytes) {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
