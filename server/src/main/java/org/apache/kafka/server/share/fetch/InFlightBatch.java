@@ -154,6 +154,10 @@ public class InFlightBatch {
      * are allowed to the batch state.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
+    public void archivingBatch() {
+        inFlightState().archiving();
+    }
+
     public void archiveBatch() {
         inFlightState().archive();
     }

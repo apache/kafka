@@ -180,6 +180,13 @@ public class InFlightState {
      * cancelling the acquisition lock timeout task.
      * This method is used to archive the record when it is no longer needed.
      */
+    public void archiving() {
+        isTerminalState = false;
+        state = RecordState.ARCHIVING;
+        memberId = EMPTY_MEMBER_ID;
+        cancelAndClearAcquisitionLockTimeoutTask();
+    }
+
     public void archive() {
         isTerminalState = true;
         state = RecordState.ARCHIVED;

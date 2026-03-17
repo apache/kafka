@@ -43,7 +43,11 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQ;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordParameter;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -87,6 +91,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -331,6 +336,12 @@ public class SharePartition {
      * The fetch lock idle duration is used to track the time for which the fetch lock is idle.
      */
     private long fetchLockIdleDurationMs;
+
+
+    /**
+     * The share group DLQ manager implementation instance.
+     */
+    private final ShareGroupDLQ dlq = new NoOpShareGroupDLQManager();
 
     SharePartition(
         String groupId,
@@ -1289,7 +1300,7 @@ public class SharePartition {
 
             // Though such batches can be removed from the cache, but it is better to archive them so
             // that they are never acquired again.
-            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE, true);
+            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE, true, ShareGroupDLQ.STALE_BATCH);
 
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
@@ -1310,7 +1321,7 @@ public class SharePartition {
     private boolean archiveAvailableRecordsOnLsoMovement(long logStartOffset) {
         lock.writeLock().lock();
         try {
-            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE, false);
+            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE, false, ShareGroupDLQ.BEHIND_LSO);
         } finally {
             lock.writeLock().unlock();
         }
@@ -1379,7 +1390,8 @@ public class SharePartition {
         long endOffset,
         NavigableMap<Long, InFlightBatch> map,
         RecordState initialState,
-        boolean updateDeliveryCompleteCount) {
+        boolean updateDeliveryCompleteCount,
+        Throwable cause) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false, isAnyBatchArchived = false;
@@ -1405,11 +1417,11 @@ public class SharePartition {
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState, updateDeliveryCompleteCount) || isAnyOffsetArchived;
+                    isAnyOffsetArchived = archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState, updateDeliveryCompleteCount, cause) || isAnyOffsetArchived;
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                isAnyBatchArchived = archiveCompleteBatch(inFlightBatch, initialState, updateDeliveryCompleteCount) || isAnyBatchArchived;
+                isAnyBatchArchived = archiveCompleteBatch(inFlightBatch, initialState, updateDeliveryCompleteCount, cause) || isAnyBatchArchived;
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
@@ -1421,33 +1433,61 @@ public class SharePartition {
                                                  long startOffsetToArchive,
                                                  long endOffsetToArchive,
                                                  RecordState initialState,
-                                                 boolean updateDeliveryCompleteCount
+                                                 boolean updateDeliveryCompleteCount,
+                                                 Throwable cause
     ) {
         lock.writeLock().lock();
         try {
-            boolean isAnyOffsetArchived = false;
-            log.trace("Archiving offset tracked batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-            for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
-                if (offsetState.getKey() < startOffsetToArchive) {
-                    continue;
-                }
-                if (offsetState.getKey() > endOffsetToArchive) {
-                    // No further offsets to process.
-                    break;
-                }
-                if (offsetState.getValue().state() != initialState) {
-                    continue;
-                }
+            CompletableFuture<Void> dlqFuture = CompletableFuture.completedFuture(null);
+            try {
+                boolean isAnyOffsetArchived = false;
+                log.trace("Archiving offset tracked batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+                for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
+                    if (offsetState.getKey() < startOffsetToArchive) {
+                        continue;
+                    }
+                    if (offsetState.getKey() > endOffsetToArchive) {
+                        // No further offsets to process.
+                        break;
+                    }
+                    if (offsetState.getValue().state() != initialState) {
+                        continue;
+                    }
 
-                offsetState.getValue().archive();
-                if (updateDeliveryCompleteCount) {
-                    // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
-                    // needs to be incremented.
-                    deliveryCompleteCount.incrementAndGet();
+                    offsetState.getValue().archiving();
+                    dlqFuture = dlq.enqueue(new ShareGroupDLQRecordParameter(
+                        groupId,
+                        topicIdPartition,
+                        offsetState.getKey(),
+                        offsetState.getKey(),
+                        Optional.of(offsetState.getValue().deliveryCount()),
+                        Optional.of(cause),
+                        false
+                    )).whenComplete((v, exp) -> {
+                        if (exp != null) {
+                            log.error("Could not DLQ record offset {}.", offsetState.getKey(), exp);
+                        }
+                        // We need to ARCHIVE - even if DLQ fails. Otherwise, progress could stall.
+                        offsetState.getValue().archive();
+                    });
+
+                    if (updateDeliveryCompleteCount) {
+                        // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
+                        // needs to be incremented.
+                        deliveryCompleteCount.incrementAndGet();
+                    }
+                    isAnyOffsetArchived = true;
                 }
-                isAnyOffsetArchived = true;
+                return isAnyOffsetArchived;
+            } finally {
+                try {
+                    dlqFuture.get(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT, TimeUnit.MILLISECONDS);
+                } catch (Exception e) {
+                    log.trace("DLQ future could not be completed in time.", e);
+                    // Force archive the batch.
+                    dlqFuture.cancel(true);
+                }
             }
-            return isAnyOffsetArchived;
         } finally {
             lock.writeLock().unlock();
         }
@@ -1456,24 +1496,51 @@ public class SharePartition {
     private boolean archiveCompleteBatch(
         InFlightBatch inFlightBatch,
         RecordState initialState,
-        boolean updateDeliveryCompleteCount) {
+        boolean updateDeliveryCompleteCount,
+        Throwable cause) {
         lock.writeLock().lock();
         try {
-            log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-            if (inFlightBatch.batchState() == initialState) {
-                // Change the state of complete batch since the same state exists for the entire inFlight batch.
-                inFlightBatch.archiveBatch();
-                if (updateDeliveryCompleteCount) {
-                    // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
-                    // needs to be incremented by the number of records in the batch.
-                    deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+            CompletableFuture<Void> dlqFuture = CompletableFuture.completedFuture(null);
+            try {
+                log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+                if (inFlightBatch.batchState() == initialState) {
+                    // Change the state of complete batch since the same state exists for the entire inFlight batch.
+                    inFlightBatch.archivingBatch();
+                    dlqFuture = dlq.enqueue(new ShareGroupDLQRecordParameter(
+                        groupId,
+                        topicIdPartition,
+                        inFlightBatch.firstOffset(),
+                        inFlightBatch.lastOffset(),
+                        Optional.of(inFlightBatch.batchDeliveryCount()),
+                        Optional.of(cause),
+                        false
+                    )).whenComplete((v, exp) -> {
+                        if (exp != null) {
+                            log.error("Could not DLQ batch with offsets [{}-{}].", inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), exp);
+                        }
+                        // We need to ARCHIVE - even if DLQ fails. Otherwise, progress could stall.
+                        inFlightBatch.archiveBatch();
+                    });
+                    if (updateDeliveryCompleteCount) {
+                        // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
+                        // needs to be incremented by the number of records in the batch.
+                        deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+                    }
+                    return true;
                 }
-                return true;
+                return false;
+            } finally {
+                try {
+                    dlqFuture.get(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT, TimeUnit.MILLISECONDS);
+                } catch (Exception e) {
+                    log.trace("DLQ future could not be completed in time.", e);
+                    // Force archive the batch.
+                    dlqFuture.cancel(true);
+                }
             }
         } finally {
             lock.writeLock().unlock();
         }
-        return false;
     }
 
     /**
@@ -3083,7 +3150,7 @@ public class SharePartition {
         for (RecordBatch recordBatch : recordsToArchive) {
             // Archive the offsets/batches in the cached state.
             NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
-            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED, true);
+            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED, true, ShareGroupDLQ.ABORTED_TRANSACTION);
         }
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
     }
