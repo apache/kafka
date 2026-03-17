@@ -296,7 +296,7 @@ public class RequestManagers implements Closeable {
                     commitRequestManager,
                     positionsValidator,
                     logContext,
-                    Optional.ofNullable(membershipManager));
+                    membershipManager == null ? () -> -1L : membershipManager::groupCreationTimeMs);
 
                 return new RequestManagers(
                         logContext,

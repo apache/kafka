@@ -42,6 +42,7 @@ public class AutoOffsetResetStrategy {
     public static final AutoOffsetResetStrategy EARLIEST = new AutoOffsetResetStrategy(StrategyType.EARLIEST);
     public static final AutoOffsetResetStrategy LATEST = new AutoOffsetResetStrategy(StrategyType.LATEST);
     public static final AutoOffsetResetStrategy NONE = new AutoOffsetResetStrategy(StrategyType.NONE);
+    public static final AutoOffsetResetStrategy BY_START_TIME = new AutoOffsetResetStrategy(StrategyType.BY_START_TIME);
 
     private final StrategyType type;
     private final Optional<Duration> duration;
@@ -78,7 +79,7 @@ public class AutoOffsetResetStrategy {
                 case NONE:
                     return NONE;
                 case BY_START_TIME:
-                    return new AutoOffsetResetStrategy(StrategyType.BY_START_TIME);
+                    return BY_START_TIME;
                 default:
                     throw new IllegalArgumentException("Unknown auto offset reset strategy: " + offsetStrategy);
             }
@@ -117,7 +118,7 @@ public class AutoOffsetResetStrategy {
     /**
      * Return the timestamp to be used for the ListOffsetsRequest.
      * @return the timestamp for the OffsetResetStrategy,
-     * if the strategy is EARLIEST or LATEST or duration is provided,
+     * if the strategy is EARLIEST or LATEST or duration is provided
      * else return Optional.empty()
      */
     public Optional<Long> timestamp() {

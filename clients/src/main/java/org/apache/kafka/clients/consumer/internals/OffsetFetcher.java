@@ -26,8 +26,8 @@ import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffset
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
 import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochUtils.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RetriableException;

@@ -26,10 +26,10 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -57,6 +57,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
@@ -94,7 +95,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-    private final Optional<ConsumerMembershipManager> membershipManager;
+    private final LongSupplier groupCreationTimeMsSupplier;
 
     /**
      * Exception that occurred while updating positions after the triggering event had already
@@ -125,7 +126,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final LogContext logContext) {
         this(subscriptionState, metadata, isolationLevel, time, retryBackoffMs, requestTimeoutMs,
                 defaultApiTimeoutMs, apiVersions, networkClientDelegate, commitRequestManager,
-                positionsValidator, logContext, Optional.empty());
+                positionsValidator, logContext, () -> -1L);
     }
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
@@ -140,7 +141,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final CommitRequestManager commitRequestManager,
                                  final PositionsValidator positionsValidator,
                                  final LogContext logContext,
-                                 final Optional<ConsumerMembershipManager> membershipManager) {
+                                 final LongSupplier groupCreationTimeMsSupplier) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
         requireNonNull(isolationLevel);
@@ -167,7 +168,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
-        this.membershipManager = membershipManager;
+        this.groupCreationTimeMsSupplier = requireNonNull(groupCreationTimeMsSupplier);
     }
 
     private static class PendingFetchCommittedRequest {
@@ -677,13 +678,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * yet been received (e.g. assign() mode or before the first heartbeat response).
      */
     private long resolveResetTimestamp(TopicPartition tp) {
-        long groupTs = membershipManager
-            .map(ConsumerMembershipManager::groupCreationTimeMs)
-            .orElseThrow(() -> new KafkaException(
-                "by_start_time auto.offset.reset requires the async consumer with the KIP-848 group protocol"));
+        long groupTs = groupCreationTimeMsSupplier.getAsLong();
         if (groupTs <= 0) {
             throw new KafkaException("Cannot reset offset for " + tp +
-                " using by_start_time: group creation time is not yet available");
+                " using by_start_time: group creation time is unavailable" +
+                " (requires subscribe() with the KIP-848 group protocol)");
         }
         return groupTs;
     }
