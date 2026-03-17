@@ -16,42 +16,44 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
-class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, ValueAndTimestamp<VOut>> {
+class TimestampedCacheFlushListenerWithHeaders<KOut, VOut> implements CacheFlushListener<KOut, ValueTimestampHeaders<VOut>> {
 
     private final InternalProcessorContext<KOut, Change<VOut>> context;
 
     @SuppressWarnings("rawtypes")
     private final ProcessorNode myNode;
 
-    TimestampedCacheFlushListener(final ProcessorContext<KOut, Change<VOut>> context) {
+    TimestampedCacheFlushListenerWithHeaders(final ProcessorContext<KOut, Change<VOut>> context) {
         this.context = (InternalProcessorContext<KOut, Change<VOut>>) context;
         myNode = this.context.currentNode();
     }
 
     @Override
-    public void apply(final Record<KOut, Change<ValueAndTimestamp<VOut>>> record) {
+    public void apply(final Record<KOut, Change<ValueTimestampHeaders<VOut>>> record) {
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
+            final VOut newValue = getValueOrNull(record.value().newValue);
+            final VOut oldValue = getValueOrNull(record.value().oldValue);
+            final long timestamp = record.value().newValue != null ? record.value().newValue.timestamp() : record.timestamp();
+            final Headers headers = record.headers() != null ? record.headers() : new RecordHeaders();
+
             context.forward(
                 record
-                    .withValue(
-                        new Change<>(
-                            getValueOrNull(record.value().newValue),
-                            getValueOrNull(record.value().oldValue),
-                            record.value().isLatest))
-                    .withTimestamp(
-                        record.value().newValue != null ? record.value().newValue.timestamp()
-                            : record.timestamp())
+                    .withValue(new Change<>(newValue, oldValue, record.value().isLatest))
+                    .withTimestamp(timestamp)
+                    .withHeaders(headers)
             );
         } finally {
             context.setCurrentNode(prev);

@@ -41,7 +41,7 @@ import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.DeserializationResult;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
@@ -435,7 +435,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     }
 
     @Override
-    public Maybe<ValueAndTimestamp<V>> priorValueForBuffered(final K key) {
+    public Maybe<ValueTimestampHeaders<V>> priorValueForBuffered(final K key) {
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
         if (index.containsKey(serializedKey)) {
             final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
@@ -448,7 +448,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
             // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
             // buffer something.
-            return Maybe.defined(ValueAndTimestamp.make(deserializedValue, RecordQueue.UNKNOWN));
+            return Maybe.defined(ValueTimestampHeaders.make(deserializedValue, RecordQueue.UNKNOWN, new RecordHeaders()));
         } else {
             return Maybe.undefined();
         }

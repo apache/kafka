@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -28,7 +29,7 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
@@ -94,7 +95,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store.store(),
                 context,
-                new TimestampedCacheFlushListener<>(context),
+                new TimestampedCacheFlushListenerWithHeaders<>(context),
                 sendOldValues);
         }
 
@@ -118,7 +119,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
                 return;
             }
 
-            final ValueAndTimestamp<VAgg> oldAggAndTimestamp = store.get(record.key());
+            final ValueTimestampHeaders<VAgg> oldAggAndTimestamp = store.get(record.key());
             VAgg oldAgg = getValueOrNull(oldAggAndTimestamp);
 
             final VAgg newAgg;
@@ -134,7 +135,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
 
             newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
-            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp);
+            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, new RecordHeaders());
             // if not put to store, do not forward downstream either
             if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                 tupleForwarder.maybeForward(
@@ -168,12 +169,12 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
         }
 
         @Override
-        public ValueAndTimestamp<VAgg> get(final KIn key) {
+        public ValueTimestampHeaders<VAgg> get(final KIn key) {
             return store.get(key);
         }
 
         @Override
-        public ValueAndTimestamp<VAgg> get(final KIn key, final long asOfTimestamp) {
+        public ValueTimestampHeaders<VAgg> get(final KIn key, final long asOfTimestamp) {
             return store.get(key, asOfTimestamp);
         }
 

@@ -292,8 +292,6 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
             }
         }
 
-        // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;
-        // otherwise, we only overwrite the checkpoint if it is largely different from the old one
         return totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
     }
 

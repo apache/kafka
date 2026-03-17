@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -237,9 +238,9 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Properties props) {
+    public static void validateNames(Map<String, ?> props) {
         Set<String> names = configNames();
-        for (String name : props.stringPropertyNames()) {
+        for (String name : props.keySet()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
@@ -250,7 +251,7 @@ public final class GroupConfig extends AbstractConfig {
      * Validates the values of the given properties.
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
-    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+    private static void validateValues(Map<String, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -356,13 +357,13 @@ public final class GroupConfig extends AbstractConfig {
      * all values can be parsed and are valid. The provided properties are merged with
      * the broker-level defaults before validation.
      */
-    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
-        Properties combinedConfigs = new Properties();
+    public static void validate(Map<String, ?> props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+        Map<String, Object> combinedConfigs = new HashMap<>();
         combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
         combinedConfigs.putAll(props);
 
         validateNames(combinedConfigs);
-        Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
+        Map<String, Object> valueMaps = CONFIG.parse(combinedConfigs);
         validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
     }
 
