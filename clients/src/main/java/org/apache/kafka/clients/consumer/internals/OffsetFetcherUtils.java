@@ -248,7 +248,7 @@ class OffsetFetcherUtils {
 
     private AutoOffsetResetStrategy offsetResetStrategyWithValidTimestamp(final TopicPartition partition) {
         AutoOffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
-        if (strategy.timestamp().isPresent()) {
+        if (strategy.timestamp().isPresent() || strategy.type() == AutoOffsetResetStrategy.StrategyType.BY_START_TIME) {
             return strategy;
         } else {
             throw new NoOffsetForPartitionException(partition);

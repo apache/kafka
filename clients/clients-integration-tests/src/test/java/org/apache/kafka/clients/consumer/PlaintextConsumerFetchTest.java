@@ -47,13 +47,13 @@ import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
-import static org.apache.kafka.clients.CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_BYTES_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
@@ -277,16 +277,7 @@ public class PlaintextConsumerFetchTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerByStartTimePreventDataLossOnPartitionExpansion() throws ExecutionException, InterruptedException {
-        testByStartTimePreventDataLossOnPartitionExpansion(GroupProtocol.CLASSIC);
-    }
-
-    @ClusterTest
-    public void testAsyncConsumerByStartTimePreventDataLossOnPartitionExpansion() throws ExecutionException, InterruptedException {
-        testByStartTimePreventDataLossOnPartitionExpansion(GroupProtocol.CONSUMER);
-    }
-
-    private void testByStartTimePreventDataLossOnPartitionExpansion(GroupProtocol groupProtocol) throws ExecutionException, InterruptedException {
+    public void testByStartTimePreventDataLossOnPartitionExpansion() throws ExecutionException, InterruptedException {
         var startTimeTopic = "by-start-time-topic";
         var historicalKey = "historical-key".getBytes(StandardCharsets.UTF_8);
         var historicalValue = "historical-value".getBytes(StandardCharsets.UTF_8);
@@ -302,20 +293,28 @@ public class PlaintextConsumerFetchTest {
                 Admin admin = cluster.admin(); 
                 Producer<byte[], byte[]> producer = cluster.producer(); 
                 Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
-                    GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT), 
+                    GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT), 
                     AUTO_OFFSET_RESET_CONFIG, "by_start_time",
-                    METADATA_MAX_AGE_CONFIG, 100
+                    REQUEST_TIMEOUT_MS_CONFIG, 1000
                 ))
         ) {
 
             // Create topic and produce historical records with an explicit past timestamp.
-            // The consumer's startupTimestamp was already captured above (at consumer creation time),
-            // so historical records with timestamps 5 minutes in the past will be filtered out.
             admin.createTopics(List.of(new NewTopic(startTimeTopic, 1, (short) 1))).all().get();
             producer.send(new ProducerRecord<>(startTimeTopic, 0, pastTimestamp, historicalKey, historicalValue));
             producer.flush();
 
             consumer.subscribe(List.of(startTimeTopic));
+
+            // Wait for the consumer to join the group and receive its assignment. This guarantees
+            // that the broker has set groupCreationTimeMs and the consumer has received it via
+            // the heartbeat response. Records produced after this point will have broker-assigned
+            // timestamps >= groupCreationTimeMs and will be included in the by_start_time reset.
+            var p0 = new TopicPartition(startTimeTopic, 0);
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return consumer.assignment().contains(p0);
+            }, 15_000, "Timed out waiting for consumer to be assigned partition 0");
 
             producer.send(new ProducerRecord<>(startTimeTopic, currentKey, currentValue));
             producer.flush();
@@ -328,7 +327,7 @@ public class PlaintextConsumerFetchTest {
             }, "Timed out waiting for post-startup record from partition 0");
             assertTrue(recordsFromP0.stream().noneMatch(r ->
                     new String(r.key(), StandardCharsets.UTF_8).equals("historical-key")),
-                "Consumer should not receive historical records produced before startup");
+                "Consumer should not receive historical records produced before group creation time");
 
             // Expand topic to 2 partitions, then immediately produce to partition 1
             // before the consumer has a chance to discover it.
