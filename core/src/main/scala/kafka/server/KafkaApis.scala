@@ -1830,7 +1830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             entriesPerPartition = controlRecords,
             requestLocal = requestLocal,
             responseCallback = errors => {
-              errors.foreachEntry { (topicIdPartition, partitionResponse) =>
+              errors.forEach { (topicIdPartition, partitionResponse) =>
                 addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
             },
@@ -4224,7 +4224,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    config.shareGroupConfig.isShareGroupEnabled || shareVersion().supportsShareGroups
+    shareVersion().supportsShareGroups
   }
 
   /**

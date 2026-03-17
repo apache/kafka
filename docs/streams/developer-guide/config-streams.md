@@ -1039,8 +1039,24 @@ The amount of time in milliseconds to wait before deleting state when a partitio
 </td>  
 <td>
 
-`600000`
-</td> (10 minutes)
+`600000` (10 minutes)
+</td> </tr>
+<tr>
+<td>
+
+state.cleanup.dir.max.age.ms
+</td>
+<td>
+
+Low
+</td>
+<td>
+
+Time-based threshold for purging local state directories and checkpoint files during application startup. State directories that have not been modified for at least `state.cleanup.dir.max.age.ms` will be removed.
+</td>
+<td>
+
+`-1` (Disabled)
 </td> </tr>  
 <tr>  
 <td>

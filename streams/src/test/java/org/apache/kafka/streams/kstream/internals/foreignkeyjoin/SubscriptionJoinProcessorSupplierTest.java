@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForwa
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,12 +36,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SubscriptionJoinProcessorSupplierTest {
-    final Map<String, ValueAndTimestamp<String>> fks = Collections.singletonMap(
-        "fk1", ValueAndTimestamp.make("foo", 1L)
+    final Map<String, ValueTimestampHeaders<String>> fks = Collections.singletonMap(
+        "fk1", ValueTimestampHeaders.make("foo", 1L, null)
     );
     final KTableValueGetterSupplier<String, String> valueGetterSupplier = valueGetterSupplier(fks);
     final Processor<CombinedKey<String, String>,
-                    Change<ValueAndTimestamp<SubscriptionWrapper<String>>>,
+                    Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>,
                     String,
                     SubscriptionResponseWrapper<String>>
         processor = processor(valueGetterSupplier);
@@ -64,10 +64,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             SubscriptionWrapper.VERSION_0,
             null
         );
-        final Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -98,10 +98,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             SubscriptionWrapper.VERSION_1,
             12
         );
-        final Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -133,10 +133,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             SubscriptionWrapper.VERSION_0,
             null
         );
-        final Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
         );
         processor.process(record);
@@ -168,10 +168,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             SubscriptionWrapper.VERSION_1,
             12
         );
-        final Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -202,10 +202,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             SubscriptionWrapper.VERSION_0,
             null
         );
-        Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -226,7 +226,7 @@ public class SubscriptionJoinProcessorSupplierTest {
 
         record = new Record<>(
                 new CombinedKey<>("fk9000", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -257,10 +257,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             "pk1",
             SubscriptionWrapper.VERSION_1,
             12);
-        Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -280,7 +280,7 @@ public class SubscriptionJoinProcessorSupplierTest {
 
         record = new Record<>(
             new CombinedKey<>("fk9000", "pk1"),
-            new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+            new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
             1L
         );
         processor.process(record);
@@ -311,10 +311,10 @@ public class SubscriptionJoinProcessorSupplierTest {
             "pk1",
             SubscriptionWrapper.VERSION_0,
             null);
-        final Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(
                 new CombinedKey<>("fk1", "pk1"),
-                new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                 1L
             );
         processor.process(record);
@@ -333,9 +333,9 @@ public class SubscriptionJoinProcessorSupplierTest {
             "pk1",
             SubscriptionWrapper.VERSION_1,
             12);
-        final Record<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> record =
+        final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(new CombinedKey<>("fk1", "pk1"),
-                         new Change<>(ValueAndTimestamp.make(newValue, 1L), null),
+                         new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
                         1L
             );
         processor.process(record);
@@ -343,11 +343,11 @@ public class SubscriptionJoinProcessorSupplierTest {
         assertEquals(0, forwarded.size());
     }
 
-    private KTableValueGetterSupplier<String, String> valueGetterSupplier(final Map<String, ValueAndTimestamp<String>> map) {
+    private KTableValueGetterSupplier<String, String> valueGetterSupplier(final Map<String, ValueTimestampHeaders<String>> map) {
         final KTableValueGetter<String, String> valueGetter = new KTableValueGetter<String, String>() {
 
             @Override
-            public ValueAndTimestamp<String> get(final String key) {
+            public ValueTimestampHeaders<String> get(final String key) {
                 return map.get(key);
             }
 
@@ -375,7 +375,7 @@ public class SubscriptionJoinProcessorSupplierTest {
     }
 
     private Processor<CombinedKey<String, String>,
-                      Change<ValueAndTimestamp<SubscriptionWrapper<String>>>,
+                      Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>,
                       String,
                       SubscriptionResponseWrapper<String>> processor(final KTableValueGetterSupplier<String, String> valueGetterSupplier) {
         final SubscriptionJoinProcessorSupplier<String, String, String> supplier =

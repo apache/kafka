@@ -18,6 +18,7 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 
@@ -37,7 +38,7 @@ import java.util.Map;
  * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
  * <code>task</code> set to the task id and <code>converter</code> set to either <code>key</code> or <code>value</code>.
  */
-public interface Converter extends Closeable {
+public interface Converter extends Closeable, ConnectPlugin {
 
     /**
      * Configure this class.
@@ -101,6 +102,7 @@ public interface Converter extends Closeable {
      * Configuration specification for this converter.
      * @return the configuration specification; may not be null
      */
+    @Override
     default ConfigDef config() {
         return new ConfigDef();
     }
@@ -108,5 +110,10 @@ public interface Converter extends Closeable {
     @Override
     default void close() throws IOException  {
         // no op
+    }
+
+    @Override
+    default String version() {
+        return "undefined";
     }
 }

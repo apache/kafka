@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
@@ -81,6 +82,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
 
     @Override
     public StoreBuilder<?> builder() {
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = storeSupplier == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         this.name,
@@ -89,15 +91,16 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                         true,
                         EmitStrategy.onWindowUpdate(),
                         false,
-                        false
+                        storeFormat
                 ))
                 : storeSupplier;
 
-        final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.windowStoreBuilder(
+        final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
                 supplier,
                 joinedInternal.keySerde(),
                 valueSerde
         );
+
 
         if (joinedInternal.loggingEnabled()) {
             builder.withLoggingEnabled(logConfig);
