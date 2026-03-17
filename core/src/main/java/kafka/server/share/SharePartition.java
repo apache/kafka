@@ -43,7 +43,6 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQ;
@@ -91,7 +90,6 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -1438,56 +1436,53 @@ public class SharePartition {
     ) {
         lock.writeLock().lock();
         try {
-            CompletableFuture<Void> dlqFuture = CompletableFuture.completedFuture(null);
-            try {
-                boolean isAnyOffsetArchived = false;
-                log.trace("Archiving offset tracked batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-                for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
-                    if (offsetState.getKey() < startOffsetToArchive) {
-                        continue;
-                    }
-                    if (offsetState.getKey() > endOffsetToArchive) {
-                        // No further offsets to process.
-                        break;
-                    }
-                    if (offsetState.getValue().state() != initialState) {
-                        continue;
-                    }
+            boolean isAnyOffsetArchived = false;
+            log.trace("Archiving offset tracked batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+            for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
+                if (offsetState.getKey() < startOffsetToArchive) {
+                    continue;
+                }
+                if (offsetState.getKey() > endOffsetToArchive) {
+                    // No further offsets to process.
+                    break;
+                }
+                if (offsetState.getValue().state() != initialState) {
+                    continue;
+                }
 
-                    offsetState.getValue().archiving();
-                    dlqFuture = dlq.enqueue(new ShareGroupDLQRecordParameter(
-                        groupId,
-                        topicIdPartition,
-                        offsetState.getKey(),
-                        offsetState.getKey(),
-                        Optional.of(offsetState.getValue().deliveryCount()),
-                        Optional.of(cause),
-                        false
-                    )).whenComplete((v, exp) -> {
-                        if (exp != null) {
-                            log.error("Could not DLQ record offset {}.", offsetState.getKey(), exp);
+                offsetState.getValue().archiving();
+                // Todo: What if this future never completed? We'd like it to be handled in a kafka scheduler.
+                dlq.enqueue(new ShareGroupDLQRecordParameter(
+                    groupId,
+                    topicIdPartition,
+                    offsetState.getKey(),
+                    offsetState.getKey(),
+                    Optional.of(offsetState.getValue().deliveryCount()),
+                    Optional.of(cause),
+                    false
+                )).whenComplete((v, exp) -> {
+                    if (exp != null) {
+                        log.warn("Could not DLQ record offset {}.", offsetState.getKey(), exp);
+                    }
+                    // We need to ARCHIVE - even if DLQ fails. Otherwise, progress could stall.
+                    lock.writeLock().lock();
+                    try {
+                        if (offsetState.getValue().state() == RecordState.ARCHIVING) {
+                            offsetState.getValue().archive();
                         }
-                        // We need to ARCHIVE - even if DLQ fails. Otherwise, progress could stall.
-                        offsetState.getValue().archive();
-                    });
-
-                    if (updateDeliveryCompleteCount) {
-                        // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
-                        // needs to be incremented.
-                        deliveryCompleteCount.incrementAndGet();
+                    } finally {
+                        lock.writeLock().unlock();
                     }
-                    isAnyOffsetArchived = true;
+                });
+
+                if (updateDeliveryCompleteCount) {
+                    // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
+                    // needs to be incremented.
+                    deliveryCompleteCount.incrementAndGet();
                 }
-                return isAnyOffsetArchived;
-            } finally {
-                try {
-                    dlqFuture.get(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT, TimeUnit.MILLISECONDS);
-                } catch (Exception e) {
-                    log.trace("DLQ future could not be completed in time.", e);
-                    // Force archive the batch.
-                    dlqFuture.cancel(true);
-                }
+                isAnyOffsetArchived = true;
             }
+            return isAnyOffsetArchived;
         } finally {
             lock.writeLock().unlock();
         }
@@ -1497,47 +1492,45 @@ public class SharePartition {
         InFlightBatch inFlightBatch,
         RecordState initialState,
         boolean updateDeliveryCompleteCount,
-        Throwable cause) {
+        Throwable cause
+    ) {
         lock.writeLock().lock();
         try {
-            CompletableFuture<Void> dlqFuture = CompletableFuture.completedFuture(null);
-            try {
-                log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-                if (inFlightBatch.batchState() == initialState) {
-                    // Change the state of complete batch since the same state exists for the entire inFlight batch.
-                    inFlightBatch.archivingBatch();
-                    dlqFuture = dlq.enqueue(new ShareGroupDLQRecordParameter(
-                        groupId,
-                        topicIdPartition,
-                        inFlightBatch.firstOffset(),
-                        inFlightBatch.lastOffset(),
-                        Optional.of(inFlightBatch.batchDeliveryCount()),
-                        Optional.of(cause),
-                        false
-                    )).whenComplete((v, exp) -> {
-                        if (exp != null) {
-                            log.error("Could not DLQ batch with offsets [{}-{}].", inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), exp);
-                        }
-                        // We need to ARCHIVE - even if DLQ fails. Otherwise, progress could stall.
-                        inFlightBatch.archiveBatch();
-                    });
-                    if (updateDeliveryCompleteCount) {
-                        // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
-                        // needs to be incremented by the number of records in the batch.
-                        deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+            log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+            if (inFlightBatch.batchState() == initialState) {
+                // Change the state of complete batch since the same state exists for the entire inFlight batch.
+                inFlightBatch.archivingBatch();
+                // Todo: What if this future never completed? We'd like it to be handled in a kafka scheduler.
+                dlq.enqueue(new ShareGroupDLQRecordParameter(
+                    groupId,
+                    topicIdPartition,
+                    inFlightBatch.firstOffset(),
+                    inFlightBatch.lastOffset(),
+                    Optional.of(inFlightBatch.batchDeliveryCount()),
+                    Optional.of(cause),
+                    false
+                )).whenComplete((v, exp) -> {
+                    if (exp != null) {
+                        log.warn("Could not DLQ batch with offsets [{}-{}].", inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), exp);
                     }
-                    return true;
+                    // We need to ARCHIVE - even if DLQ fails. Otherwise, progress could stall.
+                    lock.writeLock().lock();
+                    try {
+                        if (inFlightBatch.batchState() == RecordState.ARCHIVING) {
+                            inFlightBatch.archiveBatch();
+                        }
+                    } finally {
+                        lock.writeLock().unlock();
+                    }
+                });
+                if (updateDeliveryCompleteCount) {
+                    // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
+                    // needs to be incremented by the number of records in the batch.
+                    deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
                 }
-                return false;
-            } finally {
-                try {
-                    dlqFuture.get(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT, TimeUnit.MILLISECONDS);
-                } catch (Exception e) {
-                    log.trace("DLQ future could not be completed in time.", e);
-                    // Force archive the batch.
-                    dlqFuture.cancel(true);
-                }
+                return true;
             }
+            return false;
         } finally {
             lock.writeLock().unlock();
         }
