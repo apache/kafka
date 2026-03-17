@@ -1636,6 +1636,7 @@ kafka.server.ControllerConfigurationValidatorTest:
 - testInvalidSubscriptionNameClientMetricsConfig
 - testInvalidTopicConfig
 - testInvalidTopicNameRejected
+- testNullClientMetricsConfigValue
 - testNullGroupConfigValue
 - testNullTopicConfigValue
 - testUndefinedConfigClientMetricsConfig
