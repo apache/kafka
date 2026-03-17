@@ -121,7 +121,6 @@ public final class RaftClientTestContext {
     final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
-    final int fetchSnapshotMaxBytes;
     final int fetchMaxBytes;
 
     private int electionTimeoutMs;
@@ -504,7 +503,6 @@ public final class RaftClientTestContext {
                 metrics,
                 externalKRaftMetrics,
                 listener,
-                fetchSnapshotMaxBytes,
                 fetchMaxBytes
             );
 
@@ -535,7 +533,6 @@ public final class RaftClientTestContext {
         Metrics metrics,
         ExternalKRaftMetrics externalKRaftMetrics,
         MockListener listener,
-        int fetchSnapshotMaxBytes,
         int fetchMaxBytes
     ) {
         this.clusterId = clusterId;
@@ -555,7 +552,6 @@ public final class RaftClientTestContext {
         this.metrics = metrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
-        this.fetchSnapshotMaxBytes = fetchSnapshotMaxBytes;
         this.fetchMaxBytes = fetchMaxBytes;
     }
 

@@ -367,7 +367,7 @@ public class KafkaRaftLog implements RaftLog {
         long baseOffset = read(
             snapshotId.offset(),
             Isolation.COMMITTED,
-            Integer.MAX_VALUE
+            1
         ).startOffsetMetadata.offset();
 
         if (snapshotId.offset() != baseOffset) {
