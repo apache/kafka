@@ -1753,6 +1753,10 @@ public class UnifiedLogTest {
                 "expected a snapshot file per segment base offset, excluding the first");
     }
 
+    /**
+     * After loading the log, producer state is truncated such that there are no producer state snapshot files which
+     * exceed the log end offset. This test verifies that these are removed.
+     */
     @Test
     public void testLoadingLogDeletesProducerStateSnapshotsPastLogEndOffset() throws IOException {
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath());
