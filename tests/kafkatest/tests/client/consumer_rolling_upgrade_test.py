@@ -49,10 +49,9 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=4)
     @matrix(
-        metadata_quorum=[quorum.isolated_kraft],
-        enable_assignment_batching=[False, True]
+        metadata_quorum=[quorum.isolated_kraft]
     )
-    def rolling_update_test(self, metadata_quorum=quorum.zk, enable_assignment_batching=True):
+    def rolling_update_test(self, metadata_quorum=quorum.zk):
         """
         Verify rolling updates of partition assignment strategies works correctly. In this
         test, we use a rolling restart to change the group's assignment strategy from "range" 
