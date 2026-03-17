@@ -31,6 +31,7 @@ import org.mockito.internal.util.MockUtil;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -302,22 +303,15 @@ public class ExpiringCredentialRefreshingLoginTest {
             time.addListener(this);
         }
 
-        public Time time() {
-            return time;
-        }
-
         @Override
         public synchronized void onTimeUpdated() {
             long timeMs = time.milliseconds();
-            while (true) {
-                Map.Entry<Long, List<KafkaFutureImpl<Long>>> entry = waiters.firstEntry();
-                if ((entry == null) || (entry.getKey() > timeMs)) {
-                    break;
-                }
-                for (KafkaFutureImpl<Long> future : entry.getValue()) {
-                    future.complete(timeMs);
-                }
-                waiters.remove(entry.getKey());
+            Iterator<Map.Entry<Long, List<KafkaFutureImpl<Long>>>> iterator = waiters.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Long, List<KafkaFutureImpl<Long>>> entry = iterator.next();
+                if (entry.getKey() > timeMs) break;
+                entry.getValue().forEach(future -> future.complete(timeMs));
+                iterator.remove();
             }
         }
 
@@ -326,9 +320,7 @@ public class ExpiringCredentialRefreshingLoginTest {
             if (delayMs <= 0) {
                 waiter.complete(timeMs);
             } else {
-                long triggerTimeMs = timeMs + delayMs;
-                List<KafkaFutureImpl<Long>> futures = waiters.computeIfAbsent(triggerTimeMs, k -> new ArrayList<>());
-                futures.add(waiter);
+                waiters.computeIfAbsent(timeMs + delayMs, k -> new ArrayList<>()).add(waiter);
             }
         }
     }
