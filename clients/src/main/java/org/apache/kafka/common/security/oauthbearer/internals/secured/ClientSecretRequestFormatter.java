@@ -28,7 +28,36 @@ import java.util.Map;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 
-public class ClientCredentialsRequestFormatter implements HttpRequestFormatter {
+/**
+ * {@code ClientSecretRequestFormatter} is an {@link HttpRequestFormatter} that formats HTTP requests
+ * for OAuth 2.0 token requests using the <code>client_credentials</code> grant type with client secret
+ * authentication.
+ *
+ * <p>
+ * This formatter implements the traditional OAuth 2.0 client authentication method where the client
+ * authenticates using a client ID and client secret. The credentials are sent in the HTTP Authorization
+ * header using HTTP Basic authentication (Base64-encoded).
+ * </p>
+ *
+ * <p>
+ * The formatter creates HTTP requests with:
+ * <ul>
+ *   <li>Authorization header: Basic &lt;base64(clientId:clientSecret)&gt;</li>
+ *   <li>Content-Type: application/x-www-form-urlencoded</li>
+ *   <li>grant_type=client_credentials</li>
+ *   <li>Optional scope parameter</li>
+ * </ul>
+ * </p>
+ *
+ * <p>
+ * This class was renamed from {@code ClientCredentialsRequestFormatter} to better distinguish it from
+ * client assertion-based authentication ({@link ClientAssertionRequestFormatter}).
+ * </p>
+ *
+ * @see ClientAssertionRequestFormatter
+ * @see <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1">RFC 6749 Section 2.3.1: Client Password</a>
+ */
+public class ClientSecretRequestFormatter implements HttpRequestFormatter {
 
     public static final String GRANT_TYPE = "client_credentials";
 
@@ -38,19 +67,29 @@ public class ClientCredentialsRequestFormatter implements HttpRequestFormatter {
 
     private final String scope;
 
-    public ClientCredentialsRequestFormatter(String clientId, String clientSecret, String scope, boolean urlencode) {
+    /**
+     * Creates a new {@code ClientSecretRequestFormatter} instance.
+     *
+     * @param clientId     The OAuth client ID (required, non-blank)
+     * @param clientSecret The OAuth client secret (required, non-blank)
+     * @param scope        The OAuth scope to request; may be {@code null} for default scope
+     * @param urlEncode    If {@code true}, URL-encodes the client ID, client secret, and scope according to
+     *                     RFC 6749 Section 2.3.1; if {@code false}, uses them as-is
+     * @throws ConfigException if the client ID or client secret is blank
+     */
+    public ClientSecretRequestFormatter(String clientId, String clientSecret, String scope, boolean urlEncode) {
         if (Utils.isBlank(clientId))
             throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, clientId);
 
         if (Utils.isBlank(clientSecret))
-            throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, clientId);
+            throw new ConfigException(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, clientSecret);
 
         clientId = clientId.trim();
         clientSecret = clientSecret.trim();
         scope = Utils.isBlank(scope) ? null : scope.trim();
 
         // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
-        if (urlencode) {
+        if (urlEncode) {
             clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8);
             clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
 

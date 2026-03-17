@@ -34,7 +34,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
@@ -87,8 +87,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                     }
 
                     @Override
-                    public ValueAndTimestamp<V> get(final K key) {
-                        final Maybe<ValueAndTimestamp<V>> maybeValue = buffer.priorValueForBuffered(key);
+                    public ValueTimestampHeaders<V> get(final K key) {
+                        final Maybe<ValueTimestampHeaders<V>> maybeValue = buffer.priorValueForBuffered(key);
                         if (maybeValue.isDefined()) {
                             return maybeValue.getNullableValue();
                         } else {

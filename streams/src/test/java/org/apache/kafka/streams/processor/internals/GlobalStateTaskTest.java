@@ -247,7 +247,7 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldFlushStateManagerWithOffsets() {
+    public void shouldCommitStateManagerWithOffsets() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
@@ -257,11 +257,11 @@ public class GlobalStateTaskTest {
         globalStateTask.flushState();
 
         assertEquals(expectedOffsets, stateMgr.changelogOffsets());
-        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.committed);
     }
 
     @Test
-    public void shouldCheckpointOffsetsWhenStateIsFlushed() {
+    public void shouldCommitOffsetsWhenStateIsFlushed() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 102L);
         expectedOffsets.put(t2, 100L);
@@ -271,27 +271,25 @@ public class GlobalStateTaskTest {
         globalStateTask.flushState();
 
         assertEquals(expectedOffsets, stateMgr.changelogOffsets());
-        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.committed);
     }
 
     @Test
-    public void shouldNotCheckpointIfNotReceivedEnoughRecords() {
+    public void shouldNotCommitIfNotReceivedEnoughRecords() {
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9000L, "foo".getBytes(), "foo".getBytes()));
         time.sleep(flushInterval); // flush interval elapsed
 
-        stateMgr.checkpointWritten = false;
-        stateMgr.flushed = false;
+        stateMgr.committed = false;
 
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
-        assertFalse(stateMgr.flushed);
-        assertFalse(stateMgr.checkpointWritten);
+        assertFalse(stateMgr.committed);
     }
 
     @Test
-    public void shouldNotCheckpointWhenFlushIntervalHasNotLapsed() {
+    public void shouldNotCommitWhenCommitIntervalHasNotLapsed() {
         globalStateTask.initialize();
 
         // offset delta exceeded
@@ -299,18 +297,16 @@ public class GlobalStateTaskTest {
 
         time.sleep(flushInterval / 2);
 
-        stateMgr.checkpointWritten = false;
-        stateMgr.flushed = false;
+        stateMgr.committed = false;
 
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
-        assertFalse(stateMgr.flushed);
-        assertFalse(stateMgr.checkpointWritten);
+        assertFalse(stateMgr.committed);
     }
 
     @Test
-    public void shouldCheckpointIfReceivedEnoughRecordsAndFlushIntervalHasElapsed() {
+    public void shouldCommitIfReceivedEnoughRecordsAndCommitIntervalHasElapsed() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 10051L); // topic1 advanced with 10001 records
         expectedOffsets.put(t2, 100L);
@@ -322,26 +318,23 @@ public class GlobalStateTaskTest {
         // 10000 records received since last flush => do not flush
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9999L, "foo".getBytes(), "foo".getBytes()));
 
-        stateMgr.checkpointWritten = false;
-        stateMgr.flushed = false;
+        stateMgr.committed = false;
 
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
-        assertFalse(stateMgr.flushed);
-        assertFalse(stateMgr.checkpointWritten);
+        assertFalse(stateMgr.committed);
 
         // 1 more record received => triggers the flush
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 10000L, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.maybeCheckpoint();
 
         assertEquals(expectedOffsets, stateMgr.changelogOffsets());
-        assertTrue(stateMgr.flushed);
-        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.committed);
     }
 
     @Test
-    public void shouldCheckpointIfReceivedEnoughRecordsFromMultipleTopicsAndFlushIntervalElapsed() {
+    public void shouldCommitIfReceivedEnoughRecordsFromMultipleTopicsAndCommitIntervalElapsed() {
         final byte[] integerBytes = new IntegerSerializer().serialize(topic2, 1);
 
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
@@ -359,8 +352,7 @@ public class GlobalStateTaskTest {
         globalStateTask.maybeCheckpoint();
 
         assertEquals(expectedOffsets, stateMgr.changelogOffsets());
-        assertTrue(stateMgr.flushed);
-        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.committed);
     }
 
 
@@ -372,24 +364,21 @@ public class GlobalStateTaskTest {
     }
 
     @Test
-    public void shouldCheckpointDuringInitialization() {
+    public void shouldCommitDuringInitialization() {
         globalStateTask.initialize();
 
-        assertTrue(stateMgr.checkpointWritten);
-        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.committed);
     }
 
     @Test
-    public void shouldCheckpointDuringClose() throws Exception {
+    public void shouldCommitDuringClose() throws Exception {
         globalStateTask.initialize();
 
-        stateMgr.checkpointWritten = false;
-        stateMgr.flushed = false;
+        stateMgr.committed = false;
 
         globalStateTask.close(false);
 
-        assertTrue(stateMgr.checkpointWritten);
-        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.committed);
     }
 
     private Processor<String, String, Void, Void> createThrowingProcessor() {

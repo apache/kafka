@@ -26,8 +26,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
@@ -68,7 +70,9 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
     }
 
     static StateStore getReadOnlyStore(final StateStore global) {
-        if (global instanceof TimestampedKeyValueStore) {
+        if (global instanceof TimestampedKeyValueStoreWithHeaders) {
+            return new TimestampedKeyValueStoreReadOnlyDecoratorWithHeaders<>((TimestampedKeyValueStoreWithHeaders<?, ?>) global);
+        } else if (global instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadOnlyDecorator<>((TimestampedKeyValueStore<?, ?>) global);
         } else if (global instanceof VersionedKeyValueStore) {
             return new VersionedKeyValueStoreReadOnlyDecorator<>((VersionedKeyValueStore<?, ?>) global);
@@ -159,6 +163,15 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         implements TimestampedKeyValueStore<K, V> {
 
         private TimestampedKeyValueStoreReadOnlyDecorator(final TimestampedKeyValueStore<K, V> inner) {
+            super(inner);
+        }
+    }
+
+    static class TimestampedKeyValueStoreReadOnlyDecoratorWithHeaders<K, V>
+        extends KeyValueStoreReadOnlyDecorator<K, ValueTimestampHeaders<V>>
+        implements TimestampedKeyValueStoreWithHeaders<K, V> {
+
+        private TimestampedKeyValueStoreReadOnlyDecoratorWithHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> inner) {
             super(inner);
         }
     }

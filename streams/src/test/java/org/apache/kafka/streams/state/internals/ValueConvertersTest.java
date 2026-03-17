@@ -63,7 +63,7 @@ public class ValueConvertersTest {
     @Test
     public void headersToValueAndTimestampShouldConvertCorrectly() {
         final Function<ValueTimestampHeaders<String>, ValueAndTimestamp<String>> converter =
-            ValueConverters.headersToValueAndTimestamp();
+            ValueConverters.extractValueAndTimestampFromHeaders();
 
         final ValueTimestampHeaders<String> vth = ValueTimestampHeaders.make("value", 42L, new RecordHeaders());
         final ValueAndTimestamp<String> result = converter.apply(vth);
@@ -75,7 +75,7 @@ public class ValueConvertersTest {
     @Test
     public void headersToValueAndTimestampShouldReturnNullWhenInputIsNull() {
         final Function<ValueTimestampHeaders<String>, ValueAndTimestamp<String>> converter =
-            ValueConverters.headersToValueAndTimestamp();
+            ValueConverters.extractValueAndTimestampFromHeaders();
 
         assertNull(converter.apply(null));
     }
@@ -83,7 +83,7 @@ public class ValueConvertersTest {
     @Test
     public void headersToValueAndTimestampShouldDiscardHeaders() {
         final Function<ValueTimestampHeaders<String>, ValueAndTimestamp<String>> converter =
-            ValueConverters.headersToValueAndTimestamp();
+            ValueConverters.extractValueAndTimestampFromHeaders();
 
         final RecordHeaders headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());

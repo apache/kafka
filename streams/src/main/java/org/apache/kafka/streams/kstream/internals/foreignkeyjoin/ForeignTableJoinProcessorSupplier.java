@@ -33,8 +33,8 @@ import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrapping
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +78,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
 
     private final class KTableKTableJoinProcessor extends ContextualProcessor<KRight, Change<VRight>, KLeft, SubscriptionResponseWrapper<VRight>> {
         private Sensor droppedRecordsSensor;
-        private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<KLeft>> subscriptionStore;
+        private TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<KLeft>> subscriptionStore;
 
         @Override
         public void init(final ProcessorContext<KLeft, SubscriptionResponseWrapper<VRight>> context) {
@@ -123,11 +123,11 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
             final Bytes prefixBytes = keySchema.prefixBytes(record.key());
 
             //Perform the prefixScan and propagate the results
-            try (final KeyValueIterator<Bytes, ValueAndTimestamp<SubscriptionWrapper<KLeft>>> prefixScanResults =
+            try (final KeyValueIterator<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> prefixScanResults =
                      subscriptionStore.range(prefixBytes, BytesUtils.increment(prefixBytes))) {
 
                 while (prefixScanResults.hasNext()) {
-                    final KeyValue<Bytes, ValueAndTimestamp<SubscriptionWrapper<KLeft>>> next = prefixScanResults.next();
+                    final KeyValue<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> next = prefixScanResults.next();
                     // have to check the prefix because the range end is inclusive :(
                     if (prefixEquals(next.key.get(), prefixBytes.get())) {
                         final CombinedKey<KRight, KLeft> combinedKey = keySchema.fromBytes(next.key);

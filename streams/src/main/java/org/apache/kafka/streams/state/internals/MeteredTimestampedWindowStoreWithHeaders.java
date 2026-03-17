@@ -453,6 +453,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
                 break;
             }
         } while (true);
-        return store instanceof TimestampedBytesStore;
+        return false;
     }
 }

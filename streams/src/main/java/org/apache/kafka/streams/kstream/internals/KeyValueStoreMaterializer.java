@@ -45,7 +45,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
@@ -57,17 +57,10 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     materialized.keySerde(),
                     materialized.valueSerde());
         } else {
-            if (storeFormat == DslStoreFormat.HEADERS) {
-                builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-            } else {
-                builder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-            }
         }
 
         if (materialized.loggingEnabled()) {

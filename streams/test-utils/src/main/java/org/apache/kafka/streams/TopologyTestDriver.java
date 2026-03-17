@@ -1639,7 +1639,7 @@ public class TopologyTestDriver implements Closeable {
         private final TimestampedWindowStoreWithHeaders<K, V> inner;
 
         public TimestampedWindowStoreFacadeForHeaders(final TimestampedWindowStoreWithHeaders<K, V> store) {
-            super(store, ValueConverters.headersToValueAndTimestamp());
+            super(store, ValueConverters.extractValueAndTimestampFromHeaders());
             this.inner = store;
         }
 
@@ -1943,7 +1943,7 @@ public class TopologyTestDriver implements Closeable {
         private final TimestampedKeyValueStoreWithHeaders<K, V> inner;
 
         public TimestampedKeyValueStoreFacadeForHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> store) {
-            super(store, ValueConverters.headersToValueAndTimestamp());
+            super(store, ValueConverters.extractValueAndTimestampFromHeaders());
             this.inner = store;
         }
 

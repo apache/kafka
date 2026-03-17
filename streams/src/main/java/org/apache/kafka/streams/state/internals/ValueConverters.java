@@ -58,7 +58,7 @@ public final class ValueConverters {
      * @param <V> value type
      * @return converter function that creates ValueAndTimestamp or returns null
      */
-    public static <V> Function<ValueTimestampHeaders<V>, ValueAndTimestamp<V>> headersToValueAndTimestamp() {
+    public static <V> Function<ValueTimestampHeaders<V>, ValueAndTimestamp<V>> extractValueAndTimestampFromHeaders() {
         return vth -> vth == null ? null :
             ValueAndTimestamp.make(vth.value(), vth.timestamp());
     }

@@ -3040,12 +3040,9 @@ public class SharePartition {
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;
         }
-        ShareGroupAutoOffsetResetStrategy offsetResetStrategy;
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            offsetResetStrategy = groupConfigManager.groupConfig(groupId).get().shareAutoOffsetReset();
-        } else {
-            offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
-        }
+        ShareGroupAutoOffsetResetStrategy offsetResetStrategy = groupConfigManager.groupConfig(groupId)
+            .map(GroupConfig::shareAutoOffsetReset)
+            .orElseGet(GroupConfig::defaultShareAutoOffsetReset);
 
         if (offsetResetStrategy.type() == ShareGroupAutoOffsetResetStrategy.StrategyType.LATEST) {
             return offsetForLatestTimestamp(topicIdPartition, replicaManager, leaderEpoch);
