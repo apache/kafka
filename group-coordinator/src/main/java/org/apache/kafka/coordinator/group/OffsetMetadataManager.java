@@ -705,6 +705,8 @@ public class OffsetMetadataManager {
                 .map(CoordinatorMetadataImage.TopicMetadata::id)
                 .orElse(Uuid.ZERO_UUID);
 
+            // If the topic doesn't exist in metadata, and we need to validate the member's assignment,
+            // throw ILLEGAL_GENERATION.
             if (resolvedTopicId.equals(Uuid.ZERO_UUID) && validator != CommitPartitionValidator.NO_OP) {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
