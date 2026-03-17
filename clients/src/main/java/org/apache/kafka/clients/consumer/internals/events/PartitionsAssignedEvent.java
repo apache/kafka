@@ -42,7 +42,7 @@ public class PartitionsAssignedEvent extends CompletableBackgroundEvent<Void> {
     public PartitionsAssignedEvent(final Set<TopicPartition> assignedPartitions,
                                    final SortedSet<TopicPartition> addedPartitions) {
         super(Type.PARTITIONS_ASSIGNED, Long.MAX_VALUE);
-        this.assignedPartitions = Objects.requireNonNull(assignedPartitions);
+        this.assignedPartitions = Collections.unmodifiableSet(Objects.requireNonNull(assignedPartitions));
         this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
     }
 
