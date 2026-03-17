@@ -65,6 +65,9 @@ org.apache.kafka.connect.mirror.MirrorHeartBeatConnectorTest:
 - testSuccessfulAlterOffsets
 org.apache.kafka.connect.mirror.MirrorHeartbeatTaskTest:
 - testPollCreatesRecords
+org.apache.kafka.connect.mirror.MirrorLegacyMetricsTest:
+- testCheckpointTags
+- testSourceTags
 org.apache.kafka.connect.mirror.MirrorMakerConfigTest:
 - testAllConfigNames
 - testCaseInsensitiveSecurityProtocol
@@ -82,6 +85,9 @@ org.apache.kafka.connect.mirror.MirrorMakerConfigTest:
 - testLazyConfigResolution
 - testReplicationConfigProperties
 - testWorkerConfigs
+org.apache.kafka.connect.mirror.MirrorMetricsTest:
+- testCheckpointTags
+- testSourceTags
 org.apache.kafka.connect.mirror.MirrorSourceConfigTest:
 - testAdminConfigsForOffsetSyncsTopic
 - testAllTopics
@@ -122,8 +128,6 @@ org.apache.kafka.connect.mirror.MirrorSourceConnectorTest:
 - testReplicatesHeartbeatsDespiteFilter
 - testReplicatesHeartbeatsWhenDisabledButFilterAllows
 - testSuccessfulAlterOffsets
-org.apache.kafka.connect.mirror.MirrorSourceMetricsTest:
-- testTags
 org.apache.kafka.connect.mirror.MirrorSourceTaskTest:
 - testCommitRecordWithNullMetadata
 - testOffsetSync
@@ -160,6 +164,10 @@ org.apache.kafka.connect.mirror.integration.DedicatedMirrorIntegrationTest:
 - testMultiNodeCluster
 - testSingleNodeCluster
 org.apache.kafka.connect.mirror.integration.IdentityReplicationIntegrationTest:
+- testConnectorMetricsDefault
+- testConnectorMetricsLegacy
+- testConnectorMetricsNew
+- testConnectorMetricsNewAndLegacy
 - testNoCheckpointsIfNoRecordsAreMirrored
 - testOffsetSyncsTopicsOnTarget
 - testOffsetTranslationBehindReplicationFlow
@@ -174,6 +182,10 @@ org.apache.kafka.connect.mirror.integration.IdentityReplicationIntegrationTest:
 - testRestartReplication
 - testSyncTopicConfigs
 org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationBaseTest:
+- testConnectorMetricsDefault
+- testConnectorMetricsLegacy
+- testConnectorMetricsNew
+- testConnectorMetricsNewAndLegacy
 - testNoCheckpointsIfNoRecordsAreMirrored
 - testOffsetSyncsTopicsOnTarget
 - testOffsetTranslationBehindReplicationFlow
@@ -188,6 +200,10 @@ org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationBaseTest:
 - testRestartReplication
 - testSyncTopicConfigs
 org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationExactlyOnceTest:
+- testConnectorMetricsDefault
+- testConnectorMetricsLegacy
+- testConnectorMetricsNew
+- testConnectorMetricsNewAndLegacy
 - testNoCheckpointsIfNoRecordsAreMirrored
 - testOffsetSyncsTopicsOnTarget
 - testOffsetTranslationBehindReplicationFlow
@@ -202,6 +218,10 @@ org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationExactlyOn
 - testRestartReplication
 - testSyncTopicConfigs
 org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationSSLTest:
+- testConnectorMetricsDefault
+- testConnectorMetricsLegacy
+- testConnectorMetricsNew
+- testConnectorMetricsNewAndLegacy
 - testNoCheckpointsIfNoRecordsAreMirrored
 - testOffsetSyncsTopicsOnTarget
 - testOffsetTranslationBehindReplicationFlow
@@ -216,6 +236,10 @@ org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationSSLTest:
 - testRestartReplication
 - testSyncTopicConfigs
 org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationTransactionsTest:
+- testConnectorMetricsDefault
+- testConnectorMetricsLegacy
+- testConnectorMetricsNew
+- testConnectorMetricsNewAndLegacy
 - testNoCheckpointsIfNoRecordsAreMirrored
 - testOffsetSyncsTopicsOnTarget
 - testOffsetTranslationBehindReplicationFlow
@@ -230,6 +254,10 @@ org.apache.kafka.connect.mirror.integration.MirrorConnectorsIntegrationTransacti
 - testRestartReplication
 - testSyncTopicConfigs
 org.apache.kafka.connect.mirror.integration.MirrorConnectorsWithCustomForwardingAdminIntegrationTest:
+- testConnectorMetricsDefault
+- testConnectorMetricsLegacy
+- testConnectorMetricsNew
+- testConnectorMetricsNewAndLegacy
 - testCreatePartitionsUseProvidedForwardingAdmin
 - testNoCheckpointsIfNoRecordsAreMirrored
 - testOffsetSyncsTopicsOnTarget
