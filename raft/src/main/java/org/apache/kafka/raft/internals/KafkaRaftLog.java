@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Isolation;
-import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.LogAppendInfo;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.LogOffsetMetadata;
@@ -128,7 +127,7 @@ public class KafkaRaftLog implements RaftLog {
         try {
             FetchDataInfo fetchInfo = log.read(
                 startOffset,
-                    maxTotalBatchBytes,
+                maxTotalBatchBytes,
                 isolation,
                 true
             );
@@ -368,7 +367,7 @@ public class KafkaRaftLog implements RaftLog {
         long baseOffset = read(
             snapshotId.offset(),
             Isolation.COMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).startOffsetMetadata.offset();
 
         if (snapshotId.offset() != baseOffset) {

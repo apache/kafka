@@ -437,7 +437,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     LogFetchInfo readInfo = log.read(
                         nextExpectedOffset,
                         Isolation.COMMITTED,
-                        MAX_FETCH_SIZE_BYTES
+                        Integer.MAX_VALUE
                     );
                     listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
                 }

@@ -960,7 +960,7 @@ class KafkaRaftClientTest {
 
         Records records = context.log.read(0,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -1013,7 +1013,7 @@ class KafkaRaftClientTest {
         Records records = context.log.read(
             0,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());

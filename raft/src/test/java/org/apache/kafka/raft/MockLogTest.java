@@ -217,7 +217,7 @@ public class MockLogTest {
         Records records = log.read(
             0,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         for (RecordBatch batch : records.batches()) {
             assertTrue(batch.isControlBatch());
@@ -256,7 +256,7 @@ public class MockLogTest {
         Records records = log.read(
             5L,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
@@ -286,7 +286,7 @@ public class MockLogTest {
         Records records = log.read(
             0,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
 
         List<ByteBuffer> extractRecords = new ArrayList<>();
@@ -313,7 +313,7 @@ public class MockLogTest {
             () -> log.read(
                 61L,
                 Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             )
         );
 
@@ -323,7 +323,7 @@ public class MockLogTest {
             () -> log.read(
                 21L,
                 Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             )
         );
     }
@@ -364,7 +364,7 @@ public class MockLogTest {
             () -> log.read(
                 61L,
                 Isolation.COMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             )
         );
     }
@@ -378,7 +378,7 @@ public class MockLogTest {
         LogFetchInfo readInfo = log.read(
             5,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         );
         assertEquals(5L, readInfo.startOffsetMetadata.offset());
         assertTrue(readInfo.startOffsetMetadata.metadata().isPresent());
@@ -396,7 +396,7 @@ public class MockLogTest {
         LogFetchInfo readFromEndInfo = log.read(
             15L,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         );
         assertEquals(15, readFromEndInfo.startOffsetMetadata.offset());
         assertTrue(readFromEndInfo.startOffsetMetadata.metadata().isPresent());
@@ -410,7 +410,7 @@ public class MockLogTest {
         LogFetchInfo readFromMiddleInfo = log.read(
             16L,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         );
         assertEquals(readFromEndInfo.startOffsetMetadata, readFromMiddleInfo.startOffsetMetadata);
     }
@@ -529,7 +529,7 @@ public class MockLogTest {
             () -> log.read(
                 log.startOffset() - 1,
                 Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             )
         );
         assertThrows(
@@ -537,7 +537,7 @@ public class MockLogTest {
             () -> log.read(
                 log.endOffset().offset() + 1,
                 Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             )
         );
     }
@@ -1041,6 +1041,48 @@ public class MockLogTest {
         assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind());
     }
 
+    @Test
+    public void testMockLogLimits() {
+        appendBatch(10, 5);
+        appendBatch(10, 5);
+        // Bytes are smaller than 10 simple records in a batch.
+        // Meaning we will read only the first batch and not the second.
+        int magicMaxTotalBytes = 100;
+        Records records = log.read(
+                0,
+                Isolation.UNCOMMITTED,
+                magicMaxTotalBytes
+        ).records;
+        long expectedOffset = 0L;
+        long lastReadOffset = 0L;
+        for (Record record: records.records()) {
+            lastReadOffset = record.offset();
+            assertEquals(expectedOffset, lastReadOffset);
+            expectedOffset += 1;
+        }
+        assertEquals(9, lastReadOffset, "Expected only a single batch, with a final record of 9 to be read");
+    }
+
+    @Test
+    public void testMockLogReadExtremelyLargeInitialBatch() {
+        int numberOfRecords = 1000;
+        appendBatch(numberOfRecords, 5);
+        // The MockLog is able to read a large internal batch
+        Records records = log.read(
+                0,
+                Isolation.UNCOMMITTED,
+                1
+        ).records;
+        long expectedOffset = 0L;
+        long lastReadOffset = 0L;
+        for (Record record: records.records()) {
+            lastReadOffset = record.offset();
+            assertEquals(expectedOffset, lastReadOffset);
+            expectedOffset += 1;
+        }
+        assertEquals(numberOfRecords - 1, lastReadOffset);
+    }
+
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
         // The current MockLog implementation reads at most one batch
 
@@ -1055,7 +1097,7 @@ public class MockLogTest {
             Records records = log.read(
                 currentStart,
                 isolation,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             ).records;
             for (Record record : records.records()) {
                 foundRecord = true;
@@ -1112,7 +1154,7 @@ public class MockLogTest {
             Records records = log.read(
                 currentOffset,
                 Isolation.UNCOMMITTED,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                Integer.MAX_VALUE
             ).records;
             List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
 

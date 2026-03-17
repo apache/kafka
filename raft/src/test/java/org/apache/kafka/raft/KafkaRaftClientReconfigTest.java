@@ -135,7 +135,7 @@ public class KafkaRaftClientReconfigTest {
         Records records = context.log.read(
             0,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -202,7 +202,7 @@ public class KafkaRaftClientReconfigTest {
         Records records = context.log.read(
             0,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_BATCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -2462,7 +2462,7 @@ public class KafkaRaftClientReconfigTest {
         var records = context.log.read(
             localLogEndOffset,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
@@ -2574,7 +2574,7 @@ public class KafkaRaftClientReconfigTest {
         var records = context.log.read(
             localLogEndOffset,
             Isolation.UNCOMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            Integer.MAX_VALUE
         ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
