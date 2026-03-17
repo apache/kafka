@@ -798,6 +798,15 @@ public class GroupMetadataManager {
         boolean createIfNotExists,
         List<CoordinatorRecord> records
     ) throws GroupIdNotFoundException {
+        return getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records, -1L);
+    }
+
+    ConsumerGroup getOrMaybeCreateConsumerGroup(
+        String groupId,
+        boolean createIfNotExists,
+        List<CoordinatorRecord> records,
+        long currentTimeMs
+    ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
@@ -805,10 +814,14 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            ConsumerGroup newGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            if (currentTimeMs > 0) newGroup.setCreationTimeMs(currentTimeMs);
+            return newGroup;
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            ConsumerGroup newGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            if (currentTimeMs > 0) newGroup.setCreationTimeMs(currentTimeMs);
+            return newGroup;
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -2292,7 +2305,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
+        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records, currentTimeMs);
         throwIfConsumerGroupIsFull(group, memberId);
 
         // Get or create the member.
@@ -2427,6 +2440,9 @@ public class GroupMetadataManager {
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs(groupId));
+        if (group.creationTimeMs() > 0) {
+            response.setGroupCreationTimeMs(group.creationTimeMs());
+        }
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request. It does so when joining or rejoining the group with zero
@@ -3439,7 +3455,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash, group.creationTimeMs()));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -3766,7 +3782,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash, group.creationTimeMs()));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -4226,7 +4242,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash, group.creationTimeMs()));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
 
             for (ConsumerGroupMember member : members) {
@@ -5229,6 +5245,7 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
             consumerGroup.setMetadataHash(value.metadataHash());
+            consumerGroup.setCreationTimeMs(value.creationTimeMs());
         } else {
             ConsumerGroup consumerGroup;
             try {

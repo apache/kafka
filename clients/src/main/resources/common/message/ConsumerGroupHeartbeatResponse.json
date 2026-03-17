@@ -45,6 +45,9 @@
       "about": "The member epoch." },
     { "name": "HeartbeatIntervalMs", "type": "int32", "versions": "0+",
       "about": "The heartbeat interval in milliseconds." },
+    { "name": "GroupCreationTimeMs", "type": "int64", "versions": "0+", "default": "-1",
+      "taggedVersions": "0+", "tag": 0,
+      "about": "Epoch-ms when this consumer group was first created on the broker." },
     { "name": "Assignment", "type": "Assignment", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if not provided; the assignment otherwise.", "fields": [
       { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
