@@ -40,6 +40,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.nio.ByteBuffer;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readHeaders;
@@ -110,6 +111,26 @@ public class RawBytesExtractionBenchmark {
         }
     }
 
+    @State(Scope.Benchmark)
+    public static class IterationStateForByteBuffers {
+        private static final Random RNG = new Random();
+        private static final int BYTE_LENGTH = 16;
+        protected ByteBuffer[] values;
+
+        ByteBuffer[] getRandomValues() {
+            return values;
+        }
+
+        @Setup(Level.Iteration)
+        public void setup() {
+            this.values = new ByteBuffer[DATA_SET_SAMPLE_SIZE];
+            for (int i = 0; i < DATA_SET_SAMPLE_SIZE; i++) {
+                final byte[] value = new byte[BYTE_LENGTH];
+                RNG.nextBytes(value);
+                values[i] = ByteBuffer.wrap(value);
+            }
+        }
+    }
     
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
@@ -223,6 +244,24 @@ public class RawBytesExtractionBenchmark {
         }
     }
 
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testReadBytes(IterationStateForByteBuffers state, Blackhole bh) {
+        for (ByteBuffer randomValue : state.getRandomValues()) {
+            bh.consume(readBytesPre20249(randomValue, randomValue.remaining()));
+            randomValue.rewind();
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testReadBytesOpt(IterationStateForByteBuffers state, Blackhole bh) {
+        for (ByteBuffer randomValue : state.getRandomValues()) {
+            bh.consume(Utils.readBytes(randomValue, randomValue.remaining()));
+            randomValue.rewind();
+        }
+    }
+
     /**
      * Prior to KAFKA-20303 - HeadersBytesStore.convertToHeaderFormat
      */
@@ -300,6 +339,23 @@ public class RawBytesExtractionBenchmark {
         final byte[] result = new byte[buffer.remaining()];
         buffer.get(result);
         return result;
+    }
+
+    private static byte[] readBytesPre20249(final ByteBuffer buffer, final int length) {
+        if (length < 0) {
+            throw new SerializationException(
+                "Invalid format: negative length " + length
+            );
+        }
+        if (buffer.remaining() < length) {
+            throw new SerializationException(
+                "Invalid format: expected " + length +
+                    " bytes but only " + buffer.remaining() + " bytes remaining"
+            );
+        }
+        final byte[] bytes = new byte[length];
+        buffer.get(bytes);
+        return bytes;
     }
 
     /**
