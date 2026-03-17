@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,15 +115,24 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
         protected abstract Bytes getBaseKey(final Bytes indexKey);
     }
 
-    @SuppressWarnings("unchecked")
-    AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,
-                                                  final String metricsScope,
-                                                  final long retention,
-                                                  final long segmentInterval,
-                                                  final KeySchema baseKeySchema,
-                                                  final Optional<KeySchema> indexKeySchema) {
-        this(name, retention, baseKeySchema, indexKeySchema,
-            (AbstractSegments<S>) new KeyValueSegments(name, metricsScope, retention, segmentInterval));
+    /**
+     * Concrete implementation of IndexToBaseStoreIterator for window key schema.
+     * Converts index keys (key-first schema) to base store keys (time-first schema).
+     * <p>
+     * This can be reused by both window store implementations (with and without headers).
+     */
+    class WindowKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
+        WindowKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
+            super(indexIterator);
+        }
+
+        @Override
+        protected Bytes getBaseKey(final Bytes indexKey) {
+            final byte[] keyBytes = KeyFirstWindowKeySchema.extractStoreKeyBytes(indexKey.get());
+            final long timestamp = KeyFirstWindowKeySchema.extractStoreTimestamp(indexKey.get());
+            final int seqnum = KeyFirstWindowKeySchema.extractStoreSequence(indexKey.get());
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(keyBytes, timestamp, seqnum);
+        }
     }
 
     AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,

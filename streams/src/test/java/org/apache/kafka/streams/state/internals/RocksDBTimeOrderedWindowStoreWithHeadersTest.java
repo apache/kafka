@@ -67,12 +67,11 @@ public class RocksDBTimeOrderedWindowStoreWithHeadersTest {
         );
 
         windowStore = new RocksDBTimeOrderedWindowStoreWithHeaders(
-            new RocksDBTimeOrderedWindowSegmentedBytesStoreWithHeaders(
+            new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                 STORE_NAME,
-                "test-metrics-scope",
                 RETENTION_PERIOD,
-                SEGMENT_INTERVAL,
-                true
+                true,
+                new WindowSegmentsWithHeaders(STORE_NAME, "test-metrics-scope", RETENTION_PERIOD, SEGMENT_INTERVAL)
             ),
             false,
             WINDOW_SIZE

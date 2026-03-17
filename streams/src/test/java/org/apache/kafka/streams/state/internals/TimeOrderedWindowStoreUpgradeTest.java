@@ -91,7 +91,11 @@ public class TimeOrderedWindowStoreUpgradeTest {
         if (value == null) {
             return null;
         }
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
+        final byte[] rawHeaders = HeadersSerializer.serialize(
+            preSerializedHeaders,
+            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
+        ).array();
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {

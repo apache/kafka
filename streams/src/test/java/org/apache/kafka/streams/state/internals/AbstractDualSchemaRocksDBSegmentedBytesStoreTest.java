@@ -169,20 +169,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
         switch (schemaType()) {
             case WindowSchemaWithIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        true
+                        true,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case WindowSchemaWithoutIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        false
+                        false,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithIndex:
                 return new RocksDBTimeOrderedSessionSegmentedBytesStore(

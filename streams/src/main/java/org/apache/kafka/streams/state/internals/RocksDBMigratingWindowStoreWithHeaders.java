@@ -28,7 +28,6 @@ import org.rocksdb.RocksIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -84,7 +83,7 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
                     offsetsCf,
                     noHeadersColumnFamily,
                     withHeadersColumnFamily,
-                    RocksDBMigratingWindowStoreWithHeaders::addEmptyHeadersPrefix,
+                    HeadersBytesStore::convertToHeaderFormat,
                     this,
                     open
                 );
@@ -94,28 +93,5 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
                 noHeadersColumnFamily.close();
             }
         }
-    }
-
-    /**
-     * Converts plain value to value with empty headers prefix.
-     * <p>
-     * For window stores, the legacy format is: [value]
-     * The new format is: [headersSize(varint)][headersBytes][value]
-     * <p>
-     * This method adds empty headers prefix to the plain value.
-     * Empty headers: headersSize = 0 (encoded as [0x00])
-     *
-     * @param plainValue the plain value bytes
-     * @return the value with empty headers prefix: [0x00][plainValue]
-     */
-    private static byte[] addEmptyHeadersPrefix(final byte[] plainValue) {
-        if (plainValue == null) {
-            return null;
-        }
-        // For empty headers: headersSize = varint(0) = [0x00]
-        return ByteBuffer.allocate(1 + plainValue.length)
-            .put((byte) 0x00)
-            .put(plainValue)
-            .array();
     }
 }

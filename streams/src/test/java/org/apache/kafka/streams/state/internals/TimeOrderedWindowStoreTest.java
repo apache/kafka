@@ -103,7 +103,7 @@ public class TimeOrderedWindowStoreTest {
     private static final String CACHE_NAMESPACE = "0_0-store-name";
 
     private InternalMockProcessorContext<?, ?> context;
-    private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
+    private RocksDBTimeOrderedWindowSegmentedBytesStore<KeyValueSegment> bytesStore;
     private RocksDBTimeOrderedWindowStore underlyingStore;
     private TimeOrderedCachingWindowStore cachingStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
@@ -112,7 +112,8 @@ public class TimeOrderedWindowStoreTest {
 
     public void setUp(final boolean hasIndex) {
         baseKeySchema = new TimeFirstWindowKeySchema();
-        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
+        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore<>("test", 100, hasIndex,
+            new KeyValueSegments("test", "metrics-scope", 100, SEGMENT_INTERVAL));
         underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
