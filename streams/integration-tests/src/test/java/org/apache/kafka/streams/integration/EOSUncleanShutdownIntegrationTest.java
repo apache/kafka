@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -62,8 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 public class EOSUncleanShutdownIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3,
-        mkProperties(mkMap(mkEntry(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0"))));
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
     private static final File TEST_FOLDER = TestUtils.tempDirectory();
 
     @BeforeAll
@@ -80,13 +78,6 @@ public class EOSUncleanShutdownIntegrationTest {
     @AfterAll
     public static void closeCluster() throws IOException {
         CLUSTER.stop();
-    }
-
-    public static class WithAssignmentBatchingTest extends EOSUncleanShutdownIntegrationTest {
-        @BeforeAll
-        public static void enableAssignmentBatching() {
-            IntegrationTestUtils.setStreamsGroupAssignmentIntervalMs(CLUSTER, 1000);
-        }
     }
 
     private static final Properties STREAMS_CONFIG = new Properties();
