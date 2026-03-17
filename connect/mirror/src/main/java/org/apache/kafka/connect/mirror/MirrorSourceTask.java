@@ -16,12 +16,21 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
@@ -30,17 +39,8 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Semaphore;
-import java.util.stream.Collectors;
 
 /** Replicates a set of topic-partitions. */
 public class MirrorSourceTask extends SourceTask {
@@ -86,7 +86,7 @@ public class MirrorSourceTask extends SourceTask {
         initializeConsumer(taskTopicPartitions);
 
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
-            taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
+                taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
     }
 
     @Override
@@ -110,14 +110,14 @@ public class MirrorSourceTask extends SourceTask {
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway.");
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
         Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-   
+
     @Override
     public String version() {
         return new MirrorSourceConnector().version();
@@ -148,6 +148,10 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
+        } catch (OffsetOutOfRangeException e) {
+            // Topic reset detected (topic deleted and recreated)
+            handleTopicReset(e);
+            return null;
         } catch (WakeupException e) {
             return null;
         } catch (KafkaException e) {
@@ -161,7 +165,7 @@ public class MirrorSourceTask extends SourceTask {
             consumerAccess.release();
         }
     }
- 
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
@@ -189,7 +193,7 @@ public class MirrorSourceTask extends SourceTask {
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
- 
+
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
     }
@@ -214,12 +218,16 @@ public class MirrorSourceTask extends SourceTask {
                 return;
             }
             long nextOffsetToCommittedOffset = offset + 1L;
+
+            // Detect offset gaps (log truncation) before seeking
+            detectAndHandleOffsetGap(topicPartition, nextOffsetToCommittedOffset);
+
             log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
             consumer.seek(topicPartition, nextOffsetToCommittedOffset);
         });
     }
 
-    // visible for testing 
+    // visible for testing
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
         Headers headers = convertHeaders(record);
@@ -255,4 +263,59 @@ public class MirrorSourceTask extends SourceTask {
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
     }
+
+    /**
+     * Detects offset gaps indicating log truncation.
+     * If the committed offset + 1 is less than the earliest available offset,
+     * it indicates data loss due to retention policy.
+     */
+    private void detectAndHandleOffsetGap(TopicPartition topicPartition, long nextOffset) {
+        try {
+            long earliestOffset = consumer.beginningOffsets(java.util.List.of(topicPartition)).get(topicPartition);
+            if (nextOffset < earliestOffset) {
+                String errorMsg = String.format(
+                        "FATAL: Log truncation detected for %s. Expected offset %d but earliest available is %d. " +
+                                "Data loss of %d messages. Source topic retention may have purged messages. " +
+                                "Threshold: beginning.offset=%d, next.offset=%d, gap=%d",
+                        topicPartition, nextOffset, earliestOffset,
+                        earliestOffset - nextOffset, earliestOffset, nextOffset,
+                        earliestOffset - nextOffset);
+                log.error(errorMsg);
+                throw new DataLossDetectedException(errorMsg);
+            }
+        } catch (DataLossDetectedException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to check for offset gap on {}: {}", topicPartition, e.getMessage());
+        }
+    }
+
+    /**
+     * Handles topic reset (deletion and recreation) by recovering to beginning offset.
+     * Logs the reset event and resubscribes from offset 0.
+     */
+    private void handleTopicReset(OffsetOutOfRangeException e) {
+        log.warn("Topic reset detected - offset out of range. Attempting recovery: {}", e.getMessage());
+
+        try {
+            Set<TopicPartition> partitions = consumer.assignment();
+            if (partitions.isEmpty()) {
+                log.warn("No assigned partitions during reset recovery");
+                return;
+            }
+
+            for (TopicPartition tp : partitions) {
+                try {
+                    long beginningOffset = consumer.beginningOffsets(java.util.List.of(tp)).get(tp);
+                    log.info("Topic reset on {}. Recovering by seeking to beginning offset: {}", tp, beginningOffset);
+                    consumer.seek(tp, beginningOffset);
+                } catch (Exception offsetError) {
+                    log.error("Failed to recover offset for {}: {}", tp, offsetError.getMessage());
+                }
+            }
+        } catch (Exception recoveryError) {
+            log.error("Error during topic reset recovery: {}", recoveryError.getMessage(), recoveryError);
+        }
+    }
+
 }
