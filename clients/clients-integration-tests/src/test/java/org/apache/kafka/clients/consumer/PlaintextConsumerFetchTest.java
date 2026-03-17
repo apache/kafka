@@ -293,8 +293,11 @@ public class PlaintextConsumerFetchTest {
                 Admin admin = cluster.admin(); 
                 Producer<byte[], byte[]> producer = cluster.producer(); 
                 Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
-                    GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT), 
+                    GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
                     AUTO_OFFSET_RESET_CONFIG, "by_start_time",
+                    // When ListOffsetsRequest(groupCreationTimeMs) finds no matching record (offset = -1),
+                    // the partition stays in AWAITING_RESET until request.timeout.ms expires before retrying.
+                    // Set it to 1s so the retry fires quickly once the current record is produced.
                     REQUEST_TIMEOUT_MS_CONFIG, 1000
                 ))
         ) {
