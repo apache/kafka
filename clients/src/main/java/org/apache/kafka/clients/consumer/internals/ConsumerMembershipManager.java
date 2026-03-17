@@ -133,6 +133,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private final CommitRequestManager commitRequestManager;
 
     /**
+     * Epoch-ms when this consumer group was first created on the broker, or -1 if unknown.
+     * Updated from ConsumerGroupHeartbeatResponse.GroupCreationTimeMs.
+     */
+    private long groupCreationTimeMs = -1L;
+
+    /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
      * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
      * {@link ErrorEvent errors} to the application thread.
@@ -209,6 +215,13 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
+     * @return The epoch-ms when this consumer group was first created on the broker, or -1 if unknown.
+     */
+    public long groupCreationTimeMs() {
+        return groupCreationTimeMs;
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -246,6 +259,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
 
         updateMemberEpoch(responseData.memberEpoch());
+
+        if (responseData.groupCreationTimeMs() != -1L) {
+            groupCreationTimeMs = responseData.groupCreationTimeMs();
+        }
 
         ConsumerGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
 

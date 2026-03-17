@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
@@ -93,6 +94,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
+    private final Optional<ConsumerMembershipManager> membershipManager;
 
     /**
      * Exception that occurred while updating positions after the triggering event had already
@@ -121,6 +123,24 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final CommitRequestManager commitRequestManager,
                                  final PositionsValidator positionsValidator,
                                  final LogContext logContext) {
+        this(subscriptionState, metadata, isolationLevel, time, retryBackoffMs, requestTimeoutMs,
+                defaultApiTimeoutMs, apiVersions, networkClientDelegate, commitRequestManager,
+                positionsValidator, logContext, Optional.empty());
+    }
+
+    public OffsetsRequestManager(final SubscriptionState subscriptionState,
+                                 final ConsumerMetadata metadata,
+                                 final IsolationLevel isolationLevel,
+                                 final Time time,
+                                 final long retryBackoffMs,
+                                 final int requestTimeoutMs,
+                                 final long defaultApiTimeoutMs,
+                                 final ApiVersions apiVersions,
+                                 final NetworkClientDelegate networkClientDelegate,
+                                 final CommitRequestManager commitRequestManager,
+                                 final PositionsValidator positionsValidator,
+                                 final LogContext logContext,
+                                 final Optional<ConsumerMembershipManager> membershipManager) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
         requireNonNull(isolationLevel);
@@ -147,6 +167,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
+        this.membershipManager = membershipManager;
     }
 
     private static class PendingFetchCommittedRequest {
@@ -648,6 +669,24 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         });
         return result;
     }
+    
+    /**
+     * Resolves the ListOffsets timestamp for a BY_START_TIME partition.
+     * Requires subscribe() with the KIP-848 async consumer protocol; the group creation time is
+     * obtained from the ConsumerGroupHeartbeatResponse.  Throws if the group creation time has not
+     * yet been received (e.g. assign() mode or before the first heartbeat response).
+     */
+    private long resolveResetTimestamp(TopicPartition tp) {
+        long groupTs = membershipManager
+            .map(ConsumerMembershipManager::groupCreationTimeMs)
+            .orElseThrow(() -> new KafkaException(
+                "by_start_time auto.offset.reset requires the async consumer with the KIP-848 group protocol"));
+        if (groupTs <= 0) {
+            throw new KafkaException("Cannot reset offset for " + tp +
+                " using by_start_time: group creation time is not yet available");
+        }
+        return groupTs;
+    }
 
     /**
      * Make asynchronous ListOffsets request to fetch offsets by target times for the specified
@@ -661,7 +700,13 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private CompletableFuture<Void> sendListOffsetsRequestsAndResetPositions(
             final Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
         Map<TopicPartition, Long> timestampsToSearch = partitionAutoOffsetResetStrategyMap.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                    AutoOffsetResetStrategy strategy = e.getValue();
+                    if (strategy.type() == AutoOffsetResetStrategy.StrategyType.BY_START_TIME) {
+                        return resolveResetTimestamp(e.getKey());
+                    }
+                    return strategy.timestamp().get();
+                }));
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.empty());
 

@@ -295,7 +295,8 @@ public class RequestManagers implements Closeable {
                     networkClientDelegate,
                     commitRequestManager,
                     positionsValidator,
-                    logContext);
+                    logContext,
+                    Optional.ofNullable(membershipManager));
 
                 return new RequestManagers(
                         logContext,

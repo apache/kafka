@@ -1139,9 +1139,17 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testResetUsingStartTimeBasedAutoResetPolicy(GroupProtocol groupProtocol) {
+        // by_start_time requires subscribe() + KIP-848; using assign() must fail.
         AutoOffsetResetStrategy startTimeStrategy = AutoOffsetResetStrategy.fromString("by_start_time");
-        setUpConsumerWithAutoResetPolicy(groupProtocol, startTimeStrategy);
-        assertEquals(50L, consumer.position(tp0));
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            // Classic consumer throws synchronously during poll
+            assertThrows(KafkaException.class, () -> setUpConsumerWithAutoResetPolicy(groupProtocol, startTimeStrategy));
+        } else {
+            // Async consumer: first poll returns without throwing (exception cached by background thread).
+            // The error surfaces when position() blocks waiting for the background thread.
+            setUpConsumerWithAutoResetPolicy(groupProtocol, startTimeStrategy);
+            assertThrows(KafkaException.class, () -> consumer.position(tp0, Duration.ofSeconds(5)));
+        }
     }
 
     private void setUpConsumerWithAutoResetPolicy(GroupProtocol groupProtocol, AutoOffsetResetStrategy strategy) {

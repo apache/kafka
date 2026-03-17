@@ -56,7 +56,6 @@ public class AutoOffsetResetStrategyTest {
         AutoOffsetResetStrategy byStartTime = AutoOffsetResetStrategy.fromString("by_start_time");
         assertEquals("by_start_time", byStartTime.name());
         assertEquals(AutoOffsetResetStrategy.StrategyType.BY_START_TIME, byStartTime.type());
-        assertTrue(byStartTime.startupTimestamp().isPresent());
     }
 
     @Test
@@ -98,7 +97,7 @@ public class AutoOffsetResetStrategyTest {
 
         AutoOffsetResetStrategy byStartTime1 = AutoOffsetResetStrategy.fromString("by_start_time");
         AutoOffsetResetStrategy byStartTime2 = AutoOffsetResetStrategy.fromString("by_start_time");
-        assertNotEquals(byStartTime1, byStartTime2);
+        assertEquals(byStartTime1, byStartTime2);
     }
 
     @Test
@@ -129,13 +128,7 @@ public class AutoOffsetResetStrategyTest {
         assertEquals(byDuration1, byDuration2);
         assertNotEquals(byDuration1, byDuration3);
 
-        long before = Instant.now().toEpochMilli();
         AutoOffsetResetStrategy byStartTime = AutoOffsetResetStrategy.fromString("by_start_time");
-        long after = Instant.now().toEpochMilli();
-
-        Optional<Long> startupTs = byStartTime.startupTimestamp();
-        assertTrue(startupTs.isPresent());
-        assertTrue(startupTs.get() >= before);
-        assertTrue(startupTs.get() <= after);
+        assertFalse(byStartTime.timestamp().isPresent());
     }
 }

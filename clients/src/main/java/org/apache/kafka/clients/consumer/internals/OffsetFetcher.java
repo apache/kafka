@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffset
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
 import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochUtils.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -245,6 +246,12 @@ public class OffsetFetcher {
     }
 
     private void resetPositionsAsync(Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
+        partitionAutoOffsetResetStrategyMap.forEach((tp, strategy) -> {
+            if (strategy.type() == AutoOffsetResetStrategy.StrategyType.BY_START_TIME) {
+                throw new KafkaException("by_start_time auto.offset.reset is not supported with the classic consumer. " +
+                    "Use the async consumer (KafkaConsumer with group.protocol=consumer).");
+            }
+        });
         Map<TopicPartition, Long> partitionResetTimestamps = partitionAutoOffsetResetStrategyMap.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =

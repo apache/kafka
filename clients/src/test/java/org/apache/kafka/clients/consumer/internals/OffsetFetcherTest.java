@@ -31,6 +31,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -211,23 +212,16 @@ public class OffsetFetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToStartTimeOffset() {
-        // BY_START_TIME captures the startup timestamp once at construction time
+        // BY_START_TIME is not supported in the classic consumer; it requires the async consumer
+        // with the KIP-848 group protocol. The classic consumer throws KafkaException on reset.
         AutoOffsetResetStrategy startTimeStrategy = AutoOffsetResetStrategy.fromString("by_start_time");
-        long capturedTimestamp = startTimeStrategy.startupTimestamp().orElseThrow();
         buildFetcher(startTimeStrategy);
         assignFromUser(singleton(tp0));
         subscriptions.requestOffsetReset(tp0, startTimeStrategy);
 
         client.updateMetadata(initialUpdateResponse);
 
-        // The ListOffsets request should use the fixed startup timestamp (not recalculated)
-        client.prepareResponse(listOffsetRequestMatcher(capturedTimestamp),
-                listOffsetResponse(Errors.NONE, 1L, 5L));
-        offsetFetcher.resetPositionsIfNeeded();
-        consumerClient.pollNoWakeup();
-        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
-        assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).offset);
+        assertThrows(KafkaException.class, () -> offsetFetcher.resetPositionsIfNeeded());
     }
 
     /**
