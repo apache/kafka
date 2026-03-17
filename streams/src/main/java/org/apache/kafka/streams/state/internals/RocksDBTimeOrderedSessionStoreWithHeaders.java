@@ -36,7 +36,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  */
 class RocksDBTimeOrderedSessionStoreWithHeaders extends RocksDBTimeOrderedSessionStore implements HeadersBytesStore {
 
-    RocksDBTimeOrderedSessionStoreWithHeaders(final RocksDBTimeOrderedSessionSegmentedBytesStore store) {
+    RocksDBTimeOrderedSessionStoreWithHeaders(final RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders store) {
         super(store);
     }
 

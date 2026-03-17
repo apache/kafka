@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
@@ -165,6 +166,22 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
 
     public byte[] fetch(final Bytes key, final long timestamp, final int seqnum) {
         throw new UnsupportedOperationException("This store does not support fetch with timestamp and seqnum");
+    }
+
+    public byte[] fetchSession(final Bytes key, final long sessionStartTime, final long sessionEndTime) {
+        throw new UnsupportedOperationException("This store does not support fetchSession");
+    }
+
+    public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime, final long latestSessionEndTime) {
+        throw new UnsupportedOperationException("This store does not support fetchSessions");
+    }
+
+    public void remove(final Windowed<Bytes> key) {
+        throw new UnsupportedOperationException("This store does not support remove with Windowed key");
+    }
+
+    public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+        throw new UnsupportedOperationException("This store does not support put with Windowed key");
     }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
