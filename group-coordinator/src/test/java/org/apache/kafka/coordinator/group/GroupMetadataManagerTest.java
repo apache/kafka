@@ -1171,7 +1171,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, computeGroupHash(Map.of(
             fooTopicName, fooTopicHash
-        )), 1, Map.of("num.standby.replicas", "0", "task.offset.interval.ms", "60000")));
+        )), 1, Map.of("num.standby.replicas", "0")));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
@@ -17491,8 +17491,7 @@ public class GroupMetadataManagerTest {
                 groupMetadataHash,
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -17677,8 +17676,7 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -17771,8 +17769,7 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -17865,8 +17862,7 @@ public class GroupMetadataManagerTest {
                 )),
                 -1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -17972,8 +17968,7 @@ public class GroupMetadataManagerTest {
                 )),
                 1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -18284,8 +18279,7 @@ public class GroupMetadataManagerTest {
                 groupMetadataHash,
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -18417,8 +18411,7 @@ public class GroupMetadataManagerTest {
                 )),
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -19586,8 +19579,7 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -19716,8 +19708,7 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0",
-                    "task.offset.interval.ms", "60000"
+                    "num.standby.replicas", "0"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -19876,8 +19867,7 @@ public class GroupMetadataManagerTest {
                             groupMetadataHash,
                             0,
                             new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0",
-                                "task.offset.interval.ms", "60000"
+                                "num.standby.replicas", "0"
                             ))
                         )
                     )
@@ -20201,8 +20191,7 @@ public class GroupMetadataManagerTest {
                             groupMetadataHash,
                             0,
                             new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0",
-                                "task.offset.interval.ms", "60000"
+                                "num.standby.replicas", "0"
                             ))
                         )
                     )
@@ -20677,8 +20666,7 @@ public class GroupMetadataManagerTest {
                     0,
                     -1,
                     new TreeMap<>(Map.of(
-                        "num.standby.replicas", "0",
-                        "task.offset.interval.ms", "60000"
+                        "num.standby.replicas", "0"
                     ))
                 ),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(classicGroupId, memberId, TasksTuple.EMPTY),
@@ -21001,7 +20989,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            Map.of("num.standby.replicas", "0", "task.offset.interval.ms", "60000"),
+            Map.of("num.standby.replicas", "0"),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -21040,7 +21028,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of("num.standby.replicas", "2", "task.offset.interval.ms", "60000"),
+            Map.of("num.standby.replicas", "2"),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -21271,8 +21259,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
             Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
-                "task.offset.interval.ms", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT)
+                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
             ),
             assignor.lastPassedAssignmentConfigs());
         // Advance time.
@@ -21312,8 +21299,7 @@ public class GroupMetadataManagerTest {
         // and task offset interval is evaluated to min
         assertEquals(
             Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT),
-                "task.offset.interval.ms", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT)
+                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
             ),
             assignor.lastPassedAssignmentConfigs());
     }
@@ -26807,8 +26793,7 @@ public class GroupMetadataManagerTest {
     private Map<String, String> getDefaultAssignmentConfigs() {
         // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
-            "task.offset.interval.ms", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT)
+            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
         ));
     }
 }
