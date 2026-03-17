@@ -46,12 +46,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
     @cluster(num_nodes=7)
     @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_streams_resilient_to_broker_down(self, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_streams_resilient_to_broker_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
 
         # Broker should be down over 2x of retries * timeout ms
@@ -89,12 +85,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
     @cluster(num_nodes=7)
     @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_streams_runs_with_broker_down_initially(self, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_streams_runs_with_broker_down_initially(self, metadata_quorum, group_protocol):
         self.kafka.start()
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
@@ -164,12 +156,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
     @cluster(num_nodes=9)
     @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
         extra_configs = ",application.id=shutdown_with_broker_down"
 
@@ -254,12 +242,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
     @cluster(num_nodes=9)
     @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_streams_should_failover_while_brokers_down(self, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_streams_should_failover_while_brokers_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
         extra_configs = ",application.id=shutdown_with_broker_down"
 

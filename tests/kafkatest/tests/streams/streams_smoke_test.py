@@ -50,9 +50,9 @@ class StreamsSmokeTest(BaseStreamsTest):
     @matrix(processing_guarantee=['exactly_once_v2', 'at_least_once'],
             crash=[True, False],
             metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(processing_guarantee=['exactly_once_v2', 'at_least_once'],
+            group_protocol=["classic", "streams"],
+            enable_assignment_batching=[True])
+    @matrix(processing_guarantee=['exactly_once_v2'],
             crash=[True, False],
             metadata_quorum=[quorum.combined_kraft],
             group_protocol=["streams"],

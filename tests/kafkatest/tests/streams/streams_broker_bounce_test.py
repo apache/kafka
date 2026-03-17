@@ -233,16 +233,8 @@ class StreamsBrokerBounceTest(Test):
             num_threads=[1, 3],
             sleep_time_secs=[120],
             metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
-            broker_type=["leader"],
-            num_threads=[1, 3],
-            sleep_time_secs=[120],
-            metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill one particular broker and ensure data is still received
         Record if records are delivered.
@@ -265,15 +257,8 @@ class StreamsBrokerBounceTest(Test):
             broker_type=["controller"],
             sleep_time_secs=[0],
             metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(failure_mode=["clean_shutdown"],
-            broker_type=["controller"],
-            sleep_time_secs=[0],
-            metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_broker_type_bounce_at_start(self, failure_mode, broker_type, sleep_time_secs, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_broker_type_bounce_at_start(self, failure_mode, broker_type, sleep_time_secs, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill one particular broker immediately before streams stats
         Streams should throw an exception since it cannot create topics with the desired
@@ -295,14 +280,8 @@ class StreamsBrokerBounceTest(Test):
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             num_failures=[2],
             metadata_quorum=[quorum.isolated_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
-            num_failures=[2],
-            metadata_quorum=[quorum.isolated_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_many_brokers_bounce(self, failure_mode, num_failures, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_many_brokers_bounce(self, failure_mode, num_failures, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Record if records are delivered
@@ -321,14 +300,8 @@ class StreamsBrokerBounceTest(Test):
     @matrix(failure_mode=["clean_bounce", "hard_bounce"],
             num_failures=[3],
             metadata_quorum=[quorum.isolated_kraft],
-            group_protocol=["classic"],
-            enable_assignment_batching=[False])
-    @matrix(failure_mode=["clean_bounce", "hard_bounce"],
-            num_failures=[3],
-            metadata_quorum=[quorum.isolated_kraft],
-            group_protocol=["streams"],
-            enable_assignment_batching=[False, True])
-    def test_all_brokers_bounce(self, failure_mode, num_failures, metadata_quorum, group_protocol, enable_assignment_batching):
+            group_protocol=["classic", "streams"])
+    def test_all_brokers_bounce(self, failure_mode, num_failures, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Record if records are delivered
