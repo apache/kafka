@@ -42,19 +42,14 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
-@ClusterTestDefaults(
-    serverProperties = {
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
-    }
-)
 public class ShareConsumerRackAwareTest {
 
     @ClusterTestDefaults(
         serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
         }
     )
-    public static class WithAssignmentBatchingTest extends ShareConsumerRackAwareTest {
+    public static class WithAssignmentBatchingDisabledTest extends ShareConsumerRackAwareTest {
     }
 
     @ClusterTest(

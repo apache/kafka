@@ -36,16 +36,15 @@ import scala.jdk.CollectionConverters._
 
 object ShareGroupHeartbeatRequestTest {
   @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
     new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
   ))
-  class WithAssignmentBatchingTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
+  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
   }
 }
 
 @Timeout(120)
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
-  new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
   new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
 ))
 class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
