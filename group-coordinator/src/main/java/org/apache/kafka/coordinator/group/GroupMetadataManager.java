@@ -1953,6 +1953,7 @@ public class GroupMetadataManager {
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
+     * @param requestVersion      The API version of the request, used to set version-specific response fields.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -1972,7 +1973,8 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int memberEndpointEpoch
+        int memberEndpointEpoch,
+        short requestVersion
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -2145,6 +2147,10 @@ public class GroupMetadataManager {
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
             .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
+
+        if (requestVersion > 0) {
+            response.setAcceptableRecoveryLag(streamsGroupAcceptableRecoveryLag(groupId));
+        }
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -5039,7 +5045,8 @@ public class GroupMetadataManager {
                 request.userEndpoint(),
                 request.clientTags(),
                 request.shutdownApplication(),
-                request.endpointInformationEpoch()
+                request.endpointInformationEpoch(),
+                (short) context.requestVersion()
             );
         }
     }
@@ -8936,6 +8943,15 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.flatMap(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
+    }
+
+    /**
+     * Get the acceptable recovery lag of the provided streams group.
+     */
+    private long streamsGroupAcceptableRecoveryLag(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsAcceptableRecoveryLag)
+            .orElse(config.streamsGroupAcceptableRecoveryLag());
     }
 
     /**
