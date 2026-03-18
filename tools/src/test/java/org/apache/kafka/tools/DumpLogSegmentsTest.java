@@ -941,8 +941,8 @@ public class DumpLogSegmentsTest {
                     (short) 0
                 )
             )),
-            Optional.of("Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: " +
-                "Error reading byte array of 536870911 byte(s): only 1 byte(s) available."),
+            Optional.of("Error at offset 0, skipping. Could not read record with version 0 " +
+                    "from value's buffer due to: BufferUnderflowException."),
             Optional.empty()
         );
     }
