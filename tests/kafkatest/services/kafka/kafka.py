@@ -272,7 +272,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
-        :param enable_assignment_batching: When true, enables assignment batching introduced in KIP-1263
+        :param enable_assignment_batching: When true, enables assignment batching introduced in KIP-1263. If not specified, defaults to True.
         """
 
         self.zk = zk
@@ -787,9 +787,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
 
         if self.enable_assignment_batching:
-            override_configs[config_property.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS] = "1000"
-            override_configs[config_property.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS] = "1000"
-            override_configs[config_property.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS] = "1000"
+            # Assignment batching is enabled by default in Kafka
+            pass
         else:
             override_configs[config_property.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
             override_configs[config_property.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
