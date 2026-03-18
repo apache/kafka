@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -35,8 +37,10 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -46,11 +50,14 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -268,6 +275,76 @@ public class MirrorSourceTaskTest {
                 .seek(new TopicPartition("previouslyReplicatedTopic1", 0), offsetToSeek);
 
         verifyNoMoreInteractions(mockConsumer);
+    }
+
+    @Test
+    public void testFailFastOnLogTruncation() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+
+        TopicPartition tp = new TopicPartition("order-events", 0);
+        when(consumer.assignment()).thenReturn(Set.of(tp));
+        when(consumer.beginningOffsets(eq(Collections.singleton(tp)))).thenReturn(Map.of(tp, 42L));
+        when(consumer.poll(any())).thenThrow(new OffsetOutOfRangeException("offset out of range"));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(
+            consumer,
+            metrics,
+            "primary",
+            new DefaultReplicationPolicy(),
+            null
+        );
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, mirrorSourceTask::poll);
+        assertTrue(thrown.getMessage().contains("Fail-fast due to log truncation"));
+
+        verify(consumer, times(1)).poll(any());
+        verify(consumer, times(1)).assignment();
+        verify(consumer, times(1)).beginningOffsets(eq(Collections.singleton(tp)));
+    }
+
+    @Test
+    public void testRecoverOnTopicReset() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+
+        Set<TopicPartition> initialAssignment = Set.of(
+            new TopicPartition("order-events", 0),
+            new TopicPartition("payment-events", 0)
+        );
+        Set<TopicPartition> newAssignment = Set.of(
+            new TopicPartition("order-events", 0),
+            new TopicPartition("payment-events", 0)
+        );
+
+        when(consumer.poll(any()))
+            .thenThrow(new UnknownTopicOrPartitionException("topic missing"))
+            .thenReturn(new ConsumerRecords<>(Map.of()));
+        when(consumer.assignment()).thenReturn(initialAssignment, newAssignment);
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(
+            consumer,
+            metrics,
+            "primary",
+            new DefaultReplicationPolicy(),
+            null
+        );
+
+        assertNull(mirrorSourceTask.poll(), "reset recovery should not emit records in the same poll");
+
+        Set<String> expectedTopics = Set.of("order-events", "payment-events");
+
+        var ordered = inOrder(consumer);
+        ordered.verify(consumer).poll(any());
+        ordered.verify(consumer).assignment();
+        ordered.verify(consumer).unsubscribe();
+        ordered.verify(consumer).subscribe(eq(expectedTopics));
+        ordered.verify(consumer).poll(eq(Duration.ofSeconds(1)));
+        ordered.verify(consumer).assignment();
+        ordered.verify(consumer).seekToBeginning(eq(newAssignment));
+        ordered.verifyNoMoreInteractions();
     }
 
     @Test

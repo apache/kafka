@@ -1,0 +1,108 @@
+# Kafka Data Replication Project - E-commerce event streaming
+# OrderService & PaymentService produce events; NotificationService consumes them.
+# MirrorMaker 2 replicates order-events and payment-events to DR for business continuity.
+# See replication-setup/README.md and docs/EVENT_SCHEMA.md.
+
+version: "3.8"
+
+services:
+  # Primary Kafka cluster (PR) - single node KRaft
+  kafka-primary:
+    image: "${KAFKA_IMAGE:-apache/kafka:4.0.0}"
+    container_name: kafka-primary
+    hostname: kafka-primary
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-primary:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-primary:9093
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "19092:9092"
+    networks:
+      - kafka-net
+
+  # Standby / DR Kafka cluster - single node KRaft
+  kafka-standby:
+    image: "${KAFKA_IMAGE:-apache/kafka:4.0.0}"
+    container_name: kafka-standby
+    hostname: kafka-standby
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9095
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-standby:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-standby:9095
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "29092:9092"
+    networks:
+      - kafka-net
+
+  # Enhanced MirrorMaker 2 - replicates order-events, payment-events to DR
+  mirror-maker:
+    image: "${KAFKA_IMAGE:-apache/kafka:4.0.0}"
+    container_name: mirror-maker
+    hostname: mirror-maker
+    depends_on:
+      - kafka-primary
+      - kafka-standby
+    volumes:
+      - ./config/mm2.properties:/opt/kafka/config/mm2.properties:ro
+    command: >
+      bash -c "bin/connect-mirror-maker.sh config/mm2.properties"
+    networks:
+      - kafka-net
+    restart: on-failure
+
+  # NotificationService - consumes order-events & payment-events, "sends" notifications (logs)
+  notification-service:
+    image: "${KAFKA_IMAGE:-apache/kafka:4.0.0}"
+    container_name: notification-service
+    depends_on:
+      - kafka-primary
+    environment:
+      BOOTSTRAP_SERVERS: kafka-primary:9092
+      ORDER_EVENTS_TOPIC: order-events
+      PAYMENT_EVENTS_TOPIC: payment-events
+    # Consumes from both topics and prints each record (simulates sending notification)
+    command: >
+      bash -c "
+        echo 'NotificationService started - consuming order-events and payment-events';
+        (bin/kafka-console-consumer.sh --bootstrap-server kafka-primary:9092 --topic order-events --from-beginning 2>/dev/null | while read -r line; do echo \"[NOTIFICATION] Order event: \$line\"; done) &
+        (bin/kafka-console-consumer.sh --bootstrap-server kafka-primary:9092 --topic payment-events --from-beginning 2>/dev/null | while read -r line; do echo \"[NOTIFICATION] Payment event: \$line\"; done) &
+        wait
+      "
+    networks:
+      - kafka-net
+    restart: unless-stopped
+
+  # E-commerce event producers (simulated: use kafka-tools + run_challenge.sh to produce)
+  # For custom producer image, set ORDER_PRODUCER_IMAGE / PAYMENT_PRODUCER_IMAGE
+  kafka-tools:
+    image: "${KAFKA_IMAGE:-apache/kafka:4.0.0}"
+    container_name: kafka-tools
+    hostname: kafka-tools
+    depends_on:
+      - kafka-primary
+      - kafka-standby
+    entrypoint: ["/bin/sh", "-c", "sleep infinity"]
+    networks:
+      - kafka-net
+
+networks:
+  kafka-net:
+    driver: bridge

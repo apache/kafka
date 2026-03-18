@@ -141,7 +141,8 @@ class CheckerUtils {
             try (TreeWalk treeWalk = new TreeWalk(repository)) {
                 treeWalk.addTree(tree);
                 treeWalk.setRecursive(true);
-                treeWalk.setFilter(PathFilter.create(String.valueOf(Paths.get(filePath.substring(1)))));
+                // JGit tree paths always use forward slashes, even on Windows.
+                treeWalk.setFilter(PathFilter.create(filePath.substring(1).replace('\\', '/')));
                 if (!treeWalk.next()) {
                     throw new IllegalStateException("Did not find expected file " + filePath.substring(1));
                 }

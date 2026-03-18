@@ -22,6 +22,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -122,9 +125,10 @@ public class MirrorSourceTask extends SourceTask {
     public String version() {
         return new MirrorSourceConnector().version();
     }
-
+    //This method consumes records from source cluster.
     @Override
     public List<SourceRecord> poll() {
+
         if (!consumerAccess.tryAcquire()) {
             return null;
         }
@@ -148,18 +152,57 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
-        } catch (WakeupException e) {
-            return null;
-        } catch (KafkaException e) {
-            log.warn("Failure during poll.", e);
-            return null;
-        } catch (Throwable e)  {
-            log.error("Failure during poll.", e);
-            // allow Connect to deal with the exception
-            throw e;
-        } finally {
-            consumerAccess.release();
-        }
+            }
+            catch (OffsetOutOfRangeException e) {
+
+                Set<TopicPartition> topicPartitions = consumer.assignment();
+
+                for (TopicPartition topicPartition : topicPartitions) {
+
+                    long earliestOffset = consumer
+                            .beginningOffsets(Collections.singleton(topicPartition))
+                            .get(topicPartition);
+
+                    log.error(
+                        "LOG TRUNCATION DETECTED: topic={}, partition={}, earliestAvailableOffset={}. " +
+                        "Data loss has occurred. MirrorMaker will fail-fast to prevent inconsistent replication.",
+                        topicPartition.topic(),
+                        topicPartition.partition(),
+                        earliestOffset
+                    );
+                }
+                    throw new RuntimeException("Fail-fast due to log truncation", e);
+             }
+            catch (UnknownTopicOrPartitionException e) 
+            {
+
+                Set<TopicPartition> partitions = consumer.assignment();
+                Set<String> topics = partitions.stream()
+                                            .map(TopicPartition::topic)
+                                            .collect(Collectors.toSet());
+                log.warn(
+                    "TOPIC RESET DETECTED. Topics affected: {}. Re-subscribing and seeking to beginning.",
+                    topics
+                );
+                consumer.unsubscribe();
+                consumer.subscribe(topics);
+                consumer.poll(Duration.ofSeconds(1));
+                Set<TopicPartition> newAssignments = consumer.assignment();
+                consumer.seekToBeginning(newAssignments);
+                log.info("Recovery successful. MirrorMaker resumed replication from beginning.");
+            }      
+            catch (WakeupException e) {
+                return null;
+            } catch (KafkaException e) {
+                log.warn("Failure during poll.", e);
+                return null;
+            } catch (Throwable e)  {
+                log.error("Failure during poll.", e);
+                // allow Connect to deal with the exception
+                throw e;
+            } finally {
+                consumerAccess.release();
+            }
     }
  
     @Override
