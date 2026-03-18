@@ -131,6 +131,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["disabled"],
+        # Test the latest version only without assignment batching.
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
         assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
         enable_assignment_batching=[False]
@@ -213,6 +214,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["bidirectional", "upgrade"],
+        # Test the latest version only without assignment batching.
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
         assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
         enable_assignment_batching=[False]
@@ -286,6 +288,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
+        # Test the latest version only without assignment batching.
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
         assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
         enable_assignment_batching=[False]
