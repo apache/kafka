@@ -71,16 +71,15 @@ public class RebalanceIntegrationTest {
         final Properties props = new Properties();
         props.put("auto.create.topics.enable", "true");
         props.put("transaction.max.timeout.ms", "" + Integer.MAX_VALUE);
-        props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
         return props;
     }
 
-    public static class WithAssignmentBatchingTest extends RebalanceIntegrationTest {
+    public static class WithAssignmentBatchingDisabledTest extends RebalanceIntegrationTest {
         @Override
         protected Properties brokerConfig() {
             final Properties props = new Properties();
             props.putAll(super.brokerConfig());
-            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000");
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
             return props;
         }
     }

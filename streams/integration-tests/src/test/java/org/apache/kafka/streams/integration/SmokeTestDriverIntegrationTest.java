@@ -58,17 +58,15 @@ public class SmokeTestDriverIntegrationTest {
     private ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
     protected Properties brokerConfig() {
-        final Properties props = new Properties();
-        props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0);
-        return props;
+        return new Properties();
     }
 
-    public static class WithAssignmentBatchingTest extends SmokeTestDriverIntegrationTest {
+    public static class WithAssignmentBatchingDisabledTest extends SmokeTestDriverIntegrationTest {
         @Override
         protected Properties brokerConfig() {
             final Properties props = new Properties();
             props.putAll(super.brokerConfig());
-            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000);
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
             return props;
         }
     }
