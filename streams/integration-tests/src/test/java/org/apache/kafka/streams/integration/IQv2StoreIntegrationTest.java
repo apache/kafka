@@ -362,7 +362,9 @@ public class IQv2StoreIntegrationTest {
                 for (final StoresToTest toTest : StoresToTest.values()) {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
                         for (final String groupProtocol : Arrays.asList("classic", "streams")) {
-                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol));
+                            for (final boolean withHeaders : Arrays.asList(true, false)) {
+                                values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol, withHeaders));
+                            }
                         }
                     }
                 }
@@ -429,14 +431,15 @@ public class IQv2StoreIntegrationTest {
         ));
     }
 
-    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
+    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
         final Properties streamsConfig = streamsConfiguration(
             cache,
             log,
             storeToTest.name(),
             kind,
-            groupProtocol
+            groupProtocol,
+            withHeaders
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -769,8 +772,8 @@ public class IQv2StoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
-        setup(cache, log, storeToTest, kind, groupProtocol);
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
+        setup(cache, log, storeToTest, kind, groupProtocol, withHeaders);
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -2026,10 +2029,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier, final String kind, final String groupProtocol) {
+                                                   final String supplier, final String kind, final String groupProtocol, final boolean withHeaders) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind + "-" + groupProtocol + "-" + RANDOM.nextInt();
+                + "-" + kind + "-" + groupProtocol + "-" + withHeaders + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -2045,6 +2048,9 @@ public class IQv2StoreIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        if (withHeaders) {
+            config.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         return config;
     }
 }
