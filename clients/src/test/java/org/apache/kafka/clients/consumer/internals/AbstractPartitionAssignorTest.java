@@ -259,6 +259,8 @@ public class AbstractPartitionAssignorTest {
                                                                        List<String> brokerRacks) {
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         int nextIndex = 0;
+        // Wrap with TreeMap to ensure deterministic iteration order, since nextIndex
+        // accumulates across topics. This allows callers to use Map.of() safely.
         for (Map.Entry<String, Integer> entry : new TreeMap<>(numPartitionsPerTopic).entrySet()) {
             String topic = entry.getKey();
             int numPartitions = entry.getValue();
