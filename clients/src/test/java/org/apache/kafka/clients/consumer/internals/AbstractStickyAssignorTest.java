@@ -185,7 +185,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions = new HashMap<>();
         subscriptions.put(consumerId, buildSubscriptionV2Above(
                 topics(topic),
-                Arrays.asList(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
+                List.of(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
                 generationId, 0));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);

@@ -2004,8 +2004,8 @@ public abstract class ConsumerCoordinatorTest {
         // note that `MockPartitionAssignor.prepare` is not called therefore calling `MockPartitionAssignor.assign`
         // will throw a IllegalStateException. this indirectly verifies that `assign` is correctly skipped.
         Map<String, List<String>> memberSubscriptions = Map.of(
-            consumerId, singletonList(topic1),
-            consumerId2, singletonList(topic2)
+            consumerId, List.of(topic1),
+            consumerId2, List.of(topic2)
         );
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE, Optional.empty()));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
