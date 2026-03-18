@@ -825,6 +825,7 @@ kafka.coordinator.transaction.TransactionMarkerChannelManagerTest:
 - shouldAbortAppendToLogOnEndTxnWhenNotCoordinatorError
 - shouldCompleteAppendToLogOnEndTxnWhenSendMarkersSucceed
 - shouldCreateMetricsOnStarting
+- shouldEnableApiVersionDiscoveryInFactoryMethod
 - shouldGenerateEmptyMapWhenNoRequestsOutstanding
 - shouldGenerateRequestPerPartitionPerBroker
 - shouldNotLoseTxnCompletionAfterLoad
