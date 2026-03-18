@@ -383,6 +383,10 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT = 15000;
     public static final String STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
 
+    public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG = "group.streams.acceptable.recovery.lag";
+    public static final long STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT = 10000L;
+    public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC = "The acceptable recovery lag for a streams group member. This is the maximum number of offsets a member can be behind before being considered caught up.";
+
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
         CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
@@ -469,7 +473,8 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
-        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC);
+        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
+        .define(STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, LONG, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT, atLeast(0L), MEDIUM, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC);
 
 
     /**
@@ -532,6 +537,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxAssignmentIntervalMs;
     private final int streamsGroupTaskOffsetIntervalMs;
     private final int streamsGroupMinTaskOffsetIntervalMs;
+    private final long streamsGroupAcceptableRecoveryLag;
 
     private final AbstractConfig config;
 
@@ -596,6 +602,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
         this.config = config;
 
         // New group coordinator configs validation.
@@ -856,8 +863,8 @@ public class GroupCoordinatorConfig {
     /**
      * Copy the subset of properties that are relevant to consumer group, share group and streams group.
      */
-    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
-        Map<String, Integer> defaultConfigs = new HashMap<>();
+    public Map<String, Number> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
+        Map<String, Number> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
         defaultConfigs.putAll(extractShareGroupConfigMap(shareGroupConfig));
         defaultConfigs.putAll(extractStreamsGroupConfigMap());
@@ -892,13 +899,14 @@ public class GroupCoordinatorConfig {
     /**
      * Copy the subset of properties that are relevant to streams group.
      */
-    public Map<String, Integer> extractStreamsGroupConfigMap() {
+    public Map<String, Number> extractStreamsGroupConfigMap() {
         return Map.of(
             GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
             GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
             GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
             GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs(),
-            GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, streamsGroupTaskOffsetIntervalMs());
+            GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, streamsGroupTaskOffsetIntervalMs(),
+            GroupConfig.STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, streamsGroupAcceptableRecoveryLag());
     }
 
     /**
@@ -1348,5 +1356,12 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMinTaskOffsetIntervalMs() {
         return streamsGroupMinTaskOffsetIntervalMs;
+    }
+
+    /**
+     * The acceptable recovery lag for streams groups.
+     */
+    public long streamsGroupAcceptableRecoveryLag() {
+        return streamsGroupAcceptableRecoveryLag;
     }
 }

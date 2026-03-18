@@ -38,6 +38,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -94,6 +95,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
 
+    public static final String STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG = "streams.acceptable.recovery.lag";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -119,6 +122,8 @@ public final class GroupConfig extends AbstractConfig {
     public final int streamsInitialRebalanceDelayMs;
 
     public final int streamsTaskOffsetIntervalMs;
+
+    public final long streamsAcceptableRecoveryLag;
 
     public final String shareIsolationLevel;
 
@@ -213,7 +218,13 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
+        .define(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
+            LONG,
+            GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
@@ -230,6 +241,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsTaskOffsetIntervalMs = getInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        this.streamsAcceptableRecoveryLag = getLong(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
         this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
@@ -687,6 +699,13 @@ public final class GroupConfig extends AbstractConfig {
      */
     public int streamsTaskOffsetIntervalMs() {
         return streamsTaskOffsetIntervalMs;
+    }
+
+    /**
+     * The acceptable recovery lag for streams groups.
+     */
+    public long streamsAcceptableRecoveryLag() {
+        return streamsAcceptableRecoveryLag;
     }
 
     /**

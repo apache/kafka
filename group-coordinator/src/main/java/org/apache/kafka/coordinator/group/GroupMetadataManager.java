@@ -2141,7 +2141,8 @@ public class GroupMetadataManager {
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
-            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
+            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId))
+            .setAcceptableRecoveryLag((int) streamsGroupAcceptableRecoveryLag(groupId)); // TODO fix -- need to accept long
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -8790,6 +8791,15 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
+    }
+
+    /**
+     * Get the acceptable recovery lag of the provided streams group.
+     */
+    private long streamsGroupAcceptableRecoveryLag(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsAcceptableRecoveryLag)
+            .orElse(config.streamsGroupAcceptableRecoveryLag());
     }
 
     /**

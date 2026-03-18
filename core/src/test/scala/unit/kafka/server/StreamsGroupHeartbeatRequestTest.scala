@@ -690,6 +690,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(60_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
       assertEquals(60_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
 
+      // Verify both members picked up `acceptable.recovery.lag`
+      assertEquals(10_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag initially")
+      assertEquals(10_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag initially")
+
       // Both members continue to send heartbeats with their assigned tasks
       TestUtils.waitUntilTrue(() => {
         streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
@@ -744,6 +748,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(60_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
       assertEquals(60_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
 
+      // Verify both members picked up `acceptable.recovery.lag`
+      assertEquals(10_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag initially")
+      assertEquals(10_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag initially")
+
       // Change streams.num.standby.replicas = 1
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
       val alterConfigOp = new AlterConfigOp(
@@ -763,6 +771,16 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val configChanges2 = Map(groupConfigResource2 -> List(alterConfigOp2).asJavaCollection).asJava
       val options2 = new org.apache.kafka.clients.admin.AlterConfigsOptions()
       admin.incrementalAlterConfigs(configChanges2, options2).all().get()
+
+      // Change streams.acceptable.recovery.lag = 5000
+      val groupConfigResource3 = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+      val alterConfigOp3 = new AlterConfigOp(
+        new ConfigEntry("streams.acceptable.recovery.lag", "5000"),
+        AlterConfigOp.OpType.SET
+      )
+      val configChanges3 = Map(groupConfigResource3 -> List(alterConfigOp3).asJavaCollection).asJava
+      val options3 = new org.apache.kafka.clients.admin.AlterConfigsOptions()
+      admin.incrementalAlterConfigs(configChanges3, options3).all().get()
 
       // Send heartbeats to trigger rebalance after config change
       TestUtils.waitUntilTrue(() => {
@@ -811,6 +829,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify both members picked up change of `task.offset.interval.ms`
       assertEquals(45_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
       assertEquals(45_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
+
+      // Verify both members picked up change of `acceptable.recovery.lag`
+      assertEquals(5_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag change")
+      assertEquals(5_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag change")
 
     } finally {
       admin.close()
@@ -1097,6 +1119,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         .setStandbyTasks(List.empty.asJava)
         .setWarmupTasks(List.empty.asJava)
         .setTaskOffsetIntervalMs(60_000)
+        .setAcceptableRecoveryLag(10_000)
 
       assertEquals(expectedRejoinResponse, rejoinResponse)
     } finally {
