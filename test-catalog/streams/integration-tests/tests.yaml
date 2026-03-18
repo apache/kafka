@@ -53,8 +53,6 @@ org.apache.kafka.streams.integration.GlobalKTableEOSIntegrationTest:
 - shouldKStreamGlobalKTableLeftJoin
 - shouldNotRestoreAbortedMessages
 - shouldRestoreTransactionalMessages
-- shouldSkipOverAbortedMessagesOnRestore
-- shouldSkipOverTxMarkersOnRestore
 org.apache.kafka.streams.integration.GlobalKTableIntegrationTest:
 - shouldGetToRunningWithOnlyGlobalTopology
 - shouldKStreamGlobalKTableJoin

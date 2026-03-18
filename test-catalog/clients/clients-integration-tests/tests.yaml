@@ -255,6 +255,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumerEndOffsets
 - testAsyncConsumerFetchOffsetsForTime
 - testAsyncConsumerGroupConsumption
+- testAsyncConsumerGroupConsumptionWithTwoMembers
 - testAsyncConsumerHeaders
 - testAsyncConsumerHeadersSerializerDeserializer
 - testAsyncConsumerInterceptors
@@ -291,6 +292,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testClassicConsumerEndOffsets
 - testClassicConsumerFetchOffsetsForTime
 - testClassicConsumerGroupConsumption
+- testClassicConsumerGroupConsumptionWithTwoMembers
 - testClassicConsumerHeaders
 - testClassicConsumerHeadersSerializerDeserializer
 - testClassicConsumerInterceptors
