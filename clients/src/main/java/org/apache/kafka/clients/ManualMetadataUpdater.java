@@ -84,12 +84,15 @@ public class ManualMetadataUpdater implements MetadataUpdater {
 
     @Override
     public boolean isBootstrapped() {
-        return false;
+        // ManualMetadataUpdater is designed for cases where nodes are manually set,
+        // so we consider it bootstrapped if nodes have been provided
+        return !nodes.isEmpty();
     }
 
     @Override
     public void bootstrap(List<InetSocketAddress> addresses) {
-
+        // ManualMetadataUpdater doesn't use NetworkClient's bootstrap mechanism
+        // Nodes should be set manually via constructor or setNodes()
     }
 
     @Override

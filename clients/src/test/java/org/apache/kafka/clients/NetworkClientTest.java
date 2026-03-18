@@ -102,7 +102,8 @@ public class NetworkClientTest {
             new NetworkClient.BootstrapConfiguration(
                     BOOTSTRAP_ADDRESSES,
                     ClientDnsLookup.USE_ALL_DNS_IPS,
-                    10 * 1000);
+                    10 * 1000,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
 
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockSelector selector = new MockSelector(time);
@@ -191,7 +192,8 @@ public class NetworkClientTest {
         bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
             BOOTSTRAP_ADDRESSES,
             ClientDnsLookup.USE_ALL_DNS_IPS,
-            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+            CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
         );
     }
 
@@ -1529,7 +1531,8 @@ public class NetworkClientTest {
         NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
-                5000
+                5000,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
         );
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -1553,7 +1556,8 @@ public class NetworkClientTest {
         NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
-                100 // Short timeout
+                100, // Short timeout
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
         );
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -1576,7 +1580,8 @@ public class NetworkClientTest {
         NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
-                5000 // Long bootstrap timeout
+                5000, // Long bootstrap timeout
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
         );
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -1599,7 +1604,8 @@ public class NetworkClientTest {
         NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
-                5000
+                5000,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
         );
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,

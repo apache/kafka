@@ -169,7 +169,8 @@ public class ConnectionStressWorker implements TaskWorker {
                         NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
                             conf.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                             ClientDnsLookup.forConfig(conf.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+                            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                            conf.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
                         );
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,

@@ -293,7 +293,8 @@ public final class ClientUtils {
             bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
                 bootstrapServers != null ? bootstrapServers : List.of(),
                 dnsLookup,
-                CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+                CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
             );
             return new NetworkClient(metadataUpdater,
                     metadata,

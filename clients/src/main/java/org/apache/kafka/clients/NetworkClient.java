@@ -139,7 +139,11 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
-    private final BootstrapState bootstrapState;
+    private final BootstrapConfiguration bootstrapConfiguration;
+
+    private final Timer bootstrapTimer;
+
+    private boolean bootstrapTimerStarted;
 
     private final TelemetrySender telemetrySender;
 
@@ -359,7 +363,9 @@ public class NetworkClient implements KafkaClient {
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
-        this.bootstrapState = new BootstrapState(bootstrapConfiguration);
+        this.bootstrapConfiguration = bootstrapConfiguration;
+        this.bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+        this.bootstrapTimerStarted = false;
     }
 
     /**
@@ -1195,55 +1201,28 @@ public class NetworkClient implements KafkaClient {
         public final List<String> bootstrapServers;
         public final ClientDnsLookup clientDnsLookup;
         public final long bootstrapResolveTimeoutMs;
+        public final long retryBackoffMs;
         private boolean isBootstrapDisabled;
 
         public BootstrapConfiguration(final List<String> bootstrapServers,
                                       final ClientDnsLookup clientDnsLookup,
-                                      final long bootstrapResolveTimeoutMs) {
+                                      final long bootstrapResolveTimeoutMs,
+                                      final long retryBackoffMs) {
             this.bootstrapServers = bootstrapServers;
             this.clientDnsLookup = clientDnsLookup;
             this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
+            this.retryBackoffMs = retryBackoffMs;
             this.isBootstrapDisabled = false;
         }
 
         public static BootstrapConfiguration disabled() {
-            BootstrapConfiguration bootstrapConfiguration = new BootstrapConfiguration(List.of(), null, 0);
+            BootstrapConfiguration bootstrapConfiguration = new BootstrapConfiguration(List.of(), null, 0, 0);
             bootstrapConfiguration.disableBootstrap();
             return bootstrapConfiguration;
         }
 
         public void disableBootstrap() {
             this.isBootstrapDisabled = true;
-        }
-    }
-
-    private class BootstrapState {
-        private final Timer timer;
-        private final List<String> bootstrapServers;
-        private final ClientDnsLookup clientDnsLookup;
-        private final long dnsResolutionTimeoutMs;
-        private final boolean isDisabled;
-        private boolean timerStarted;
-
-        BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
-            this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
-            this.timer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-            this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
-            this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
-            this.isDisabled = bootstrapConfiguration.isBootstrapDisabled;
-            this.timerStarted = false;
-        }
-
-        boolean isDisabled() {
-            return isDisabled;
-        }
-
-        void ensureTimerStarted(long currentTimeMs) {
-            if (!timerStarted) {
-                timer.update(currentTimeMs);
-                timer.reset(dnsResolutionTimeoutMs);
-                timerStarted = true;
-            }
         }
     }
 
@@ -1269,11 +1248,15 @@ public class NetworkClient implements KafkaClient {
      *           (up to 100ms) between attempts until one of the exit conditions above is met.
      */
     void ensureBootstrapped(final long pollTimeoutMs, final long currentTimeMs) {
-        if (bootstrapState.isDisabled() || metadataUpdater.isBootstrapped())
+        if (bootstrapConfiguration.isBootstrapDisabled || metadataUpdater.isBootstrapped())
             return;
 
         // Start the bootstrap timer on first call to ensure it starts counting from the first poll
-        bootstrapState.ensureTimerStarted(currentTimeMs);
+        if (!bootstrapTimerStarted) {
+            bootstrapTimer.update(currentTimeMs);
+            bootstrapTimer.reset(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+            bootstrapTimerStarted = true;
+        }
 
         // Handle potential overflow when adding timeout to current time
         long pollDeadlineMs;
@@ -1284,36 +1267,33 @@ public class NetworkClient implements KafkaClient {
 
         while (true) {
             long now = time.milliseconds();
-            bootstrapState.timer.update(now);
+            bootstrapTimer.update(now);
 
             List<InetSocketAddress> servers = ClientUtils.parseAddresses(
-                bootstrapState.bootstrapServers, bootstrapState.clientDnsLookup);
+                bootstrapConfiguration.bootstrapServers, bootstrapConfiguration.clientDnsLookup);
 
             if (!servers.isEmpty()) {
                 // Resolution succeeded
-                bootstrapState.timer.reset(bootstrapState.dnsResolutionTimeoutMs);
+                bootstrapTimer.reset(bootstrapConfiguration.bootstrapResolveTimeoutMs);
                 metadataUpdater.bootstrap(servers);
                 return;
             }
 
-            // Check which timeout expires first
-            boolean bootstrapExpired = bootstrapState.timer.isExpired();
-            boolean pollExpired = now >= pollDeadlineMs;
-
-            if (bootstrapExpired) {
+            if (bootstrapTimer.isExpired()) {
                 // Bootstrap timeout expired before poll timeout
                 throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
             }
 
-            if (pollExpired) {
+            if (now >= pollDeadlineMs) {
                 // Poll timeout reached but bootstrap timeout hasn't expired yet
                 return;
             }
 
-            // Sleep briefly before retrying to avoid tight loop
+            // Sleep before retrying to avoid tight loop and reduce load on DNS server
+            // Use the standard retry backoff to prevent overloading DNS with requests
             long remainingPollTimeMs = pollDeadlineMs - now;
-            long remainingBootstrapTimeMs = bootstrapState.timer.remainingMs();
-            long sleepTimeMs = Math.min(Math.min(remainingPollTimeMs, remainingBootstrapTimeMs), 100);
+            long remainingBootstrapTimeMs = bootstrapTimer.remainingMs();
+            long sleepTimeMs = Math.min(Math.min(remainingPollTimeMs, remainingBootstrapTimeMs), bootstrapConfiguration.retryBackoffMs);
 
             if (sleepTimeMs > 0) {
                 time.sleep(sleepTimeMs);
