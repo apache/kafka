@@ -63,14 +63,14 @@ public final class ClientQuotasImage {
 
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
-        Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByType = new HashMap<>();
-        for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+        var entitiesByType = new HashMap<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>>();
+        for (var entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
-            for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
+            for (var entityEntry : entity.entries().entrySet()) {
                 entitiesByType
                     .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
                     .computeIfAbsent(entityEntry.getValue(), k -> new HashMap<>())
-                    .putIfAbsent(entity, entry.getValue());
+                    .put(entity, entry.getValue());
             }
         }
         this.entitiesByType = Collections.unmodifiableMap(entitiesByType);
@@ -93,7 +93,6 @@ public final class ClientQuotasImage {
     }
 
     public DescribeClientQuotasResponseData describe(DescribeClientQuotasRequestData request) {
-        DescribeClientQuotasResponseData response = new DescribeClientQuotasResponseData();
         Map<String, String> exactMatch = new HashMap<>();
         Set<String> typeMatch = new HashSet<>();
         for (DescribeClientQuotasRequestData.ComponentData component : request.components()) {
@@ -144,16 +143,15 @@ public final class ClientQuotasImage {
             }
         }
 
-        matches(response, exactMatch, typeMatch, request.strict());
-        return response;
+        return matches(exactMatch, typeMatch, request.strict());
     }
 
-    private void matches(
-        DescribeClientQuotasResponseData response,
+    private DescribeClientQuotasResponseData matches(
         Map<String, String> exactMatch,
         Set<String> typeMatch,
         boolean strict
     ) {
+        DescribeClientQuotasResponseData response = new DescribeClientQuotasResponseData();
         Map<ClientQuotaEntity, ClientQuotaImage> candidates = null;
         // Case 1: exact match exists. Filter candidates based on exact match first and then type match
         if (!exactMatch.isEmpty()) {
@@ -193,7 +191,7 @@ public final class ClientQuotasImage {
             for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
                 response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
             }
-            return;
+            return response;
         }
 
         if (candidates != null) {
@@ -209,6 +207,7 @@ public final class ClientQuotasImage {
                 }
             }
         }
+        return response;
     }
 
     private static EntryData toDescribeEntry(ClientQuotaEntity entity,
