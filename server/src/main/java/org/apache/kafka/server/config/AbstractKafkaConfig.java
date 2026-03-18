@@ -659,6 +659,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             }
         }
 
-        return millis < 0 ? -1 : millis;
+        return millis < 0 ? Long.valueOf(-1) : millis;
     }
 }
