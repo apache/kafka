@@ -767,9 +767,9 @@ public class KafkaAdminClientTest {
 
     private static FeatureMetadata defaultFeatureMetadata() {
         return new FeatureMetadata(
-            Utils.mkMap(Utils.mkEntry("test_feature_1", new FinalizedVersionRange((short) 2, (short) 2))),
+            Map.of("test_feature_1", new FinalizedVersionRange((short) 2, (short) 2)),
             Optional.of(1L),
-            Utils.mkMap(Utils.mkEntry("test_feature_1", new SupportedVersionRange((short) 1, (short) 5))));
+            Map.of("test_feature_1", new SupportedVersionRange((short) 1, (short) 5)));
     }
 
     private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
@@ -5259,7 +5259,7 @@ public class KafkaAdminClientTest {
 
         ListConsumerGroupOffsetsSpec groupASpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupAPartitions);
         ListConsumerGroupOffsetsSpec groupBSpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupBPartitions);
-        return Utils.mkMap(Utils.mkEntry("groupA", groupASpec), Utils.mkEntry("groupB", groupBSpec));
+        return Map.of("groupA", groupASpec, "groupB", groupBSpec);
     }
 
     private Map<String, ListStreamsGroupOffsetsSpec> batchedListStreamsGroupOffsetsSpec() {
@@ -5268,7 +5268,7 @@ public class KafkaAdminClientTest {
 
         ListStreamsGroupOffsetsSpec groupASpec = new ListStreamsGroupOffsetsSpec().topicPartitions(groupAPartitions);
         ListStreamsGroupOffsetsSpec groupBSpec = new ListStreamsGroupOffsetsSpec().topicPartitions(groupBPartitions);
-        return Utils.mkMap(Utils.mkEntry("groupA", groupASpec), Utils.mkEntry("groupB", groupBSpec));
+        return Map.of("groupA", groupASpec, "groupB", groupBSpec);
     }
 
     private void waitForRequest(MockClient mockClient, ApiKeys apiKeys) throws Exception {
@@ -8801,9 +8801,9 @@ public class KafkaAdminClientTest {
     }
 
     private Map<String, FeatureUpdate> makeTestFeatureUpdates() {
-        return Utils.mkMap(
-            Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-            Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)));
+        return Map.of(
+            "test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+            "test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE));
     }
 
     private void testUpdateFeatures(Map<String, FeatureUpdate> featureUpdates,
@@ -8871,9 +8871,9 @@ public class KafkaAdminClientTest {
                     0),
                 env.cluster().nodeById(controllerId));
             final KafkaFuture<Void> future = env.adminClient().updateFeatures(
-                Utils.mkMap(
-                    Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-                    Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))),
+                Map.of(
+                    "test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+                    "test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
                 new UpdateFeaturesOptions().timeoutMs(10000)
             ).all();
             future.get();
@@ -8895,8 +8895,8 @@ public class KafkaAdminClientTest {
             assertThrows(
                 IllegalArgumentException.class,
                 () -> env.adminClient().updateFeatures(
-                    Utils.mkMap(Utils.mkEntry("feature", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-                                Utils.mkEntry("", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)))));
+                    Map.of("feature", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+                        "", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE))));
         }
     }
 

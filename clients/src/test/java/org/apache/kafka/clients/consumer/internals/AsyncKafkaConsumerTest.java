@@ -47,6 +47,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
 import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
@@ -135,8 +136,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -488,7 +487,7 @@ public class AsyncKafkaConsumerTest {
         ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-                assertDoesNotThrow(() -> consumer.commitSync(mkMap(mkEntry(tp, new OffsetAndMetadata(0)))));
+                assertDoesNotThrow(() -> consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0))));
                 callbackExecuted.set(true);
             }
 
@@ -1452,7 +1451,12 @@ public class AsyncKafkaConsumerTest {
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
-            CompletableBackgroundEvent<Void> e = new PartitionsRemovedEvent(methodName, partitions);
+            CompletableBackgroundEvent<Void> e;
+            if (methodName == ON_PARTITIONS_ASSIGNED) {
+                e = new PartitionsAssignedEvent(Set.of(), partitions);
+            } else {
+                e = new PartitionsRemovedEvent(methodName, partitions);
+            }
             backgroundEventQueue.add(e);
         }
 

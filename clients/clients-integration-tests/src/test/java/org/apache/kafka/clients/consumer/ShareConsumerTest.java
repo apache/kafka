@@ -66,9 +66,11 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -271,7 +273,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -289,7 +298,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPollMultiple() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1285,7 +1301,14 @@ public class ShareConsumerTest {
             "Consumer close should not wait for full timeout when broker is already shut down");
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupSequentialConsumption() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1321,7 +1344,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupConcurrentConsumption()
         throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
@@ -1355,7 +1385,14 @@ public class ShareConsumerTest {
         assertEquals(producerCount * messagesPerProducer, totalResult);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
         throws ExecutionException, InterruptedException, TimeoutException {
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
@@ -1468,7 +1505,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupFailureConcurrentConsumption()
         throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
@@ -1781,7 +1825,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1810,7 +1861,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
         String topic1 = "bar";
         String topic2 = "baz";

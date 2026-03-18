@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 
@@ -35,38 +34,34 @@ import java.util.Optional;
 
 /**
  * A RocksDB backed time-ordered segmented bytes store for window key schema.
+ * <p>
+ * This class supports different segment implementations via the generic type parameter.
+ * It can be used with {@link KeyValueSegment} for regular stores or {@link WindowSegmentWithHeaders}
+ * for stores with headers support.
+ *
+ * @param <S> the segment type
  */
-public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
-
-    private class WindowKeySchemaIndexToBaseStoreIterator  extends IndexToBaseStoreIterator {
-        WindowKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
-            super(indexIterator);
-        }
-
-        @Override
-        protected Bytes getBaseKey(final Bytes indexKey) {
-            final byte[] keyBytes = KeyFirstWindowKeySchema.extractStoreKeyBytes(indexKey.get());
-            final long timestamp = KeyFirstWindowKeySchema.extractStoreTimestamp(indexKey.get());
-            final int seqnum = KeyFirstWindowKeySchema.extractStoreSequence(indexKey.get());
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(keyBytes, timestamp, seqnum);
-        }
-    }
+public class RocksDBTimeOrderedWindowSegmentedBytesStore<S extends Segment> extends AbstractRocksDBTimeOrderedSegmentedBytesStore<S> {
 
     RocksDBTimeOrderedWindowSegmentedBytesStore(final String name,
-                                                final String metricsScope,
                                                 final long retention,
-                                                final long segmentInterval,
-                                                final boolean withIndex) {
-        super(name, metricsScope, retention, segmentInterval, new TimeFirstWindowKeySchema(),
-            Optional.ofNullable(withIndex ? new KeyFirstWindowKeySchema() : null));
+                                                final boolean withIndex,
+                                                final AbstractSegments<S> segments) {
+        super(name,
+            retention,
+            new TimeFirstWindowKeySchema(),
+            Optional.ofNullable(withIndex ? new KeyFirstWindowKeySchema() : null),
+            segments);
     }
 
+    @Override
     public void put(final Bytes key, final long timestamp, final int seqnum, final byte[] value) {
         final Bytes baseKey = TimeFirstWindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum);
         put(baseKey, value);
     }
 
-    byte[] fetch(final Bytes key, final long timestamp, final int seqnum) {
+    @Override
+    public byte[] fetch(final Bytes key, final long timestamp, final int seqnum) {
         return get(TimeFirstWindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum));
     }
 
@@ -80,7 +75,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
     }
 
     @Override
-    Map<KeyValueSegment, WriteBatch> getWriteBatches(
+    Map<S, WriteBatch> getWriteBatches(
         final Collection<ConsumerRecord<byte[], byte[]>> records) {
         // advance stream time to the max timestamp in the batch
         for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -88,11 +83,11 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
             observedStreamTime = Math.max(observedStreamTime, timestamp);
         }
 
-        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        final Map<S, WriteBatch> writeBatchMap = new HashMap<>();
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
+            final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
             if (segment != null) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
@@ -123,7 +118,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
 
     @Override
     protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(
-        final SegmentIterator<KeyValueSegment> segmentIterator) {
+        final SegmentIterator<S> segmentIterator) {
         return new WindowKeySchemaIndexToBaseStoreIterator(segmentIterator);
     }
 }

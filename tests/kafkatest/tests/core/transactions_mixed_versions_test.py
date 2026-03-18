@@ -22,7 +22,7 @@ from kafkatest.utils import is_int
 from kafkatest.utils.transactions_utils import create_and_start_copiers
 from kafkatest.version import LATEST_3_3, LATEST_3_4, LATEST_3_5, \
     LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, LATEST_4_0, \
-    LATEST_4_1, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
+    LATEST_4_1, LATEST_4_2, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
@@ -147,14 +147,25 @@ class TransactionsMixedVersionsTest(Test):
 
         return self.drain_consumer(concurrent_consumer, num_messages_to_copy)
 
-    def setup_topics(self):
-        assignment = ":".join(map(str, [self.kafka.idx(node) for node in self.kafka.nodes]))
-        transaction_assignment = ",".join(map(str, [assignment[::-1]] * 50))
+    def setup_topics(self, txn_state_leader_node, data_leader_node):
+        all_node_ids = [self.kafka.idx(node) for node in self.kafka.nodes]
+
+        # Data topics: data_leader_node first
+        data_leader_id = self.kafka.idx(data_leader_node)
+        data_replicas = [data_leader_id] + [nid for nid in all_node_ids if nid != data_leader_id]
+        data_assignment = ":".join(map(str, data_replicas))
+
+        # Internal topics: txn_state_leader_node first
+        txn_leader_id = self.kafka.idx(txn_state_leader_node)
+        txn_replicas = [txn_leader_id] + [nid for nid in all_node_ids if nid != txn_leader_id]
+        txn_assignment = ":".join(map(str, txn_replicas))
+        internal_topic_assignment = ",".join([txn_assignment] * 50)
+
         self.kafka.topics = {
             self.input_topic: {
                 "partitions": self.num_input_partitions,
                 "replication-factor": self.replication_factor,
-                "replica-assignment": assignment,
+                "replica-assignment": data_assignment,
                 "configs": {
                     "min.insync.replicas": 2
                 }
@@ -162,7 +173,7 @@ class TransactionsMixedVersionsTest(Test):
             self.output_topic: {
                 "partitions": self.num_output_partitions,
                 "replication-factor": self.replication_factor,
-                "replica-assignment": assignment,
+                "replica-assignment": data_assignment,
                 "configs": {
                     "min.insync.replicas": 2
                 }
@@ -170,7 +181,7 @@ class TransactionsMixedVersionsTest(Test):
             "__transaction_state": {
                 "partitions": 50,
                 "replication-factor": self.replication_factor,
-                "replica-assignment": transaction_assignment,
+                "replica-assignment": internal_topic_assignment,
                 "configs": {
                     "min.insync.replicas": 2
                 }
@@ -179,11 +190,12 @@ class TransactionsMixedVersionsTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(
-        old_kafka_version=[str(LATEST_4_1), str(LATEST_4_0), str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3)],
+        old_kafka_version=[str(LATEST_4_2), str(LATEST_4_1), str(LATEST_4_0), str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3)],
         metadata_quorum=[isolated_kraft],
-        group_protocol=[None]
+        group_protocol=[None],
+        coordinator_on_new_broker=[True, False]
     )
-    def test_transactions_mixed_versions(self, old_kafka_version, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_transactions_mixed_versions(self, old_kafka_version, metadata_quorum=quorum.isolated_kraft, group_protocol=None, coordinator_on_new_broker=True):
         oldKafkaVersion = KafkaVersion(old_kafka_version)
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=self.num_brokers,
@@ -192,6 +204,9 @@ class TransactionsMixedVersionsTest(Test):
                                   controller_num_nodes_override=1)
 
         self.kafka.nodes[0].version = DEV_BRANCH
+
+        new_node = self.kafka.nodes[0]  # DEV_BRANCH
+        old_node = self.kafka.nodes[1]  # old version
 
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
@@ -202,7 +217,10 @@ class TransactionsMixedVersionsTest(Test):
 
         self.kafka.log_level = "DEBUG"
 
-        self.setup_topics()
+        if coordinator_on_new_broker:
+            self.setup_topics(txn_state_leader_node=new_node, data_leader_node=old_node)
+        else:
+            self.setup_topics(txn_state_leader_node=old_node, data_leader_node=new_node)
         self.kafka.start()
 
         input_messages = self.seed_messages(self.input_topic, self.num_seed_messages)

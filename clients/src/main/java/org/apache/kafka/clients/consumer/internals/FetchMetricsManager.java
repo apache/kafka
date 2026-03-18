@@ -34,6 +34,9 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
  * The {@link FetchMetricsManager} class provides wrapper methods to record lag, lead, latency, and fetch metrics.
  * It keeps an internal ID of the assigned set of partitions which is updated to ensure the set of metrics it
  * records matches up with the topic-partitions in use.
+ *
+ * <p>Note: metric tag maps use {@code Utils.mkMap} to preserve insertion order; do not replace
+ * with {@code Map.of} as tag order affects JMX MBean names.
  */
 public class FetchMetricsManager {
 

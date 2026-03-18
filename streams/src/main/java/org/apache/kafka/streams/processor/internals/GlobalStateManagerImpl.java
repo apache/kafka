@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
@@ -51,6 +52,7 @@ import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -179,7 +181,20 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             final List<TopicPartition> storePartitions = topicPartitionsForStore(stateStore);
             final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
                     stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
-            maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
+            try {
+                maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
+            } catch (final ProcessorStateException e) {
+                if (eosEnabled) {
+                    log.warn("{}Detected unclean shutdown for global store {}. " +
+                            "Wiping global state directory.", logPrefix, stateStore.name(), e);
+                    try {
+                        Utils.delete(stateDirectory.globalStateDir().getAbsoluteFile());
+                    } catch (final IOException ioe) {
+                        e.addSuppressed(ioe);
+                    }
+                }
+                throw e;
+            }
 
             for (final TopicPartition storePartition : storePartitions) {
                 wrappedStores.put(storePartition, maybeWrappedStore);
@@ -566,7 +581,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     // only add offsets for persistent stores
                     if (store.persistent()) {
                         for (final TopicPartition storePartition : storePartitions) {
-                            storeOffsets.put(storePartition, currentOffsets.get(storePartition));
+                            final Long offset = currentOffsets.get(storePartition);
+                            if (offset != null) {
+                                storeOffsets.put(storePartition, offset);
+                            }
                         }
                     }
                     store.commit(storeOffsets);

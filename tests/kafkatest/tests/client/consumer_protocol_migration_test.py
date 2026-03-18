@@ -108,24 +108,37 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["disabled"],
         consumer_version=consumer_versions_supporting_range_assignnor,
-        assignment_strategy=[RANGE]
+        assignment_strategy=[RANGE],
+        enable_assignment_batching=[True]
     )
     @matrix(
         static_membership=[True],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["disabled"],
         consumer_version=consumer_versions_supporting_static_membership,
-        assignment_strategy=[RANGE]
+        assignment_strategy=[RANGE],
+        enable_assignment_batching=[True]
     )
     @matrix(
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["disabled"],
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor,
-        assignment_strategy=[COOPERATIVE_STICKEY]
+        assignment_strategy=[COOPERATIVE_STICKEY],
+        enable_assignment_batching=[True]
+    )
+    @matrix(
+        static_membership=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        consumer_group_migration_policy=["disabled"],
+        # Test the latest version only without assignment batching.
+        consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
+        assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
+        enable_assignment_batching=[False]
     )
     def test_consumer_offline_migration(self, static_membership, metadata_quorum,
-                                        consumer_group_migration_policy, consumer_version, assignment_strategy):
+                                        consumer_group_migration_policy, consumer_version, assignment_strategy,
+                                        enable_assignment_batching):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
         offline upgrade/downgrade.
@@ -178,24 +191,37 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=consumer_versions_supporting_range_assignnor,
-        assignment_strategy=[RANGE]
+        assignment_strategy=[RANGE],
+        enable_assignment_batching=[True]
     )
     @matrix(
         static_membership=[True],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=consumer_versions_supporting_static_membership,
-        assignment_strategy=[RANGE]
+        assignment_strategy=[RANGE],
+        enable_assignment_batching=[True]
     )
     @matrix(
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor,
-        assignment_strategy=[COOPERATIVE_STICKEY]
+        assignment_strategy=[COOPERATIVE_STICKEY],
+        enable_assignment_batching=[True]
+    )
+    @matrix(
+        static_membership=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        consumer_group_migration_policy=["bidirectional", "upgrade"],
+        # Test the latest version only without assignment batching.
+        consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
+        assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
+        enable_assignment_batching=[False]
     )
     def test_consumer_rolling_upgrade(self, static_membership, metadata_quorum,
-                                      consumer_group_migration_policy, consumer_version, assignment_strategy):
+                                      consumer_group_migration_policy, consumer_version, assignment_strategy,
+                                      enable_assignment_batching):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
         online upgrade when the migration policy is set to be UPGRADE.
@@ -239,24 +265,37 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=consumer_versions_supporting_range_assignnor,
-        assignment_strategy=[RANGE]
+        assignment_strategy=[RANGE],
+        enable_assignment_batching=[True]
     )
     @matrix(
         static_membership=[True],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=consumer_versions_supporting_static_membership,
-        assignment_strategy=[RANGE]
+        assignment_strategy=[RANGE],
+        enable_assignment_batching=[True]
     )
     @matrix(
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=consumer_versions_supporting_cooperative_sticky_assignor,
-        assignment_strategy=[COOPERATIVE_STICKEY]
+        assignment_strategy=[COOPERATIVE_STICKEY],
+        enable_assignment_batching=[True]
+    )
+    @matrix(
+        static_membership=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        consumer_group_migration_policy=["downgrade"],
+        # Test the latest version only without assignment batching.
+        consumer_version=consumer_versions_supporting_cooperative_sticky_assignor[-1:],
+        assignment_strategy=[RANGE, COOPERATIVE_STICKEY],
+        enable_assignment_batching=[False]
     )
     def test_consumer_rolling_downgrade(self, static_membership, metadata_quorum,
-                                        consumer_group_migration_policy, consumer_version, assignment_strategy):
+                                        consumer_group_migration_policy, consumer_version, assignment_strategy,
+                                        enable_assignment_batching):
         """
         Verify correct consumer behavior when the consumers in the group are restarted to perform
         online downgrade when the migration policy is set to be DOWNGRADE.

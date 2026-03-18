@@ -117,7 +117,12 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
                 for (final Map.Entry<TopicPartition, Long> entry : legacyCheckpoint.read().entrySet()) {
                     final StateStore store = stores.get(entry.getKey());
                     if (store != null) {
-                        storesToMigrate.computeIfAbsent(store, k -> new HashMap<>()).put(entry.getKey(), entry.getValue());
+                        final Long offset = changelogOffsetFromCheckpointedOffset(entry.getValue());
+                        if (offset != null) {
+                            storesToMigrate
+                                    .computeIfAbsent(store, k -> new HashMap<>())
+                                    .put(entry.getKey(), offset);
+                        }
                     }
                 }
 
@@ -169,7 +174,7 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
             final Map<TopicPartition, Long> allOffsets = checkpointFile.read();
             for (final Map.Entry<TopicPartition, Long> entry : allOffsets.entrySet()) {
                 if (changelogPartitions.contains(entry.getKey())) {
-                    offsets.put(entry.getKey(), changelogOffsetFromCheckpointedOffset(entry.getValue()));
+                    offsets.put(entry.getKey(), entry.getValue());
                 }
             }
             checkpointedOffsets = new HashMap<>(offsets);
@@ -206,7 +211,17 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         super.commit(changelogOffsets);
 
         // update in-memory offsets
-        offsets.putAll(changelogOffsets);
+        if (changelogOffsets.isEmpty()) {
+            offsets.clear();
+        } else {
+            for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
+                if (entry.getValue() != null) {
+                    offsets.put(entry.getKey(), entry.getValue());
+                } else {
+                    offsets.remove(entry.getKey());
+                }
+            }
+        }
 
         // only write the checkpoint file if both:
         // 1. in ALOS mode (under EOS, the checkpoint file is only written when closing the store)
@@ -236,14 +251,8 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         // only checkpoint persistent and logged stores
         if (persistent() && !changelogPartitions.isEmpty()) {
             try {
-                // merge new checkpoint offsets into checkpoint file
-                final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>(offsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
-                    checkpointingOffsets.put(entry.getKey(), checkpointableOffsetFromChangelogOffset(entry.getValue()));
-                }
-
-                log.debug("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
-                checkpointFile.write(checkpointingOffsets);
+                log.debug("Writing checkpoint: {} for task {}", offsets, taskId);
+                checkpointFile.write(offsets);
                 checkpointedOffsets = new HashMap<>(offsets);
             } catch (final IOException e) {
                 log.warn("{}Failed to write offset checkpoint file to [{}]." +
@@ -293,11 +302,6 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         }
 
         return totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
-    }
-
-    // Pass in a sentinel value to checkpoint when the changelog offset is not yet initialized/known
-    private static long checkpointableOffsetFromChangelogOffset(final Long offset) {
-        return offset != null ? offset : OFFSET_UNKNOWN;
     }
 
     // Convert the written offsets in the checkpoint file back to the changelog offset

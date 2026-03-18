@@ -39,7 +39,7 @@ import java.util.Optional;
 /**
  * A RocksDB backed time-ordered segmented bytes store for session key schema.
  */
-public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
+public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment> {
 
     private class SessionKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
         SessionKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
@@ -60,8 +60,11 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
                                                  final long retention,
                                                  final long segmentInterval,
                                                  final boolean withIndex) {
-        super(name, metricsScope, retention, segmentInterval, new TimeFirstSessionKeySchema(),
-            Optional.ofNullable(withIndex ? new KeyFirstSessionKeySchema() : null));
+        super(name,
+            retention,
+            new TimeFirstSessionKeySchema(),
+            Optional.ofNullable(withIndex ? new KeyFirstSessionKeySchema() : null),
+            new KeyValueSegments(name, metricsScope, retention, segmentInterval));
     }
 
     public byte[] fetchSession(final Bytes key,

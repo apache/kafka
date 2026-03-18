@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -829,6 +831,22 @@ public class RocksDBVersionedStoreTest {
         putToStore("k2", "v", BASE_TIMESTAMP + 2, PUT_RETURN_CODE_NOT_PUT);
         verifyGetNullFromStore("k2");
         verifyExpiredRecordSensor(1);
+    }
+
+    @Test
+    public void shouldLoadPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), store.name() + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+
+
+        store.close();
+        store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        store.init(context, store);
+        assertEquals(position, store.getPosition());
+        store.close();
     }
 
     private void putToStore(final String key, final String value, final long timestamp, final long expectedValidTo) {
