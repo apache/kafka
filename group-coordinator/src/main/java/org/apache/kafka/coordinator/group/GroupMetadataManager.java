@@ -2142,7 +2142,7 @@ public class GroupMetadataManager {
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
             .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId))
-            .setAcceptableRecoveryLag((int) streamsGroupAcceptableRecoveryLag(groupId)); // TODO fix -- need to accept long
+            .setAcceptableRecoveryLag(streamsGroupAcceptableRecoveryLag(groupId));
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
