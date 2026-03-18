@@ -46,6 +46,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class KafkaRaftClientFetchTest {
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -123,12 +124,12 @@ public final class KafkaRaftClientFetchTest {
     }
 
     @Test
-    public void testFetchMaxBytesLargerThanRecords() throws Exception {
+    public void testFetchMaxBytesAlwaysReturnsAllBatchesForLargeMax() throws Exception {
         var epoch = 2;
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
         var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
-        // This should return every record. If localMaxSizeBytes is used only one batch will be returned.
+        // Here we are effectively saying that there is no limit to the amount of records to return.
         var remoteMaxSizeBytes = Integer.MAX_VALUE;
         var localMaxSizeBytes = 1;
 
@@ -175,7 +176,7 @@ public final class KafkaRaftClientFetchTest {
     }
 
     @Test
-    public void testFetchMaxBytesFromRemoteFetchUsed() throws Exception {
+    public void testFetchMaxBytesAlwaysReturnsAtLeastOneBatch() throws Exception {
         var epoch = 2;
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
@@ -219,6 +220,65 @@ public final class KafkaRaftClientFetchTest {
             iterator.hasNext(),
             String.format("Expected only a single batch to be fetched for maxSize = %d", remoteMaxSizeBytes)
         );
+    }
+
+    @Test
+    public void testFetchMaxBytesFromRemoteFetchUsed() throws Exception {
+        var epoch = 2;
+        var id = KafkaRaftClientTest.randomReplicaId();
+        var localKey = KafkaRaftClientTest.replicaKey(id, true);
+        var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
+        var remoteMaxSizeBytes = 115;
+        var localMaxSizeBytes = 1024;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey.id(),
+            localKey.directoryId().get()
+        )
+            .appendToLog(epoch, List.of("a", "a", "a"))
+            .appendToLog(epoch, List.of("b", "b", "b"))
+            .appendToLog(epoch, List.of("c", "c", "c"))
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withUnknownLeader(epoch)
+            .withFetchMaxBytes(localMaxSizeBytes)
+            .build();
+
+        context.unattachedToLeader();
+        epoch = context.currentEpoch();
+
+        // Send a fetch request with max bytes that are different from the configured value.
+        FetchRequestData request = context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
+        request.setMaxBytes(remoteMaxSizeBytes);
+        context.deliverRequest(request);
+
+        context.pollUntilResponse();
+        FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE.code(), partitionData.errorCode());
+        MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
+        // Invariant is that we will always return records in batches and will include batches which "go over"
+        // the controller.quorum.fetch.max.bytes configuration.
+        assertTrue(
+            records.sizeInBytes() < remoteMaxSizeBytes * 2,
+            String.format(
+                "Expected records size (%d) < remoteMaxSizeBytes*2 (%d)",
+                records.sizeInBytes(),
+                remoteMaxSizeBytes * 2
+            )
+        );
+        int batchCount = 0;
+        long lastNextOffset = 0;
+        var iterator = records.batchIterator();
+        while (iterator.hasNext()) {
+            var batch = iterator.next();
+            lastNextOffset = batch.nextOffset();
+            batchCount++;
+        }
+        // Only two batches will be returned
+        assertEquals(2, batchCount);
+        // 3 batches with 3 records each
+        assertEquals(6, lastNextOffset);
     }
 
     @Test

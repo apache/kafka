@@ -444,6 +444,7 @@ public class MockLog implements RaftLog {
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
+            // Exits loop if position of buffer goes beyond maxTotalBatchBytes.
             if (batch.lastOffset() >= startOffset
                 && batch.lastOffset() < maxOffset
                 && !batch.entries.isEmpty()

@@ -1045,7 +1045,7 @@ public class MockLogTest {
     public void testMockLogLimits() {
         appendBatch(10, 5);
         appendBatch(10, 5);
-        // Bytes are smaller than 10 simple records in a batch.
+        // magicMaxTotalBytes are smaller than 10 simple records in a batch.
         // Meaning we will read only the first batch and not the second.
         int magicMaxTotalBytes = 100;
         Records records = log.read(
