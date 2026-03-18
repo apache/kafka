@@ -820,6 +820,34 @@ public class ShareConsumerImplTest {
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
     }
 
+    @Test
+    public void testPollDoesNotAddNewSharePollEventWhenOneIsAlreadyInFlight() {
+        ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit");
+
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(Collections.singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Keep pollForFetches from spinning by making it "wait" and advance MockTime.
+        doReturn(100L).when(applicationEventHandler).maximumTimeToWait();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            ((MockTime) time).sleep(pollTimer.remainingMs());
+            return null;
+        }).when(fetchBuffer).awaitNotEmpty(any(Timer.class));
+
+        // Always empty fetch: forces multiple loop iterations until the overall poll timeout expires.
+        doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ofMillis(450));
+        assertTrue(result.isEmpty());
+
+        verify(fetchBuffer, org.mockito.Mockito.atLeastOnce()).awaitNotEmpty(any(Timer.class));
+        verify(applicationEventHandler, times(1)).add(any(SharePollEvent.class));
+    }
+
     @ParameterizedTest
     @EnumSource(value = Errors.class, names = {"TOPIC_AUTHORIZATION_FAILED", "GROUP_AUTHORIZATION_FAILED", "INVALID_TOPIC_EXCEPTION"})
     public void testCloseWithBackgroundQueueErrorsAfterUnsubscribe(Errors error) {
