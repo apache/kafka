@@ -6057,6 +6057,8 @@ org.apache.kafka.streams.state.internals.SessionStoreBuilderTest:
 - shouldThrowNullPointerIfTimeIsNull
 org.apache.kafka.streams.state.internals.SessionStoreFetchTest:
 - testStoreConfig
+org.apache.kafka.streams.state.internals.SessionStoreWithHeadersSerializerSideEffectTest:
+- shouldPropagateSerializerHeaderSideEffectToChangelog
 org.apache.kafka.streams.state.internals.SessionToHeadersIteratorAdapterTest:
 - shouldAddHeadersOnNext
 - shouldDelegateClose
@@ -6326,6 +6328,8 @@ org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHead
 - shouldThrowNullPointerIfTimeIsNull
 - shouldWrapPlainKeyValueStoreAsHeadersStore
 - shouldWrapTimestampKeyValueStoreAsHeadersStore
+org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreWithHeadersSerializerSideEffectTest:
+- shouldPropagateSerializerHeaderSideEffectToChangelog
 org.apache.kafka.streams.state.internals.TimestampedSegmentTest:
 - shouldBeEqualIfIdIsEqual
 - shouldCompareSegmentIdOnly
@@ -6398,6 +6402,8 @@ org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilde
 - shouldNotWrapHeadersByteStore
 - shouldThrowNullPointerIfInnerIsNull
 - shouldWrapTimestampedStoreAsHeadersStore
+org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersSerializerSideEffectTest:
+- shouldPropagateSerializerHeaderSideEffectToChangelog
 org.apache.kafka.streams.state.internals.UtilsTest:
 - shouldExtractRawPlainValue
 - shouldReturnNullForNullRawPlainValue
