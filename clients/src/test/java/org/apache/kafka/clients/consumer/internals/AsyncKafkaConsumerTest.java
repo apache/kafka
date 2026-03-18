@@ -1455,7 +1455,7 @@ public class AsyncKafkaConsumerTest {
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
             CompletableBackgroundEvent<Void> e;
             if (methodName == ON_PARTITIONS_ASSIGNED) {
-                e = new PartitionsAssignedEvent(Collections.emptySet(), partitions);
+                e = new PartitionsAssignedEvent(Set.of(), partitions);
             } else {
                 e = new PartitionsRemovedEvent(methodName, partitions);
             }
