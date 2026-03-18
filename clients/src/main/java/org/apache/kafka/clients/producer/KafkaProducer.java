@@ -525,6 +525,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
+                producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                 this.metrics,
                 "producer",
                 logContext,

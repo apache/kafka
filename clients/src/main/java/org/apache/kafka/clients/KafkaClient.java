@@ -212,5 +212,5 @@ public interface KafkaClient extends Closeable {
      * was invoked for this client.
      */
     boolean active();
-    
+
 }

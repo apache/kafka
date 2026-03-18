@@ -550,7 +550,14 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+
+            // Use the appropriate bootstrap configuration determined by AdminBootstrapAddresses
+            List<String> bootstrapAddressesToUse = adminAddresses.usingBootstrapControllers()
+                ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
+                : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+
             networkClient = ClientUtils.createNetworkClient(config,
+                bootstrapAddressesToUse,
                 clientId,
                 metrics,
                 "admin-client",

@@ -21,11 +21,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.BootstrapResolutionException;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
@@ -1223,6 +1223,7 @@ public class NetworkClient implements KafkaClient {
         private final ClientDnsLookup clientDnsLookup;
         private final long dnsResolutionTimeoutMs;
         private final boolean isDisabled;
+        private boolean timerStarted;
 
         BootstrapState(BootstrapConfiguration bootstrapConfiguration) {
             this.dnsResolutionTimeoutMs = bootstrapConfiguration.bootstrapResolveTimeoutMs;
@@ -1230,10 +1231,19 @@ public class NetworkClient implements KafkaClient {
             this.bootstrapServers = bootstrapConfiguration.bootstrapServers;
             this.clientDnsLookup = bootstrapConfiguration.clientDnsLookup;
             this.isDisabled = bootstrapConfiguration.isBootstrapDisabled;
+            this.timerStarted = false;
         }
 
         boolean isDisabled() {
             return isDisabled;
+        }
+
+        void ensureTimerStarted(long currentTimeMs) {
+            if (!timerStarted) {
+                timer.update(currentTimeMs);
+                timer.reset(dnsResolutionTimeoutMs);
+                timerStarted = true;
+            }
         }
     }
 
@@ -1262,6 +1272,9 @@ public class NetworkClient implements KafkaClient {
         if (bootstrapState.isDisabled() || metadataUpdater.isBootstrapped())
             return;
 
+        // Start the bootstrap timer on first call to ensure it starts counting from the first poll
+        bootstrapState.ensureTimerStarted(currentTimeMs);
+
         // Handle potential overflow when adding timeout to current time
         long pollDeadlineMs;
         if (currentTimeMs > Long.MAX_VALUE - pollTimeoutMs)
@@ -1273,7 +1286,7 @@ public class NetworkClient implements KafkaClient {
             long now = time.milliseconds();
             bootstrapState.timer.update(now);
 
-            List<InetSocketAddress> servers = ClientUtils.validateAddresses(
+            List<InetSocketAddress> servers = ClientUtils.parseAddresses(
                 bootstrapState.bootstrapServers, bootstrapState.clientDnsLookup);
 
             if (!servers.isEmpty()) {
