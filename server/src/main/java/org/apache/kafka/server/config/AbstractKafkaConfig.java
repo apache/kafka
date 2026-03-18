@@ -442,25 +442,13 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     public static String loggableValue(ConfigResource.Type resourceType,
                                        String name,
                                        String value) {
-        boolean sensitive;
-        switch (resourceType) {
-            case BROKER:
-                sensitive = maybeSensitive(configType(name));
-                break;
-            case TOPIC:
-                sensitive = maybeSensitive(LogConfig.configType(name));
-                break;
-            case GROUP:
-                sensitive = maybeSensitive(GroupConfig.configType(name));
-                break;
-            case BROKER_LOGGER:
-            case CLIENT_METRICS:
-                sensitive = false;
-                break;
-            default:
-                sensitive = true;
-                break;
-        }
+        boolean sensitive = switch (resourceType) {
+            case BROKER -> maybeSensitive(configType(name));
+            case TOPIC -> maybeSensitive(LogConfig.configType(name));
+            case GROUP -> maybeSensitive(GroupConfig.configType(name));
+            case BROKER_LOGGER, CLIENT_METRICS -> false;
+            default -> true;
+        };
         return sensitive ? Password.HIDDEN : value;
     }
 
