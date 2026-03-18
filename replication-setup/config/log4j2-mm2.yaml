@@ -1,0 +1,39 @@
+Configuration:
+  status: warn
+  name: mm2-log4j2
+
+  Appenders:
+    Console:
+      name: console
+      target: SYSTEM_OUT
+      PatternLayout:
+        pattern: "%d{ISO8601} %-5p [%t] %c - %m%n"
+
+  Loggers:
+    Logger:
+      - name: org.apache.kafka.connect.mirror
+        level: debug
+        additivity: false
+        AppenderRef:
+          - ref: console
+      - name: org.apache.kafka.connect.runtime.WorkerSourceTask
+        level: info
+        additivity: false
+        AppenderRef:
+          - ref: console
+      - name: org.apache.kafka.clients.consumer.internals
+        level: info
+        additivity: false
+        AppenderRef:
+          - ref: console
+      - name: org.apache.kafka.clients.NetworkClient
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: console
+
+    Root:
+      level: info
+      AppenderRef:
+        - ref: console
+

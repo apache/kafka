@@ -3,8 +3,6 @@
 # MirrorMaker 2 replicates order-events and payment-events to DR for business continuity.
 # See replication-setup/README.md and docs/EVENT_SCHEMA.md.
 
-version: "3.8"
-
 services:
   # Primary Kafka cluster (PR) - single node KRaft
   kafka-primary:
@@ -62,8 +60,12 @@ services:
       - kafka-standby
     volumes:
       - ./config/mm2.properties:/opt/kafka/config/mm2.properties:ro
+      - ./config/log4j2-mm2.yaml:/opt/kafka/config/log4j2-mm2.yaml:ro
+    environment:
+      # Make MirrorMaker 2 logs explicit and verbose for MirrorSourceTask.
+      KAFKA_LOG4J_OPTS: "-Dlog4j2.configurationFile=/opt/kafka/config/log4j2-mm2.yaml"
     command: >
-      bash -c "bin/connect-mirror-maker.sh config/mm2.properties"
+      bash -lc "connect-mirror-maker.sh config/mm2.properties"
     networks:
       - kafka-net
     restart: on-failure
@@ -80,10 +82,10 @@ services:
       PAYMENT_EVENTS_TOPIC: payment-events
     # Consumes from both topics and prints each record (simulates sending notification)
     command: >
-      bash -c "
+      bash -lc "
         echo 'NotificationService started - consuming order-events and payment-events';
-        (bin/kafka-console-consumer.sh --bootstrap-server kafka-primary:9092 --topic order-events --from-beginning 2>/dev/null | while read -r line; do echo \"[NOTIFICATION] Order event: \$line\"; done) &
-        (bin/kafka-console-consumer.sh --bootstrap-server kafka-primary:9092 --topic payment-events --from-beginning 2>/dev/null | while read -r line; do echo \"[NOTIFICATION] Payment event: \$line\"; done) &
+        (kafka-console-consumer.sh --bootstrap-server kafka-primary:9092 --topic order-events --from-beginning 2>/dev/null | while read -r line; do echo \"[NOTIFICATION] Order event: \$line\"; done) &
+        (kafka-console-consumer.sh --bootstrap-server kafka-primary:9092 --topic payment-events --from-beginning 2>/dev/null | while read -r line; do echo \"[NOTIFICATION] Payment event: \$line\"; done) &
         wait
       "
     networks:

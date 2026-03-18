@@ -22,6 +22,13 @@ log() {
   echo "[$(date -Iseconds 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)] $*"
 }
 
+section() {
+  echo
+  log "=============================================================================="
+  log "$*"
+  log "=============================================================================="
+}
+
 dc() {
   if command -v docker-compose &>/dev/null; then
     docker-compose -f "$COMPOSE_FILE" "$@"
@@ -30,12 +37,27 @@ dc() {
   fi
 }
 
+kafka_cmd() {
+  # Run kafka CLI tools inside kafka-tools container reliably across images.
+  # Prefer tools on PATH; fall back to /opt/kafka/bin if needed.
+  dc exec -T kafka-tools bash -lc '
+    if command -v '"$1"' >/dev/null 2>&1; then
+      '"$@"'
+    elif [[ -x "/opt/kafka/bin/'"$1"'" ]]; then
+      /opt/kafka/bin/'"$@"'
+    else
+      echo "Kafka CLI not found: '"$1"'" >&2
+      exit 127
+    fi
+  '
+}
+
 wait_for_broker() {
   local name=$1
   local bootstrap=$2
   log "Waiting for broker $name at $bootstrap"
   for i in $(seq 1 60); do
-    if dc exec -T kafka-tools bin/kafka-topics.sh --bootstrap-server "$bootstrap" --list >/dev/null 2>&1; then
+    if kafka_cmd kafka-topics.sh --bootstrap-server "$bootstrap" --list >/dev/null 2>&1; then
       log "Broker $name is up"
       return 0
     fi
@@ -45,11 +67,33 @@ wait_for_broker() {
   return 1
 }
 
+compose_status() {
+  log "Compose services status"
+  dc ps || true
+}
+
+tail_logs() {
+  local service=$1
+  local lines=${2:-200}
+  log "Last $lines lines of logs for $service"
+  dc logs --no-color --tail "$lines" "$service" 2>&1 || true
+}
+
+assert_mm2_log_contains() {
+  local needle=$1
+  if dc logs --no-color "$MM_SERVICE" 2>&1 | grep -F "$needle" >/dev/null; then
+    log "OK: MirrorMaker log contains: $needle"
+    return 0
+  fi
+  log "MISSING: MirrorMaker log does not contain: $needle"
+  return 1
+}
+
 create_topics() {
   log "Creating e-commerce topics (order-events, payment-events)"
 
   for topic in "$ORDER_TOPIC" "$PAYMENT_TOPIC"; do
-    dc exec -T kafka-tools bin/kafka-topics.sh \
+    kafka_cmd kafka-topics.sh \
       --bootstrap-server "$PRIMARY_BROKER" \
       --create --if-not-exists \
       --topic "$topic" \
@@ -58,7 +102,7 @@ create_topics() {
   done
 
   for topic in "$DR_ORDER_TOPIC" "$DR_PAYMENT_TOPIC"; do
-    dc exec -T kafka-tools bin/kafka-topics.sh \
+    kafka_cmd kafka-topics.sh \
       --bootstrap-server "$STANDBY_BROKER" \
       --create --if-not-exists \
       --topic "$topic" \
@@ -75,7 +119,7 @@ produce_order_events() {
     ts=$(date +%s)
     order_id="ORD-$i"
     echo "{\"event_id\":\"$event_id\",\"event_type\":\"ORDER_CREATED\",\"timestamp\":$ts,\"order_id\":\"$order_id\",\"customer_id\":\"CUST-$i\",\"total_amount\":$((i * 10)).99,\"currency\":\"USD\",\"status\":\"CREATED\"}"
-  done | dc exec -i kafka-tools bin/kafka-console-producer.sh \
+  done | kafka_cmd kafka-console-producer.sh \
     --bootstrap-server "$PRIMARY_BROKER" \
     --topic "$ORDER_TOPIC" \
     --request-required-acks 1
@@ -90,7 +134,7 @@ produce_payment_events() {
     ts=$(date +%s)
     order_id="ORD-$i"
     echo "{\"event_id\":\"$event_id\",\"event_type\":\"PAYMENT_SUCCESSFUL\",\"timestamp\":$ts,\"payment_id\":\"PAY-$i\",\"order_id\":\"$order_id\",\"amount\":$((i * 10)).99,\"currency\":\"USD\",\"status\":\"SUCCESS\"}"
-  done | dc exec -i kafka-tools bin/kafka-console-producer.sh \
+  done | kafka_cmd kafka-console-producer.sh \
     --bootstrap-server "$PRIMARY_BROKER" \
     --topic "$PAYMENT_TOPIC" \
     --request-required-acks 1
@@ -112,8 +156,7 @@ count_messages() {
   else
     bootstrap="$STANDBY_BROKER"
   fi
-  dc exec -T kafka-tools bash -c \
-    "bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --topic $topic --from-beginning --timeout-ms 10000 2>/dev/null | wc -l" || echo "0"
+  kafka_cmd kafka-console-consumer.sh --bootstrap-server "$bootstrap" --topic "$topic" --from-beginning --timeout-ms 10000 2>/dev/null | wc -l || echo "0"
 }
 
 check_mm2_log() {
@@ -126,17 +169,19 @@ check_mm2_log() {
 # Scenario 1: Normal replication (order + payment events)
 ###############################################################################
 scenario_normal_replication() {
-  log "=== Scenario 1: Normal replication (E-commerce) ==="
+  section "Scenario 1: Normal replication (E-commerce)"
   dc down -v --remove-orphans 2>/dev/null || true
   dc up -d kafka-primary kafka-standby kafka-tools
+  compose_status
 
-  wait_for_broker primary "$PRIMARY_BROKER"
-  wait_for_broker standby "$STANDBY_BROKER"
+  wait_for_broker primary "$PRIMARY_BROKER" || { tail_logs kafka-primary 250; compose_status; return 1; }
+  wait_for_broker standby "$STANDBY_BROKER" || { tail_logs kafka-standby 250; compose_status; return 1; }
   create_topics
 
   log "Starting MirrorMaker2"
   dc up -d "$MM_SERVICE"
   sleep 15
+  tail_logs "$MM_SERVICE" 120
 
   produce_ecommerce_events 500
   log "Waiting for replication"
@@ -161,9 +206,10 @@ scenario_normal_replication() {
 # Scenario 2: Log truncation detection (fail-fast) on order-events
 ###############################################################################
 scenario_truncation_detection() {
-  log "=== Scenario 2: Log truncation detection (order-events) ==="
+  section "Scenario 2: Log truncation detection (order-events)"
 
   dc stop "$MM_SERVICE" 2>/dev/null || true
+  tail_logs "$MM_SERVICE" 120
 
   produce_order_events 200
   log "Sleeping past retention (70s) so order-events is truncated"
@@ -172,12 +218,14 @@ scenario_truncation_detection() {
   log "Restarting MirrorMaker2; enhanced MM2 should detect offset gap and fail-fast"
   dc up -d "$MM_SERVICE"
   sleep 20
+  tail_logs "$MM_SERVICE" 200
 
   if dc ps -a --format '{{.Names}} {{.Status}}' 2>/dev/null | grep -q "mirror-maker.*Exited"; then
     log "Scenario 2: MirrorMaker2 exited (fail-fast) as expected after truncation"
   else
-    check_mm2_log "truncat"; check_mm2_log "offset gap"; check_mm2_log "OffsetOutOfRange"
-    log "Scenario 2: Check mirror-maker logs for truncation/offset gap detection"
+    assert_mm2_log_contains "LOG TRUNCATION DETECTED" || true
+    assert_mm2_log_contains "Fail-fast due to log truncation" || true
+    log "Scenario 2 NOTE: MirrorMaker should either exit or log truncation detection."
   fi
 }
 
@@ -185,18 +233,18 @@ scenario_truncation_detection() {
 # Scenario 3: Topic reset handling (order-events delete/recreate)
 ###############################################################################
 scenario_topic_reset() {
-  log "=== Scenario 3: Topic reset handling (order-events) ==="
+  section "Scenario 3: Topic reset handling (order-events)"
 
   dc stop "$MM_SERVICE" 2>/dev/null || true
 
   log "Deleting order-events on primary"
-  dc exec -T kafka-tools bin/kafka-topics.sh \
+  kafka_cmd kafka-topics.sh \
     --bootstrap-server "$PRIMARY_BROKER" \
     --delete --topic "$ORDER_TOPIC" 2>/dev/null || true
   sleep 5
 
   log "Recreating order-events on primary"
-  dc exec -T kafka-tools bin/kafka-topics.sh \
+  kafka_cmd kafka-topics.sh \
     --bootstrap-server "$PRIMARY_BROKER" \
     --create --topic "$ORDER_TOPIC" \
     --partitions 1 --replication-factor 1 \
@@ -205,6 +253,9 @@ scenario_topic_reset() {
   log "Restarting MirrorMaker2; should detect reset and resubscribe from beginning"
   dc up -d "$MM_SERVICE"
   sleep 20
+  tail_logs "$MM_SERVICE" 200
+  assert_mm2_log_contains "TOPIC RESET DETECTED" || true
+  assert_mm2_log_contains "Recovery successful. MirrorMaker resumed replication from beginning." || true
 
   produce_order_events 100
   produce_payment_events 50
