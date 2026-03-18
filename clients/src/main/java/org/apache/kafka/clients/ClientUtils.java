@@ -272,7 +272,6 @@ public final class ClientUtils {
                                                     ClientTelemetrySender clientTelemetrySender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
-        NetworkClient.BootstrapConfiguration bootstrapConfiguration;
 
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
@@ -284,18 +283,13 @@ public final class ClientUtils {
                     logContext);
             ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
 
-            // Validate bootstrap servers if provided (non-empty list)
-            // This allows configurations that don't use bootstrap (e.g., broker-to-broker) to skip validation
-            if (bootstrapServers != null && !bootstrapServers.isEmpty()) {
-                parseAndValidateAddresses(bootstrapServers, dnsLookup);
-            }
-
-            bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+            NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
                 bootstrapServers != null ? bootstrapServers : List.of(),
                 dnsLookup,
-                CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
-            );
+                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
+                false);
+
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,

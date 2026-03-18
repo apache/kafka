@@ -103,7 +103,8 @@ public class NetworkClientTest {
                     BOOTSTRAP_ADDRESSES,
                     ClientDnsLookup.USE_ALL_DNS_IPS,
                     10 * 1000,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                false);
 
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockSelector selector = new MockSelector(time);
@@ -169,7 +170,13 @@ public class NetworkClientTest {
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata, boolean disableBootstrap) {
         if (disableBootstrap) {
-            bootstrapConfiguration.disableBootstrap();
+            bootstrapConfiguration =
+                new NetworkClient.BootstrapConfiguration(
+                    BOOTSTRAP_ADDRESSES,
+                    ClientDnsLookup.USE_ALL_DNS_IPS,
+                    10 * 1000,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                    true);
         }
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -193,8 +200,8 @@ public class NetworkClientTest {
             BOOTSTRAP_ADDRESSES,
             ClientDnsLookup.USE_ALL_DNS_IPS,
             CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-            CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
-        );
+            CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+            false);
     }
 
     @Test
@@ -1532,8 +1539,8 @@ public class NetworkClientTest {
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
-        );
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                false);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1557,8 +1564,8 @@ public class NetworkClientTest {
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 100, // Short timeout
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
-        );
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                false);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1581,8 +1588,8 @@ public class NetworkClientTest {
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000, // Long bootstrap timeout
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
-        );
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                false);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1605,8 +1612,8 @@ public class NetworkClientTest {
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS
-        );
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                false);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,

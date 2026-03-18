@@ -186,8 +186,8 @@ public class BrokerApiVersionsCommand {
                 config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
                 CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
-            );
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
+                false);
             NetworkClient networkClient = new NetworkClient(
                     selector,
                     metadata,

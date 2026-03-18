@@ -677,7 +677,7 @@ public class ReplicaVerificationTool {
                 consumerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(consumerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
                 consumerConfig.getLong(ConsumerConfig.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                consumerConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
+                consumerConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG), false);
             this.networkClient = new NetworkClient(
                 selector,
                 new ManualMetadataUpdater(),

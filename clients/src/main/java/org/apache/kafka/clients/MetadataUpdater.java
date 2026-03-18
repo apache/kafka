@@ -106,9 +106,7 @@ public interface MetadataUpdater extends Closeable {
     /**
      * Returns true if the metadata has been bootstrapped.
      */
-    default boolean isBootstrapped() {
-        return false;
-    }
+    boolean isBootstrapped();
 
     /**
      * Bootstrap the metadata cache with the given addresses.

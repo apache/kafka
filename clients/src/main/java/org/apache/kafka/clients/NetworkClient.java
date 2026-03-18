@@ -1202,27 +1202,22 @@ public class NetworkClient implements KafkaClient {
         public final ClientDnsLookup clientDnsLookup;
         public final long bootstrapResolveTimeoutMs;
         public final long retryBackoffMs;
-        private boolean isBootstrapDisabled;
+        private final boolean isBootstrapDisabled;
 
         public BootstrapConfiguration(final List<String> bootstrapServers,
                                       final ClientDnsLookup clientDnsLookup,
                                       final long bootstrapResolveTimeoutMs,
-                                      final long retryBackoffMs) {
+                                      final long retryBackoffMs,
+                                      final boolean isBootstrapDisabled) {
             this.bootstrapServers = bootstrapServers;
             this.clientDnsLookup = clientDnsLookup;
             this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
             this.retryBackoffMs = retryBackoffMs;
-            this.isBootstrapDisabled = false;
+            this.isBootstrapDisabled = isBootstrapDisabled;
         }
 
         public static BootstrapConfiguration disabled() {
-            BootstrapConfiguration bootstrapConfiguration = new BootstrapConfiguration(List.of(), null, 0, 0);
-            bootstrapConfiguration.disableBootstrap();
-            return bootstrapConfiguration;
-        }
-
-        public void disableBootstrap() {
-            this.isBootstrapDisabled = true;
+            return new BootstrapConfiguration(List.of(), null, 0, 0, true);
         }
     }
 
