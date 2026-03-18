@@ -220,6 +220,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testInitiateDeleteShareGroupOffsetsSuccess
 - testInitiateDeleteShareGroupOffsetsSuccessWithErrorTopics
 - testOnLoaded
+- testOnMetadataUpdate
 - testOnTopicsDeleted
 - testOnUnloaded
 - testReplayConsumerGroupCurrentMemberAssignment
@@ -678,10 +679,12 @@ org.apache.kafka.coordinator.group.OffsetMetadataManagerTest:
 - testCleanupExpiredOffsetsWithPendingTransactionalOffsetsOnly
 - testConsumerGroupOffsetCommit
 - testConsumerGroupOffsetCommitFromAdminClient
+- testConsumerGroupOffsetCommitResolvesTopicId
 - testConsumerGroupOffsetCommitWithIllegalGenerationId
 - testConsumerGroupOffsetCommitWithOffsetMetadataTooLarge
 - testConsumerGroupOffsetCommitWithStaleMemberEpoch
 - testConsumerGroupOffsetCommitWithUnknownMemberId
+- testConsumerGroupOffsetCommitWithZeroTopicId
 - testConsumerGroupOffsetDelete
 - testConsumerGroupOffsetDeleteWithErrors
 - testConsumerGroupOffsetDeleteWithPendingTransactionalOffsets
@@ -691,8 +694,10 @@ org.apache.kafka.coordinator.group.OffsetMetadataManagerTest:
 - testConsumerGroupOffsetFetchWithStaleMemberEpoch
 - testConsumerGroupOffsetFetchWithUnknownMemberId
 - testConsumerGroupTransactionalOffsetCommit
+- testConsumerGroupTransactionalOffsetCommitResolvesTopicId
 - testConsumerGroupTransactionalOffsetCommitWithStaleMemberEpoch
 - testConsumerGroupTransactionalOffsetCommitWithUnknownMemberId
+- testConsumerGroupTransactionalOffsetCommitWithUnresolvedTopicId
 - testDeleteGroupAllOffsets
 - testDeleteGroupAllOffsetsWithPendingTransactionalOffsets
 - testFetchAllOffsetsAtDifferentCommittedOffset
@@ -977,6 +982,7 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMemberTest:
 - testAsConsumerGroupDescribeMember
 - testAsConsumerGroupDescribeWithTargetAssignmentNull
 - testAsConsumerGroupDescribeWithTopicNameNotFound
+- testAssignedAndPendingRevocationEpoch
 - testClassicProtocolListFromJoinRequestProtocolCollection
 - testEquals
 - testNewMember
@@ -1025,6 +1031,9 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsReassignedBeforeBeingRevoked
 - testValidateDeleteGroup
 - testValidateOffsetCommit
+- testValidateOffsetCommitWithClassicProtocolMember
+- testValidateOffsetCommitWithEpochValidation
+- testValidateOffsetCommitWithUnassignedTopicOrPartition
 - testValidateOffsetFetch
 - testValidateTransactionalOffsetCommit
 - testWaitingOnUnreleasedPartition

@@ -5184,6 +5184,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldMatchPositionAfterPut
 - shouldMigrateFromDefaultToHeadersAwareColumnFamily
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
@@ -5272,6 +5273,7 @@ org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStoreTest:
 - shouldFindValuesWithinRange
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5339,6 +5341,7 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldMatchPositionAfterPut
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
 - shouldNotIncludeDeletedFromRangeResult
@@ -5426,6 +5429,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithInde
 - shouldGetAllBackwards
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5456,6 +5460,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithoutI
 - shouldGetAllBackwards
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5560,6 +5565,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowSchemaWithIndex
 - shouldGetAllBackwards
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5590,6 +5596,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowSchemaWithoutIn
 - shouldGetAllBackwards
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5687,6 +5694,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreTe
 - shouldFindValuesWithinRange
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5707,6 +5715,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreWi
 - shouldFindValuesWithinRange
 - shouldGetAllSegments
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldLoadSegmentsWithOldStyleColonFormattedName
 - shouldLoadSegmentsWithOldStyleDateFormattedName
 - shouldMatchPositionAfterPut
@@ -5735,6 +5744,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldMatchPositionAfterPut
 - shouldMigrateDataFromDefaultToTimestampColumnFamily
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
@@ -5820,6 +5830,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldLoadPositionFromFile
 - shouldMatchPositionAfterPut
 - shouldMigrateFromPlainToHeadersAwareColumnFamily
 - shouldMigrateFromTimestampedToHeadersAwareColumnFamily
@@ -5921,6 +5932,7 @@ org.apache.kafka.streams.state.internals.RocksDBVersionedStoreTest:
 - shouldGetRecordVersionsFromMultipleOldSegmentsInAscendingOrder
 - shouldGetRecordVersionsFromOlderSegments
 - shouldGetRecordVersionsInAscendingOrder
+- shouldLoadPositionFromFile
 - shouldMoveRecordToOlderSegmentDuringPut
 - shouldMoveRecordToOlderSegmentWithNullsDuringPut
 - shouldNotDeleteExpired
