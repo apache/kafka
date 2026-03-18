@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -465,7 +466,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
         contextRegistersStateStore(stateMgr);
 
         try {
@@ -934,7 +935,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -963,7 +964,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
         contextRegistersStateStore(stateMgr);
 
         try {
@@ -977,7 +978,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldNotThrowTaskCorruptedExceptionAfterCheckpointing() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
         contextRegistersStateStore(stateMgr);
 
         try {
@@ -1012,7 +1013,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIllegalStateIfInitializingOffsetsForCorruptedTasks() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -1027,7 +1028,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldBeAbleToCloseWithoutRegisteringAnyStores() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
 
         stateMgr.close();
     }
@@ -1147,12 +1148,69 @@ public class ProcessorStateManagerTest {
         }
     }
 
+    @Test
+    public void shouldWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsPre43() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, false, UpgradeFromValues.UPGRADE_FROM_42);
 
+        contextRegistersStateStore(stateMgr);
+        persistentStore.init(context, persistentStore);
+        stateMgr.initializeStoreOffsets(false);
 
+        // update the offset for the persistent store
+        stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 100L));
 
+        stateMgr.close();
 
+        // verify the legacy per-task checkpoint was written
+        final File legacyFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertTrue(legacyFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        assertEquals(100L, written.get(persistentStorePartition));
+    }
 
-    private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled) {
+    @Test
+    public void shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+
+        contextRegistersStateStore(stateMgr);
+        persistentStore.init(context, persistentStore);
+        stateMgr.initializeStoreOffsets(false);
+
+        stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 100L));
+        stateMgr.close();
+
+        final File legacyFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertFalse(legacyFile.exists());
+    }
+
+    @Test
+    public void shouldExcludeCorruptedStoresFromDowngradeCheckpoint() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, false, UpgradeFromValues.UPGRADE_FROM_42);
+
+        contextRegistersStateStore(stateMgr);
+        persistentStore.init(context, persistentStore);
+        persistentStoreTwo.init(context, persistentStoreTwo);
+        stateMgr.initializeStoreOffsets(false);
+
+        stateMgr.updateChangelogOffsets(mkMap(
+            mkEntry(persistentStorePartition, 100L),
+            mkEntry(persistentStoreTwoPartition, 200L)
+        ));
+
+        // mark the first store as corrupted
+        stateMgr.markChangelogAsCorrupted(singletonList(persistentStorePartition));
+
+        stateMgr.close();
+
+        final File legacyFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertTrue(legacyFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        // only the non-corrupted store should be in the checkpoint
+        assertFalse(written.containsKey(persistentStorePartition));
+        assertEquals(200L, written.get(persistentStoreTwoPartition));
+    }
+
+    private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled, final UpgradeFromValues upgradeFrom) {
         return new ProcessorStateManager(
             taskId,
             taskType,
@@ -1164,11 +1222,12 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            emptySet());
+            emptySet(),
+            upgradeFrom);
     }
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
-        return getStateManager(taskType, false);
+        return getStateManager(taskType, false, null);
     }
 
     private void contextRegistersStateStore(final StateManager stateManager) {
