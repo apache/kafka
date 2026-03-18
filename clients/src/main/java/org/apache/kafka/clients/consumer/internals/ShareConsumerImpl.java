@@ -204,6 +204,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
+    private SharePollEvent inFlightPoll;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     // currentThread holds the threadId of the current thread accessing the KafkaShareConsumer
@@ -614,15 +615,19 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             shouldSendShareFetchEvent = true;
 
-            do {
-                // Make sure the network thread can tell the application is actively polling
-                applicationEventHandler.add(new SharePollEvent(timer.currentTimeMs()));
+            // This distinguishes the first pass of the inner do/while loop from subsequent passes for the
+            // in-flight poll event logic.
+            boolean firstPass = true;
 
+            do {
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // A wake-up between returned fetches and returning records would lead to never
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
 
+                // Make sure the network thread can tell the application is actively polling
+                checkInFlightPoll(timer, firstPass);
+                firstPass = false;
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
@@ -646,6 +651,49 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
 
             release();
+        }
+    }
+
+    private void checkInFlightPoll(Timer timer, boolean firstPass) {
+        if (firstPass && inFlightPoll != null) {
+            maybeClearPreviousInFlightPoll();
+        }
+
+        boolean newlySubmittedEvent = false;
+
+        if (inFlightPoll == null) {
+            inFlightPoll = new SharePollEvent(calculateDeadlineMs(timer), timer.currentTimeMs());
+            newlySubmittedEvent = true;
+            log.trace("In-flight event {} submitted", inFlightPoll);
+            applicationEventHandler.add(inFlightPoll);
+        }
+
+        timer.update();
+
+        if (inFlightPoll != null) {
+            maybeClearCurrentInFlightPoll(newlySubmittedEvent);
+        }
+    }
+
+    private void maybeClearPreviousInFlightPoll() {
+        if (inFlightPoll.isComplete()) {
+            log.trace("Previous in-flight event {} completed, clearing", inFlightPoll);
+            inFlightPoll = null;
+        } else if (inFlightPoll.isExpired(time)) {
+            log.trace("Previous in-flight event {} expired without completing, clearing", inFlightPoll);
+            inFlightPoll = null;
+        }
+    }
+
+    private void maybeClearCurrentInFlightPoll(boolean newlySubmittedEvent) {
+        if (inFlightPoll.isComplete()) {
+            log.trace("In-flight event {} completed without error, clearing", inFlightPoll);
+            inFlightPoll = null;
+        } else if (!newlySubmittedEvent) {
+            if (inFlightPoll.isExpired(time)) {
+                log.trace("In-flight event {} expired without completing, clearing", inFlightPoll);
+                inFlightPoll = null;
+            }
         }
     }
 

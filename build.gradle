@@ -1900,6 +1900,8 @@ project(':clients') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
+    testImplementation libs.testcontainersKeycloak
+    testImplementation libs.testcontainersJunitJupiter
 
     testCompileOnly libs.bndlib
 

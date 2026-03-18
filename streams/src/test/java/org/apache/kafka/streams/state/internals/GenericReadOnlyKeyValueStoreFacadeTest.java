@@ -84,7 +84,7 @@ public class GenericReadOnlyKeyValueStoreFacadeTest {
     @Test
     public void shouldConvertValueToValueAndTimestamp() {
         final Function<ValueTimestampHeaders<String>, ValueAndTimestamp<String>> converter =
-            ValueConverters.headersToValueAndTimestamp();
+            ValueConverters.extractValueAndTimestampFromHeaders();
         final GenericReadOnlyKeyValueStoreFacade<String, ValueTimestampHeaders<String>, ValueAndTimestamp<String>> facade =
             new GenericReadOnlyKeyValueStoreFacade<>(mockedHeadersStore, converter);
 

@@ -189,6 +189,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -2139,7 +2140,8 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
+            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -8782,6 +8784,15 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Get the task offset interval of the provided streams group.
+     */
+    private int streamsGroupTaskOffsetIntervalMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
+            .orElse(config.streamsGroupTaskOffsetIntervalMs());
+    }
+
+    /**
      * Get the initial rebalance delay of the provided streams group.
      */
     private int streamsGroupInitialRebalanceDelayMs(String groupId) {
@@ -8804,7 +8815,9 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        return Map.of("num.standby.replicas", numStandbyReplicas.toString());
+        return new TreeMap<>(Map.of(
+            "num.standby.replicas", numStandbyReplicas.toString()
+        ));
     }
 
     /**

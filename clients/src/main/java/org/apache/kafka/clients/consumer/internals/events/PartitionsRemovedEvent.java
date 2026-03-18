@@ -16,30 +16,26 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
 import org.apache.kafka.common.TopicPartition;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.SortedSet;
 
 /**
- * Event that signifies that the network I/O thread wants to invoke one of the callback methods on the
- * {@link ConsumerRebalanceListener}. This event will be processed by the application thread when the next
- * {@link Consumer#poll(Duration)} call is performed by the user. When processed, the application thread should
- * invoke the appropriate callback method (based on {@link #methodName()}) with the given partitions.
+ * Event sent from the background to the app thread
+ * to notify that a new assignment has been reconciled in the background removing partitions.
+ * The app thread is expected to invoke the onPartitionsRevoked/onPartitionsLost callback as needed.
  */
-public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
+public class PartitionsRemovedEvent extends CompletableBackgroundEvent<Void> {
 
     private final ConsumerRebalanceListenerMethodName methodName;
     private final SortedSet<TopicPartition> partitions;
 
-    public ConsumerRebalanceListenerCallbackNeededEvent(final ConsumerRebalanceListenerMethodName methodName,
-                                                        final SortedSet<TopicPartition> partitions) {
-        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, Long.MAX_VALUE);
+    public PartitionsRemovedEvent(final ConsumerRebalanceListenerMethodName methodName,
+                                   final SortedSet<TopicPartition> partitions) {
+        super(Type.PARTITIONS_REMOVED, Long.MAX_VALUE);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
     }

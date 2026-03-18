@@ -4224,7 +4224,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    config.shareGroupConfig.isShareGroupEnabled || shareVersion().supportsShareGroups
+    shareVersion().supportsShareGroups
   }
 
   /**

@@ -2365,7 +2365,6 @@ public class ShareConsumerTest {
         brokers = 1,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),

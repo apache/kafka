@@ -98,22 +98,6 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
-    RawAndDeserializedValue<V> getWithBinary(final K key) {
-        try {
-            return maybeMeasureLatency(
-                () -> {
-                    final byte[] rawValue = wrapped().get(serializeKey(key));
-                    return new RawAndDeserializedValue<>(rawValue, deserializeValue(rawValue));
-                },
-                time,
-                getSensor
-            );
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key);
-            throw new ProcessorStateException(message, e);
-        }
-    }
-
     public boolean putIfDifferentValues(
         final K key,
         final ValueAndTimestamp<V> newValue,

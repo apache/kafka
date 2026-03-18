@@ -83,7 +83,7 @@ public class GenericKeyValueIteratorFacadeTest {
 
     @Test
     public void shouldDelegatePeekNextKey() {
-        when(mockedInnerIterator.peekNextKey()).thenReturn("peekedKey", null);
+        when(mockedInnerIterator.peekNextKey()).thenReturn("peekedKey", (String) null);
 
         assertThat(facade.peekNextKey(), is("peekedKey"));
         assertNull(facade.peekNextKey());

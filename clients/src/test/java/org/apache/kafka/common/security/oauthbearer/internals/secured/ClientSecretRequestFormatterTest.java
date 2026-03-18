@@ -28,11 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter.GRANT_TYPE;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientSecretRequestFormatter.GRANT_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ClientCredentialsRequestFormatterTest extends OAuthBearerTest {
+public class ClientSecretRequestFormatterTest extends OAuthBearerTest {
 
     public static final String CLIENT_ID = "jdoe";
     public static final String CLIENT_SECRET = "secret";
@@ -51,7 +51,7 @@ public class ClientCredentialsRequestFormatterTest extends OAuthBearerTest {
     public void testFormatterMissingValues(String clientId, String clientSecret, boolean urlencode) {
         assertThrows(
             ConfigException.class,
-            () -> new ClientCredentialsRequestFormatter(
+            () -> new ClientSecretRequestFormatter(
                 clientId,
                 clientSecret,
                 SCOPE,
@@ -122,7 +122,7 @@ public class ClientCredentialsRequestFormatterTest extends OAuthBearerTest {
     }
 
     private void assertRequestBodyEquals(String scope, boolean urlencode, String expected) {
-        ClientCredentialsRequestFormatter formatter = new ClientCredentialsRequestFormatter(
+        ClientSecretRequestFormatter formatter = new ClientSecretRequestFormatter(
             CLIENT_ID,
             CLIENT_SECRET,
             scope,
@@ -133,7 +133,7 @@ public class ClientCredentialsRequestFormatterTest extends OAuthBearerTest {
     }
 
     private void assertAuthorizationHeaderEquals(String clientId, String clientSecret, boolean urlencode, String expected) {
-        ClientCredentialsRequestFormatter formatter = new ClientCredentialsRequestFormatter(clientId, clientSecret, SCOPE, urlencode);
+        ClientSecretRequestFormatter formatter = new ClientSecretRequestFormatter(clientId, clientSecret, SCOPE, urlencode);
         Map<String, String> headers = formatter.formatHeaders();
         String actual = headers.get("Authorization");
         assertEquals(expected, actual, String.format("Expected the HTTP Authorization header generated for client ID \"%s\" and client secret \"%s\" to match", clientId, clientSecret));
