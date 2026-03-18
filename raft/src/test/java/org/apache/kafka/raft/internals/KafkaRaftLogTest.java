@@ -1088,11 +1088,11 @@ public class KafkaRaftLogTest {
         // 5 records are written in batches of 101 bytes each (at time of writing).
         int magicMaxBatchSizeBytes = 101;
         MetadataLogConfig config = createMetadataLogConfig(
-                10240,
-                10 * 1000,
-                10240,
-                60 * 1000,
-                magicMaxBatchSizeBytes
+            10240,
+            10 * 1000,
+            10240,
+            60 * 1000,
+            magicMaxBatchSizeBytes
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
         int recordsPerBatch = 5;
@@ -1106,24 +1106,16 @@ public class KafkaRaftLogTest {
             Isolation.UNCOMMITTED,
             magicMaxBatchSizeBytes * expectedBatches
         );
+        assertEquals(expectedBatches * magicMaxBatchSizeBytes, info.records.sizeInBytes());
         // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
         // [0..R-1] converted to an utf-8 string with empty keys and headers.
         int count = 0;
         for (Record record : info.records.records()) {
             byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
-            SimpleRecord expected = new SimpleRecord(expectedValue);
-            SimpleRecord actual = new SimpleRecord(
-                    record.timestamp(),
-                    record.key(),
-                    record.value(),
-                    record.headers()
-            );
-
-            assertEquals(expected, actual);
+            assertEquals(ByteBuffer.wrap(expectedValue), record.value());
             count += 1;
         }
         assertEquals(recordsPerBatch * expectedBatches, count);
-
     }
 
     private static MetadataLogConfig createMetadataLogConfig(

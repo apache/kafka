@@ -1809,7 +1809,6 @@ public final class RaftClientTestContext {
             message.data(),
             "unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
-        assertEquals(fetchMaxBytes, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
 
         assertEquals(1, request.topics().size());

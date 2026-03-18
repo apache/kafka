@@ -101,6 +101,7 @@ public final class KafkaRaftClientFetchTest {
         int localId = KafkaRaftClientTest.randomReplicaId();
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
         ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
+        int expectedFetchMaxBytes = 1024;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
             local.id(),
@@ -111,17 +112,70 @@ public final class KafkaRaftClientFetchTest {
             )
             .withElectedLeader(epoch, electedLeader.id())
             // Explicitly change the configuration here.
-            .withFetchMaxBytes(1024)
+            .withFetchMaxBytes(expectedFetchMaxBytes)
             .build();
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        // assertFetchRequestData contains a check which verifies the SizeBytes field of the Fetch request.
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.empty());
+        FetchRequestData data = (FetchRequestData) fetchRequest.data();
+        assertEquals(expectedFetchMaxBytes, data.maxBytes());
     }
 
     @Test
-    public void testMaxBytesRequestedFromLogsUsesValueFromFetch() throws Exception {
+    public void testFetchMaxBytesLargerThanRecords() throws Exception {
+        var epoch = 2;
+        var id = KafkaRaftClientTest.randomReplicaId();
+        var localKey = KafkaRaftClientTest.replicaKey(id, true);
+        var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
+        // This should return every record. If localMaxSizeBytes is used only one batch will be returned.
+        var remoteMaxSizeBytes = Integer.MAX_VALUE;
+        var localMaxSizeBytes = 1;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey.id(),
+            localKey.directoryId().get()
+        )
+            .appendToLog(epoch, List.of("a", "a", "a"))
+            .appendToLog(epoch, List.of("b", "b", "b"))
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withUnknownLeader(epoch)
+            .withFetchMaxBytes(localMaxSizeBytes)
+            .build();
+
+        context.unattachedToLeader();
+        epoch = context.currentEpoch();
+
+        // Send a fetch request with max bytes that are different from the configured value.
+        FetchRequestData request = context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
+        request.setMaxBytes(remoteMaxSizeBytes);
+        context.deliverRequest(request);
+
+        context.pollUntilResponse();
+        FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE.code(), partitionData.errorCode());
+        MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
+        var iterator = records.batchIterator();
+        int offsetCount = 0;
+        int batchCount = 0;
+        while (iterator.hasNext()) {
+            var batch = iterator.next();
+            var recordsIterator = batch.iterator();
+            while (recordsIterator.hasNext()) {
+                var record = recordsIterator.next();
+                assertEquals(offsetCount, record.offset());
+                offsetCount++;
+            }
+            batchCount++;
+        }
+        assertEquals(2, batchCount);
+        assertEquals(6, offsetCount);
+    }
+
+    @Test
+    public void testFetchMaxBytesFromRemoteFetchUsed() throws Exception {
         var epoch = 2;
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
@@ -136,14 +190,14 @@ public final class KafkaRaftClientFetchTest {
                 localKey.id(),
                 localKey.directoryId().get()
         )
-                .appendToLog(epoch, List.of("a", "a", "a"))
-                .appendToLog(epoch, List.of("b", "b", "b"))
-                .withStartingVoters(
-                        VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
-                )
-                .withUnknownLeader(epoch)
-                .withFetchMaxBytes(localMaxSizeBytes)
-                .build();
+            .appendToLog(epoch, List.of("a", "a", "a"))
+            .appendToLog(epoch, List.of("b", "b", "b"))
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withUnknownLeader(epoch)
+            .withFetchMaxBytes(localMaxSizeBytes)
+            .build();
 
         context.unattachedToLeader();
         epoch = context.currentEpoch();
@@ -161,10 +215,11 @@ public final class KafkaRaftClientFetchTest {
         var firstBatch = iterator.next();
         assertEquals(0, firstBatch.baseOffset());
         assertEquals(3, firstBatch.nextOffset());
-        assertFalse(iterator.hasNext(), "maxSize=1 implies a single batch is retrieved");
+        assertFalse(
+            iterator.hasNext(),
+            String.format("Expected only a single batch to be fetched for maxSize = %d", remoteMaxSizeBytes)
+        );
     }
-
-
 
     @Test
     void testReplicationOfHigherPartitionLeaderEpoch() throws Exception {
