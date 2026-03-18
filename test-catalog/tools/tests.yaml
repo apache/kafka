@@ -63,7 +63,10 @@ org.apache.kafka.tools.ClusterToolTest:
 org.apache.kafka.tools.ConfigCommandIntegrationTest:
 - testAddConfigKeyValuesUsingCommand
 - testAlterReadOnlyConfigInKRaftThenShouldFail
+- testAlterStreamsGroupHeartbeatInterval
 - testAlterStreamsGroupNumOfStandbyReplicas
+- testAlterStreamsGroupSessionTimeout
+- testAlterStreamsGroupTaskOffsetInterval
 - testBrokerLoggerConfigUpdate
 - testClientMetricsConfigUpdate
 - testDescribeGroupWithoutDynamicConfigs

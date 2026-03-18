@@ -9,6 +9,7 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testEvaluateDoesNotModifyInput
 - testEvaluateEmptyPropsReturnsEmpty
 - testEvaluateMaxBoundedValueAboveMaxIsCapped
+- testEvaluateMinBoundedValueBelowMinIsCapped
 - testEvaluateValueAboveMaxIsCapped
 - testEvaluateValueBelowMinIsCapped
 - testFromPropsInvalid
@@ -24,11 +25,16 @@ org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testConfigs
 - testConsumerGroupAssignorFullClassNames
 - testConsumerGroupAssignors
-- testInvalidConfigs
+- testInvalidConsumerConfigs
+- testInvalidStreamsConfigs
 - testShareGroupAssignorFullClassNames
 - testShareGroupAssignors
 - testStreamsGroupInitialRebalanceDelayCustomValue
 - testStreamsGroupInitialRebalanceDelayDefaultValue
+- testStreamsGroupMinTaskOffsetIntervalCustomValue
+- testStreamsGroupMinTaskOffsetIntervalDefaultValue
+- testStreamsGroupTaskOffsetIntervalCustomValue
+- testStreamsGroupTaskOffsetIntervalDefaultValue
 org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest:
 - testEmptyGroupMetadataRecord
 - testNewConsumerGroupCurrentAssignmentRecord
