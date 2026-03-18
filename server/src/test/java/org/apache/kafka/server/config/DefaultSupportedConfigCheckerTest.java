@@ -41,11 +41,14 @@ class DefaultSupportedConfigCheckerTest {
         assertTrue(checker.isSupported(TOPIC, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG));
         assertFalse(checker.isSupported(TOPIC, "invalid.topic.config"));
 
-        // Test valid broker configs
+        // BROKER allows all config names, including listener-specific prefixed configs
+        // (e.g., listener.name.<name>.ssl.keystore.location) and plugin-defined configs
+        // (e.g., custom authorizer or quota callback configs) that cannot be pre-enumerated.
         assertTrue(checker.isSupported(BROKER, "log.cleaner.threads"));
         assertTrue(checker.isSupported(BROKER, "num.network.threads"));
         assertTrue(checker.isSupported(BROKER, "log.segment.bytes"));
-        assertFalse(checker.isSupported(BROKER, "invalid.broker.config"));
+        assertTrue(checker.isSupported(BROKER, "listener.name.EXTERNAL.ssl.keystore.location"));
+        assertTrue(checker.isSupported(BROKER, "fake.configurable.authorizer.foobar.config"));
 
         // Test valid client metrics configs
         assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.INTERVAL_MS_CONFIG));
