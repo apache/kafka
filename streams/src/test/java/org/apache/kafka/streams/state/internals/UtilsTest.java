@@ -35,7 +35,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.streams.state.internals.Utils.hasEmptyHeadersAndTimestamp;
+import static org.apache.kafka.streams.state.internals.Utils.hasEmptyHeaders;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
@@ -160,18 +160,18 @@ public class UtilsTest {
     public void testEmptyHeadersAndTimestampMinLength() {
         final byte[] less = new byte[MIN_SIZE - 1];
         less[0] = (byte) 0x00; // header size
-        assertThrows(SerializationException.class, () -> hasEmptyHeadersAndTimestamp(less));
+        assertThrows(SerializationException.class, () -> hasEmptyHeaders(less));
     }
 
     @Test
     public void testEmptyHeadersAndTimestamp() {
         final byte[] empty = new byte[MIN_SIZE];
         empty[0] = (byte) 0x00; // header size
-        assertTrue(hasEmptyHeadersAndTimestamp(empty));
+        assertTrue(hasEmptyHeaders(empty));
 
         final byte[] nonEmpty = new byte[MIN_SIZE];
         nonEmpty[0] = (byte) 0x01; // header size
-        assertFalse(hasEmptyHeadersAndTimestamp(nonEmpty));
+        assertFalse(hasEmptyHeaders(nonEmpty));
     }
 
     @ParameterizedTest
@@ -179,7 +179,7 @@ public class UtilsTest {
     public void testEmptyHeadersAndTimestampWithInvalidHeaderSizes(final int invalidSize) {
         final byte[] invalid = new byte[MIN_SIZE];
         invalid[0] = (byte) invalidSize; // header size
-        assertFalse(hasEmptyHeadersAndTimestamp(invalid));
+        assertFalse(hasEmptyHeaders(invalid));
     }
 
     @Test

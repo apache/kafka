@@ -41,11 +41,11 @@ public class Utils {
         }
 
         // If the header is empty, then copy the value bytes directly
-        if (hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
+        if (hasEmptyHeaders(rawValueTimestampHeaders)) {
             // Strip header size (varint 1 byte), empty headers (no bytes), and timestamp
             final byte[] rawValue = new byte[rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE]; 
-            System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, res, 0, res.length);
-            return res;
+            System.arraycopy(rawValueTimestampHeaders, 1 + StateSerdes.TIMESTAMP_SIZE, rawValue, 0, rawValue.length);
+            return rawValue;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
@@ -87,11 +87,11 @@ public class Utils {
         }
 
         // If the header is empty, then copy the value and timestamp bytes directly
-        if (hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
+        if (hasEmptyHeaders(rawValueTimestampHeaders)) {
             // Strip header size (varint 1 byte), empty headers (no bytes)
             final byte[] rawValueAndTimestamp = new byte[rawValueTimestampHeaders.length - 1]; 
-            System.arraycopy(rawValueTimestampHeaders, 1, res, 0, res.length);
-            return res;
+            System.arraycopy(rawValueTimestampHeaders, 1, rawValueAndTimestamp, 0, rawValueAndTimestamp.length);
+            return rawValueAndTimestamp;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);

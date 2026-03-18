@@ -64,6 +64,11 @@ public class GroupConfigManager implements AutoCloseable {
             throw new InvalidRequestException("Group name can't be empty.");
         }
 
+        if (newGroupConfig.isEmpty()) {
+            configMap.remove(groupId);
+            return;
+        }
+
         // Evaluate ensures configs respect broker-level bounds. For the Admin API path,
         // values are pre-validated so this is effectively a no-op. For the broker startup
         // path, configs from metadata may need evaluation if bounds have changed.

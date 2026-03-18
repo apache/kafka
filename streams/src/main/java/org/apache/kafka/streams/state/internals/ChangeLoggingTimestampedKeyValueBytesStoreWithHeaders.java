@@ -97,4 +97,11 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
             );
         }
     }
+
+    @Override
+    public byte[] delete(final Bytes key) {
+        final byte[] deletedValue = wrapped().delete(key);
+        log(key, null, internalContext.recordContext().timestamp(), internalContext.recordContext().headers());
+        return deletedValue;
+    }
 }

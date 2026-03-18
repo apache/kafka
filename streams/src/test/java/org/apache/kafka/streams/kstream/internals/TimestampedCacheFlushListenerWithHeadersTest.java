@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -49,8 +50,8 @@ public class TimestampedCacheFlushListenerWithHeadersTest {
             new Record<>(
                 "key",
                 new Change<>(
-                    ValueTimestampHeaders.make("newValue", 42L, null),
-                    ValueTimestampHeaders.make("oldValue", 21L, null)),
+                    ValueTimestampHeaders.make("newValue", 42L, new RecordHeaders()),
+                    ValueTimestampHeaders.make("oldValue", 21L, new RecordHeaders())),
                 73L));
 
         verify(context, times(2)).setCurrentNode(null);
@@ -69,7 +70,7 @@ public class TimestampedCacheFlushListenerWithHeadersTest {
         new TimestampedCacheFlushListenerWithHeaders<>(context).apply(
             new Record<>(
                 "key",
-                new Change<>(null, ValueTimestampHeaders.make("oldValue", 21L, null)),
+                new Change<>(null, ValueTimestampHeaders.make("oldValue", 21L, new RecordHeaders())),
                 73L));
 
         verify(context, times(2)).setCurrentNode(null);

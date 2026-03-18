@@ -128,6 +128,8 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(inner.name()).thenReturn(STORE_NAME);
         when(context.appConfigs()).thenReturn(CONFIGS);
+        lenient().when(context.recordContext()).thenReturn(new org.apache.kafka.streams.processor.internals.ProcessorRecordContext(
+            0L, 0L, 0, "topic", new org.apache.kafka.common.header.internals.RecordHeaders()));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -527,6 +529,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
             keySerde,
             valueSerde
         );
+        when(context.headers()).thenReturn(new RecordHeaders());
         mockStore.init(context, mockStore);
         return mockStore;
     }

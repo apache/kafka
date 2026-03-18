@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -130,44 +131,44 @@ public class KTableMapValuesTest {
             inputTopic1.pipeInput("B", "01", 10L);
             inputTopic1.pipeInput("C", "01", 30L);
 
-            assertEquals(ValueTimestampHeaders.make(1, 50L, null), getter2.get("A"));
-            assertEquals(ValueTimestampHeaders.make(1, 10L, null), getter2.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 30L, null), getter2.get("C"));
+            assertEquals(ValueTimestampHeaders.make(1, 50L, new RecordHeaders()), getter2.get("A"));
+            assertEquals(ValueTimestampHeaders.make(1, 10L, new RecordHeaders()), getter2.get("B"));
+            assertEquals(ValueTimestampHeaders.make(1, 30L, new RecordHeaders()), getter2.get("C"));
 
-            assertEquals(ValueTimestampHeaders.make(-1, 50L, null), getter3.get("A"));
-            assertEquals(ValueTimestampHeaders.make(-1, 10L, null), getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(-1, 30L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(-1, 50L, new RecordHeaders()), getter3.get("A"));
+            assertEquals(ValueTimestampHeaders.make(-1, 10L, new RecordHeaders()), getter3.get("B"));
+            assertEquals(ValueTimestampHeaders.make(-1, 30L, new RecordHeaders()), getter3.get("C"));
 
             inputTopic1.pipeInput("A", "02", 25L);
             inputTopic1.pipeInput("B", "02", 20L);
 
-            assertEquals(ValueTimestampHeaders.make(2, 25L, null), getter2.get("A"));
-            assertEquals(ValueTimestampHeaders.make(2, 20L, null), getter2.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 30L, null), getter2.get("C"));
+            assertEquals(ValueTimestampHeaders.make(2, 25L, new RecordHeaders()), getter2.get("A"));
+            assertEquals(ValueTimestampHeaders.make(2, 20L, new RecordHeaders()), getter2.get("B"));
+            assertEquals(ValueTimestampHeaders.make(1, 30L, new RecordHeaders()), getter2.get("C"));
 
-            assertEquals(ValueTimestampHeaders.make(-2, 25L, null), getter3.get("A"));
-            assertEquals(ValueTimestampHeaders.make(-2, 20L, null), getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(-1, 30L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(-2, 25L, new RecordHeaders()), getter3.get("A"));
+            assertEquals(ValueTimestampHeaders.make(-2, 20L, new RecordHeaders()), getter3.get("B"));
+            assertEquals(ValueTimestampHeaders.make(-1, 30L, new RecordHeaders()), getter3.get("C"));
 
             inputTopic1.pipeInput("A", "03", 35L);
 
-            assertEquals(ValueTimestampHeaders.make(3, 35L, null), getter2.get("A"));
-            assertEquals(ValueTimestampHeaders.make(2, 20L, null), getter2.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 30L, null), getter2.get("C"));
+            assertEquals(ValueTimestampHeaders.make(3, 35L, new RecordHeaders()), getter2.get("A"));
+            assertEquals(ValueTimestampHeaders.make(2, 20L, new RecordHeaders()), getter2.get("B"));
+            assertEquals(ValueTimestampHeaders.make(1, 30L, new RecordHeaders()), getter2.get("C"));
 
-            assertEquals(ValueTimestampHeaders.make(-3, 35L, null), getter3.get("A"));
-            assertEquals(ValueTimestampHeaders.make(-2, 20L, null), getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(-1, 30L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(-3, 35L, new RecordHeaders()), getter3.get("A"));
+            assertEquals(ValueTimestampHeaders.make(-2, 20L, new RecordHeaders()), getter3.get("B"));
+            assertEquals(ValueTimestampHeaders.make(-1, 30L, new RecordHeaders()), getter3.get("C"));
 
             inputTopic1.pipeInput("A", (String) null, 1L);
 
             assertNull(getter2.get("A"));
-            assertEquals(ValueTimestampHeaders.make(2, 20L, null), getter2.get("B"));
-            assertEquals(ValueTimestampHeaders.make(1, 30L, null), getter2.get("C"));
+            assertEquals(ValueTimestampHeaders.make(2, 20L, new RecordHeaders()), getter2.get("B"));
+            assertEquals(ValueTimestampHeaders.make(1, 30L, new RecordHeaders()), getter2.get("C"));
 
             assertNull(getter3.get("A"));
-            assertEquals(ValueTimestampHeaders.make(-2, 20L, null), getter3.get("B"));
-            assertEquals(ValueTimestampHeaders.make(-1, 30L, null), getter3.get("C"));
+            assertEquals(ValueTimestampHeaders.make(-2, 20L, new RecordHeaders()), getter3.get("B"));
+            assertEquals(ValueTimestampHeaders.make(-1, 30L, new RecordHeaders()), getter3.get("C"));
         }
     }
 

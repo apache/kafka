@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
@@ -62,7 +63,7 @@ public class ResponseJoinProcessorSupplierTest {
 
                 @Override
                 public ValueTimestampHeaders<V> get(final K key) {
-                    return ValueTimestampHeaders.make(map.get(key), -1, null);
+                    return ValueTimestampHeaders.make(map.get(key), -1, new RecordHeaders());
                 }
 
                 @Override

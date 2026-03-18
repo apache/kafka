@@ -31,12 +31,13 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class MirrorSourceMetricsTest {
+public class MirrorLegacyMetricsTest {
 
     private static final String SOURCE = "source";
     private static final String TARGET = "target";
     private static final TopicPartition TP = new TopicPartition("topic", 0);
     private static final TopicPartition SOURCE_TP = new TopicPartition(SOURCE + "." + TP.topic(), TP.partition());
+    private static final String GROUP = "my-group";
 
     private final Map<String, String> configs = new HashMap<>();
     private TestReporter reporter;
@@ -44,25 +45,51 @@ public class MirrorSourceMetricsTest {
     @BeforeEach
     public void setUp() {
         configs.put(ConnectorConfig.NAME_CONFIG, "name");
-        configs.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, MirrorSourceConnector.class.getName());
         configs.put(MirrorConnectorConfig.SOURCE_CLUSTER_ALIAS, SOURCE);
         configs.put(MirrorConnectorConfig.TARGET_CLUSTER_ALIAS, TARGET);
         configs.put(MirrorConnectorConfig.TASK_INDEX, "0");
-        configs.put(MirrorSourceTaskConfig.TASK_TOPIC_PARTITIONS, TP.toString());
         reporter = new TestReporter();
     }
 
     @Test
-    public void testTags() {
+    public void testSourceTags() {
+        configs.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, MirrorSourceConnector.class.getName());
+        configs.put(MirrorSourceTaskConfig.TASK_TOPIC_PARTITIONS, TP.toString());
         MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
-        MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
+        MirrorSourceLegacyMetrics metrics = new MirrorSourceLegacyMetrics(taskConfig);
         metrics.addReporter(reporter);
 
         metrics.countRecord(SOURCE_TP);
+        // 12 MirrorSourceConnector metrics + the metrics count metric
         assertEquals(13, reporter.metrics.size());
-        Map<String, String> tags = reporter.metrics.get(0).metricName().tags();
+        Map<String, String> tags = reporter.metrics.stream()
+                .filter(m -> m.metricName().group().equals(MirrorSourceConnector.class.getSimpleName()))
+                .findFirst()
+                .get().metricName().tags();
         assertEquals(SOURCE, tags.get("source"));
         assertEquals(TARGET, tags.get("target"));
+        assertEquals(SOURCE_TP.topic(), tags.get("topic"));
+        assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
+    }
+
+    @Test
+    public void testCheckpointTags() {
+        configs.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, MirrorCheckpointConnector.class.getName());
+        configs.put(MirrorCheckpointTaskConfig.TASK_CONSUMER_GROUPS, GROUP);
+        MirrorCheckpointTaskConfig taskConfig = new MirrorCheckpointTaskConfig(configs);
+        MirrorCheckpointLegacyMetrics metrics = new MirrorCheckpointLegacyMetrics(taskConfig);
+        metrics.addReporter(reporter);
+
+        metrics.checkpointLatency(SOURCE_TP, GROUP, 1L);
+        // 4 MirrorCheckpointConnector metrics + the metrics count metric
+        assertEquals(5, reporter.metrics.size());
+        Map<String, String> tags = reporter.metrics.stream()
+                .filter(m -> m.metricName().group().equals(MirrorCheckpointConnector.class.getSimpleName()))
+                .findFirst()
+                .get().metricName().tags();
+        assertEquals(SOURCE, tags.get("source"));
+        assertEquals(TARGET, tags.get("target"));
+        assertEquals(GROUP, tags.get("group"));
         assertEquals(SOURCE_TP.topic(), tags.get("topic"));
         assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
     }

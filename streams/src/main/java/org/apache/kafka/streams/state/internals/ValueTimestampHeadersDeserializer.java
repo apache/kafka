@@ -114,7 +114,7 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
      */
     public static long timestamp(final byte[] rawValueTimestampHeaders) {
         // If the headers is empty, then do not need to skip the headers
-        if (Utils.hasEmptyHeadersAndTimestamp(rawValueTimestampHeaders)) {
+        if (Utils.hasEmptyHeaders(rawValueTimestampHeaders)) {
             final byte[] rawTimestamp = new byte[StateSerdes.TIMESTAMP_SIZE];
             System.arraycopy(rawValueTimestampHeaders, 1, rawTimestamp, 0, StateSerdes.TIMESTAMP_SIZE);
             return LONG_DESERIALIZER.deserialize("", rawTimestamp);

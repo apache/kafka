@@ -113,8 +113,8 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         if (aggregationWithHeaders.length > 0 && aggregationWithHeaders[0] == 0x00) {
             // Strip header size's varint byte, and empty headers consume no bytes
             final byte[] aggregation = new byte[aggregationWithHeaders.length - 1]; 
-            System.arraycopy(aggregationWithHeaders, 1, res, 0, res.length);
-            return res;
+            System.arraycopy(aggregationWithHeaders, 1, aggregation, 0, aggregation.length);
+            return aggregation;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
