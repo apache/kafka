@@ -31,7 +31,6 @@ import org.mockito.internal.util.MockUtil;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -288,15 +287,9 @@ public class ExpiringCredentialRefreshingLoginTest {
     /*
     * */
     private static class MockScheduler implements MockTime.Listener {
-        /**
-         * The MockTime object.
-         */
-        private final MockTime time;
 
-        /**
-         * Futures which are waiting for a specified wall-clock time to arrive.
-         */
-        private final TreeMap<Long, List<KafkaFutureImpl<Long>>> waiters = new TreeMap<>();
+        private final MockTime time;
+        private final Map<Long, List<KafkaFutureImpl<Long>>> waiters = new TreeMap<>();
 
         public MockScheduler(MockTime time) {
             this.time = time;
@@ -306,9 +299,9 @@ public class ExpiringCredentialRefreshingLoginTest {
         @Override
         public synchronized void onTimeUpdated() {
             long timeMs = time.milliseconds();
-            Iterator<Map.Entry<Long, List<KafkaFutureImpl<Long>>>> iterator = waiters.entrySet().iterator();
+            var iterator = waiters.entrySet().iterator();
             while (iterator.hasNext()) {
-                Map.Entry<Long, List<KafkaFutureImpl<Long>>> entry = iterator.next();
+                var entry = iterator.next();
                 if (entry.getKey() > timeMs) break;
                 entry.getValue().forEach(future -> future.complete(timeMs));
                 iterator.remove();

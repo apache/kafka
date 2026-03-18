@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Time;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * An interface for scheduling tasks for the future.
@@ -28,7 +29,17 @@ import java.util.concurrent.ScheduledExecutorService;
  * Implementations of this class should be thread-safe.
  */
 public interface Scheduler {
-    Scheduler SYSTEM = new SystemScheduler();
+    Scheduler SYSTEM = new Scheduler() {
+        @Override
+        public Time time() {
+            return Time.SYSTEM;
+        }
+
+        @Override
+        public <T> Future<T> schedule(ScheduledExecutorService executor, Callable<T> callable, long delayMs) {
+            return executor.schedule(callable, delayMs, TimeUnit.MILLISECONDS);
+        }
+    };
 
     /**
      * Get the timekeeper associated with this scheduler.

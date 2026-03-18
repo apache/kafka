@@ -33,11 +33,6 @@ public interface Platform {
 
         public static final String TROGDOR_COORDINATOR_PORT = "trogdor.coordinator.port";
 
-        public static final String TROGDOR_COORDINATOR_HEARTBEAT_MS =
-            "trogdor.coordinator.heartbeat.ms";
-
-        public static final int TROGDOR_COORDINATOR_HEARTBEAT_MS_DEFAULT = 60000;
-
         public static Platform parse(String curNodeName, String path) throws Exception {
             JsonNode root = JsonUtil.JSON_SERDE.readTree(new File(path));
             JsonNode platformNode = root.get("platform");
