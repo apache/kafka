@@ -72,7 +72,6 @@ import java.util.stream.IntStream;
 import jakarta.ws.rs.core.Response;
 
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
@@ -80,7 +79,6 @@ import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.PREDICATES_CONFIG;
@@ -211,9 +209,9 @@ public class ConnectWorkerIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-        // Properties for the source connector. The task should fail at startup due to the bad broker address.
+        // Properties for the source connector. The task should fail at startup due to injected error.
         props.put(TASKS_MAX_CONFIG, Objects.toString(numTasks));
-        props.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "nobrokerrunningatthisaddress");
+        props.put("task-" + CONNECTOR_NAME + "-0.start.inject.error", "true");
 
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -221,8 +219,8 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not fail in time");
 
-        // Reconfigure the connector without the bad broker address.
-        props.remove(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG);
+        // Reconfigure the connector without the injected error.
+        props.remove("task-" + CONNECTOR_NAME + "-0.start.inject.error");
         connect.configureConnector(CONNECTOR_NAME, props);
 
         // Restart the failed task
