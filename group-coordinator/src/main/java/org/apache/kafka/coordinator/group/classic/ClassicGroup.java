@@ -1429,7 +1429,7 @@ public class ClassicGroup implements Group {
             }
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
-                    consumerGroup.targetAssignment().get(memberId).partitions(),
+                    consumerGroup.targetAssignment(memberId).partitions(),
                     image
                 ),
                 ConsumerProtocol.deserializeVersion(
