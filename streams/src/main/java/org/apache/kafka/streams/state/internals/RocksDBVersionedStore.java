@@ -50,7 +50,6 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -108,7 +107,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
-    private OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     RocksDBVersionedStore(final String name, final String metricsScope, final long historyRetention, final long segmentInterval) {
@@ -366,17 +364,15 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(stateStoreContext), stateStoreContext.taskId());
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segmentStores.setPosition(position);
         segmentStores.openExisting(internalProcessorContext, observedStreamTime);
+        this.position = segmentStores.position;
+        StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), this.position);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) RocksDBVersionedStore.this::restoreBatch,
-                () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+                segmentStores::writePosition
         );
 
         open = true;

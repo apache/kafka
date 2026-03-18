@@ -140,7 +140,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected StateStoreContext context;
     protected Position position;
-    private OffsetCheckpoint positionCheckpoint;
 
     public RocksDBStore(final String name,
                         final String metricsScope) {
@@ -169,10 +168,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
         openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
-
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), position);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
@@ -180,7 +176,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+                this::writePosition
         );
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             stateStoreContext.appConfigs(),
@@ -252,7 +248,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         openRocksDB(dbOptions, columnFamilyOptions);
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         try {
-            cfAccessor.open(dbAccessor, !eosEnabled);
+            final Position existingPositionOrEmpty = cfAccessor.open(dbAccessor, !eosEnabled);
+            if (position == null) {
+                position = existingPositionOrEmpty;
+            } else {
+                // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
+                position.merge(existingPositionOrEmpty);
+            }
         } catch (final StreamsException fatal) {
             final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
             throw new ProcessorStateException(fatalMessage, fatal);
@@ -394,6 +396,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             }
         }
         return columnFamilies;
+    }
+
+    public final void writePosition() {
+        validateStoreOpen();
+        try {
+            cfAccessor.commit(dbAccessor, position);
+        } catch (final RocksDBException e) {
+            log.warn("Error while committing position for store {}", name, e);
+        }
     }
 
     @Override
@@ -906,6 +917,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         void commit(final DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
 
+        void commit(final DBAccessor accessor, final Position storePosition) throws RocksDBException;
+
         void addToBatch(final byte[] key,
                         final byte[] value,
                         final WriteBatchInterface batch) throws RocksDBException;
@@ -914,9 +927,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         /**
          * Initializes the ColumnFamily.
+         * @return the position of the store based on the data in the ColumnFamily. If no offset position is found, an empty position is returned.
          * @throws StreamsException if an invalid state is found and ignoreInvalidState is false
          */
-        void open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
+        Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
         Long getCommittedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
     }

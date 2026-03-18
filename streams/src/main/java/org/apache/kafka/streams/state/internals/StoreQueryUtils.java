@@ -49,6 +49,7 @@ import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -162,6 +163,14 @@ public final class StoreQueryUtils {
             if (meta.topic() != null) {
                 position.withComponent(meta.topic(), meta.partition(), meta.offset());
             }
+        }
+    }
+
+    public static void maybeMigrateExistingPositionFile(final File stateDir, final String storeName, final Position position) {
+        final File positionCheckpointFile = new File(stateDir, storeName + ".position");
+        if (positionCheckpointFile.exists()) {
+            final Position existingPosition = readPositionFromCheckpoint(new OffsetCheckpoint(positionCheckpointFile));
+            position.merge(existingPosition);
         }
     }
 

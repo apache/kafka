@@ -144,6 +144,11 @@ class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
     }
 
     @Override
+    public void writePosition() {
+        physicalStore.writePosition();
+    }
+
+    @Override
     public synchronized void close() {
         // close open iterators
         final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
