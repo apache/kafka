@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -528,5 +529,148 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public long connectionSetupTimeoutMaxMs() {
         return getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+    }
+
+    // ********* Log Configuration **********
+
+    public boolean autoCreateTopicsEnable() {
+        return getBoolean(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG);
+    }
+
+    public int numPartitions() {
+        return getInt(ServerLogConfigs.NUM_PARTITIONS_CONFIG);
+    }
+
+    public Integer logSegmentBytes() {
+        return getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG);
+    }
+
+    public Long logFlushIntervalMessages() {
+        return getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG);
+    }
+
+    public int logCleanerThreads() {
+        return getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP);
+    }
+
+    public long logFlushSchedulerIntervalMs() {
+        return getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG);
+    }
+
+    public long logFlushOffsetCheckpointIntervalMs() {
+        return getInt(ServerLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).longValue();
+    }
+
+    public long logFlushStartOffsetCheckpointIntervalMs() {
+        return getInt(ServerLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).longValue();
+    }
+
+    public long logCleanupIntervalMs() {
+        return getLong(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG);
+    }
+
+    public List<String> logCleanupPolicy() {
+        return getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG);
+    }
+
+    public Long logRetentionBytes() {
+        return getLong(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG);
+    }
+
+    public long logCleanerDedupeBufferSize() {
+        return getLong(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP);
+    }
+
+    public Long logCleanerDeleteRetentionMs() {
+        return getLong(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP);
+    }
+
+    public Long logCleanerMinCompactionLagMs() {
+        return getLong(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP);
+    }
+
+    public Long logCleanerMaxCompactionLagMs() {
+        return getLong(CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP);
+    }
+
+    public Double logCleanerMinCleanRatio() {
+        return getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP);
+    }
+
+    public Integer logIndexSizeMaxBytes() {
+        return getInt(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG);
+    }
+
+    public Integer logIndexIntervalBytes() {
+        return getInt(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG);
+    }
+
+    public Long logDeleteDelayMs() {
+        return getLong(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG);
+    }
+
+    public Long logRollTimeMillis() {
+        Long millis = getLong(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG);
+        if (millis != null) return millis;
+        return 60L * 60L * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG);
+    }
+
+    public Long logRollTimeJitterMillis() {
+        Long millis = getLong(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG);
+        if (millis != null) return millis;
+        return 60L * 60L * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG);
+    }
+
+    public Long logFlushIntervalMs() {
+        Long millis = getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG);
+        if (millis != null) return millis;
+        return getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG);
+    }
+
+    public Integer minInSyncReplicas() {
+        return getInt(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG);
+    }
+
+    public Boolean logPreAllocateEnable() {
+        return getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG);
+    }
+
+    public long logInitialTaskDelayMs() {
+        Long millis = getLong(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG);
+        if (millis != null) return millis;
+        return ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT;
+    }
+
+    public TimestampType logMessageTimestampType() {
+        return TimestampType.forName(getString(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG));
+    }
+
+    public long logMessageTimestampBeforeMaxMs() {
+        return getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
+    }
+
+    public long logMessageTimestampAfterMaxMs() {
+        return getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
+    }
+
+    public long logDirFailureTimeoutMs() {
+        return getLong(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG);
+    }
+
+    public Long logRetentionTimeMillis() {
+        long millisInMinute = 60L * 1000L;
+        long millisInHour = 60L * millisInMinute;
+
+        Long millis = getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG);
+        if (millis == null) {
+            Integer mins = getInt(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG);
+            if (mins != null) {
+                millis = millisInMinute * mins;
+            } else {
+                millis = millisInHour * getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG);
+            }
+        }
+
+        return millis < 0 ? -1 : millis;
     }
 }
