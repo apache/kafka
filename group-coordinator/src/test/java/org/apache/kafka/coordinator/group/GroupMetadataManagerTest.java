@@ -25641,6 +25641,84 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupHeartbeatDoesNotBumpGroupEpochDuringAssignmentDelay() {
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .buildCoordinatorMetadataImage();
+
+        String groupId = "share-group";
+        String memberId = Uuid.randomUuid().toString();
+
+        ShareGroupMember member = new ShareGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(t1Name))
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .withShareGroup(new ShareGroupBuilder(groupId, 2)
+                .withMember(member)
+                .withAssignment(memberId, mkAssignment())
+                .withAssignmentEpoch(2)
+                // Suppress assignments.
+                .withAssignmentTimestamp(Integer.MAX_VALUE)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    t1Name, computeTopicHash(t1Name, metadataImage)
+                ))))
+            .build();
+
+        // t1-0 and t1-1 are initialized and not yet assigned.
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializingTopics(List.of())
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t1Uuid)
+                        .setTopicName(t1Name)
+                        .setPartitions(List.of(0, 1))
+                ))
+                .setDeletingTopics(List.of())
+        );
+
+        // Group epoch is bumped on the next heartbeat.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result1 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(2));
+
+        assertEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 3, computeGroupHash(Map.of(
+                    t1Name, computeTopicHash(t1Name, metadataImage)
+                )))
+            ),
+            result1.records()
+        );
+
+        // Group epoch is not bumped again.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result2 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(2));
+
+        assertEquals(
+            List.of(),
+            result2.records()
+        );
+    }
+
+    @Test
     public void testShareGroupHeartbeatPersisterRequestWithInitializing() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
