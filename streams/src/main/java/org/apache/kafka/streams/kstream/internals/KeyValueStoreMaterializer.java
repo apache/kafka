@@ -40,12 +40,12 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     public KeyValueStoreMaterializer(
             final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
     }
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
+        final DslStoreFormat storeFormat = dslStoreFormat();
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();

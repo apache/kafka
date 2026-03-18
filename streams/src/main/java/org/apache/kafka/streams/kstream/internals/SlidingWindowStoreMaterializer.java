@@ -40,7 +40,7 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
             final SlidingWindows windows,
             final EmitStrategy emitStrategy
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
         this.windows = windows;
         this.emitStrategy = emitStrategy;
 
@@ -59,7 +59,7 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
+        final DslStoreFormat storeFormat = dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
             ? dslStoreSuppliers().windowStore(new DslWindowParams(
             materialized.storeName(),

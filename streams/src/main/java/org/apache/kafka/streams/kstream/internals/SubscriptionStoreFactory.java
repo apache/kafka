@@ -39,7 +39,7 @@ public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactor
         final String name,
         final Serde<SubscriptionWrapper<K>> subscriptionWrapperSerde
     ) {
-        super(null);
+        super(null, DslStoreFormat.TIMESTAMPED);
         this.name = name;
         this.subscriptionWrapperSerde = subscriptionWrapperSerde;
     }
@@ -47,7 +47,7 @@ public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactor
     @Override
     public StoreBuilder<?> builder() {
         StoreBuilder<?> builder;
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
+        final DslStoreFormat storeFormat = dslStoreFormat();
         builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
             dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name, storeFormat)),
             new Serdes.BytesSerde(),

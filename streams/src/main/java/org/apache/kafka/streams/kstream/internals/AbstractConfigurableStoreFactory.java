@@ -29,8 +29,10 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private DslStoreSuppliers dslStoreSuppliers;
     private DslStoreFormat dslStoreFormat;
 
-    public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers) {
+    public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers,
+                                               final DslStoreFormat defaultStoreFormat) {
         this.dslStoreSuppliers = initialStoreSuppliers;
+        this.dslStoreFormat = defaultStoreFormat;
     }
 
     @Override
@@ -46,7 +48,7 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
         if (dslStoreFormatValue.equalsIgnoreCase(StreamsConfig.DSL_STORE_FORMAT_HEADERS)) {
             dslStoreFormat = DslStoreFormat.HEADERS;
         }
-        // else dslStoreFormat remains null and the lower layers decide between PLAIN and TIMESTAMPED
+        // else dslStoreFormat keeps the defaultStoreFormat provided by the subclass
     }
 
     @Override
