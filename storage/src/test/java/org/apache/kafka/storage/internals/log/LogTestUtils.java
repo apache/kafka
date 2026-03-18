@@ -218,11 +218,11 @@ public class LogTestUtils {
                                         long startOffset,
                                         int maxLength,
                                         FetchIsolation isolation,
-                                        boolean minOneMessage) throws java.io.IOException {
+                                        boolean minOneMessage) throws IOException {
         return log.read(startOffset, maxLength, isolation, minOneMessage);
     }
 
-    public static FetchDataInfo readLog(UnifiedLog log, long startOffset, int maxLength) throws java.io.IOException {
+    public static FetchDataInfo readLog(UnifiedLog log, long startOffset, int maxLength) throws IOException {
         return readLog(log, startOffset, maxLength, FetchIsolation.LOG_END, true);
     }
 

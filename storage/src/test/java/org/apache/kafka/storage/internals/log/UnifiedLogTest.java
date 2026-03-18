@@ -4088,7 +4088,7 @@ public class UnifiedLogTest {
         try {
             executor.submit(hwUpdateLoop);
 
-            java.util.concurrent.Future<Integer> future = executor.submit(txnWriteAndReadLoop);
+            Future<Integer> future = executor.submit(txnWriteAndReadLoop);
             int nonEmptyReads = future.get();
 
             assertEquals(0, nonEmptyReads);
