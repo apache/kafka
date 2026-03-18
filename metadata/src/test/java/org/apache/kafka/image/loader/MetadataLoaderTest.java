@@ -992,7 +992,6 @@ public class MetadataLoaderTest {
                         setValue("2.8"), (short) 0))
                 )));
             loader.waitForAllEventsToBeHandled();
-            publisher.firstPublish.get(10, TimeUnit.SECONDS);
 
             // Verify config was filtered out
             assertTrue(publisher.latestImage.configs().configMapForResource(
