@@ -419,7 +419,8 @@ public class PlaintextConsumerTest {
         consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "group_two_members");
 
         try (Producer<byte[], byte[]> producer = cluster.producer();
-             Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumerConfig)
+             Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumerConfig);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumerConfig)
         ) {
             var startingTimestamp = System.currentTimeMillis();
 
@@ -432,23 +433,21 @@ public class PlaintextConsumerTest {
             sendRecords(producer, foo1, 10, startingTimestamp);
             consumeAndVerifyRecords(consumer1, foo1, 10, 0, 0, startingTimestamp);
 
-            try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumerConfig)) {
-                consumer2.subscribe(List.of(fooTopic));
-                TestUtils.waitForCondition(() -> {
-                    consumer1.poll(Duration.ofMillis(100));
-                    consumer2.poll(Duration.ofMillis(100));
-                    return consumer1.assignment().size() == 1 && consumer2.assignment().size() == 1;
-                }, "Timed out waiting for rebalance to complete");
+            consumer2.subscribe(List.of(fooTopic));
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                return consumer1.assignment().size() == 1 && consumer2.assignment().size() == 1;
+            }, "Timed out waiting for rebalance to complete");
 
-                assertTrue(consumer1.assignment().contains(foo0) || consumer1.assignment().contains(foo1));
-                assertTrue(consumer2.assignment().contains(foo0) || consumer2.assignment().contains(foo1));
-                assertNotEquals(consumer1.assignment(), consumer2.assignment());
+            assertTrue(consumer1.assignment().contains(foo0) || consumer1.assignment().contains(foo1));
+            assertTrue(consumer2.assignment().contains(foo0) || consumer2.assignment().contains(foo1));
+            assertNotEquals(consumer1.assignment(), consumer2.assignment());
 
-                sendRecords(producer, foo0, 10, startingTimestamp);
-                sendRecords(producer, foo1, 10, startingTimestamp);
-                consumeAndVerifyRecords(consumer1, consumer1.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
-                consumeAndVerifyRecords(consumer2, consumer2.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
-            }
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, consumer1.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
+            consumeAndVerifyRecords(consumer2, consumer2.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
         }
     }
 
