@@ -166,12 +166,11 @@ public class ConnectionStressWorker implements TaskWorker {
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                         metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
-                        NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+                        NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
                             conf.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                             ClientDnsLookup.forConfig(conf.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                            conf.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
-                            false);
+                            conf.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
+                            conf.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",

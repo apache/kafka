@@ -267,6 +267,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -538,7 +539,22 @@ public class KafkaAdminClient extends AdminClient {
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
                 adminAddresses.usingBootstrapControllers());
-            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
+
+            // Get the appropriate bootstrap configuration
+            List<String> bootstrapAddressesToUse = adminAddresses.usingBootstrapControllers()
+                ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
+                : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+
+            // Create unresolved addresses for bootstrap cluster (defer DNS resolution to NetworkClient.poll())
+            List<InetSocketAddress> unresolvedAddresses = new ArrayList<>();
+            for (String address : bootstrapAddressesToUse) {
+                String host = Utils.getHost(address);
+                Integer port = Utils.getPort(address);
+                if (host != null && port != null) {
+                    unresolvedAddresses.add(InetSocketAddress.createUnresolved(host, port));
+                }
+            }
+            metadataManager.update(Cluster.bootstrap(unresolvedAddresses), time.milliseconds());
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
@@ -550,11 +566,6 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-
-            // Use the appropriate bootstrap configuration determined by AdminBootstrapAddresses
-            List<String> bootstrapAddressesToUse = adminAddresses.usingBootstrapControllers()
-                ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
-                : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
 
             networkClient = ClientUtils.createNetworkClient(config,
                 bootstrapAddressesToUse,

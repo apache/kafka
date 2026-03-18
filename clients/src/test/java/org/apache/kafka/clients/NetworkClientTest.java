@@ -99,12 +99,11 @@ public class NetworkClientTest {
     private static List<InetAddress> initialAddresses;
     private static List<InetAddress> newAddresses;
     private static NetworkClient.BootstrapConfiguration bootstrapConfiguration =
-            new NetworkClient.BootstrapConfiguration(
+            NetworkClient.BootstrapConfiguration.enabled(
                     BOOTSTRAP_ADDRESSES,
                     ClientDnsLookup.USE_ALL_DNS_IPS,
                     10 * 1000,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                false);
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
 
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockSelector selector = new MockSelector(time);
@@ -170,13 +169,7 @@ public class NetworkClientTest {
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata, boolean disableBootstrap) {
         if (disableBootstrap) {
-            bootstrapConfiguration =
-                new NetworkClient.BootstrapConfiguration(
-                    BOOTSTRAP_ADDRESSES,
-                    ClientDnsLookup.USE_ALL_DNS_IPS,
-                    10 * 1000,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                    true);
+            bootstrapConfiguration = NetworkClient.BootstrapConfiguration.disabled();
         }
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -196,12 +189,11 @@ public class NetworkClientTest {
     @BeforeEach
     public void setup() {
         selector.reset();
-        bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+        bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
             BOOTSTRAP_ADDRESSES,
             ClientDnsLookup.USE_ALL_DNS_IPS,
             CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-            CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-            false);
+            CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
     }
 
     @Test
@@ -1535,12 +1527,11 @@ public class NetworkClientTest {
     @Test
     public void testEnsureBootstrappedSuccess() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
+        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                false);
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1560,12 +1551,11 @@ public class NetworkClientTest {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         // Use invalid addresses that cannot be resolved
         List<String> invalidAddresses = List.of("invalid.host.that.does.not.exist:9092");
-        NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
+        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 100, // Short timeout
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                false);
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1584,12 +1574,11 @@ public class NetworkClientTest {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         // Use invalid addresses that cannot be resolved
         List<String> invalidAddresses = List.of("invalid.host.that.does.not.exist:9092");
-        NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
+        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000, // Long bootstrap timeout
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                false);
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
@@ -1608,12 +1597,11 @@ public class NetworkClientTest {
     @Test
     public void testEnsureBootstrappedRetryUntilSuccess() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        NetworkClient.BootstrapConfiguration config = new NetworkClient.BootstrapConfiguration(
+        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                false);
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,

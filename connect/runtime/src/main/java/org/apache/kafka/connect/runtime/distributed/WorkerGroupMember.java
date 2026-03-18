@@ -107,11 +107,11 @@ public class WorkerGroupMember {
             metadata.bootstrap(addresses);
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+            NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
                 config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG), false);
+                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     metadata,

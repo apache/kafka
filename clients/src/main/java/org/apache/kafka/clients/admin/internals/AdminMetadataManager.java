@@ -158,7 +158,7 @@ public class AdminMetadataManager {
 
         @Override
         public void bootstrap(List<InetSocketAddress> addresses) {
-            // AdminClient handles bootstrap during construction, so this method is not used
+            // Bootstrap is handled by NetworkClient.ensureBootstrapped() during poll
         }
 
         @Override

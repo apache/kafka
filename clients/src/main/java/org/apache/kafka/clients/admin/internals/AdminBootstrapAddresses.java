@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -56,20 +55,19 @@ public final class AdminBootstrapAddresses {
         if (controllerServers == null) {
             controllerServers = Collections.emptyList();
         }
-        String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
         if (bootstrapServers.isEmpty()) {
             if (controllerServers.isEmpty()) {
                 throw new ConfigException("You must set either " +
                         CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " or " +
                         AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
             } else {
-                return new AdminBootstrapAddresses(true,
-                    ClientUtils.parseAndValidateAddresses(controllerServers, clientDnsLookupConfig));
+                // Don't perform DNS resolution here - defer to NetworkClient.poll()
+                return new AdminBootstrapAddresses(true, List.of());
             }
         } else {
             if (controllerServers.isEmpty()) {
-                return new AdminBootstrapAddresses(false,
-                    ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookupConfig));
+                // Don't perform DNS resolution here - defer to NetworkClient.poll()
+                return new AdminBootstrapAddresses(false, List.of());
             } else {
                 throw new ConfigException("You cannot set both " +
                         CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " and " +

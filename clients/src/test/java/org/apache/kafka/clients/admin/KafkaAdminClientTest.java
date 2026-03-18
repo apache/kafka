@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
@@ -529,8 +527,7 @@ public class KafkaAdminClientTest {
     }
 
     private static Cluster mockBootstrapCluster() {
-        return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
+        return Cluster.bootstrap(singletonList(InetSocketAddress.createUnresolved("localhost", 8121)));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
