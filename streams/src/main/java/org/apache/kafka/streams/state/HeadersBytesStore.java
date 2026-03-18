@@ -52,7 +52,7 @@ public interface HeadersBytesStore {
         //   headersBytes = [] (empty, 0 bytes)
         // Result: [0x00][payload]
         final byte[] valueTimestampHeaders = new byte[1 + valueAndTimestamp.length];
-        // res[0] is initialized to 0x00 per Java Specification
+        // valueTimestampHeaders[0] is initialized to 0x00 per Java Specification
         System.arraycopy(valueAndTimestamp, 0, valueTimestampHeaders, 1, valueAndTimestamp.length);
         return valueTimestampHeaders;
     }
