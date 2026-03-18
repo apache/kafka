@@ -210,7 +210,7 @@ public class KTableTransformValuesTest {
 
         when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
         when(parentGetterSupplier.get()).thenReturn(parentGetter);
-        when(parentGetter.get("Key")).thenReturn(ValueTimestampHeaders.make("Value", 73L, null));
+        when(parentGetter.get("Key")).thenReturn(ValueTimestampHeaders.make("Value", 73L, new RecordHeaders()));
         final ProcessorRecordContext recordContext = new ProcessorRecordContext(
             42L,
             23L,
@@ -242,7 +242,7 @@ public class KTableTransformValuesTest {
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         when(context.getStateStore(QUERYABLE_NAME)).thenReturn(stateStore);
-        when(stateStore.get("Key")).thenReturn(ValueTimestampHeaders.make("something", 0L, null));
+        when(stateStore.get("Key")).thenReturn(ValueTimestampHeaders.make("something", 0L, new RecordHeaders()));
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);

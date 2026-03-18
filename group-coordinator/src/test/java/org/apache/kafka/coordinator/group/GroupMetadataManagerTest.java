@@ -174,6 +174,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -200,6 +201,7 @@ import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_SESSION_TIMEO
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
@@ -1201,7 +1203,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
     }
@@ -17461,7 +17464,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -17481,7 +17485,15 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, groupMetadataHash, 0, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                2,
+                groupMetadataHash,
+                0,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
@@ -17547,7 +17559,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -17640,7 +17653,8 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
-                    .setStatusDetail("Source topics bar are missing."))),
+                    .setStatusDetail("Source topics bar are missing.")))
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -17656,9 +17670,15 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-            )), -1, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                2,
+                computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
+                -1,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
@@ -17726,7 +17746,8 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_INTERNAL_TOPICS.code())
-                    .setStatusDetail("Internal topics are missing: bar"))),
+                    .setStatusDetail("Internal topics are missing: bar")))
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -17742,9 +17763,15 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-            )), -1, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                2,
+                computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
+                -1,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
@@ -17809,7 +17836,8 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.INCORRECTLY_PARTITIONED_TOPICS.code())
-                    .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]"))),
+                    .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]")))
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -17825,10 +17853,18 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                barTopicName, computeTopicHash(barTopicName, metadataImage)
-            )), -1, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                2,
+                computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+                    barTopicName, computeTopicHash(barTopicName, metadataImage)
+                )),
+                -1,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
@@ -17907,7 +17943,8 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.STALE_TOPOLOGY.code())
-                    .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1."))),
+                    .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1.")))
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -17922,10 +17959,18 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                barTopicName, computeTopicHash(barTopicName, metadataImage)
-            )), 1, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                11,
+                computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+                    barTopicName, computeTopicHash(barTopicName, metadataImage)
+                )),
+                1,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
@@ -18001,7 +18046,8 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                )),
+                ))
+                .setTaskOffsetIntervalMs(60_000),
             result1.response().data()
         );
         assertRecordsEquals(List.of(), result1.records());
@@ -18022,7 +18068,8 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                )),
+                ))
+                .setTaskOffsetIntervalMs(60_000),
             result2.response().data()
         );
 
@@ -18115,7 +18162,8 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                )),
+                ))
+                .setTaskOffsetIntervalMs(60_000),
             result2.response().data()
         );
     }
@@ -18195,7 +18243,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -18224,7 +18273,15 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, groupMetadataHash, 0, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                11,
+                groupMetadataHash,
+                0,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
@@ -18316,7 +18373,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -18344,10 +18402,18 @@ public class GroupMetadataManagerTest {
             .build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, newMetadataImage),
-                barTopicName, computeTopicHash(barTopicName, newMetadataImage)
-            )), 0,  Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                11,
+                computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, newMetadataImage),
+                    barTopicName, computeTopicHash(barTopicName, newMetadataImage)
+                )),
+                0,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
@@ -18456,7 +18522,8 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
 
             result.response().data()
         );
@@ -18584,7 +18651,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -18600,7 +18668,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
     }
@@ -18653,7 +18722,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -18669,7 +18739,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
     }
@@ -18721,7 +18792,8 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                         .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
-                )),
+                ))
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -18750,7 +18822,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
     }
@@ -18917,7 +18990,8 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -18959,7 +19033,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19005,7 +19080,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19039,7 +19115,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19079,7 +19156,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19109,7 +19187,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19136,7 +19215,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19167,7 +19247,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19210,7 +19291,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19257,7 +19339,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19468,7 +19551,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19489,9 +19573,15 @@ public class GroupMetadataManagerTest {
             .build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-            )), 0, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                11,
+                computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
+                0,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
@@ -19598,7 +19688,8 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19611,9 +19702,15 @@ public class GroupMetadataManagerTest {
             .build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 11, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-            )), 0, Map.of("num.standby.replicas", "0")),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                groupId,
+                11,
+                computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
+                0,
+                new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0"
+                ))
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
@@ -19764,7 +19861,15 @@ public class GroupMetadataManagerTest {
                         StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-                        StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, groupMetadataHash, 0, Map.of("num.standby.replicas", "0"))
+                        StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                            groupId,
+                            3,
+                            groupMetadataHash,
+                            0,
+                            new TreeMap<>(Map.of(
+                                "num.standby.replicas", "0"
+                            ))
+                        )
                     )
                 )
             )),
@@ -19825,7 +19930,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19864,7 +19970,8 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19893,7 +20000,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19925,7 +20033,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -19990,7 +20099,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -20029,7 +20139,8 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -20057,7 +20168,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -20073,7 +20185,15 @@ public class GroupMetadataManagerTest {
                         StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId1),
-                        StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 4, groupMetadataHash, 0, Map.of("num.standby.replicas", "0"))
+                        StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                            groupId,
+                            4,
+                            groupMetadataHash,
+                            0,
+                            new TreeMap<>(Map.of(
+                                "num.standby.replicas", "0"
+                            ))
+                        )
                     )
                 )
             )),
@@ -20240,7 +20360,8 @@ public class GroupMetadataManagerTest {
                         .setStandbyTasks(List.of())
                         .setWarmupTasks(List.of())
                         .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
-                        .setStatus(List.of()),
+                        .setStatus(List.of())
+                        .setTaskOffsetIntervalMs(60_000),
                 result.response().data()
         );
 
@@ -20417,7 +20538,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of()),
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
 
@@ -20538,7 +20660,15 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(classicGroupId, expectedMember),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(classicGroupId, topology),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(classicGroupId, 2, 0, -1, Map.of("num.standby.replicas", "0")),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+                    classicGroupId,
+                    2,
+                    0,
+                    -1,
+                    new TreeMap<>(Map.of(
+                        "num.standby.replicas", "0"
+                    ))
+                ),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(classicGroupId, memberId, TasksTuple.EMPTY),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(classicGroupId, 2, context.time.milliseconds()),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(classicGroupId, expectedMember)
@@ -20858,7 +20988,10 @@ public class GroupMetadataManagerTest {
                     .setStandbyTasks(List.of())
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
-        assertEquals(Map.of("num.standby.replicas", "0"), assignor.lastPassedAssignmentConfigs());
+        assertEquals(
+            Map.of("num.standby.replicas", "0"),
+            assignor.lastPassedAssignmentConfigs()
+        );
 
         // Verify heartbeat interval
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, result.response().data().heartbeatIntervalMs());
@@ -20894,7 +21027,10 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId, 50000);
 
         // Verify that the new number of standby replicas is used
-        assertEquals(Map.of("num.standby.replicas", "2"), assignor.lastPassedAssignmentConfigs());
+        assertEquals(
+            Map.of("num.standby.replicas", "2"),
+            assignor.lastPassedAssignmentConfigs()
+        );
 
         // Advance time.
         assertEquals(
@@ -21116,15 +21252,16 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
 
-        // Verify default heartbeat interval, session timeout, and num.standby.replicas before config update.
+        // Verify default heartbeat interval, session timeout, num.standby.replicas, task.offset.interval before config update.
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             result.response().data().heartbeatIntervalMs());
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
-        assertEquals(Map.of("num.standby.replicas",
-                String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)),
+        assertEquals(
+            Map.of(
+                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            ),
             assignor.lastPassedAssignmentConfigs());
-
         // Advance time.
         assertEquals(
             List.of(),
@@ -21134,10 +21271,12 @@ public class GroupMetadataManagerTest {
         // Dynamic update group config with out-of-range values.
         // Session timeout 70000 exceeds max 60000; heartbeat interval 1 is below min 5000;
         // num standby replicas 100 exceeds max 2.
+        // task offset interval 100 exceeds min 15000.
         Properties newGroupConfig = new Properties();
         newGroupConfig.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, 70000);
         newGroupConfig.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, 1);
         newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 100);
+        newGroupConfig.put(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, 100);
         context.updateGroupConfig(groupId, newGroupConfig);
 
         // Session timer is rescheduled on second heartbeat, new assignment with evaluated parameter is calculated.
@@ -21156,9 +21295,12 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT);
 
-        // Verify that the number of standby replicas is evaluated to max.
-        assertEquals(Map.of("num.standby.replicas",
-                String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
+        // Verify that the number of standby replicas is evaluated to max,
+        // and task offset interval is evaluated to min
+        assertEquals(
+            Map.of(
+                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
+            ),
             assignor.lastPassedAssignmentConfigs());
     }
 
@@ -26650,6 +26792,8 @@ public class GroupMetadataManagerTest {
      */
     private Map<String, String> getDefaultAssignmentConfigs() {
         // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
-        return Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
+        return new TreeMap<>(Map.of(
+            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+        ));
     }
 }

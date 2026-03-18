@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -45,6 +46,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
 
 /**
  * A Metered {@link TimestampedWindowStoreWithHeaders} wrapper that is used for recording operation metrics,
@@ -81,10 +83,37 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     @Override
     public void put(final K key, final ValueTimestampHeaders<V> value, final long windowStartTimestamp) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Headers headers = value == null || value.headers() == null ? new RecordHeaders() : value.headers();
         try {
             maybeMeasureLatency(
-                () -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers), windowStartTimestamp),
+                () -> {
+                    if (value == null) {
+                        // Deletion path
+                        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                        // Create new headers object to isolate delete operation from input record
+                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                        // Create temporary context with new headers
+                        final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                            currentContext.timestamp(),
+                            currentContext.offset(),
+                            currentContext.partition(),
+                            currentContext.topic(),
+                            deleteHeaders
+                        );
+
+                        try {
+                            internalContext.setRecordContext(temporaryContext);
+                            wrapped().put(keyBytes(key, deleteHeaders), null, windowStartTimestamp);
+                        } finally {
+                            // Restore original context
+                            internalContext.setRecordContext(currentContext);
+                        }
+                    } else {
+                        final Headers headers = value.headers() == null ? new RecordHeaders() : value.headers();
+                        wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers), windowStartTimestamp);
+                    }
+                },
                 time,
                 putSensor
             );

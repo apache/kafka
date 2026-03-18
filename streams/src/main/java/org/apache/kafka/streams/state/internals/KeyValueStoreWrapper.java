@@ -56,13 +56,10 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     // to simplify implementation for methods which do not depend on store type.
     private StateStore store;
 
-    @SuppressWarnings("unchecked")
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
-        final StateStore rawStore = context.getStateStore(storeName);
-
         // Try headers-aware timestamped store
         try {
-            headersStore = (TimestampedKeyValueStoreWithHeaders<K, V>) rawStore;
+            headersStore = context.getStateStore(storeName);
             store = headersStore;
             return;
         } catch (final ClassCastException e) {
@@ -71,12 +68,13 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
         // Try versioned store
         try {
-            versionedStore = (VersionedKeyValueStore<K, V>) rawStore;
+            versionedStore = context.getStateStore(storeName);
             store = versionedStore;
         } catch (final ClassCastException e) {
-            final String storeType = rawStore == null ? "null" : rawStore.getClass().getName();
+            store = context.getStateStore(storeName);
+            final String storeType = store == null ? "null" : store.getClass().getName();
             throw new InvalidStateStoreException("KTable source state store must implement either "
-                + "TimestampedKeyValueStore, TimestampedKeyValueStoreWithHeaders, or VersionedKeyValueStore. Got: " + storeType);
+                + "TimestampedKeyValueStoreWithHeaders, or VersionedKeyValueStore. Got: " + storeType);
         }
     }
 
@@ -88,9 +86,9 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             final VersionedRecord<V> versionedRecord = versionedStore.get(key);
             return versionedRecord == null
                 ? null
-                : ValueTimestampHeaders.make(versionedRecord.value(), versionedRecord.timestamp(), null);
+                : ValueTimestampHeaders.make(versionedRecord.value(), versionedRecord.timestamp(), new RecordHeaders());
         }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped, headers, or versioned store");
+        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either headers or versioned store");
     }
 
     public ValueTimestampHeaders<V> get(final K key, final long asOfTimestamp) {
@@ -114,7 +112,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         if (versionedStore != null) {
             return versionedStore.put(key, value, timestamp);
         }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped, headers, or versioned store");
+        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either headers or versioned store");
     }
 
     public StateStore store() {
