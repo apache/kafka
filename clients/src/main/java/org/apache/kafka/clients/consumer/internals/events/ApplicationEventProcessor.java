@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
@@ -727,15 +728,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * (to keep subscription state changes in the background)
      */
     private void process(final ApplyAssignmentEvent event) {
-        if (requestManagers.consumerMembershipManager.isEmpty()) {
-            log.warn("ConsumerMembershipManager not present when processing ApplyAssignmentEvent");
-            event.future().completeExceptionally(
-                new IllegalStateException("ConsumerMembershipManager not available"));
-            return;
-        }
         try {
-            requestManagers.consumerMembershipManager.get().applyAssignment(
-                event.assignedPartitions(), event.addedPartitions());
+            if (requestManagers.consumerMembershipManager.isPresent()) {
+                requestManagers.consumerMembershipManager.get().applyAssignment(
+                    event.assignedPartitions(), event.addedPartitions());
+            } else if (requestManagers.streamsMembershipManager.isPresent()) {
+                requestManagers.streamsMembershipManager.get().applyAssignment(
+                    (SortedSet<TopicPartition>) event.assignedPartitions(), event.addedPartitions());
+            } else {
+                log.warn("Neither ConsumerMembershipManager nor StreamsMembershipManager present " +
+                    "when processing ApplyAssignmentEvent");
+                event.future().completeExceptionally(
+                    new IllegalStateException("No membership manager available when processing ApplyAssignmentEvent"));
+                return;
+            }
             event.future().complete(null);
         } catch (Exception e) {
             event.future().completeExceptionally(e);
