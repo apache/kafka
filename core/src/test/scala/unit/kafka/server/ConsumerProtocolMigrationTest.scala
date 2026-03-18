@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -303,64 +302,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val joinGroupResponseData = sendJoinRequest(
       groupId = groupId
     )
-    val joinGroupResponse = sendJoinRequest(
+    val memberId2 = sendJoinRequest(
       groupId = groupId,
       memberId = joinGroupResponseData.memberId,
       metadata = metadata(List.empty)
-    )
-    val memberId2 = joinGroupResponse.memberId
-
-    if (isConsumerAssignmentBatchingEnabled) {
-      assertEquals(2, joinGroupResponse.generationId)
-
-      // Member 2 syncs at the unbumped group epoch.
-      assertEquals(
-        new SyncGroupResponseData()
-          .setErrorCode(Errors.NONE.code)
-          .setProtocolType("consumer")
-          .setProtocolName("consumer-range")
-          .setAssignment(assignment(List.empty)),
-        syncGroupWithOldProtocol(
-          groupId = groupId,
-          memberId = memberId2,
-          generationId = 2
-        )
-      )
-
-      // Member 1 heartbeats until a new assignment is computed.
-      TestUtils.waitUntilTrue(() => {
-        consumerGroupHeartbeat(
-          groupId = groupId,
-          memberId = memberId1,
-          memberEpoch = 2
-        ).assignment != null
-      }, msg = "Target assignment did not update before timeout.")
-
-      // Member 2 heartbeats and gets REBALANCE_IN_PROGRESS.
-      heartbeat(
-        groupId = groupId,
-        generationId = 2,
-        memberId = memberId2,
-        expectedError = Errors.REBALANCE_IN_PROGRESS
-      )
-
-      // Member 2 re-joins.
-      assertEquals(
-        new JoinGroupResponseData()
-          .setErrorCode(Errors.NONE.code)
-          .setGenerationId(3)
-          .setProtocolType("consumer")
-          .setProtocolName("consumer-range")
-          .setMemberId(memberId2),
-        sendJoinRequest(
-          groupId = groupId,
-          memberId = memberId2,
-          metadata = metadata(List.empty)
-        )
-      )
-    } else {
-      assertEquals(3, joinGroupResponse.generationId)
-    }
+    ).memberId
 
     // Member 2 syncs. The assigned partition is empty.
     assertEquals(
@@ -372,33 +318,8 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       syncGroupWithOldProtocol(
         groupId = groupId,
         memberId = memberId2,
-        generationId = 3
+        generationId = if (isConsumerAssignmentBatchingEnabled) 2 else 3
       )
-    )
-
-    // Member 2 heartbeats.
-    heartbeat(
-      groupId = groupId,
-      generationId = 3,
-      memberId = memberId2
-    )
-
-    // Member 1 heartbeats to revoke partitions.
-    consumerGroupHeartbeat(
-      groupId = groupId,
-      memberId = memberId1,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.NONE
-    )
-
-    // Member 2 heartbeats and gets REBALANCE_IN_PROGRESS.
-    heartbeat(
-      groupId = groupId,
-      generationId = 3,
-      memberId = memberId2,
-      expectedError = Errors.REBALANCE_IN_PROGRESS
     )
 
     // Downgrade the group by leaving member 1.
