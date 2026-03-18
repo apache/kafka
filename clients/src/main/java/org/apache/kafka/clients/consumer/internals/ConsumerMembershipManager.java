@@ -19,11 +19,13 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -48,7 +50,6 @@ import java.util.concurrent.CompletableFuture;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
-import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 
@@ -134,7 +135,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
+     * {@link PartitionsAssignedEvent}, {@link PartitionsRemovedEvent} and, if needed,
      * {@link ErrorEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
@@ -360,17 +361,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
     }
 
-    private CompletableFuture<Void> invokeOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
-        // This should always trigger the callback, even if partitionsAssigned is empty, to keep
-        // the current behaviour.
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (listener.isPresent()) {
-            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_ASSIGNED, partitionsAssigned);
-        } else {
-            return CompletableFuture.completedFuture(null);
-        }
-    }
-
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
@@ -386,8 +376,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> partitionsAssigned) {
-        return invokeOnPartitionsAssignedCallback(partitionsAssigned);
+    protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                               SortedSet<TopicPartition> addedPartitions) {
+        // Send an event to notify the app thread that the assignment changed with new partitions.
+        // The app thread is expected to trigger the assignment update (within a call to poll),
+        // and to run the onPartitionsAssigned callback if needed.
+        return enqueuePartitionsAssignedEvent(assignedPartitions.topicPartitions(), addedPartitions);
     }
 
     /**
@@ -440,16 +434,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
-     * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
-     * application thread.
+     * Enqueue a {@link PartitionsRemovedEvent} to trigger the execution of either
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked} or {@link ConsumerRebalanceListener#onPartitionsLost}
+     * on the application thread.
      *
      * <p/>
      *
      * Because the reconciliation process (run in the background thread) will be blocked by the application thread
      * until it completes this, we need to provide a {@link CompletableFuture} by which to remember where we left off.
      *
-     * @param methodName Callback method that needs to be executed on the application thread
+     * @param methodName Callback method that needs to be executed (ON_PARTITIONS_REVOKED or ON_PARTITIONS_LOST)
      * @param partitions Partitions to supply to the callback method
      * @return Future that will be chained within the rest of the reconciliation logic
      */
@@ -458,9 +452,26 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
 
-        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        CompletableBackgroundEvent<Void> event = new PartitionsRemovedEvent(methodName, sortedPartitions);
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
+        return event.future();
+    }
+
+    /**
+     * Enqueue a {@link PartitionsAssignedEvent} to the application thread.
+     * This event handles the assignment update and optional onPartitionsAssigned callback.
+     *
+     * @param fullAssignment The full assignment to apply
+     * @param addedPartitions The newly added partitions (passed to the callback)
+     * @return Future that will be chained within the rest of the reconciliation logic
+     */
+    private CompletableFuture<Void> enqueuePartitionsAssignedEvent(Set<TopicPartition> fullAssignment,
+                                                                   SortedSet<TopicPartition> addedPartitions) {
+        CompletableBackgroundEvent<Void> event = new PartitionsAssignedEvent(fullAssignment, addedPartitions);
+        backgroundEventHandler.add(event);
+        log.debug("The event to update the new assignment and trigger onPartitionsAssigned callback if needed " +
+                "has been enqueued successfully to be sent to the app thread.");
         return event.future();
     }
 
@@ -495,6 +506,21 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
             future.complete(null);
         }
+    }
+
+    /**
+     * Apply the assignment update to the subscription state. This is called from the background
+     * thread when processing an {@link ApplyAssignmentEvent} that was triggered by the application
+     * thread during poll. This ensures that the assignment update happens on the background thread
+     * but is coordinated by the application thread, so consumer.assignment() only changes within
+     * a call to consumer.poll().
+     *
+     * @param assignedPartitions The full assignment to apply
+     * @param addedPartitions The newly added partitions
+     */
+    public void applyAssignment(Set<TopicPartition> assignedPartitions, SortedSet<TopicPartition> addedPartitions) {
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+        notifyAssignmentChange(assignedPartitions);
     }
 
     /**

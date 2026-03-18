@@ -46,7 +46,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
-class CachingWindowStore
+public class CachingWindowStore
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
     implements WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 

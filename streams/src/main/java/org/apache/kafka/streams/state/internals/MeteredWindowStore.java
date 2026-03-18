@@ -73,18 +73,18 @@ public class MeteredWindowStore<K, V>
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     protected StateSerdes<K, V> serdes;
-    private StreamsMetricsImpl streamsMetrics;
+    protected StreamsMetricsImpl streamsMetrics;
     protected Sensor putSensor;
-    private Sensor fetchSensor;
+    protected Sensor fetchSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
-    private Sensor iteratorDurationSensor;
-    private InternalProcessorContext<?, ?> internalContext;
+    protected Sensor iteratorDurationSensor;
+    protected InternalProcessorContext<?, ?> internalContext;
     private TaskId taskId;
     private Sensor restoreSensor;
 
-    private final LongAdder numOpenIterators = new LongAdder();
-    private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    protected final LongAdder numOpenIterators = new LongAdder();
+    protected final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -158,6 +158,24 @@ public class MeteredWindowStore<K, V>
                 }
             }
         );
+        if (!persistent()) {
+            StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                    (config, now) -> {
+                        final InMemoryWindowStore inMemoryStore = findInMemoryWindowStore(wrapped());
+                        return inMemoryStore != null ? inMemoryStore.numEntries() : -1L;
+                    }
+            );
+        }
+    }
+
+    private static InMemoryWindowStore findInMemoryWindowStore(final StateStore store) {
+        if (store instanceof InMemoryWindowStore) {
+            return (InMemoryWindowStore) store;
+        } else if (store instanceof WrappedStateStore) {
+            return findInMemoryWindowStore(((WrappedStateStore<?, ?, ?>) store).wrapped());
+        } else {
+            return null;
+        }
     }
 
     @Override

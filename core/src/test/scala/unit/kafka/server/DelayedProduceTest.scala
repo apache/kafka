@@ -20,6 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.purgatory.DelayedProduce
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -37,7 +38,7 @@ class DelayedProduceTest {
     val partition = new TopicPartition("test-topic", 0)
 
     // Record an expiration so the partition metric is created
-    DelayedProduceMetrics.recordExpiration(partition)
+    DelayedProduce.recordExpiration(partition)
 
     // Verify the partition metric exists in the registry
     val metricsBefore = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
@@ -53,7 +54,7 @@ class DelayedProduceTest {
         !name.getMBeanName.contains("topic="))
 
     // Remove the partition metric
-    DelayedProduceMetrics.removePartitionMetrics(partition)
+    DelayedProduce.removePartitionMetrics(partition)
 
     // Verify the partition metric is removed from the registry
     val metricsAfter = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
@@ -77,6 +78,6 @@ class DelayedProduceTest {
     val partition = new TopicPartition("nonexistent-topic", 0)
 
     // Should not throw when removing a partition that was never recorded
-    DelayedProduceMetrics.removePartitionMetrics(partition)
+    DelayedProduce.removePartitionMetrics(partition)
   }
 }

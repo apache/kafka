@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.BytesUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -124,7 +125,7 @@ public class RocksDBRangeIteratorTest {
 
     @Test
     public void shouldReturnAllKeysWhenLastKeyIsGreaterThanLargestKeyInStateStoreInForwardDirection() {
-        final Bytes toBytes = Bytes.increment(key4Bytes);
+        final Bytes toBytes = BytesUtils.increment(key4Bytes);
         final RocksIterator rocksIterator = mock(RocksIterator.class);
         doNothing().when(rocksIterator).seek(key1Bytes.get());
         when(rocksIterator.isValid())
@@ -340,7 +341,7 @@ public class RocksDBRangeIteratorTest {
     @Test
     public void shouldReturnTheCurrentKeyOnInvokingPeekNextKeyInReverseDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        final Bytes toBytes = Bytes.increment(key4Bytes);
+        final Bytes toBytes = BytesUtils.increment(key4Bytes);
         doNothing().when(rocksIterator).seekForPrev(toBytes.get());
         when(rocksIterator.isValid())
             .thenReturn(true)

@@ -337,7 +337,7 @@ public class GlobalKTableEOSIntegrationTest {
                 + File.separator
                 + "global");
         assertTrue(globalStateDir.mkdirs());
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(globalStateDir, ".checkpoint"));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(globalStateDir, ".checkpoint_" + globalStore));
 
         // set the checkpointed offset to the commit marker of partition-1
         // even if `poll()` won't return any data for partition-1, we should still finish the restore

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.BytesUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -34,14 +36,14 @@ public class BytesTest {
     public void testIncrement() {
         byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
         byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
-        Bytes output = Bytes.increment(Bytes.wrap(input));
+        Bytes output = BytesUtils.increment(Bytes.wrap(input));
         assertArrayEquals(output.get(), expected);
     }
 
     @Test
     public void testIncrementUpperBoundary() {
         byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        assertThrows(IndexOutOfBoundsException.class, () -> Bytes.increment(Bytes.wrap(input)));
+        assertThrows(IndexOutOfBoundsException.class, () -> BytesUtils.increment(Bytes.wrap(input)));
     }
 
     @Test
@@ -64,7 +66,7 @@ public class BytesTest {
         map.put(key5, val);
 
         Bytes prefix = key1;
-        Bytes prefixEnd = Bytes.increment(prefix);
+        Bytes prefixEnd = BytesUtils.increment(prefix);
 
         Comparator<? super Bytes> comparator = map.comparator();
         final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
@@ -112,7 +114,7 @@ public class BytesTest {
     }
 
     private int cmp(String l, String r) {
-        return Bytes.BYTES_LEXICO_COMPARATOR.compare(
+        return BytesUtils.BYTES_LEXICO_COMPARATOR.compare(
             l.getBytes(StandardCharsets.UTF_8),
             r.getBytes(StandardCharsets.UTF_8));
     }

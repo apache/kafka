@@ -263,7 +263,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The consumer group id.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         return CoordinatorRecord.tombstone(
@@ -694,7 +694,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The group id.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newShareGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         return CoordinatorRecord.tombstone(
@@ -810,13 +810,19 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     private static List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> toTopicPartitions(
-        Map<Uuid, Set<Integer>> topicPartitions
+        Map<Uuid, Map<Integer, Integer>> assignment
     ) {
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(topicPartitions.size());
-        topicPartitions.forEach((topicId, partitions) ->
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(assignment.size());
+        assignment.forEach((topicId, partitionEpochs) -> {
+            List<Integer> partitionList = new ArrayList<>(partitionEpochs.keySet());
+            List<Integer> epochList = partitionList.stream()
+                .map(partitionEpochs::get)
+                .toList();
             topics.add(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId)
-                .setPartitions(new ArrayList<>(partitions)))
+                .setPartitions(partitionList)
+                .setAssignmentEpochs(epochList));
+            }
         );
         return topics;
     }
