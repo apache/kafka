@@ -99,6 +99,17 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
         inner.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return inner.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return inner.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         inner.close();

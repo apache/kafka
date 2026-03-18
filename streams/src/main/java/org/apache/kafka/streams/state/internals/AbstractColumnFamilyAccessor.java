@@ -24,6 +24,7 @@ import org.apache.kafka.streams.query.Position;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.RocksIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -53,12 +54,20 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
 
     @Override
     public final void commit(final RocksDBStore.DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
-        for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            final Long offset = entry.getValue();
-            final byte[] key = stringSerializer.serialize(null, tp.toString());
-            final byte[] value = longSerde.serializer().serialize(null, offset);
-            accessor.put(offsetColumnFamilyHandle, key, value);
+        if (changelogOffsets.isEmpty()) {
+            wipeOffsets(accessor);
+        } else {
+            for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
+                final TopicPartition tp = entry.getKey();
+                final Long offset = entry.getValue();
+                final byte[] key = stringSerializer.serialize(null, tp.toString());
+                if (offset != null) {
+                    final byte[] value = longSerde.serializer().serialize(null, offset);
+                    accessor.put(offsetColumnFamilyHandle, key, value);
+                } else {
+                    accessor.delete(offsetColumnFamilyHandle, key);
+                }
+            }
         }
         // We need to remove this flush call when implementing KAFKA-19712
         this.flush(accessor, offsetColumnFamilyHandle);
@@ -112,4 +121,17 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
      * @throws RocksDBException if an error occurs during the commit operation
      */
     protected abstract void flush(final RocksDBStore.DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException;
+
+    private void wipeOffsets(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
+        try (final RocksIterator iter = accessor.newIterator(offsetColumnFamilyHandle)) {
+            iter.seekToFirst();
+            while (iter.isValid()) {
+                final byte[] key = iter.key();
+                if (!Arrays.equals(key, statusKey)) {
+                    accessor.delete(offsetColumnFamilyHandle, key);
+                }
+                iter.next();
+            }
+        }
+    }
 }

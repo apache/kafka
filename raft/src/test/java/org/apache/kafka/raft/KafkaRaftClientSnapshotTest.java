@@ -51,6 +51,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -123,11 +124,12 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
-        // Check that listener was notified of the new snapshot
+        // Check that listener was notified of the committed snapshot, not the bootstrap snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
         }
+        assertFalse(context.listener.drainHandledBootstrapSnapshot().isPresent());
     }
 
     @ParameterizedTest
@@ -176,11 +178,12 @@ public final class KafkaRaftClientSnapshotTest {
             context.client.highWatermark()
         );
 
-        // Check that listener was notified of the new snapshot
+        // Check that listener was notified of the committed snapshot, not the bootstrap snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(), snapshot);
         }
+        assertFalse(context.listener.drainHandledBootstrapSnapshot().isPresent());
     }
 
     @ParameterizedTest
@@ -2127,6 +2130,61 @@ public final class KafkaRaftClientSnapshotTest {
             "Cannot create snapshot at offset (5) because it is not batch aligned. The batch containing the requested offset has a base offset of (3)",
             exception.getMessage()
         );
+    }
+
+    @Test
+    public void testListenerReceivesBootstrapSnapshot() throws Exception {
+        ReplicaKey localKey = replicaKey(randomReplicaId(), true);
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey));
+        List<String> bootstrapRecords = List.of("a", "b", "c");
+
+        RaftClientTestContext context = new RaftClientTestContext
+            .Builder(localKey.id(), localKey.directoryId().get())
+            .withRaftProtocol(KIP_853_PROTOCOL)
+            .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
+            .build();
+
+        context.pollUntil(() -> context.client.highWatermark().isPresent());
+
+        assertBootstrapSnapshot(context, bootstrapRecords);
+    }
+
+    @Test
+    public void testListenerReceivesBootstrapSnapshotViaFollowerFetch() throws Exception {
+        ReplicaKey localKey = replicaKey(randomReplicaId(), true);
+        ReplicaKey otherNodeKey = replicaKey(localKey.id() + 1, true);
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey));
+        List<String> bootstrapRecords = List.of("a", "b", "c");
+
+        RaftClientTestContext context = new RaftClientTestContext
+            .Builder(localKey.id(), localKey.directoryId().get())
+            .withRaftProtocol(KIP_853_PROTOCOL)
+            .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Advance HWM via follower fetch
+        long localLogEndOffset = context.log.endOffset().offset();
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, localLogEndOffset, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localKey.id()));
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+
+        assertBootstrapSnapshot(context, bootstrapRecords);
+    }
+
+    private static void assertBootstrapSnapshot(
+        RaftClientTestContext context,
+        List<String> expectedRecords
+    ) throws Exception {
+        try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
+            assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
+            SnapshotWriterReaderTest.assertDataSnapshot(List.of(expectedRecords), bootstrapSnapshot);
+        }
+        assertFalse(context.listener.drainHandledSnapshot().isPresent());
     }
 
     private static ReplicaKey replicaKey(int id, boolean withDirectoryId) {

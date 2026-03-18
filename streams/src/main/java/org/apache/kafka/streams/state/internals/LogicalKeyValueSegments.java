@@ -107,6 +107,17 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
         physicalStore.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return physicalStore.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return physicalStore.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         // close the logical segments first to close any open iterators

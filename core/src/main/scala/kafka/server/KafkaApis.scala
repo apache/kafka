@@ -312,11 +312,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // For lower API versions, the topic id may not be included in the request.
           // In this case, we resolve the topic id from metadata cache to ensure that the topic exists.
-          // If the topic doesn't exist, the currentTopicId will fallback to ZERO_UUID.
-          val currentTopicId = metadataCache.getTopicId(topic.name)
-          topic.setTopicId(currentTopicId)
+          // If the topic doesn't exist, the topicId will fallback to ZERO_UUID.
+          if (!useTopicIds) {
+            topic.setTopicId(metadataCache.getTopicId(topic.name))
+          }
 
-          if (currentTopicId == Uuid.ZERO_UUID) {
+          if (topic.topicId == Uuid.ZERO_UUID) {
             // If the topic is unknown, we add the topic and all its partitions
             // to the response with UNKNOWN_TOPIC_OR_PARTITION.
             responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
@@ -324,7 +325,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // Otherwise, we check all partitions to ensure that they all exist.
             val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
-              .setTopicId(topic.topicId())
+              .setTopicId(topic.topicId)
               .setName(topic.name)
 
             topic.partitions.forEach { partition =>
@@ -332,7 +333,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 topicWithValidPartitions.partitions.add(partition)
               } else {
                 responseBuilder.addPartition(
-                  topic.topicId(),
+                  topic.topicId,
                   topic.name,
                   partition.partitionIndex,
                   Errors.UNKNOWN_TOPIC_OR_PARTITION
