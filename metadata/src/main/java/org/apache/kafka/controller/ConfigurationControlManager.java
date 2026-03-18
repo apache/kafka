@@ -545,7 +545,6 @@ public class ConfigurationControlManager {
             log.info("Skipping unsupported config {} for resource {} during replay", record.name(), configResource);
             return;
         }
-        
         TimelineHashMap<String, String> configs = configData.get(configResource);
         if (configs == null) {
             configs = new TimelineHashMap<>(snapshotRegistry, 0);

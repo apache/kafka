@@ -35,7 +35,7 @@ public class MetadataImageBuilder {
 
     public MetadataImageBuilder(MetadataImage image) {
         this.delta = new MetadataDelta.Builder()
-            .setImage(MetadataImage.EMPTY)
+            .setImage(image)
             .build();
     }
 
