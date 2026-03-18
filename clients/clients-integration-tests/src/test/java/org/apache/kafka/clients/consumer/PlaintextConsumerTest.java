@@ -109,6 +109,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MI
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -384,6 +385,70 @@ public class PlaintextConsumerTest {
             sendRecords(producer, TP, 10, startingTimestamp);
             consumer.subscribe(List.of(TOPIC));
             consumeAndVerifyRecords(consumer, TP, 1, 0, 0, startingTimestamp);
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
+    public void testAsyncConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    private void testGroupConsumptionWithTwoMembers(Map<String, Object> consumerConfig) throws InterruptedException {
+        var fooTopic = "foo";
+        var foo0 = new TopicPartition(fooTopic, 0);
+        var foo1 = new TopicPartition(fooTopic, 1);
+        cluster.createTopic(fooTopic, 2, (short) BROKER_COUNT);
+
+        consumerConfig = new HashMap<>(consumerConfig);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "group_two_members");
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumerConfig)
+        ) {
+            var startingTimestamp = System.currentTimeMillis();
+
+            consumer1.subscribe(List.of(fooTopic));
+            awaitAssignment(consumer1, Set.of(foo0, foo1));
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo0, 10, 0, 0, startingTimestamp);
+
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo1, 10, 0, 0, startingTimestamp);
+
+            try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumerConfig)) {
+                consumer2.subscribe(List.of(fooTopic));
+                TestUtils.waitForCondition(() -> {
+                    consumer1.poll(Duration.ofMillis(100));
+                    consumer2.poll(Duration.ofMillis(100));
+                    return consumer1.assignment().size() == 1 && consumer2.assignment().size() == 1;
+                }, "Timed out waiting for rebalance to complete");
+
+                assertTrue(consumer1.assignment().contains(foo0) || consumer1.assignment().contains(foo1));
+                assertTrue(consumer2.assignment().contains(foo0) || consumer2.assignment().contains(foo1));
+                assertNotEquals(consumer1.assignment(), consumer2.assignment());
+
+                sendRecords(producer, foo0, 10, startingTimestamp);
+                sendRecords(producer, foo1, 10, startingTimestamp);
+                consumeAndVerifyRecords(consumer1, consumer1.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
+                consumeAndVerifyRecords(consumer2, consumer2.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
+            }
         }
     }
 
