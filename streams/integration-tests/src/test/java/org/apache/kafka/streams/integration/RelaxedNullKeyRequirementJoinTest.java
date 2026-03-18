@@ -32,7 +32,8 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -56,6 +57,7 @@ public class RelaxedNullKeyRequirementJoinTest {
     private TestInputTopic<String, String> left;
     private TestInputTopic<String, String> right;
     private TestOutputTopic<String, String> out;
+    private boolean withHeaders;
 
     @BeforeEach
     void beforeEach() {
@@ -69,8 +71,10 @@ public class RelaxedNullKeyRequirementJoinTest {
         testDriver.close();
     }
 
-    @Test
-    void testRelaxedLeftStreamStreamJoin() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRelaxedLeftStreamStreamJoin(final boolean withHeaders) {
+        this.withHeaders = withHeaders;
         leftStream
             .leftJoin(rightStream, JOINER, WINDOW)
             .to(OUT);
@@ -79,8 +83,10 @@ public class RelaxedNullKeyRequirementJoinTest {
         assertEquals(Collections.singletonList(new KeyValue<>(null, "leftValue|null")), out.readKeyValuesToList());
     }
 
-    @Test
-    void testRelaxedLeftStreamTableJoin() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRelaxedLeftStreamTableJoin(final boolean withHeaders) {
+        this.withHeaders = withHeaders;
         leftStream
             .leftJoin(rightStream.toTable(), JOINER)
             .to(OUT);
@@ -89,8 +95,10 @@ public class RelaxedNullKeyRequirementJoinTest {
         assertEquals(Collections.singletonList(new KeyValue<>(null, "leftValue|null")), out.readKeyValuesToList());
     }
 
-    @Test
-    void testRelaxedOuterStreamStreamJoin() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRelaxedOuterStreamStreamJoin(final boolean withHeaders) {
+        this.withHeaders = withHeaders;
         leftStream
             .outerJoin(rightStream, JOINER, WINDOW)
             .to(OUT);
@@ -103,8 +111,10 @@ public class RelaxedNullKeyRequirementJoinTest {
         );
     }
 
-    @Test
-    void testRelaxedLeftStreamGlobalTableJoin() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRelaxedLeftStreamGlobalTableJoin(final boolean withHeaders) {
+        this.withHeaders = withHeaders;
         final GlobalKTable<String, String> global = builder.globalTable("global");
         leftStream
             .leftJoin(global, (key, value) -> null, JOINER)
@@ -114,8 +124,10 @@ public class RelaxedNullKeyRequirementJoinTest {
         assertEquals(Collections.singletonList(new KeyValue<>(null, "leftValue|null")), out.readKeyValuesToList());
     }
 
-    @Test
-    void testDropNullKeyRecordsForRepartitionNodesWithNoRelaxedJoinDownstream() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testDropNullKeyRecordsForRepartitionNodesWithNoRelaxedJoinDownstream(final boolean withHeaders) {
+        this.withHeaders = withHeaders;
         leftStream
             .repartition()
             .to(OUT);
@@ -125,7 +137,12 @@ public class RelaxedNullKeyRequirementJoinTest {
     }
 
     private void initTopology() {
-        testDriver = new TopologyTestDriver(builder.build(), props());
+        final Properties props = props();
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+        testDriver = new TopologyTestDriver(builder.build(), props);
+
         left = testDriver.createInputTopic(
             LEFT,
             new StringSerializer(),

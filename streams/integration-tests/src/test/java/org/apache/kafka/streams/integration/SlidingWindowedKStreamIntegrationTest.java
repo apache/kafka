@@ -131,8 +131,13 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @CsvSource({
+        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
+        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
+        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
+        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+    })
+    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -157,6 +162,10 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         startStreams();
 
@@ -197,8 +206,13 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @CsvSource({
+        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
+        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
+        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
+        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+    })
+    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -223,6 +237,10 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         startStreams();
 
@@ -272,8 +290,13 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @CsvSource({
+        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
+        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
+        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
+        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+    })
+    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "L1", 0),
@@ -313,6 +336,10 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         startStreams();
 

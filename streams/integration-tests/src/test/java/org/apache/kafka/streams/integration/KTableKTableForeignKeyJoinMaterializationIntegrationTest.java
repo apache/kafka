@@ -69,8 +69,11 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"false, false", "true, false", "true, true"})
-    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable) {
+    @CsvSource({"false, false, false", "false, false, true", "true, false, false", "true, false, true", "true, true, false", "true, true, true"})
+    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable, final boolean withHeaders) {
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final Topology topology = getTopology(streamsConfig, "store", materialized, queryable);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());

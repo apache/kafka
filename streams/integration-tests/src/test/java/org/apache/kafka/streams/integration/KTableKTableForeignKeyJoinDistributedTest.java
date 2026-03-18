@@ -39,9 +39,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -121,11 +122,12 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     }
 
     @AfterEach
-    public void after() {
+    public void after() throws InterruptedException {
         client1.close(Duration.ofSeconds(60));
         client2.close(Duration.ofSeconds(60));
         quietlyCleanStateAfterTest(CLUSTER, client1);
         quietlyCleanStateAfterTest(CLUSTER, client2);
+        CLUSTER.deleteTopics(LEFT_TABLE, RIGHT_TABLE, OUTPUT);
     }
 
     public Properties getStreamsConfiguration(final String safeTestName) {
@@ -157,11 +159,17 @@ public class KTableKTableForeignKeyJoinDistributedTest {
                 .to(OUTPUT);
     }
 
-    @Test
-    public void shouldBeInitializedWithDefaultSerde(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldBeInitializedWithDefaultSerde(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties streamsConfiguration1 = getStreamsConfiguration(safeTestName);
         final Properties streamsConfiguration2 = getStreamsConfiguration(safeTestName);
+
+        if (withHeaders) {
+            streamsConfiguration1.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+            streamsConfiguration2.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

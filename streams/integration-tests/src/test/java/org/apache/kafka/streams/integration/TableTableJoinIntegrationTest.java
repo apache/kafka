@@ -29,7 +29,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -61,8 +61,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             .withLoggingDisabled();
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInner(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -70,6 +70,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -106,8 +110,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeft(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeft(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -115,6 +119,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -151,8 +159,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuter(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuter(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -160,6 +168,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -196,8 +208,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerWithVersionedStores(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerWithVersionedStores(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
@@ -205,6 +217,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -238,8 +254,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftWithVersionedStores(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftWithVersionedStores(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
@@ -247,6 +263,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -280,8 +300,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterWithVersionedStores(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterWithVersionedStores(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
@@ -289,6 +309,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
@@ -322,8 +346,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerWithLeftVersionedOnly(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerWithLeftVersionedOnly(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
@@ -331,6 +355,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -367,8 +395,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftWithLeftVersionedOnly(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftWithLeftVersionedOnly(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
@@ -376,6 +404,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -412,8 +444,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterWithLeftVersionedOnly(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterWithLeftVersionedOnly(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
@@ -421,6 +453,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -457,8 +493,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerWithRightVersionedOnly(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerWithRightVersionedOnly(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -466,6 +502,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -502,8 +542,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftWithRightVersionedOnly(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftWithRightVersionedOnly(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -511,6 +551,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -547,8 +591,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterWithRightVersionedOnly(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterWithRightVersionedOnly(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -556,6 +600,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
@@ -592,8 +640,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerInner(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -601,6 +649,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -643,8 +695,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerLeft(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerLeft(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -652,6 +704,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -691,8 +747,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerOuter(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerOuter(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -700,6 +756,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.join(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -742,8 +802,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftInner(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -751,6 +811,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -790,8 +854,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftLeft(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftLeft(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -799,6 +863,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -840,8 +908,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftOuter(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftOuter(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -849,6 +917,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.leftJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -890,8 +962,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterInner(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -899,6 +971,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -940,8 +1016,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterLeft(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterLeft(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -949,6 +1025,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
@@ -992,8 +1072,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testOuterOuter(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testOuterOuter(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
@@ -1001,6 +1081,10 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         leftTable.outerJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
