@@ -39,10 +39,10 @@ object ConsumerGroupHeartbeatRequestTest {
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
     )
   )
-  class WithAssignmentBatchingTest(cluster: ClusterInstance) extends ConsumerGroupHeartbeatRequestTest(cluster) {
+  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ConsumerGroupHeartbeatRequestTest(cluster) {
   }
 }
 
@@ -50,8 +50,7 @@ object ConsumerGroupHeartbeatRequestTest {
   types = Array(Type.KRAFT),
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
   )
 )
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
