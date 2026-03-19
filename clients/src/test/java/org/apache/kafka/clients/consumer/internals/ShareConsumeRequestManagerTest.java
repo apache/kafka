@@ -40,7 +40,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
-import org.apache.kafka.common.errors.ShareSessionNotFoundException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Header;
@@ -369,7 +369,7 @@ public class ShareConsumeRequestManagerTest {
         assertNull(shareConsumeRequestManager.requestStates(0));
         // The callback for these unsent acknowledgements will be invoked with an error code.
         assertEquals(Map.of(tip0, acknowledgements2), completedAcknowledgements.get(0));
-        assertInstanceOf(ShareSessionNotFoundException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertInstanceOf(NotLeaderOrFollowerException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         // Attempt a normal fetch to check if nodesWithPendingRequests is empty.
         assertEquals(1, sendFetches());
@@ -1490,7 +1490,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(0, builder.data().topics().find(tip0.topicId()).partitions().find(0).acknowledgementBatches().size());
 
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
-        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     @Test
@@ -1526,7 +1526,7 @@ public class ShareConsumeRequestManagerTest {
 
         // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
-        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     @Test
@@ -2226,20 +2226,18 @@ public class ShareConsumeRequestManagerTest {
         // We fail the acknowledgements for records which were received from node0 with NOT_LEADER_OR_FOLLOWER exception.
         shareConsumeRequestManager.commitSync(commitAcks, calculateDeadlineMs(time.timer(100)));
 
-        // Verify if the callback was invoked with the failed acknowledgements.
-        assertEquals(1, completedAcknowledgements.get(0).size());
-        assertEquals(acknowledgementsTp0, completedAcknowledgements.get(0).get(tip0));
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
-
         // We only send acknowledgements for tip1 to node1.
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
         client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(1, completedAcknowledgements.get(1).size());
-        assertEquals(acknowledgementsTp1, completedAcknowledgements.get(1).get(tip1));
-        assertNull(completedAcknowledgements.get(1).get(tip1).getAcknowledgeException());
+        // Verify if the callback was invoked with the failed acknowledgements. The callback is called with the commitSync processing.
+        assertEquals(2, completedAcknowledgements.get(0).size());
+        assertEquals(acknowledgementsTp0, completedAcknowledgements.get(0).get(tip0));
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertEquals(acknowledgementsTp1, completedAcknowledgements.get(0).get(tip1));
+        assertNull(completedAcknowledgements.get(0).get(tip1).getAcknowledgeException());
     }
 
     @Test
