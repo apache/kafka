@@ -227,9 +227,13 @@ org.apache.kafka.tools.DumpLogSegmentsTest:
 - testBatchAndRecordMetadataOutput
 - testDumpControlRecord
 - testDumpEmptyIndex
+- testDumpFileWithNoDotInName
 - testDumpIndexMismatches
 - testDumpMetadataRecords
 - testDumpMetadataSnapshot
+- testDumpProducerIdSnapshot
+- testDumpProducerIdSnapshotCorrupt
+- testDumpProducerIdSnapshotWithBatchMetadata
 - testDumpRemoteLogMetadataEmpty
 - testDumpRemoteLogMetadataIoException
 - testDumpRemoteLogMetadataMultipleRecordsMultipleBatches
@@ -240,11 +244,18 @@ org.apache.kafka.tools.DumpLogSegmentsTest:
 - testDumpRemoteLogMetadataOneRecordOneBatch
 - testDumpRemoteLogMetadataWithCorruption
 - testDumpTimeIndexErrors
+- testDumpTxnIndex
+- testDumpUnknownFileSuffix
+- testIndexSanityCheck
+- testInvalidDecoderClass
 - testLegacyRecordBatchOutputFormat
 - testOffsetsMessageParser
 - testPrintDataLog
 - testPrintDataLogPartialBatches
+- testPrintTrailingBytes
 - testShareGroupStateMessageParser
+- testTimeIndexDumpErrorsPrintErrors
+- testTimeIndexVerifyOnly
 - testTransactionLogMessageParser
 org.apache.kafka.tools.EndToEndLatencyTest:
 - shouldFailWhenConsumerRecordsIsEmpty

@@ -251,7 +251,12 @@ org.apache.kafka.streams.integration.RangeQueryIntegrationTest:
 - testStoreConfig
 org.apache.kafka.streams.integration.RebalanceIntegrationTest:
 - shouldCommitAllTasksIfRevokedTaskTriggerPunctuation
+org.apache.kafka.streams.integration.RebalanceIntegrationTest$WithAssignmentBatchingDisabledTest:
+- shouldCommitAllTasksIfRevokedTaskTriggerPunctuation
 org.apache.kafka.streams.integration.RebalanceProtocolMigrationIntegrationTest:
+- shouldMigrateFromAndToStreamsRebalanceProtocol
+- shouldMigrateToAndFromStreamsRebalanceProtocol
+org.apache.kafka.streams.integration.RebalanceProtocolMigrationIntegrationTest$WithAssignmentBatchingDisabledTest:
 - shouldMigrateFromAndToStreamsRebalanceProtocol
 - shouldMigrateToAndFromStreamsRebalanceProtocol
 org.apache.kafka.streams.integration.RebalanceTaskClosureIntegrationTest:
@@ -293,6 +298,8 @@ org.apache.kafka.streams.integration.SlidingWindowedKStreamIntegrationTest:
 - shouldAggregateWindowedWithNoGrace
 - shouldRestoreAfterJoinRestart
 org.apache.kafka.streams.integration.SmokeTestDriverIntegrationTest:
+- shouldWorkWithRebalance
+org.apache.kafka.streams.integration.SmokeTestDriverIntegrationTest$WithAssignmentBatchingDisabledTest:
 - shouldWorkWithRebalance
 org.apache.kafka.streams.integration.StandbyTaskCreationIntegrationTest:
 - shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables

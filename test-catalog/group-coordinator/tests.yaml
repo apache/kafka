@@ -601,6 +601,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStaticMembersLeaveUnknownGroup
 - testStaticMembersUnknownInstanceBatchLeaveGroup
 - testStaticMembersValidBatchLeaveGroup
+- testStreamsGroupAssignmentInterval
 - testStreamsGroupDeleteCancelsInitialRebalanceTimer
 - testStreamsGroupDescribeBeforeAndAfterCommittingOffset
 - testStreamsGroupDescribeNoErrors
