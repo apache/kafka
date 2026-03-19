@@ -481,6 +481,27 @@ public class StreamsGroupCommand {
             }
         }
 
+        Map<TopicPartition, OffsetAndMetadata> getInputTopicOffsets(String groupId) {
+            try {
+                var sourceTopics = adminClient.describeStreamsGroups(
+                    List.of(groupId),
+                    withTimeoutMs(new DescribeStreamsGroupsOptions())
+                ).all().get().get(groupId).subtopologies().stream()
+                    .flatMap(subtopology -> subtopology.sourceTopics().stream())
+                    .collect(Collectors.toSet());
+
+                var allTopicPartitions = adminClient.listStreamsGroupOffsets(
+                    Map.of(groupId, new ListStreamsGroupOffsetsSpec()),
+                    withTimeoutMs(new ListStreamsGroupOffsetsOptions())
+                ).partitionsToOffsetAndMetadata(groupId).get();
+
+                allTopicPartitions.keySet().removeIf(tp -> !sourceTopics.contains(tp.topic()));
+                return allTopicPartitions;
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         private List<TopicPartition> filterExistingGroupTopics(String groupId, List<TopicPartition> topicPartitions) {
             try {
                 var allTopicPartitions = adminClient.listStreamsGroupOffsets(
@@ -640,7 +661,7 @@ public class StreamsGroupCommand {
             String groupId = opts.options.valueOf(opts.groupOpt);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res;
             if (opts.options.has(opts.allInputTopicsOpt)) {
-                Set<TopicPartition> partitions = getCommittedOffsets(groupId).keySet();
+                Set<TopicPartition> partitions = getInputTopicOffsets(groupId).keySet();
                 res = deleteOffsets(groupId, partitions, new HashMap<>());
             } else if (opts.options.has(opts.inputTopicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
@@ -926,7 +947,7 @@ public class StreamsGroupCommand {
 
         private Collection<TopicPartition> getPartitionsToReset(String groupId) throws ExecutionException, InterruptedException {
             if (opts.options.has(opts.allInputTopicsOpt)) {
-                return getCommittedOffsets(groupId).keySet();
+                return getInputTopicOffsets(groupId).keySet();
             } else if (opts.options.has(opts.inputTopicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
