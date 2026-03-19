@@ -42,7 +42,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -165,7 +164,6 @@ public class MetadataLoaderTest {
     static class MockSnapshotReader implements SnapshotReader<ApiMessageAndVersion> {
         private final MetadataProvenance provenance;
         private final Iterator<Batch<ApiMessageAndVersion>> iterator;
-        private final boolean isCommittedSnapshot;
         private MockTime time = null;
         boolean closed = false;
 
@@ -185,21 +183,8 @@ public class MetadataLoaderTest {
             MetadataProvenance provenance,
             List<Batch<ApiMessageAndVersion>> batches
         ) {
-            this(
-                provenance,
-                batches,
-                !provenance.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)
-            );
-        }
-
-        MockSnapshotReader(
-            MetadataProvenance provenance,
-            List<Batch<ApiMessageAndVersion>> batches,
-            boolean isCommittedSnapshot
-        ) {
             this.provenance = provenance;
             this.iterator = batches.iterator();
-            this.isCommittedSnapshot = isCommittedSnapshot;
         }
 
         MockSnapshotReader setTime(MockTime time) {
@@ -210,11 +195,6 @@ public class MetadataLoaderTest {
         @Override
         public OffsetAndEpoch snapshotId() {
             return provenance.snapshotId();
-        }
-
-        @Override
-        public boolean isCommittedSnapshot() {
-            return isCommittedSnapshot;
         }
 
         @Override

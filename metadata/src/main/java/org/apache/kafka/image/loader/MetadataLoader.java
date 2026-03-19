@@ -450,16 +450,14 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
             loadControlRecords(batch);
-            if (reader.isCommittedSnapshot()) {
-                for (ApiMessageAndVersion record : batch.records()) {
-                    try {
-                        delta.replay(record.message());
-                    } catch (Throwable e) {
-                        faultHandler.handleFault("Error loading metadata log record " + snapshotIndex +
-                                " in snapshot at offset " + reader.lastContainedLogOffset(), e);
-                    }
-                    snapshotIndex++;
+            for (ApiMessageAndVersion record : batch.records()) {
+                try {
+                    delta.replay(record.message());
+                } catch (Throwable e) {
+                    faultHandler.handleFault("Error loading metadata log record " + snapshotIndex +
+                            " in snapshot at offset " + reader.lastContainedLogOffset(), e);
                 }
+                snapshotIndex++;
             }
         }
         delta.finishSnapshot();

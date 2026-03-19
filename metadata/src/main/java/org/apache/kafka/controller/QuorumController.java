@@ -102,7 +102,6 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.util.RecordRedactor;
@@ -1034,33 +1033,24 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        // KIP-1170: The bootstrap checkpoint can contain metadata records. If it does,
-                        // they should be considered the bootstrap metadata for the cluster.
-                        if (!reader.isCommittedSnapshot() && !messages.isEmpty()) {
-                            if (bootstrapMetadata.source().contains(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
-                                log.warn("Legacy metadata bootstrap checkpoint file exists alongside " +
-                                    "the bootstrap metadata records in the bootstrap checkpoint. ");
-                            }
-                            bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
-                        } else {
-                            log.debug("Replaying snapshot {} batch with last offset of {}",
-                                    snapshotName, offset);
 
-                            int i = 1;
-                            for (ApiMessageAndVersion message : messages) {
-                                try {
-                                    replay(message.message(), Optional.of(reader.snapshotId()),
-                                            reader.lastContainedLogOffset());
-                                } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s record " +
-                                        "from snapshot %s on standby controller, which was %d of " +
-                                        "%d record(s) in the batch with baseOffset %d.",
-                                        message.message().getClass().getSimpleName(), reader.snapshotId(),
-                                        i, messages.size(), batch.baseOffset());
-                                    throw fatalFaultHandler.handleFault(failureMessage, e);
-                                }
-                                i++;
+                        log.debug("Replaying snapshot {} batch with last offset of {}",
+                                snapshotName, offset);
+
+                        int i = 1;
+                        for (ApiMessageAndVersion message : messages) {
+                            try {
+                                replay(message.message(), Optional.of(reader.snapshotId()),
+                                        reader.lastContainedLogOffset());
+                            } catch (Throwable e) {
+                                String failureMessage = String.format("Unable to apply %s record " +
+                                    "from snapshot %s on standby controller, which was %d of " +
+                                    "%d record(s) in the batch with baseOffset %d.",
+                                    message.message().getClass().getSimpleName(), reader.snapshotId(),
+                                    i, messages.size(), batch.baseOffset());
+                                throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
+                            i++;
                         }
                     }
                     offsetControl.endLoadSnapshot(reader.lastContainedLogTimestamp());

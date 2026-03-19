@@ -144,35 +144,33 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             // Since the state machine is only one value, expect only one data record
             boolean foundDataRecord = false;
             while (reader.hasNext()) {
-                if (reader.isCommittedSnapshot()) {
-                    Batch<Integer> batch = reader.next();
-                    if (!batch.records().isEmpty()) {
-                        if (foundDataRecord) {
-                            throw new AssertionError(
-                                String.format(
-                                    "Expected the snapshot at %s to only one data batch %s",
-                                    reader.snapshotId(),
-                                    batch
-                                )
-                            );
-                        } else if (batch.records().size() != 1) {
-                            throw new AssertionError(
-                                String.format(
-                                    "Expected the snapshot at %s to only contain one record %s",
-                                    reader.snapshotId(),
-                                    batch.records()
-                                )
-                            );
-                        }
-
-                        foundDataRecord = true;
+                Batch<Integer> batch = reader.next();
+                if (!batch.records().isEmpty()) {
+                    if (foundDataRecord) {
+                        throw new AssertionError(
+                            String.format(
+                                "Expected the snapshot at %s to only one data batch %s",
+                                reader.snapshotId(),
+                                batch
+                            )
+                        );
+                    } else if (batch.records().size() != 1) {
+                        throw new AssertionError(
+                            String.format(
+                                "Expected the snapshot at %s to only contain one record %s",
+                                reader.snapshotId(),
+                                batch.records()
+                            )
+                        );
                     }
 
-                    for (Integer value : batch) {
-                        log.debug("Setting value: {}", value);
-                        committed = value;
-                        uncommitted = value;
-                    }
+                    foundDataRecord = true;
+                }
+
+                for (Integer value : batch) {
+                    log.debug("Setting value: {}", value);
+                    committed = value;
+                    uncommitted = value;
                 }
             }
             lastOffsetSnapshotted = reader.lastContainedLogOffset();
