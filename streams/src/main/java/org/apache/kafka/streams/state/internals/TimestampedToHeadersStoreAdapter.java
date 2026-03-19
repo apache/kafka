@@ -112,6 +112,17 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
         store.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         store.close();

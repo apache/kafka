@@ -277,6 +277,17 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         segments.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return segments.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return segments.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         open = false;

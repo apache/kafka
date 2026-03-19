@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -43,7 +44,6 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
 
     private final boolean eosEnabled;
     private final Set<TopicPartition> changelogPartitions;
-    private final StateDirectory stateDirectory;
     private final TaskId taskId;
     private final OffsetCheckpoint checkpointFile;
     private final String logPrefix;
@@ -75,6 +75,45 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         return (store instanceof LegacyCheckpointingStateStore<?, ?, ?>)
                 ? ((LegacyCheckpointingStateStore<?, ?, ?>) store).wrapped()
                 : store;
+    }
+
+    /**
+     * Writes a consolidated per-task {@code .checkpoint} file for downgrade support.
+     *
+     * When {@code upgradeFrom} is set to a version older than 4.3, this method writes the offsets into the legacy
+     * per-task checkpoint file so that an older Kafka Streams version can find its offsets after a downgrade.
+     *
+     * This is a no-op if {@code upgradeFrom} is {@code null} or refers to version 4.3 or later.
+     *
+     * @param logPrefix Log prefix to use for log messages.
+     * @param upgradeFrom The configured {@code upgrade.from} value, or {@code null} if not set.
+     * @param stateDirectory The singleton {@link StateDirectory} used for looking up state directories.
+     * @param taskId Either the task ID for regular stores, or {@code null} for global stores.
+     * @param offsets The offsets to write to the checkpoint file. Entries with {@code null} values are written as
+     *                {@link OffsetCheckpoint#OFFSET_UNKNOWN}.
+     */
+    public static void maybeDowngradeOffsets(final String logPrefix,
+                                             final UpgradeFromValues upgradeFrom,
+                                             final StateDirectory stateDirectory,
+                                             final TaskId taskId,
+                                             final Map<TopicPartition, Long> offsets) {
+        if (upgradeFrom == null || upgradeFrom.ordinal() > UpgradeFromValues.UPGRADE_FROM_42.ordinal()) {
+            return;
+        }
+
+        final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
+        for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
+            checkpointableOffsets.put(entry.getKey(), checkpointableOffsetFromChangelogOffset(entry.getValue()));
+        }
+
+        final File legacyCheckpointFile = checkpointFileFor(stateDirectory, taskId, null);
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(legacyCheckpointFile);
+        try {
+            log.debug("{}Writing downgrade checkpoint file for task {} with offsets {}", logPrefix, taskId, checkpointableOffsets);
+            checkpoint.write(checkpointableOffsets);
+        } catch (final IOException e) {
+            log.warn("{}Failed to write downgrade checkpoint file for task {}", logPrefix, taskId, e);
+        }
     }
 
     public static void maybeMarkCorrupted(final StateStore store) {
@@ -117,7 +156,12 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
                 for (final Map.Entry<TopicPartition, Long> entry : legacyCheckpoint.read().entrySet()) {
                     final StateStore store = stores.get(entry.getKey());
                     if (store != null) {
-                        storesToMigrate.computeIfAbsent(store, k -> new HashMap<>()).put(entry.getKey(), entry.getValue());
+                        final Long offset = changelogOffsetFromCheckpointedOffset(entry.getValue());
+                        if (offset != null) {
+                            storesToMigrate
+                                    .computeIfAbsent(store, k -> new HashMap<>())
+                                    .put(entry.getKey(), offset);
+                        }
                     }
                 }
 
@@ -156,7 +200,6 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         super(wrapped);
         this.eosEnabled = eosEnabled;
         this.changelogPartitions = changelogPartitions;
-        this.stateDirectory = stateDirectory;
         this.taskId = taskId;
         this.checkpointFile = new OffsetCheckpoint(checkpointFileFor(stateDirectory, taskId, this));
         this.logPrefix = logPrefix;
@@ -169,7 +212,7 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
             final Map<TopicPartition, Long> allOffsets = checkpointFile.read();
             for (final Map.Entry<TopicPartition, Long> entry : allOffsets.entrySet()) {
                 if (changelogPartitions.contains(entry.getKey())) {
-                    offsets.put(entry.getKey(), changelogOffsetFromCheckpointedOffset(entry.getValue()));
+                    offsets.put(entry.getKey(), entry.getValue());
                 }
             }
             checkpointedOffsets = new HashMap<>(offsets);
@@ -206,7 +249,17 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         super.commit(changelogOffsets);
 
         // update in-memory offsets
-        offsets.putAll(changelogOffsets);
+        if (changelogOffsets.isEmpty()) {
+            offsets.clear();
+        } else {
+            for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
+                if (entry.getValue() != null) {
+                    offsets.put(entry.getKey(), entry.getValue());
+                } else {
+                    offsets.remove(entry.getKey());
+                }
+            }
+        }
 
         // only write the checkpoint file if both:
         // 1. in ALOS mode (under EOS, the checkpoint file is only written when closing the store)
@@ -236,14 +289,8 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         // only checkpoint persistent and logged stores
         if (persistent() && !changelogPartitions.isEmpty()) {
             try {
-                // merge new checkpoint offsets into checkpoint file
-                final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>(offsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
-                    checkpointingOffsets.put(entry.getKey(), checkpointableOffsetFromChangelogOffset(entry.getValue()));
-                }
-
-                log.debug("Writing checkpoint: {} for task {}", checkpointingOffsets, taskId);
-                checkpointFile.write(checkpointingOffsets);
+                log.debug("Writing checkpoint: {} for task {}", offsets, taskId);
+                checkpointFile.write(offsets);
                 checkpointedOffsets = new HashMap<>(offsets);
             } catch (final IOException e) {
                 log.warn("{}Failed to write offset checkpoint file to [{}]." +
@@ -295,7 +342,7 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
         return totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
     }
 
-    // Pass in a sentinel value to checkpoint when the changelog offset is not yet initialized/known
+    // Convert a changelog offset to the value written in the checkpoint file
     private static long checkpointableOffsetFromChangelogOffset(final Long offset) {
         return offset != null ? offset : OFFSET_UNKNOWN;
     }

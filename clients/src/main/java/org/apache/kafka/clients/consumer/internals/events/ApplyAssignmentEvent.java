@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedSet;
@@ -45,8 +46,8 @@ public class ApplyAssignmentEvent extends CompletableApplicationEvent<Void> {
     public ApplyAssignmentEvent(Set<TopicPartition> assignedPartitions,
                                 SortedSet<TopicPartition> addedPartitions) {
         super(Type.APPLY_ASSIGNMENT, Long.MAX_VALUE);
-        this.assignedPartitions = Objects.requireNonNull(assignedPartitions);
-        this.addedPartitions = Objects.requireNonNull(addedPartitions);
+        this.assignedPartitions = Collections.unmodifiableSet(Objects.requireNonNull(assignedPartitions));
+        this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
     }
 
     public Set<TopicPartition> assignedPartitions() {

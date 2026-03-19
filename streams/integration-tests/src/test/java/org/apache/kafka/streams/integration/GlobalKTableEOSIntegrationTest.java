@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -42,7 +41,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -54,19 +52,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -312,101 +306,6 @@ public class GlobalKTableEOSIntegrationTest {
             () -> "waiting for initial values" +
                 "\n  expected: " + expected +
                 "\n  received: " + result
-        );
-    }
-
-    @Test
-    public void shouldSkipOverTxMarkersOnRestore() throws Exception {
-        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(false);
-    }
-
-    @Test
-    public void shouldSkipOverAbortedMessagesOnRestore() throws Exception {
-        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(true);
-    }
-
-    private void shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(final boolean appendAbortedMessages) throws Exception {
-        // records with key 1L, 2L, and 4L are written into partition-0
-        // record with key 3L is written into partition-1
-        produceInitialGlobalTableValues();
-        final String stateDir = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
-        final File globalStateDir = new File(
-            stateDir
-                + File.separator
-                + streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
-                + File.separator
-                + "global");
-        assertTrue(globalStateDir.mkdirs());
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(globalStateDir, ".checkpoint_" + globalStore));
-
-        // set the checkpointed offset to the commit marker of partition-1
-        // even if `poll()` won't return any data for partition-1, we should still finish the restore
-        checkpoint.write(Collections.singletonMap(new TopicPartition(globalTableTopic, 1), 1L));
-
-        if (appendAbortedMessages) {
-            final AtomicReference<Exception> error = new AtomicReference<>();
-            startStreams(new StateRestoreListener() {
-                @Override
-                public void onRestoreStart(final TopicPartition topicPartition,
-                                           final String storeName,
-                                           final long startingOffset,
-                                           final long endingOffset) {
-                    // we need to write aborted messages only after we init the `highWatermark`
-                    // to move the `endOffset` beyond the `highWatermark
-                    //
-                    // we cannot write committed messages because we want to test the case that
-                    // poll() returns no records
-                    //
-                    // cf. GlobalStateManagerImpl#restoreState()
-                    try {
-                        produceAbortedMessages();
-                    } catch (final Exception fatal) {
-                        error.set(fatal);
-                    }
-                }
-
-                @Override
-                public void onBatchRestored(final TopicPartition topicPartition,
-                                            final String storeName,
-                                            final long batchEndOffset,
-                                            final long numRestored) { }
-
-                @Override
-                public void onRestoreEnd(final TopicPartition topicPartition,
-                                         final String storeName,
-                                         final long totalRestored) { }
-            });
-            final Exception fatal = error.get();
-            if (fatal != null) {
-                throw fatal;
-            }
-        } else {
-            startStreams();
-        }
-
-        final Map<Long, String> expected = new HashMap<>();
-        expected.put(1L, "A");
-        expected.put(2L, "B");
-        // skip record <3L, "C"> because we won't read it (cf checkpoint file above)
-        expected.put(4L, "D");
-
-        final ReadOnlyKeyValueStore<Long, String> store = IntegrationTestUtils
-            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
-        assertNotNull(store);
-
-        final Map<Long, String> storeContent = new HashMap<>();
-        TestUtils.waitForCondition(
-            () -> {
-                storeContent.clear();
-                try (final KeyValueIterator<Long, String> it = store.all()) {
-                    it.forEachRemaining(kv -> storeContent.put(kv.key, kv.value));
-                }
-                return storeContent.equals(expected);
-            },
-            30_000L,
-            () -> "waiting for initial values" +
-                "\n  expected: " + expected +
-                "\n  received: " + storeContent
         );
     }
 

@@ -309,6 +309,17 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // same physical RocksDB instance
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return segmentStores.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return segmentStores.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         open = false;

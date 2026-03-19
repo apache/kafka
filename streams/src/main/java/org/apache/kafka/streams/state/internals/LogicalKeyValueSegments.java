@@ -86,8 +86,8 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     // VisibleForTesting
-    LogicalKeyValueSegment getReservedSegment(final long segmentId) {
-        return reservedSegments.get(segmentId);
+    LogicalKeyValueSegment getReservedSegment() {
+        return reservedSegments.get(-1L);
     }
 
     @Override
@@ -105,6 +105,18 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         physicalStore.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
+    public boolean managesOffsets() {
+        return physicalStore.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return physicalStore.committedOffset(partition);
     }
 
     @Override
