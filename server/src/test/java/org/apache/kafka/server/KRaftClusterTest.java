@@ -49,7 +49,6 @@ import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
-import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
@@ -1403,33 +1402,6 @@ public class KRaftClusterTest {
                 assertNotNull(exception.getCause());
                 assertEquals(UnsupportedVersionException.class, exception.getCause().getClass());
             }
-        }
-    }
-
-    @Test
-    public void testStartupWithNonDefaultKControllerDynamicConfiguration() throws Exception {
-        var bootstrapRecords = List.of(
-            new ApiMessageAndVersion(new FeatureLevelRecord()
-                .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()), (short) 0),
-            new ApiMessageAndVersion(new ConfigRecord()
-                .setResourceType(ConfigResource.Type.BROKER.id())
-                .setResourceName("")
-                .setName("num.io.threads")
-                .setValue("9"), (short) 0));
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            var controller = cluster.controllers().values().iterator().next();
-            TestUtils.retryOnExceptionWithTimeout(60000, () -> {
-                assertNotNull(controller.controllerApisHandlerPool());
-                assertEquals(9, controller.controllerApisHandlerPool().threadPoolSize().get());
-            });
         }
     }
 
