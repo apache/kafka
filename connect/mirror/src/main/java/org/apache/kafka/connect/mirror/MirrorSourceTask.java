@@ -35,7 +35,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +61,20 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+
+    // -------------------------------------------------------------------------
+    // ENHANCEMENT: New field to track the last-seen logStartOffset per partition.
+    //
+    // logStartOffset = the lowest offset currently stored on the Kafka broker.
+    // Anything below it has been deleted by Kafka's retention policy.
+    //
+    // We store this per partition so we can compare it on every poll() and
+    // detect two failure scenarios:
+    //   1. Log Truncation  → our consumer position dropped BELOW logStartOffset
+    //   2. Topic Reset     → logStartOffset itself dropped back to 0 (topic was
+    //                        deleted and recreated)
+    // -------------------------------------------------------------------------
+    private final Map<TopicPartition, Long> lastKnownLogStartOffset = new HashMap<>();
 
     public MirrorSourceTask() {}
 
@@ -116,14 +132,14 @@ public class MirrorSourceTask extends SourceTask {
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway.");
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
         Utils.closeQuietly(legacyMetrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-   
+
     @Override
     public String version() {
         return new MirrorSourceConnector().version();
@@ -138,6 +154,102 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         }
         try {
+            // -----------------------------------------------------------------
+            // ENHANCEMENT: Fault detection block.
+            //
+            // consumer.beginningOffsets() asks the broker for the current
+            // logStartOffset of each partition — the lowest offset that is
+            // still physically stored on disk. Anything below this has been
+            // permanently deleted by Kafka's log retention policy.
+            //
+            // We call this BEFORE consumer.poll() so we can catch problems
+            // before blindly reading (and silently skipping) missing data.
+            // -----------------------------------------------------------------
+            Set<TopicPartition> assignedPartitions = consumer.assignment();
+            Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(assignedPartitions);
+
+            for (TopicPartition tp : assignedPartitions) {
+                long logStartOffset  = beginningOffsets.getOrDefault(tp, 0L);
+                // consumer.position(tp) = the next offset this consumer will fetch.
+                // It reflects where we are right now, before the upcoming poll().
+                long currentPosition = consumer.position(tp);
+                Long prevLogStart    = lastKnownLogStartOffset.get(tp);
+
+                // -------------------------------------------------------------
+                // ENHANCEMENT 2: Topic Reset Detection
+                //
+                // A "topic reset" = operator deletes and recreates the topic.
+                // After recreation, the broker starts logStartOffset at 0 again.
+                //
+                // We know a reset happened when:
+                //   - prevLogStart > 0  (topic previously had data, offset was advancing)
+                //   - logStartOffset == 0  (broker is now serving a fresh empty topic)
+                //
+                // Without this check, MirrorMaker 2 would try to seek to an
+                // offset that no longer exists in the new topic and stall/crash.
+                //
+                // Fix: seek back to 0 so replication restarts from the beginning
+                // of the newly created topic. No operator action needed.
+                // -------------------------------------------------------------
+                if (prevLogStart != null && prevLogStart > 0 && logStartOffset == 0) {
+                    log.warn(
+                        "[MirrorSourceTask] TOPIC RESET DETECTED on partition {} at {}. " +
+                        "logStartOffset dropped from {} to 0. " +
+                        "Topic was likely deleted and recreated. " +
+                        "Seeking to offset 0 and resuming replication automatically.",
+                        tp, Instant.now(), prevLogStart
+                    );
+                    // Seek back to the beginning of the fresh topic.
+                    consumer.seek(tp, 0L);
+                    // Update our baseline so we don't re-trigger this on the next poll.
+                    lastKnownLogStartOffset.put(tp, 0L);
+                    continue; // skip truncation check for this partition this cycle
+                }
+
+                // -------------------------------------------------------------
+                // ENHANCEMENT 1: Log Truncation Detection (Fail-Fast)
+                //
+                // Log truncation = Kafka's retention policy deleted segments
+                // that MirrorMaker 2 has not yet replicated.
+                //
+                // We know truncation happened when:
+                //   currentPosition < logStartOffset
+                //   (we want to read offset 50, but broker only has from 200+)
+                //
+                // Without this check, vanilla MirrorMaker 2 catches the resulting
+                // OffsetOutOfRangeException inside poll() and silently resets to
+                // the latest offset — creating an invisible gap in the DR cluster.
+                //
+                // Fix: detect it before poll() and throw DataLossException so
+                // the Connect framework marks this task as FAILED immediately.
+                // This is intentional fail-fast behaviour — the operator must
+                // investigate rather than silently losing data.
+                // -------------------------------------------------------------
+                if (currentPosition < logStartOffset) {
+                    long lostMessages = logStartOffset - currentPosition;
+                    String errorMsg = String.format(
+                        "[MirrorSourceTask] LOG TRUNCATION DETECTED on partition %s. " +
+                        "Consumer position %d is below logStartOffset %d. " +
+                        "Approximately %d messages were deleted by retention before replication completed. " +
+                        "These messages are permanently lost on the source. " +
+                        "Failing fast — operator must inspect DR cluster for gaps starting at offset %d.",
+                        tp, currentPosition, logStartOffset, lostMessages, currentPosition
+                    );
+                    log.error(errorMsg);
+                    // DataLossException extends RuntimeException (see DataLossException.java).
+                    // Throwing here causes Connect to mark the task FAILED and surface
+                    // the error in logs and the Connect REST API — no silent data loss.
+                    throw new DataLossException(errorMsg);
+                }
+
+                // Save the current logStartOffset as the new baseline for next poll cycle.
+                lastKnownLogStartOffset.put(tp, logStartOffset);
+            }
+            // -----------------------------------------------------------------
+            // END ENHANCEMENT BLOCK
+            // Everything below is the original unmodified poll() logic.
+            // -----------------------------------------------------------------
+
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -175,7 +287,7 @@ public class MirrorSourceTask extends SourceTask {
             consumerAccess.release();
         }
     }
- 
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
@@ -209,7 +321,7 @@ public class MirrorSourceTask extends SourceTask {
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
- 
+
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
     }
@@ -239,7 +351,7 @@ public class MirrorSourceTask extends SourceTask {
         });
     }
 
-    // visible for testing 
+    // visible for testing
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
         Headers headers = convertHeaders(record);
