@@ -551,7 +551,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
     def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String, extraMessage: String = ""): Unit = {
       if (originals.containsKey(configName)) {
-        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role." + (if (extraMessage.isEmpty) "" else s" $extraMessage"))
+        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
       }
     }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
