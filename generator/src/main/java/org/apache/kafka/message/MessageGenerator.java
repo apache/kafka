@@ -120,7 +120,7 @@ public final class MessageGenerator {
 
     static final String RESPONSE_SUFFIX = "Response";
 
-    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.internals.ByteUtils";
 
     static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
 
