@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  * RocksDB-backed session store with support for record headers.
  * <p>
  * This store extends {@link RocksDBSessionStore} and returns
- * {@link QueryResult#forUnknownQueryType(Query, Object)} for all queries,
+ * {@link QueryResult#forUnknownQueryType(Query, StateStore)} for all queries,
  * as IQv2 query handling is done at the metered layer.
  * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]

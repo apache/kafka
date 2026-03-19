@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -31,7 +32,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  * {@link TimestampedBytesStore} (for timestamp support) and {@link HeadersBytesStore}
  * (for header support) marker interfaces.
  * <p>
- * This store returns {@link QueryResult#forUnknownQueryType(Query, Object)} for all queries,
+ * This store returns {@link QueryResult#forUnknownQueryType(Query, StateStore)} for all queries,
  * as IQv2 query handling is done at the metered layer.
  * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
@@ -40,7 +41,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  * @see HeadersBytesStore
  * @see TimestampedBytesStore
  */
-class RocksDBTimeOrderedWindowStoreWithHeaders extends RocksDBTimeOrderedWindowStore implements TimestampedBytesStore, HeadersBytesStore {
+class RocksDBTimeOrderedWindowStoreWithHeaders extends RocksDBTimeOrderedWindowStore<WindowSegmentWithHeaders> implements TimestampedBytesStore, HeadersBytesStore {
 
     RocksDBTimeOrderedWindowStoreWithHeaders(final RocksDBTimeOrderedWindowSegmentedBytesStore<WindowSegmentWithHeaders> store,
                                              final boolean retainDuplicates,

@@ -55,6 +55,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +66,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.delete;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests upgrade path from time-ordered session store (without headers) to
@@ -108,7 +110,10 @@ public class TimeOrderedSessionStoreUpgradeTest {
         if (value == null) {
             return null;
         }
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
+        final byte[] rawHeaders = HeadersSerializer
+            .serialize(preSerializedHeaders, ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders))
+            .array();
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
@@ -283,21 +288,13 @@ public class TimeOrderedSessionStoreUpgradeTest {
 
     // --- DSL-level supplier resolution tests ---
 
-    static Stream<Arguments> withIndexParams() {
-        return Stream.of(
-            Arguments.of(true),
-            Arguments.of(false)
-        );
-    }
-
     /**
      * Uses {@link BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers#sessionStore(DslSessionParams)}
      * to create stores — the same code path the DSL materializer uses when
      * {@code ON_WINDOW_CLOSE} is set. Validates the upgrade from PLAIN to HEADERS format.
      */
-    @ParameterizedTest
-    @MethodSource("withIndexParams")
-    public void shouldMigrateViaDslSupplierPath(final boolean withIndex) {
+    @Test
+    public void shouldMigrateViaDslSupplierPath() {
         final BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers dslSuppliers =
             new BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers();
 
@@ -397,8 +394,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
                     foundBSession = true;
                 }
             }
-            assertEquals(true, foundASession, "Should find A's session [100,200]");
-            assertEquals(true, foundBSession, "Should find B's session [150,150]");
+            assertTrue(foundASession, "Should find A's session [100,200]");
+            assertTrue(foundBSession, "Should find B's session [150,150]");
         }
     }
 
