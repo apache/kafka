@@ -183,20 +183,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                         new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithIndex:
-                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                        storeName,
-                        METRICS_SCOPE,
-                        retention,
-                        segmentInterval,
-                        true
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                    storeName,
+                    retention,
+                    true,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithoutIndex:
-                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                        storeName,
-                        METRICS_SCOPE,
-                        retention,
-                        segmentInterval,
-                        false
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                    storeName,
+                    retention,
+                    false,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             default:
                 throw new IllegalStateException("Unknown SchemaType: " + schemaType());
@@ -852,28 +850,28 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), expectedValue4);
 
         // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key1, windows[0].start(), windows[0].end());
         assertNull(value1);
 
         // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key1, windows[1].start(), windows[1].end());
         assertNull(value2);
 
         // expired record
         // timestampFromRawKey = 1500 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key2, windows[2].start(), windows[2].end());
         assertNull(value3);
 
         // only non-expired record
         // timestampFromRawKey = 60,000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key3, windows[3].start(), windows[3].end());
         assertEquals(Bytes.wrap(value4), Bytes.wrap(expectedValue4));
 
-        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key3, 2000, 3000);
         assertNull(noValue);
     }
@@ -900,7 +898,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         // Fetch point
         assertEquals(
             Collections.singletonList(KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L)),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 100L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 100L))
         );
 
         // Fetch partial boundary
@@ -909,7 +907,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 200L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 200L))
         );
 
         // Fetch partial
@@ -918,11 +916,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 201L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(99L, 201L))
         );
 
         // Fetch partial
-        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 199L)) {
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(101L, 199L)) {
             assertTrue(toListAndCloseIterator(values).isEmpty());
         }
 
@@ -933,7 +931,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
                 KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 300L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 300L))
         );
 
         // Fetch all
@@ -943,13 +941,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
                 KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 301L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(99L, 301L))
         );
 
         // Fetch all
         assertEquals(
             Collections.singletonList(KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 299L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(101L, 299L))
         );
     }
 

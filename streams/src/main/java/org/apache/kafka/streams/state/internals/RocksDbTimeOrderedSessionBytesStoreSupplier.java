@@ -58,15 +58,14 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
                     segmentIntervalMs(),
                     withIndex
                 );
-            return new RocksDBTimeOrderedSessionStoreWithHeaders(bytesStore);
+            return new RocksDBTimeOrderedSessionStore(bytesStore);
         }
-        final RocksDBTimeOrderedSessionSegmentedBytesStore bytesStore =
-            new RocksDBTimeOrderedSessionSegmentedBytesStore(
+        final RocksDBTimeOrderedSessionSegmentedBytesStore<KeyValueSegment> bytesStore =
+            new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
                 name,
-                metricsScope(),
                 retentionPeriod,
-                segmentIntervalMs(),
-                withIndex
+                withIndex,
+                new KeyValueSegments(name, metricsScope(), retentionPeriod, segmentIntervalMs())
             );
         return new RocksDBTimeOrderedSessionStore(bytesStore);
     }

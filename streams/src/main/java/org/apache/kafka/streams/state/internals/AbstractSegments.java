@@ -38,7 +38,7 @@ import java.util.NavigableMap;
 import java.util.SimpleTimeZone;
 import java.util.TreeMap;
 
-abstract class AbstractSegments<S extends Segment> implements Segments<S> {
+public abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     private static final Logger log = LoggerFactory.getLogger(AbstractSegments.class);
 
     final TreeMap<Long, S> segments = new TreeMap<>();
@@ -184,7 +184,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         }
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public boolean managesOffsets() {
         return true;
