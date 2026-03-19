@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -135,6 +136,9 @@ class ActiveTaskCreator {
                                               final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         final List<StreamTask> createdTasks = new ArrayList<>();
 
+        final String upgradeFromStr = applicationConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        final UpgradeFromValues upgradeFrom = upgradeFromStr != null ? UpgradeFromValues.fromString(upgradeFromStr) : null;
+
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final LogContext logContext = getLogContext(taskId);
@@ -148,7 +152,8 @@ class ActiveTaskCreator {
                 logContext,
                 stateDirectory,
                 topology.storeToChangelogTopic(),
-                partitions);
+                partitions,
+                upgradeFrom);
 
             final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,

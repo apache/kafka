@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
@@ -25,8 +27,8 @@ import java.util.SortedSet;
 
 /**
  * Event sent from the background to the app thread, to notify that a new assignment has been reconciled.
- * The app thread is expected to apply the assignment change to the subscription state in the next call to consumer.poll,
- * and invoke the onPartitionsAssigned callback if needed.
+ * The app thread is expected to apply the assignment change to the subscription state in the next call to
+ * {@link Consumer#poll(Duration)} and invoke the onPartitionsAssigned callback if needed.
  */
 public class PartitionsAssignedEvent extends CompletableBackgroundEvent<Void> {
 
@@ -42,7 +44,7 @@ public class PartitionsAssignedEvent extends CompletableBackgroundEvent<Void> {
     public PartitionsAssignedEvent(final Set<TopicPartition> assignedPartitions,
                                    final SortedSet<TopicPartition> addedPartitions) {
         super(Type.PARTITIONS_ASSIGNED, Long.MAX_VALUE);
-        this.assignedPartitions = Objects.requireNonNull(assignedPartitions);
+        this.assignedPartitions = Collections.unmodifiableSet(Objects.requireNonNull(assignedPartitions));
         this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
     }
 

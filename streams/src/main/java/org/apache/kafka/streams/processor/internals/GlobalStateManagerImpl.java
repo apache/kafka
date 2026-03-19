@@ -38,6 +38,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -117,6 +118,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private final Map<String, StateStoreMetadata> storeMetadata = new HashMap<>();
     private final boolean eosEnabled;
+    private final UpgradeFromValues upgradeFrom;
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
@@ -161,6 +163,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         final boolean globalEnabled = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
         processingExceptionHandler = globalEnabled ? config.processingExceptionHandler() : null;
         eosEnabled = StreamsConfigUtils.eosEnabled(config);
+        final String upgradeFromStr = config.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        upgradeFrom = upgradeFromStr != null ? UpgradeFromValues.fromString(upgradeFromStr) : null;
     }
 
     @Override
@@ -624,6 +628,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 log.info("Skipping to close non-initialized store {}", entry.getKey());
             }
         }
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(logPrefix, upgradeFrom, stateDirectory, null, currentOffsets);
 
         if (closeFailed.length() > 0) {
             throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
