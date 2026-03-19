@@ -138,17 +138,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class DumpLogSegmentsTest {
     private static final Pattern SIZE_PATTERN = Pattern.compile(".+?size:\\s(\\d+).+");
 
-    private static final class BatchInfo {
-        private final List<SimpleRecord> records;
-        private final boolean hasKeys;
-        private final boolean hasValues;
-
-        private BatchInfo(List<SimpleRecord> records, boolean hasKeys, boolean hasValues) {
-            this.records = records;
-            this.hasKeys = hasKeys;
-            this.hasValues = hasValues;
-        }
-    }
+    private record BatchInfo(
+        List<SimpleRecord> records,
+        boolean hasKeys,
+        boolean hasValues
+    ) { }
 
     private final File tmpDir = TestUtils.tempDir();
     private final File logDir = TestUtils.randomPartitionLogDir(tmpDir);
