@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -149,10 +148,10 @@ public class InternalTopicIntegrationTest {
         return Admin.create(adminClientConfig);
     }
 
-    private void configureStreams(final boolean streamsProtocolEnabled, final String appID) {
+    private void configureStreams(final boolean withHeaders, final String appID) {
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        if (streamsProtocolEnabled) {
-            streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        if (withHeaders) {
+            streamsProp.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
     }
 
@@ -162,9 +161,9 @@ public class InternalTopicIntegrationTest {
      */
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldGetToRunningWithWindowedTableInFKJ(final boolean streamsProtocolEnabled) throws Exception {
-        final String appID = APP_ID + "-windowed-FKJ-" + streamsProtocolEnabled;
-        configureStreams(streamsProtocolEnabled, appID);
+    public void shouldGetToRunningWithWindowedTableInFKJ(final boolean withHeaders) throws Exception {
+        final String appID = APP_ID + "-windowed-FKJ-" + withHeaders;
+        configureStreams(withHeaders, appID);
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         final KStream<String, String> inputTopic = streamsBuilder.stream(DEFAULT_INPUT_TOPIC);
@@ -192,9 +191,9 @@ public class InternalTopicIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldCompactTopicsForKeyValueStoreChangelogs(final boolean streamsProtocolEnabled) throws Exception {
-        final String appID = APP_ID + "-compact-" + streamsProtocolEnabled;
-        configureStreams(streamsProtocolEnabled, appID);
+    public void shouldCompactTopicsForKeyValueStoreChangelogs(final boolean withHeaders) throws Exception {
+        final String appID = APP_ID + "-compact-" + withHeaders;
+        configureStreams(withHeaders, appID);
 
         //
         // Step 1: Configure and start a simple word count topology
@@ -230,9 +229,9 @@ public class InternalTopicIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs(final boolean streamsProtocolEnabled) throws Exception {
-        final String appID = APP_ID + "-compact-delete-" + streamsProtocolEnabled;
-        configureStreams(streamsProtocolEnabled, appID);
+    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs(final boolean withHeaders) throws Exception {
+        final String appID = APP_ID + "-compact-delete-" + withHeaders;
+        configureStreams(withHeaders, appID);
 
         //
         // Step 1: Configure and start a simple word count topology

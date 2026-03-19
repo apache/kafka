@@ -48,8 +48,9 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -113,8 +114,9 @@ public class SuppressionIntegrationTest {
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
     }
 
-    @Test
-    public void shouldUseDefaultSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldUseDefaultSerdes(final boolean withHeaders) {
         final String testId = "-shouldInheritSerdes";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -144,6 +146,10 @@ public class SuppressionIntegrationTest {
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -165,8 +171,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldInheritSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldInheritSerdes(final boolean withHeaders) {
         final String testId = "-shouldInheritSerdes";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -196,6 +203,10 @@ public class SuppressionIntegrationTest {
         final Properties streamsConfig = getStreamsConfig(appId);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
@@ -246,8 +257,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutdownWhenRecordConstraintIsViolated() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownWhenRecordConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
         final String testId = "-shouldShutdownWhenRecordConstraintIsViolated";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -269,6 +281,10 @@ public class SuppressionIntegrationTest {
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = getStreamsConfig(appId);
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -287,8 +303,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutdownWhenBytesConstraintIsViolated() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownWhenBytesConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
         final String testId = "-shouldShutdownWhenBytesConstraintIsViolated";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -311,6 +328,10 @@ public class SuppressionIntegrationTest {
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = getStreamsConfig(appId);
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -329,8 +350,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAllowOverridingChangelogConfig() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAllowOverridingChangelogConfig(final boolean withHeaders) {
         final String testId = "-shouldAllowOverridingChangelogConfig";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -364,6 +386,10 @@ public class SuppressionIntegrationTest {
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -389,8 +415,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldCreateChangelogByDefault() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCreateChangelogByDefault(final boolean withHeaders) {
         final String testId = "-shouldCreateChangelogByDefault";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -422,6 +449,10 @@ public class SuppressionIntegrationTest {
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -445,8 +476,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAllowDisablingChangelog() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAllowDisablingChangelog(final boolean withHeaders) {
         final String testId = "-shouldAllowDisablingChangelog";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -477,6 +509,10 @@ public class SuppressionIntegrationTest {
         final Properties streamsConfig = getStreamsConfig(appId);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {

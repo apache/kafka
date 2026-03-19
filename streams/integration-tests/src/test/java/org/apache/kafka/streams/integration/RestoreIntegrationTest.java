@@ -200,7 +200,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreNullRecord(final boolean useNewProtocol) throws Exception {
+    public void shouldRestoreNullRecord(final boolean withHeaders) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String applicationId = appId;
@@ -217,8 +217,8 @@ public class RestoreIntegrationTest {
                 Serdes.BytesSerde.class.getName(),
                 props);
 
-        if (useNewProtocol) {
-            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         CLUSTER.createTopics(inputTopic);
@@ -270,19 +270,20 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean useNewProtocol) throws Exception {
+    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean withHeaders) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final Topology topology = new Topology();
 
         final Properties props = props();
-        if (useNewProtocol) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
+        final boolean useNewProtocol = false;
         if (!useNewProtocol) {
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             setCheckpointedOffset(props, inputStream, offsetCheckpointed);
@@ -331,20 +332,21 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean useNewProtocol) throws Exception {
+    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean withHeaders) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        if (useNewProtocol) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
+        final boolean useNewProtocol = false;
         if (!useNewProtocol) {
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             setCheckpointedOffset(props, inputStream, offsetCheckpointed);
@@ -396,7 +398,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromChangelogTopic(final boolean useNewProtocol) throws Exception {
+    public void shouldRestoreStateFromChangelogTopic(final boolean withHeaders) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
@@ -405,8 +407,8 @@ public class RestoreIntegrationTest {
 
         final Properties props = props();
 
-        if (useNewProtocol) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
@@ -447,7 +449,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean useNewProtocol) throws InterruptedException {
+    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
@@ -458,8 +460,8 @@ public class RestoreIntegrationTest {
                 Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled()
             );
         final Properties props = props();
-        if (useNewProtocol) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
         kafkaStreams = new KafkaStreams(builder.build(), props);
         try {
@@ -471,7 +473,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean useNewProtocol) throws InterruptedException {
+    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean withHeaders) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                 asList(KeyValue.pair(1, 1),
                         KeyValue.pair(2, 2),
@@ -501,8 +503,8 @@ public class RestoreIntegrationTest {
 
         final Properties props = props();
 
-        if (useNewProtocol) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
         kafkaStreams = new KafkaStreams(topology, props);
 
@@ -521,7 +523,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean useNewProtocol) throws Exception {
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean withHeaders) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
@@ -529,6 +531,7 @@ public class RestoreIntegrationTest {
         );
         createStateForRestoration(inputStream, 0);
 
+        final boolean useNewProtocol = false;
         if (useNewProtocol) {
             CLUSTER.setGroupStandbyReplicas(appId, 1);
         }
@@ -536,8 +539,8 @@ public class RestoreIntegrationTest {
         final Properties props1 = props();
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
-        if (useNewProtocol) {
-            props1.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props1.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
         purgeLocalStreamsState(props1);
         final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
@@ -545,8 +548,8 @@ public class RestoreIntegrationTest {
         final Properties props2 = props();
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
-        if (useNewProtocol) {
-            props2.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props2.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
         purgeLocalStreamsState(props2);
         final KafkaStreams streams2 = new KafkaStreams(builder.build(), props2);
@@ -604,7 +607,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldInvokeUserDefinedGlobalStateRestoreListener(final boolean useNewProtocol) throws Exception {
+    public void shouldInvokeUserDefinedGlobalStateRestoreListener(final boolean withHeaders) throws Exception {
         final String inputTopic = "inputTopic";
         final String outputTopic = "outputTopic";
         CLUSTER.createTopic(inputTopic, 5, 1);
@@ -615,10 +618,16 @@ public class RestoreIntegrationTest {
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
             mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
+        if (withHeaders) {
+            kafkaStreams1Configuration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2")
         );
+        if (withHeaders) {
+            kafkaStreams2Configuration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopic, Consumed.with(EARLIEST))
@@ -633,6 +642,7 @@ public class RestoreIntegrationTest {
 
         sendEvents(inputTopic, sampleData);
 
+        final boolean useNewProtocol = false;
         kafkaStreams = startKafkaStreams(builder, null, kafkaStreams1Configuration, useNewProtocol);
 
         validateReceivedMessages(sampleData, outputTopic);
@@ -676,14 +686,14 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRecordRestoreMetrics(final boolean useNewProtocol) throws Exception {
+    public void shouldRecordRestoreMetrics(final boolean withHeaders) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties props = props();
 
-        if (useNewProtocol) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");

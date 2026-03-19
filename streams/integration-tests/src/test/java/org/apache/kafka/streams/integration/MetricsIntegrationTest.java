@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -59,7 +58,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -344,9 +342,9 @@ public class MetricsIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldAddMetricsOnAllLevels(final boolean streamsProtocolEnabled) throws Exception {
-        if (streamsProtocolEnabled) {
-            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+    public void shouldAddMetricsOnAllLevels(final boolean withHeaders) throws Exception {
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
@@ -383,9 +381,9 @@ public class MetricsIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldAddMetricsForWindowStoreAndSuppressionBuffer(final boolean streamsProtocolEnabled) throws Exception {
-        if (streamsProtocolEnabled) {
-            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+    public void shouldAddMetricsForWindowStoreAndSuppressionBuffer(final boolean withHeaders) throws Exception {
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         final Duration windowSize = Duration.ofMillis(50);
@@ -416,9 +414,9 @@ public class MetricsIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldAddMetricsForSessionStore(final boolean streamsProtocolEnabled) throws Exception {
-        if (streamsProtocolEnabled) {
-            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+    public void shouldAddMetricsForSessionStore(final boolean withHeaders) throws Exception {
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
 
         final Duration inactivityGap = Duration.ofMillis(50);
