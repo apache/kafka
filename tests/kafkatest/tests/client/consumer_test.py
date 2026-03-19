@@ -404,7 +404,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         group_protocol=[consumer_group.consumer_group_protocol],
         enable_assignment_batching=[False]
     )
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)

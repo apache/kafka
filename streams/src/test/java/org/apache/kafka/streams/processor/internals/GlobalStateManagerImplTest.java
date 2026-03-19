@@ -32,6 +32,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -1195,6 +1196,60 @@ public class GlobalStateManagerImplTest {
 
         stateManager.registerStore(store5, stateRestoreCallback, null);
         assertEquals(0, stateRestoreCallback.restored.size());
+    }
+
+    @Test
+    public void shouldWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsPre43() throws IOException {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.UPGRADE_FROM_CONFIG, UpgradeFromValues.UPGRADE_FROM_42.toString());
+        final StreamsConfig downgradeConfig = new StreamsConfig(props);
+        final StateDirectory downgradeStateDir = new StateDirectory(downgradeConfig, time, true, false);
+        final GlobalStateManagerImpl downgradeManager = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            downgradeStateDir,
+            stateRestoreListener,
+            downgradeConfig
+        );
+
+        final InternalMockProcessorContext downgradeContext =
+            new InternalMockProcessorContext(downgradeStateDir.globalStateDir(), downgradeConfig);
+        downgradeManager.setGlobalProcessorContext(downgradeContext);
+        downgradeContext.setStateManger(downgradeManager);
+
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        downgradeManager.initialize();
+
+        // simulate some offsets being tracked
+        downgradeManager.updateChangelogOffsets(Collections.singletonMap(t1, 500L));
+
+        downgradeManager.close();
+
+        // verify the legacy global checkpoint was written
+        final File legacyGlobalFile = new File(downgradeStateDir.globalStateDir(),
+            LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertTrue(legacyGlobalFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyGlobalFile).read();
+        assertEquals(500L, written.get(t1));
+    }
+
+    @Test
+    public void shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        processorContext.setStateManger(stateManager);
+        stateManager.initialize();
+
+        stateManager.updateChangelogOffsets(Collections.singletonMap(t1, 500L));
+        stateManager.close();
+
+        final File legacyGlobalFile = new File(stateDirectory.globalStateDir(),
+            LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertFalse(legacyGlobalFile.exists());
     }
 
     private void writeCorruptCheckpoint() throws IOException {

@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,7 +58,7 @@ import java.util.Optional;
  * @see RocksDBTimeOrderedSessionSegmentedBytesStore
  * @see RocksDBTimeOrderedWindowSegmentedBytesStore
  */
-public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> {
+public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Segment> extends AbstractDualSchemaRocksDBSegmentedBytesStore<S> {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractDualSchemaRocksDBSegmentedBytesStore.class);
 
     abstract class IndexToBaseStoreIterator implements KeyValueIterator<Bytes, byte[]> {
@@ -113,14 +115,32 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         protected abstract Bytes getBaseKey(final Bytes indexKey);
     }
 
+    /**
+     * Concrete implementation of IndexToBaseStoreIterator for window key schema.
+     * Converts index keys (key-first schema) to base store keys (time-first schema).
+     * <p>
+     * This can be reused by both window store implementations (with and without headers).
+     */
+    class WindowKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
+        WindowKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
+            super(indexIterator);
+        }
+
+        @Override
+        protected Bytes getBaseKey(final Bytes indexKey) {
+            final byte[] keyBytes = KeyFirstWindowKeySchema.extractStoreKeyBytes(indexKey.get());
+            final long timestamp = KeyFirstWindowKeySchema.extractStoreTimestamp(indexKey.get());
+            final int seqnum = KeyFirstWindowKeySchema.extractStoreSequence(indexKey.get());
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(keyBytes, timestamp, seqnum);
+        }
+    }
+
     AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,
-                                                  final String metricsScope,
                                                   final long retention,
-                                                  final long segmentInterval,
                                                   final KeySchema baseKeySchema,
-                                                  final Optional<KeySchema> indexKeySchema) {
-        super(name, baseKeySchema, indexKeySchema,
-            new KeyValueSegments(name, metricsScope, retention, segmentInterval), retention);
+                                                  final Optional<KeySchema> indexKeySchema,
+                                                  final AbstractSegments<S> segments) {
+        super(name, baseKeySchema, indexKeySchema, segments, retention);
     }
 
     @Override
@@ -137,7 +157,15 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         return fetch(key, from, to, false);
     }
 
-    protected abstract IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator);
+    protected abstract IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<S> segmentIterator);
+
+    public void put(final Bytes key, final long timestamp, final int seqnum, final byte[] value) {
+        throw new UnsupportedOperationException("This store does not support put with timestamp and seqnum");
+    }
+
+    public byte[] fetch(final Bytes key, final long timestamp, final int seqnum) {
+        throw new UnsupportedOperationException("This store does not support fetch with timestamp and seqnum");
+    }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                           final long from,
@@ -151,7 +179,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         }
 
         if (indexKeySchema.isPresent()) {
-            final List<KeyValueSegment> searchSpace = indexKeySchema.get().segmentsToSearch(segments, actualFrom, to,
+            final List<S> searchSpace = indexKeySchema.get().segmentsToSearch(segments, actualFrom, to,
                 forward);
 
             final Bytes binaryFrom = indexKeySchema.get().lowerRangeFixedSize(key, actualFrom);
@@ -166,7 +194,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         }
 
 
-        final List<KeyValueSegment> searchSpace = baseKeySchema.segmentsToSearch(segments, actualFrom, to,
+        final List<S> searchSpace = baseKeySchema.segmentsToSearch(segments, actualFrom, to,
             forward);
 
         final Bytes binaryFrom = baseKeySchema.lowerRangeFixedSize(key, actualFrom);
@@ -216,7 +244,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
         }
 
         if (indexKeySchema.isPresent()) {
-            final List<KeyValueSegment> searchSpace = indexKeySchema.get().segmentsToSearch(segments, actualFrom, to,
+            final List<S> searchSpace = indexKeySchema.get().segmentsToSearch(segments, actualFrom, to,
                 forward);
 
             final Bytes binaryFrom = indexKeySchema.get().lowerRange(keyFrom, actualFrom);
@@ -230,7 +258,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
                 forward));
         }
 
-        final List<KeyValueSegment> searchSpace = baseKeySchema.segmentsToSearch(segments, actualFrom, to,
+        final List<S> searchSpace = baseKeySchema.segmentsToSearch(segments, actualFrom, to,
             forward);
 
         final Bytes binaryFrom = baseKeySchema.lowerRange(keyFrom, actualFrom);
@@ -254,7 +282,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<KeyValueSegment> searchSpace = segments.segments(actualFrom, timeTo, true);
+        final List<S> searchSpace = segments.segments(actualFrom, timeTo, true);
         final Bytes binaryFrom = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 
@@ -276,7 +304,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<KeyValueSegment> searchSpace = segments.segments(actualFrom, timeTo, false);
+        final List<S> searchSpace = segments.segments(actualFrom, timeTo, false);
         final Bytes binaryFrom = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 

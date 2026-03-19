@@ -80,6 +80,6 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplierTest {
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(RocksDBTimeOrderedWindowStoreWithHeaders.class));
         assertThat(wrapped, instanceOf(RocksDBTimeOrderedWindowSegmentedBytesStore.class));
-        assertTrue(((RocksDBTimeOrderedWindowSegmentedBytesStore) wrapped).hasIndex());
+        assertTrue(((RocksDBTimeOrderedWindowSegmentedBytesStore<?>) wrapped).hasIndex());
     }
 }

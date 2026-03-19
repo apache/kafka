@@ -418,7 +418,7 @@ public class PlaintextConsumerPollTest {
         Map<String, Object> config = Map.of(
             GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
             GROUP_ID_CONFIG, "test-group",
-            MAX_POLL_INTERVAL_MS_CONFIG, 100
+            MAX_POLL_INTERVAL_MS_CONFIG, 1000
         );
         // use consumers defined in this class plus one additional consumer
         // Use topic defined in this class + one additional topic

@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
@@ -26,15 +31,10 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  * {@link TimestampedBytesStore} (for timestamp support) and {@link HeadersBytesStore}
  * (for header support) marker interfaces.
  * <p>
- * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
+ * This store returns {@link QueryResult#forUnknownQueryType(Query, Object)} for all queries,
+ * as IQv2 query handling is done at the metered layer.
  * <p>
- * This implementation uses segment-level versioning for backward compatibility:
- * <ul>
- * <li>Old segments continue to use the legacy format without headers</li>
- * <li>New segments use the header-embedded format</li>
- * <li>Legacy values are served with empty headers on read</li>
- * <li>All new writes use the new format</li>
- * </ul>
+ * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
  *
  * @see RocksDBTimeOrderedWindowStore
  * @see HeadersBytesStore
@@ -42,9 +42,30 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  */
 class RocksDBTimeOrderedWindowStoreWithHeaders extends RocksDBTimeOrderedWindowStore implements TimestampedBytesStore, HeadersBytesStore {
 
-    RocksDBTimeOrderedWindowStoreWithHeaders(final RocksDBTimeOrderedWindowSegmentedBytesStore store,
+    RocksDBTimeOrderedWindowStoreWithHeaders(final RocksDBTimeOrderedWindowSegmentedBytesStore<WindowSegmentWithHeaders> store,
                                              final boolean retainDuplicates,
                                              final long windowSize) {
         super(store, retainDuplicates, windowSize);
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+        final Position position = getPosition();
+
+        synchronized (position) {
+            result = QueryResult.forUnknownQueryType(query, this);
+
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + this.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                );
+            }
+            result.setPosition(position.copy());
+        }
+        return result;
     }
 }
