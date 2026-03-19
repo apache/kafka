@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.internals.CachingWindowStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedWindowBytesStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.internals.TimeOrderedCachingWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -227,6 +228,7 @@ public class WindowStoreMaterializerTest {
 
     @Test
     public void shouldCreateHeadersStoreWithOnWindowCloseAndCachingEnabled() {
+        doReturn("headers").when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
         emitStrategy = EmitStrategy.onWindowClose();
 
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =
@@ -235,7 +237,7 @@ public class WindowStoreMaterializerTest {
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertInstanceOf(CachingWindowStore.class, wrapped);
+        assertInstanceOf(TimeOrderedCachingWindowStore.class, wrapped);
     }
 
 

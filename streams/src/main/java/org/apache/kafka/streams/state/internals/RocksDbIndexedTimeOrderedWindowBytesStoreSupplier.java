@@ -118,32 +118,29 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
         switch (windowStoreType) {
             case DEFAULT_WINDOW_STORE:
                 return new RocksDBTimeOrderedWindowStore(
-                    new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                    new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         name,
-                        metricsScope(),
                         retentionPeriod,
-                        segmentInterval,
-                        false),
+                        false,
+                        new KeyValueSegments(name, metricsScope(), retentionPeriod, segmentInterval)),
                     retainDuplicates,
                     windowSize);
             case INDEXED_WINDOW_STORE:
                 return new RocksDBTimeOrderedWindowStore(
-                    new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                    new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         name,
-                        metricsScope(),
                         retentionPeriod,
-                        segmentInterval,
-                        true),
+                        true,
+                        new KeyValueSegments(name, metricsScope(), retentionPeriod, segmentInterval)),
                     retainDuplicates,
                     windowSize);
             case INDEXED_WINDOW_STORE_WITH_HEADERS:
                 return new RocksDBTimeOrderedWindowStoreWithHeaders(
-                    new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                    new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         name,
-                        metricsScope(),
                         retentionPeriod,
-                        segmentInterval,
-                        true),
+                        true,
+                        new WindowSegmentsWithHeaders(name, metricsScope(), retentionPeriod, segmentInterval)),
                     retainDuplicates,
                     windowSize);
             default:

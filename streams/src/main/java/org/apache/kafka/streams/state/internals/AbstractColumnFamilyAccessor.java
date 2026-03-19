@@ -20,10 +20,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.Position;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.RocksIterator;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,6 +42,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     private final StringSerializer stringSerializer = new StringSerializer();
     private final Serdes.LongSerde longSerde = new Serdes.LongSerde();
     private final byte[] statusKey = stringSerializer.serialize(null, "status");
+    private final byte[] positionKey = stringSerializer.serialize(null, "position");
     private final byte[] openState = longSerde.serializer().serialize(null, 1L);
     private final byte[] closedState = longSerde.serializer().serialize(null, 0L);
     private final AtomicBoolean storeOpen;
@@ -50,24 +54,43 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
 
     @Override
     public final void commit(final RocksDBStore.DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
-        for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            final Long offset = entry.getValue();
-            final byte[] key = stringSerializer.serialize(null, tp.toString());
-            final byte[] value = longSerde.serializer().serialize(null, offset);
-            accessor.put(offsetColumnFamilyHandle, key, value);
+        if (changelogOffsets.isEmpty()) {
+            wipeOffsets(accessor);
+        } else {
+            for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
+                final TopicPartition tp = entry.getKey();
+                final Long offset = entry.getValue();
+                final byte[] key = stringSerializer.serialize(null, tp.toString());
+                if (offset != null) {
+                    final byte[] value = longSerde.serializer().serialize(null, offset);
+                    accessor.put(offsetColumnFamilyHandle, key, value);
+                } else {
+                    accessor.delete(offsetColumnFamilyHandle, key);
+                }
+            }
         }
         // We need to remove this flush call when implementing KAFKA-19712
         this.flush(accessor, offsetColumnFamilyHandle);
     }
 
     @Override
-    public final void open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException {
+    public final void commit(final RocksDBStore.DBAccessor accessor, final Position storePosition) throws RocksDBException {
+        accessor.put(offsetColumnFamilyHandle, positionKey, PositionSerde.serialize(storePosition).array());
+    }
+
+    @Override
+    public final Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException {
         final byte[] valueBytes = accessor.get(offsetColumnFamilyHandle, statusKey);
         if (ignoreInvalidState || (valueBytes == null || Arrays.equals(valueBytes, closedState))) {
             // If the status key is not present, we initialize it to "OPEN"
             accessor.put(offsetColumnFamilyHandle, statusKey, openState);
             storeOpen.set(true);
+            final byte[] positionBytes = accessor.get(offsetColumnFamilyHandle, positionKey);
+            if (positionBytes != null) {
+                return PositionSerde.deserialize(ByteBuffer.wrap(positionBytes));
+            } else {
+                return Position.emptyPosition();
+            }
         } else {
             throw new ProcessorStateException("Invalid state during store open. Expected state to be either empty or closed");
         }
@@ -98,4 +121,17 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
      * @throws RocksDBException if an error occurs during the commit operation
      */
     protected abstract void flush(final RocksDBStore.DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException;
+
+    private void wipeOffsets(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
+        try (final RocksIterator iter = accessor.newIterator(offsetColumnFamilyHandle)) {
+            iter.seekToFirst();
+            while (iter.isValid()) {
+                final byte[] key = iter.key();
+                if (!Arrays.equals(key, statusKey)) {
+                    accessor.delete(offsetColumnFamilyHandle, key);
+                }
+                iter.next();
+            }
+        }
+    }
 }

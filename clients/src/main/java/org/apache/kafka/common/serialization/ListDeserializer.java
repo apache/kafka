@@ -38,20 +38,18 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     final Logger log = LoggerFactory.getLogger(ListDeserializer.class);
 
-    private static final Map<Class<? extends Deserializer<?>>, Integer> FIXED_LENGTH_DESERIALIZERS = mkMap(
-        mkEntry(ShortDeserializer.class, Short.BYTES),
-        mkEntry(IntegerDeserializer.class, Integer.BYTES),
-        mkEntry(FloatDeserializer.class, Float.BYTES),
-        mkEntry(LongDeserializer.class, Long.BYTES),
-        mkEntry(DoubleDeserializer.class, Double.BYTES),
-        mkEntry(UUIDDeserializer.class, 36)
+    private static final Map<Class<? extends Deserializer<?>>, Integer> FIXED_LENGTH_DESERIALIZERS = Map.of(
+        ShortDeserializer.class, Short.BYTES,
+        IntegerDeserializer.class, Integer.BYTES,
+        FloatDeserializer.class, Float.BYTES,
+        LongDeserializer.class, Long.BYTES,
+        DoubleDeserializer.class, Double.BYTES,
+        UUIDDeserializer.class, 36
     );
 
     private Deserializer<Inner> inner;

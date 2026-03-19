@@ -16,23 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueStore;
-
-import java.io.IOException;
-
-public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore, Comparable<Segment> {
-
-    long id();
-
-    void destroy() throws IOException;
-
-    void deleteRange(Bytes keyFrom, Bytes keyTo);
-
-    void writePosition();
+public class RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndexTest extends AbstractRocksDBWindowStoreTest {
 
     @Override
-    default int compareTo(final Segment segment) {
-        return Long.compare(id(), segment.id());
+    StoreType storeType() {
+        return StoreType.RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndex;
     }
 }
