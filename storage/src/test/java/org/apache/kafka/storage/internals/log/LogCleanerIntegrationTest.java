@@ -43,6 +43,7 @@ import com.yammer.metrics.core.Metric;
 import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -78,8 +79,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class LogCleanerIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(LogCleanerIntegrationTest.class);
 
-    protected LogCleaner cleaner;
-    protected final File logDir = TestUtils.tempDirectory();
+    private LogCleaner cleaner;
+    private final File logDir = TestUtils.tempDirectory();
 
     private final List<UnifiedLog> logs = new ArrayList<>();
     private static final int DEFAULT_MAX_MESSAGE_SIZE = 128;
@@ -613,25 +614,22 @@ public class LogCleanerIntegrationTest {
     private List<KeyValueOffset> writeDupsSingleMessageSet(int numKeys, int numDups, UnifiedLog log,
                                                            Compression codec, int startKey,
                                                            byte magicValue) throws IOException {
-        List<int[]> kvs = new ArrayList<>();
+        List<KeyValueOffset> kvs = new ArrayList<>();
+        List<SimpleRecord> records = new ArrayList<>();
         for (int i = 0; i < numDups; i++) {
             for (int key = startKey; key < startKey + numKeys; key++) {
-                String payload = String.valueOf(counter());
+                String value = String.valueOf(counter());
                 incCounter();
-                kvs.add(new int[]{key, Integer.parseInt(payload)});
+                kvs.add(new KeyValueOffset(key, value, 0));
+                records.add(new SimpleRecord(
+                    time.milliseconds(),
+                    String.valueOf(key).getBytes(),
+                    value.getBytes()));
             }
         }
 
-        SimpleRecord[] records = new SimpleRecord[kvs.size()];
-        for (int i = 0; i < kvs.size(); i++) {
-            records[i] = new SimpleRecord(
-                time.milliseconds(),
-                String.valueOf(kvs.get(i)[0]).getBytes(),
-                String.valueOf(kvs.get(i)[1]).getBytes());
-        }
-
         LogAppendInfo appendInfo = log.appendAsLeaderWithRecordVersion(
-            MemoryRecords.withRecords(magicValue, codec, records),
+            MemoryRecords.withRecords(magicValue, codec, records.toArray(new SimpleRecord[0])),
             0, RecordVersion.lookup(magicValue));
         // move LSO forward to increase compaction bound
         log.updateHighWatermark(log.logEndOffset());
@@ -640,7 +638,8 @@ public class LogCleanerIntegrationTest {
 
         List<KeyValueOffset> result = new ArrayList<>();
         for (int i = 0; i < kvs.size(); i++) {
-            result.add(new KeyValueOffset(kvs.get(i)[0], String.valueOf(kvs.get(i)[1]), offsets[i]));
+            KeyValueOffset kvo = kvs.get(i);
+            result.add(new KeyValueOffset(kvo.key(), kvo.value(), offsets[i]));
         }
         return result;
     }
@@ -729,24 +728,16 @@ public class LogCleanerIntegrationTest {
 
     private Map<Integer, Integer> readFromLog(UnifiedLog log) {
         Map<Integer, Integer> result = new HashMap<>();
-        for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
-                int key = Integer.parseInt(LogTestUtils.readString(record.key()));
-                int value = Integer.parseInt(LogTestUtils.readString(record.value()));
-                result.put(key, value);
-            }
+        for (KeyValueOffset kvo : readFromLogFull(log)) {
+            result.put(kvo.key(), Integer.parseInt(kvo.value()));
         }
         return result;
     }
 
     private List<int[]> readKeyValuePairsFromLog(UnifiedLog log) {
         List<int[]> result = new ArrayList<>();
-        for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
-                int key = Integer.parseInt(LogTestUtils.readString(record.key()));
-                int value = Integer.parseInt(LogTestUtils.readString(record.value()));
-                result.add(new int[]{key, value});
-            }
+        for (KeyValueOffset kvo : readFromLogFull(log)) {
+            result.add(new int[]{kvo.key(), Integer.parseInt(kvo.value())});
         }
         return result;
     }
@@ -1040,6 +1031,11 @@ public class LogCleanerIntegrationTest {
     private void closeLog(UnifiedLog log) {
         log.close();
         logs.remove(log);
+    }
+
+    @BeforeEach
+    public void setup() {
+        counter = 0;
     }
 
     @AfterEach
