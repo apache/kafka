@@ -38,7 +38,6 @@ import org.apache.kafka.snapshot.Snapshots;
 
 import java.io.File;
 import java.io.PrintStream;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -508,28 +507,20 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        try {
-            RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
-                setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
-                setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
-                setRawSnapshotWriter(FileRawSnapshotWriter.create(
-                    clusterMetadataDirectory.toPath(),
-                    Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
-                setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion));
-            if (initialControllers.isPresent()) {
-                VoterSet voterSet = initialControllers.get().toVoterSet(controllerListenerName);
-                builder.setVoterSet(Optional.of(voterSet));
-            }
-            try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
-                writer.append(bootstrapMetadata.records());
-                writer.freeze();
-            }
-        } catch (UncheckedIOException e) {
-            throw new FormatterException("Error while writing bootstrap checkpoint file " +
-                Snapshots.snapshotPath(
-                    clusterMetadataDirectory.toPath(),
-                    Snapshots.BOOTSTRAP_SNAPSHOT_ID
-                ).toAbsolutePath() + ": " + e, e);
+        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
+            setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
+            setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
+            setRawSnapshotWriter(FileRawSnapshotWriter.create(
+                clusterMetadataDirectory.toPath(),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
+            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion));
+        if (initialControllers.isPresent()) {
+            VoterSet voterSet = initialControllers.get().toVoterSet(controllerListenerName);
+            builder.setVoterSet(Optional.of(voterSet));
+        }
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
+            writer.append(bootstrapMetadata.records());
+            writer.freeze();
         }
     }
 }
