@@ -17,19 +17,17 @@
 package kafka.server
 
 import java.io.File
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
 import java.util.{Optional, Properties}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.metadata.bootstrap.{BootstrapMetadata, BootstrapTestUtils}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -37,13 +35,6 @@ import org.junit.jupiter.api.Test
 
 class KafkaRaftServerTest {
   private val clusterIdBase64 = "H3KKO4NTRPaCWtEmm3vW7A"
-
-  private def readBootstrapMetadata(directoryPath: String): BootstrapMetadata = {
-    val metadataPartitionDir = Path.of(directoryPath,
-      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}")
-    val checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID)
-    new BootstrapDirectory(checkpointPath, true).read()
-  }
 
   @Test
   def testSuccessfulLoadMetaProperties(): Unit = {
@@ -308,7 +299,7 @@ class KafkaRaftServerTest {
       assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
       assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
 
-      val bootstrapMetadata = readBootstrapMetadata(logDir.getAbsolutePath)
+      val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(logDir.getAbsolutePath)
       assertEquals(MetadataVersion.IBP_3_3_IV3, bootstrapMetadata.metadataVersion())
     } finally {
       Utils.delete(logDir)

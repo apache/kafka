@@ -24,7 +24,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.metadata.bootstrap.BootstrapTestUtils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
@@ -53,7 +53,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -62,8 +61,6 @@ import java.util.OptionalInt;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
-import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
-import static org.apache.kafka.snapshot.Snapshots.snapshotPath;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALT;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALTED_PASSWORD;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -141,16 +138,6 @@ public class FormatterTest {
         }
     }
 
-    /**
-     * Reads bootstrap metadata from the snapshot checkpoint file in the given directory.
-     */
-    private static BootstrapMetadata readBootstrapMetadata(String directoryPath) {
-        Path metadataPartitionDir = Path.of(directoryPath,
-            CLUSTER_METADATA_TOPIC_PARTITION.topic() + "-" + CLUSTER_METADATA_TOPIC_PARTITION.partition());
-        Path checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID);
-        return new BootstrapDirectory(checkpointPath, true).read();
-    }
-
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3})
     public void testDirectories(int numDirs) throws Exception {
@@ -162,7 +149,7 @@ public class FormatterTest {
             assertEquals(OptionalInt.of(DEFAULT_NODE_ID), ensemble.nodeId());
             assertEquals(Optional.of(DEFAULT_CLUSTER_ID.toString()), ensemble.clusterId());
             assertEquals(new HashSet<>(testEnv.directories), ensemble.logDirProps().keySet());
-            BootstrapMetadata bootstrapMetadata = readBootstrapMetadata(testEnv.directory(0));
+            BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
             assertEquals(MetadataVersion.latestProduction(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -292,7 +279,7 @@ public class FormatterTest {
                     "\nFormatting metadata directory " + testEnv.directory(0) +
                     " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
                 formatter1.output().trim());
-            BootstrapMetadata bootstrapMetadata = readBootstrapMetadata(testEnv.directory(0));
+            BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
             assertEquals(MetadataVersion.IBP_3_5_IV0, bootstrapMetadata.metadataVersion());
             assertEquals(1, bootstrapMetadata.records().size());
         }
@@ -319,7 +306,7 @@ public class FormatterTest {
                     "\nFormatting metadata directory " + testEnv.directory(0) +
                     " with metadata.version " + MetadataVersion.latestTesting() + ".",
                 formatter1.output().trim());
-            BootstrapMetadata bootstrapMetadata = readBootstrapMetadata(testEnv.directory(0));
+            BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -369,7 +356,7 @@ public class FormatterTest {
                     "\nFormatting metadata directory " + testEnv.directory(0) +
                     " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
                 formatter1.output().trim());
-            BootstrapMetadata bootstrapMetadata = readBootstrapMetadata(testEnv.directory(0));
+            BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
             List<ApiMessageAndVersion> scramRecords = bootstrapMetadata.records().stream().
                 filter(r -> r.message() instanceof UserScramCredentialRecord).
@@ -403,7 +390,7 @@ public class FormatterTest {
             formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel(TestFeatureVersion.FEATURE_NAME, version);
             formatter1.formatter.run();
-            BootstrapMetadata bootstrapMetadata = readBootstrapMetadata(testEnv.directory(0));
+            BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
             List<ApiMessageAndVersion> expected = new ArrayList<>();
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).

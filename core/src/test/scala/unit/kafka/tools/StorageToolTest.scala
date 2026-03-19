@@ -19,23 +19,21 @@ package kafka.tools
 
 import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
 import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
-import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
+import org.apache.kafka.metadata.bootstrap.BootstrapTestUtils
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
-import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -45,13 +43,6 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(value = 40)
 class StorageToolTest {
-
-  private def readBootstrapMetadata(directoryPath: String) = {
-    val metadataPartitionDir = Path.of(directoryPath,
-      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}")
-    val checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID)
-    new BootstrapDirectory(checkpointPath, true).read()
-  }
 
   private def newSelfManagedProperties() = {
     val properties = new Properties()
@@ -405,7 +396,7 @@ Found problem:
       "--feature", "share.version=1")))
 
     // Verify that the feature override is applied by checking the bootstrap metadata
-    val bootstrapMetadata = readBootstrapMetadata(availableDirs.head.toString)
+    val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(availableDirs.head.toString)
 
     // Verify that the share.version feature is set to 1 as specified
     assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
@@ -434,7 +425,7 @@ Found problem:
       "--feature", "group.version=1")))
 
     // Verify that all features are properly bootstrapped by checking the bootstrap metadata
-    val bootstrapMetadata = readBootstrapMetadata(availableDirs.head.toString)
+    val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(availableDirs.head.toString)
 
     // Verify that all specified features are set correctly
     assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
@@ -872,7 +863,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = readBootstrapMetadata(availableDirs.head.toString)
+    val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(availableDirs.head.toString)
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])
