@@ -1068,7 +1068,7 @@ public class StreamThreadTest {
             null
         ) {
             @Override
-            int commit(final Collection<Task> tasksToCommit) {
+            int commit(final Collection<? extends Task> tasksToCommit) {
                 committed.set(true);
                 // we advance time to make sure the commit delay is considered when computing the next commit timestamp
                 mockTime.sleep(commitLatency);
@@ -1137,7 +1137,7 @@ public class StreamThreadTest {
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
-        final Task task = mock(Task.class);
+        final StreamTask task = mock(StreamTask.class);
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.singleton(task));
         when(activeTaskCreator.producerClientIds()).thenReturn("producerClientId");
@@ -1176,7 +1176,7 @@ public class StreamThreadTest {
             schedulingTaskManager
         ) {
             @Override
-            int commit(final Collection<Task> tasksToCommit) {
+            int commit(final Collection<? extends Task> tasksToCommit) {
                 mockTime.sleep(10L);
                 return 1;
             }
@@ -1456,7 +1456,7 @@ public class StreamThreadTest {
 
         assertThat(thrown.getCause(), isA(IllegalStateException.class));
         // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
-        assertEquals("No current assignment for partition topic1-1", thrown.getCause().getMessage());
+        assertEquals("Cannot add records for a partition that is not assigned to the consumer", thrown.getCause().getMessage());
         assertFalse(consumer.shouldRebalance());
 
         verify(taskManager).handleLostAll();
@@ -3576,6 +3576,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             UUID.randomUUID(),
             Optional.empty(),
+            Optional.empty(),
             Map.of(),
             Map.of()
         );
@@ -3634,6 +3635,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -3704,6 +3706,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
                 Optional.empty(),
+                Optional.empty(),
                 Map.of(),
                 Map.of()
         );
@@ -3765,6 +3768,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             UUID.randomUUID(),
             Optional.empty(),
+            Optional.empty(),
             Map.of(),
             Map.of()
         );
@@ -3823,6 +3827,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -3892,6 +3897,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -4060,8 +4066,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.setStreamsConfig(config);
     }
 
-    // TODO: change return type to `StandbyTask`
-    private Collection<Task> createStandbyTask(final StreamsConfig config) {
+    private Collection<StandbyTask> createStandbyTask(final StreamsConfig config) {
         final LogContext logContext = new LogContext("test");
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);

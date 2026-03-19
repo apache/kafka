@@ -57,11 +57,13 @@ public class MeteredTimestampedKeyValueStore<K, V>
     extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> 
     implements TimestampedKeyValueStore<K, V> {
 
-    MeteredTimestampedKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
-                                    final String metricScope,
-                                    final Time time,
-                                    final Serde<K> keySerde,
-                                    final Serde<ValueAndTimestamp<V>> valueSerde) {
+    MeteredTimestampedKeyValueStore(
+        final KeyValueStore<Bytes, byte[]> inner,
+        final String metricScope,
+        final Time time,
+        final Serde<K> keySerde,
+        final Serde<ValueAndTimestamp<V>> valueSerde
+    ) {
         super(inner, metricScope, time, keySerde, valueSerde);
     }
 
@@ -96,29 +98,19 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
-    public RawAndDeserializedValue<V> getWithBinary(final K key) {
-        try {
-            return maybeMeasureLatency(() -> { 
-                final byte[] serializedValue = wrapped().get(keyBytes(key));
-                return new RawAndDeserializedValue<>(serializedValue, outerValue(serializedValue));
-            }, time, getSensor);
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key);
-            throw new ProcessorStateException(message, e);
-        }
-    }
-
-    public boolean putIfDifferentValues(final K key,
-                                        final ValueAndTimestamp<V> newValue,
-                                        final byte[] oldSerializedValue) {
+    public boolean putIfDifferentValues(
+        final K key,
+        final ValueAndTimestamp<V> newValue,
+        final byte[] oldSerializedValue
+    ) {
         try {
             return maybeMeasureLatency(
                 () -> {
-                    final byte[] newSerializedValue = serdes.rawValue(newValue);
-                    if (ValueAndTimestampSerializer.valuesAreSameAndTimeIsIncreasing(oldSerializedValue, newSerializedValue)) {
+                    final byte[] rawNewValue = serializeValue(newValue);
+                    if (ValueAndTimestampSerializer.valuesAreSameAndTimeIsIncreasing(oldSerializedValue, rawNewValue)) {
                         return false;
                     } else {
-                        wrapped().put(keyBytes(key), newSerializedValue);
+                        wrapped().put(serializeKey(key), rawNewValue);
                         return true;
                     }
                 },
@@ -132,10 +124,10 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
     static class RawAndDeserializedValue<ValueType> {
-        final byte[] serializedValue;
+        final byte[] rawValue;
         final ValueAndTimestamp<ValueType> value;
-        RawAndDeserializedValue(final byte[] serializedValue, final ValueAndTimestamp<ValueType> value) {
-            this.serializedValue = serializedValue;
+        RawAndDeserializedValue(final byte[] rawValue, final ValueAndTimestamp<ValueType> value) {
+            this.rawValue = rawValue;
             this.value = value;
         }
     }
@@ -172,18 +164,14 @@ public class MeteredTimestampedKeyValueStore<K, V>
         return result;
     }
 
-
-
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runTimestampedKeyQuery(final Query<R> query,
                                                       final PositionBound positionBound,
                                                       final QueryConfig config) {
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
-        final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.key()));
-        final QueryResult<byte[]> rawResult =
-                wrapped().query(rawKeyQuery, positionBound, config);
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key()));
+        final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueAndTimestamp<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueAndTimestamp<V> valueAndTimestamp = deserializer.apply(rawResult.getResult());
@@ -207,8 +195,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.lowerBound().orElse(null)),
-                keyBytes(typedQuery.upperBound().orElse(null))
+            serializeKey(typedQuery.lowerBound().orElse(null)),
+            serializeKey(typedQuery.upperBound().orElse(null))
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -245,8 +233,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                                              final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
-        final KeyQuery<Bytes, byte[]> rawKeyQuery =
-                KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey()));
         final QueryResult<byte[]> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -273,8 +260,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().orElse(null)),
-                keyBytes(typedQuery.getUpperBound().orElse(null))
+            serializeKey(typedQuery.getLowerBound().orElse(null)),
+            serializeKey(typedQuery.getUpperBound().orElse(null))
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -344,12 +331,12 @@ public class MeteredTimestampedKeyValueStore<K, V>
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             if (returnPlainValue) {
                 final V plainValue = valueAndTimestampDeserializer.apply(keyValue.value).value();
-                return KeyValue.pair(
-                        serdes.keyFrom(keyValue.key.get()), plainValue);
+                return KeyValue.pair(deserializeKey(keyValue.key.get()), plainValue);
             }
             return (KeyValue<K, V>) KeyValue.pair(
-                    serdes.keyFrom(keyValue.key.get()),
-                    valueAndTimestampDeserializer.apply(keyValue.value));
+                deserializeKey(keyValue.key.get()),
+                valueAndTimestampDeserializer.apply(keyValue.value)
+            );
         }
         @Override
         public void close() {
@@ -365,7 +352,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
         @Override
         public K peekNextKey() {
-            return serdes.keyFrom(iter.peekNextKey().get());
+            return deserializeKey(iter.peekNextKey().get());
         }
     }
 }

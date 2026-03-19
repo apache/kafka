@@ -21,7 +21,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, Br
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiMessage, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}

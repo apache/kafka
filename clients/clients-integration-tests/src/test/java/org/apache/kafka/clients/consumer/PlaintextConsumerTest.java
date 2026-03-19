@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -45,6 +45,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.quota.QuotaType;
@@ -101,12 +102,14 @@ import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -360,7 +363,14 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerGroupConsumption() throws Exception {
         testGroupConsumption(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
@@ -375,6 +385,69 @@ public class PlaintextConsumerTest {
             sendRecords(producer, TP, 10, startingTimestamp);
             consumer.subscribe(List.of(TOPIC));
             consumeAndVerifyRecords(consumer, TP, 1, 0, 0, startingTimestamp);
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
+    public void testAsyncConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    private void testGroupConsumptionWithTwoMembers(Map<String, Object> consumerConfig) throws InterruptedException {
+        var fooTopic = "foo";
+        var foo0 = new TopicPartition(fooTopic, 0);
+        var foo1 = new TopicPartition(fooTopic, 1);
+        cluster.createTopic(fooTopic, 2, (short) BROKER_COUNT);
+
+        consumerConfig = new HashMap<>(consumerConfig);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "group_two_members");
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumerConfig);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumerConfig)
+        ) {
+            var startingTimestamp = System.currentTimeMillis();
+
+            consumer1.subscribe(List.of(fooTopic));
+            awaitAssignment(consumer1, Set.of(foo0, foo1));
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo0, 10, 0, 0, startingTimestamp);
+
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo1, 10, 0, 0, startingTimestamp);
+
+            consumer2.subscribe(List.of(fooTopic));
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                return consumer1.assignment().size() == 1 && consumer2.assignment().size() == 1;
+            }, "Timed out waiting for rebalance to complete");
+
+            assertTrue(consumer1.assignment().contains(foo0) || consumer1.assignment().contains(foo1));
+            assertTrue(consumer2.assignment().contains(foo0) || consumer2.assignment().contains(foo1));
+            assertNotEquals(consumer1.assignment(), consumer2.assignment());
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, consumer1.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
+            consumeAndVerifyRecords(consumer2, consumer2.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
         }
     }
 
@@ -889,13 +962,9 @@ public class PlaintextConsumerTest {
             assertNotNull(fetchLead0);
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
     }
 
@@ -957,13 +1026,9 @@ public class PlaintextConsumerTest {
             var expectedLag = numMessages - records.count();
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
     }
 
@@ -1330,7 +1395,14 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart() throws Exception {
         testStaticConsumerDetectsNewPartitionCreatedAfterRestart(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
@@ -1749,6 +1821,20 @@ public class PlaintextConsumerTest {
         }, "Timed out waiting for non-empty records from topic " + tp.topic() + " partition " + tp.partition());
 
         return result.get();
+    }
+
+    private void awaitMetricsCleanup(
+        Consumer<?, ?> consumer,
+        String metricName,
+        Map<String, String> tags1,
+        Map<String, String> tags2
+    ) throws InterruptedException {
+        var metric1 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags1);
+        var metric2 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags2);
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return consumer.metrics().get(metric1) == null && consumer.metrics().get(metric2) == null;
+        }, "Metrics for removed partitions should be cleaned up");
     }
 
     public static class SerializerImpl implements Serializer<byte[]> {

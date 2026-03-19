@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -36,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -51,7 +53,7 @@ import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWit
  * stores a key into a shared physical store by prepending the key with a prefix (unique to
  * the specific logical segment), and storing the combined key into the physical store.
  */
-class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segment, VersionedStoreSegment {
+class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
     private static final Logger log = LoggerFactory.getLogger(LogicalKeyValueSegment.class);
 
     private final long id;
@@ -74,11 +76,6 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     @Override
     public long id() {
         return id;
-    }
-
-    @Override
-    public int compareTo(final LogicalKeyValueSegment segment) {
-        return Long.compare(id, segment.id);
     }
 
     @Override
@@ -142,8 +139,13 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void flush() {
-        throw new UnsupportedOperationException("nothing to flush for logical segment");
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        throw new UnsupportedOperationException("nothing to commit for logical segment");
+    }
+
+    @Override
+    public void writePosition() {
+        physicalStore.writePosition();
     }
 
     @Override

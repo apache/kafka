@@ -53,11 +53,11 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -350,6 +350,10 @@ public final class RaftClientTestContext {
         }
 
         Builder withBootstrapSnapshot(Optional<VoterSet> voters) {
+            return withBootstrapSnapshotRecords(voters, List.of());
+        }
+
+        Builder withBootstrapSnapshotRecords(Optional<VoterSet> voters, List<String> records) {
             startingVoters = voters.orElse(VoterSet.empty());
             isStartingVotersStatic = false;
 
@@ -364,6 +368,9 @@ public final class RaftClientTestContext {
                     .setVoterSet(voters);
 
                 try (RecordsSnapshotWriter<String> writer = builder.build(SERDE)) {
+                    if (!records.isEmpty()) {
+                        writer.append(records);
+                    }
                     writer.freeze();
                 }
             } else {
@@ -2224,6 +2231,7 @@ public final class RaftClientTestContext {
         private LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
+        private Optional<SnapshotReader<String>> bootstrapSnapshot = Optional.empty();
         private boolean readCommit = true;
 
         MockListener(OptionalInt localId) {
@@ -2358,10 +2366,28 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleLoadSnapshot(SnapshotReader<String> reader) {
-            snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
+            snapshot = handleLoadSnapshotOrBootstrap(snapshot, reader);
+        }
+
+        @Override
+        public void handleLoadBootstrap(SnapshotReader<String> reader) {
+            bootstrapSnapshot = handleLoadSnapshotOrBootstrap(bootstrapSnapshot, reader);
+        }
+
+        private Optional<SnapshotReader<String>> handleLoadSnapshotOrBootstrap(
+            Optional<SnapshotReader<String>> previousSnapshot,
+            SnapshotReader<String> reader
+        ) {
+            previousSnapshot.ifPresent(s -> assertDoesNotThrow(s::close));
             commits.clear();
             savedBatches.clear();
-            snapshot = Optional.of(reader);
+            return Optional.of(reader);
+        }
+
+        Optional<SnapshotReader<String>> drainHandledBootstrapSnapshot() {
+            Optional<SnapshotReader<String>> temp = bootstrapSnapshot;
+            bootstrapSnapshot = Optional.empty();
+            return temp;
         }
     }
 

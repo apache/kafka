@@ -24,6 +24,10 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +36,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -42,6 +47,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  */
 public final class GroupConfig extends AbstractConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(GroupConfig.class);
+
     public static final String CONSUMER_SESSION_TIMEOUT_MS_CONFIG = "consumer.session.timeout.ms";
 
     public static final String CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG = "consumer.heartbeat.interval.ms";
@@ -51,6 +58,10 @@ public final class GroupConfig extends AbstractConfig {
     public static final String SHARE_HEARTBEAT_INTERVAL_MS_CONFIG = "share.heartbeat.interval.ms";
 
     public static final String SHARE_RECORD_LOCK_DURATION_MS_CONFIG = "share.record.lock.duration.ms";
+
+    public static final String SHARE_DELIVERY_COUNT_LIMIT_CONFIG = "share.delivery.count.limit";
+
+    public static final String SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG = "share.partition.max.record.locks";
 
     public static final String SHARE_AUTO_OFFSET_RESET_CONFIG = "share.auto.offset.reset";
     public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetResetStrategy.LATEST.name();
@@ -69,6 +80,10 @@ public final class GroupConfig extends AbstractConfig {
         "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
         "Non-transactional records will be returned unconditionally in either mode.";
 
+    public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG = "share.renew.acknowledge.enable";
+    public static final boolean SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT = true;
+    public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC = "Whether the renew acknowledge type is enabled for the share group.";
+
     public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "streams.session.timeout.ms";
 
     public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "streams.heartbeat.interval.ms";
@@ -76,6 +91,8 @@ public final class GroupConfig extends AbstractConfig {
     public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "streams.num.standby.replicas";
 
     public static final String STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG = "streams.initial.rebalance.delay.ms";
+
+    public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
 
     public final int consumerSessionTimeoutMs;
 
@@ -87,6 +104,10 @@ public final class GroupConfig extends AbstractConfig {
 
     public final int shareRecordLockDurationMs;
 
+    public final int shareDeliveryCountLimit;
+
+    public final int sharePartitionMaxRecordLocks;
+
     public final String shareAutoOffsetReset;
 
     public final int streamsSessionTimeoutMs;
@@ -97,7 +118,11 @@ public final class GroupConfig extends AbstractConfig {
 
     public final int streamsInitialRebalanceDelayMs;
 
+    public final int streamsTaskOffsetIntervalMs;
+
     public final String shareIsolationLevel;
+
+    public final boolean shareRenewAcknowledgeEnable;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -130,6 +155,18 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(1000),
             MEDIUM,
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
+        .define(SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
+            INT,
+            ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT,
+            atLeast(2),
+            MEDIUM,
+            ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
+        .define(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
+            INT,
+            ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT,
+            atLeast(100),
+            MEDIUM,
+            ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC)
         .define(SHARE_AUTO_OFFSET_RESET_CONFIG,
             STRING,
             SHARE_AUTO_OFFSET_RESET_DEFAULT,
@@ -142,6 +179,11 @@ public final class GroupConfig extends AbstractConfig {
             in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
             MEDIUM,
             SHARE_ISOLATION_LEVEL_DOC)
+        .define(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG,
+            BOOLEAN,
+            SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT,
+            MEDIUM,
+            SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -165,7 +207,13 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC)
+        .define(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
@@ -174,12 +222,16 @@ public final class GroupConfig extends AbstractConfig {
         this.shareSessionTimeoutMs = getInt(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         this.shareHeartbeatIntervalMs = getInt(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        this.shareDeliveryCountLimit = getInt(SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
+        this.sharePartitionMaxRecordLocks = getInt(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         this.shareAutoOffsetReset = getString(SHARE_AUTO_OFFSET_RESET_CONFIG);
         this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        this.streamsTaskOffsetIntervalMs = getInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
+        this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -197,9 +249,9 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Properties props) {
+    public static void validateNames(Map<String, ?> props) {
         Set<String> names = configNames();
-        for (Object name : props.keySet()) {
+        for (String name : props.keySet()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
@@ -210,15 +262,18 @@ public final class GroupConfig extends AbstractConfig {
      * Validates the values of the given properties.
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
-    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+    private static void validateValues(Map<String, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         int shareSessionTimeout = (Integer) valueMaps.get(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        int shareDeliveryCountLimit = (Integer) valueMaps.get(SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
+        int sharePartitionMaxRecordLocks = (Integer) valueMaps.get(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         int streamsSessionTimeoutMs = (Integer) valueMaps.get(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         int streamsHeartbeatIntervalMs = (Integer) valueMaps.get(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         int streamsNumStandbyReplicas = (Integer) valueMaps.get(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
+        int streamsTaskOffsetIntervalMs = (Integer) valueMaps.get(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -259,6 +314,22 @@ public final class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be less than or equal to " +
                 ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         }
+        if (shareDeliveryCountLimit < shareGroupConfig.shareGroupMinDeliveryCountLimit()) {
+            throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be greater than or equal to " +
+                ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
+        }
+        if (shareDeliveryCountLimit > shareGroupConfig.shareGroupMaxDeliveryCountLimit()) {
+            throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be less than or equal to " +
+                ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
+        }
+        if (sharePartitionMaxRecordLocks < shareGroupConfig.shareGroupMinPartitionMaxRecordLocks()) {
+            throw new InvalidConfigurationException(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG + " must be greater than or equal to " +
+                ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+        }
+        if (sharePartitionMaxRecordLocks > shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks()) {
+            throw new InvalidConfigurationException(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG + " must be less than or equal to " +
+                ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+        }
         if (streamsHeartbeatIntervalMs < groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
                 GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -279,6 +350,10 @@ public final class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(STREAMS_NUM_STANDBY_REPLICAS_CONFIG + " must be less than or equal to " +
                 GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
         }
+        if (streamsTaskOffsetIntervalMs < groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()) {
+            throw new InvalidConfigurationException(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        }
         if (consumerSessionTimeout <= consumerHeartbeatInterval) {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -294,13 +369,209 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Check that the given properties contain only valid consumer group config names and that all values can be
-     * parsed and are valid.
+     * Check that the given properties contain only valid group config names and that
+     * all values can be parsed and are valid. The provided properties are merged with
+     * the broker-level defaults before validation.
      */
-    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
-        validateNames(props);
-        Map<?, ?> valueMaps = CONFIG.parse(props);
+    public static void validate(Map<String, ?> props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+        Map<String, Object> combinedConfigs = new HashMap<>();
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
+        combinedConfigs.putAll(props);
+
+        validateNames(combinedConfigs);
+        Map<String, Object> valueMaps = CONFIG.parse(combinedConfigs);
         validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
+    }
+
+    /**
+     * Evaluate group config values to their effective values within broker-level bounds.
+     * Out-of-range values are capped and a WARN log is emitted.
+     *
+     * @param props                  The raw group config properties.
+     * @param groupId                The group id.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     * @return A new Properties with out-of-range values capped.
+     */
+    public static Properties evaluate(
+        Properties props,
+        String groupId,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        Properties effective = new Properties();
+        effective.putAll(props);
+        evaluateValues(effective, groupId, groupCoordinatorConfig, shareGroupConfig);
+        return effective;
+    }
+
+    private static void evaluateValues(
+        Properties props,
+        String groupId,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        // Consumer group configs
+        clampToRange(props, groupId, CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs());
+        clampToRange(props, groupId, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs());
+
+        // Share group configs
+        clampToRange(props, groupId, SHARE_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs());
+        clampToRange(props, groupId, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs());
+        clampToRange(props, groupId, SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
+            shareGroupConfig.shareGroupMinRecordLockDurationMs(),
+            shareGroupConfig.shareGroupMaxRecordLockDurationMs());
+        clampToRange(props, groupId, SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
+            shareGroupConfig.shareGroupMinDeliveryCountLimit(),
+            shareGroupConfig.shareGroupMaxDeliveryCountLimit());
+        clampToRange(props, groupId, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
+            shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
+            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks());
+
+        // Streams group configs
+        clampToRange(props, groupId, STREAMS_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs());
+        clampToRange(props, groupId, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs());
+        clampToMax(props, groupId, STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas());
+        clampToMin(props, groupId, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs());
+
+        // Verify that clamping did not break the session > heartbeat invariant.
+        checkSessionExceedsHeartbeat(props, groupId,
+            CONSUMER_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.consumerGroupSessionTimeoutMs(),
+            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs());
+        checkSessionExceedsHeartbeat(props, groupId,
+            SHARE_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
+            SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.shareGroupHeartbeatIntervalMs());
+        checkSessionExceedsHeartbeat(props, groupId,
+            STREAMS_SESSION_TIMEOUT_MS_CONFIG, groupCoordinatorConfig.streamsGroupSessionTimeoutMs(),
+            STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs());
+    }
+
+    /**
+     * Log a WARN if the session timeout is not greater than the heartbeat interval after
+     * evaluation. When a key is absent from props, the broker-level default is used.
+     */
+    private static void checkSessionExceedsHeartbeat(
+        Properties props,
+        String groupId,
+        String sessionKey,
+        int defaultSession,
+        String heartbeatKey,
+        int defaultHeartbeat
+    ) {
+        Object rawSession = props.get(sessionKey);
+        Object rawHeartbeat = props.get(heartbeatKey);
+        if (rawSession == null && rawHeartbeat == null) return;
+
+        int session = rawSession != null ? Integer.parseInt(rawSession.toString()) : defaultSession;
+        int heartbeat = rawHeartbeat != null ? Integer.parseInt(rawHeartbeat.toString()) : defaultHeartbeat;
+        if (session <= heartbeat) {
+            log.warn("The effective {} ({}) for group '{}' is not greater than {} ({}). "
+                    + "Check that the broker-level min/max bounds for session timeout "
+                    + "and heartbeat interval do not overlap.",
+                sessionKey, session, groupId, heartbeatKey, heartbeat);
+        }
+    }
+
+    /**
+     * Clamp a config value to [min, max]. A WARN log is emitted on adjustment.
+     * No-op when the key is absent from props.
+     *
+     * @param props   The properties to modify in place.
+     * @param groupId The group id.
+     * @param key     The config key.
+     * @param min     The minimum allowed value (inclusive).
+     * @param max     The maximum allowed value (inclusive).
+     */
+    private static void clampToRange(
+        Properties props,
+        String groupId,
+        String key,
+        int min,
+        int max
+    ) {
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
+
+        int value = Integer.parseInt(rawValue.toString());
+        if (value < min) {
+            log.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
+                    "allowed minimum {}. The effective value will be capped to {}.",
+                key, groupId, value, min, min);
+            props.put(key, min);
+        } else if (value > max) {
+            log.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
+                    "allowed maximum {}. The effective value will be capped to {}.",
+                key, groupId, value, max, max);
+            props.put(key, max);
+        }
+    }
+
+    /**
+     * Clamp a config value to at most max. A WARN log is emitted on adjustment.
+     * No-op when the key is absent from props.
+     *
+     * @param props   The properties to modify in place.
+     * @param groupId The group id.
+     * @param key     The config key.
+     * @param max     The maximum allowed value (inclusive).
+     */
+    private static void clampToMax(
+        Properties props,
+        String groupId,
+        String key,
+        int max
+    ) {
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
+
+        int value = Integer.parseInt(rawValue.toString());
+        if (value > max) {
+            log.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
+                    "allowed maximum {}. The effective value will be capped to {}.",
+                key, groupId, value, max, max);
+            props.put(key, max);
+        }
+    }
+
+    /**
+     * Clamp a config value to at least min. A WARN log is emitted on adjustment.
+     * No-op when the key is absent from props.
+     *
+     * @param props   The properties to modify in place.
+     * @param groupId The group id.
+     * @param key     The config key.
+     * @param min     The minimum allowed value (inclusive).
+     */
+    private static void clampToMin(
+        Properties props,
+        String groupId,
+        String key,
+        int min
+    ) {
+        Object rawValue = props.get(key);
+        if (rawValue == null) return;
+
+        int value = Integer.parseInt(rawValue.toString());
+        if (value < min) {
+            log.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
+                    "allowed minimum {}. The effective value will be capped to {}.",
+                key, groupId, value, min, min);
+            props.put(key, min);
+        }
     }
 
     /**
@@ -356,6 +627,20 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
+     * The share group delivery count limit.
+     */
+    public int shareDeliveryCountLimit() {
+        return shareDeliveryCountLimit;
+    }
+
+    /**
+     * The share group partition max record locks.
+     */
+    public int sharePartitionMaxRecordLocks() {
+        return sharePartitionMaxRecordLocks;
+    }
+
+    /**
      * The share group record lock duration milliseconds.
      */
     public int shareRecordLockDurationMs() {
@@ -398,6 +683,13 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
+     * The task offset reporting interval.
+     */
+    public int streamsTaskOffsetIntervalMs() {
+        return streamsTaskOffsetIntervalMs;
+    }
+
+    /**
      * The share group isolation level.
      */
     public IsolationLevel shareIsolationLevel() {
@@ -409,6 +701,13 @@ public final class GroupConfig extends AbstractConfig {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
         }
+    }
+
+    /**
+     * The share group renew acknowledge enable.
+     */
+    public boolean shareRenewAcknowledgeEnable() {
+        return shareRenewAcknowledgeEnable;
     }
 
     public static void main(String[] args) {

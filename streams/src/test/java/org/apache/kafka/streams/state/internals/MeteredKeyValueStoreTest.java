@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -169,11 +170,12 @@ public class MeteredKeyValueStoreTest {
         final Deserializer<String> valueDeserializer = mock(Deserializer.class);
         final Serializer<String> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
-        when(keySerializer.serialize(topic, KEY)).thenReturn(KEY.getBytes());
+        when(keySerializer.serialize(topic, new RecordHeaders(), KEY)).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-        when(valueDeserializer.deserialize(topic, VALUE_BYTES)).thenReturn(VALUE);
+        when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_BYTES)).thenReturn(VALUE);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
-        when(valueSerializer.serialize(topic, VALUE)).thenReturn(VALUE_BYTES);
+        when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE)).thenReturn(VALUE_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_BYTES);
         metered = new MeteredKeyValueStore<>(
             inner,
@@ -317,12 +319,12 @@ public class MeteredKeyValueStoreTest {
     }
 
     @Test
-    public void shouldFlushInnerWhenFlushTimeRecords() {
+    public void shouldFlushInnerWhenCommitTimeRecords() {
         setUp();
-        doNothing().when(inner).flush();
+        doNothing().when(inner).commit(Map.of());
         init();
 
-        metered.flush();
+        metered.commit(Map.of());
 
         final KafkaMetric metric = metric("flush-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -466,6 +468,17 @@ public class MeteredKeyValueStoreTest {
 
         final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        setUp();
+        when(inner.approximateNumEntries()).thenReturn(42L);
+        init();
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(42L));
     }
 
     @SuppressWarnings("unused")

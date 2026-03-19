@@ -57,11 +57,13 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" are not supported yet.
+* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" and rack aware assignment are not supported yet.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
 * **Online Migration**: Group migration while the application is running is not available between the classic and new streams protocol.
+
+* **Custom Client Supplier**: Using a custom `KafkaClientSupplier` will only allow so provide restore/global consumer, producer, and admin client. It's not possible to provide the "main" consumer when "streams" groups are enabled. 
 
 # Why Use the Streams Rebalance Protocol?
 
@@ -251,3 +253,5 @@ The only broker-side group data that will be preserved are the committed offsets
 Similarly, you can convert a streams group back to a classic group by following the same process but setting `group.protocol=classic`.
 
 **Warning:** Online migration (migrating while the application is running) is not available in this version. Plan for a maintenance window when migrating between protocols.
+
+**Warning:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix will be targeted for a future release.

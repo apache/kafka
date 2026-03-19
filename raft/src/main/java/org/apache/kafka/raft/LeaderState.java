@@ -22,10 +22,10 @@ import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -507,7 +507,7 @@ public class LeaderState<T> implements EpochState {
      * This methods upgrades the kraft version to {@code newVersion}. If the version is already
      * {@code newVersion}, this is a noop operation.
      *
-     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to curent
+     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to current
      * kraft version {@code persistedVersion}.
      *
      * For the upgrade to succeed all of the voters in the voter set must support the new kraft

@@ -51,7 +51,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
@@ -98,6 +97,13 @@ class ShareCoordinatorServiceTest {
         return runtime;
     }
 
+    private MetadataImage mockMetadataImageWithShareGroupsEnabled() {
+        MetadataImage image = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+        when(image.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort()))
+            .thenReturn((short) 1);
+        return image;
+    }
+
     @Test
     public void testStartupShutdown() throws Exception {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
@@ -108,8 +114,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             new MockTimer(),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -132,8 +137,7 @@ class ShareCoordinatorServiceTest {
             coordinatorMetrics,
             time,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -244,8 +248,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -346,8 +349,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -430,8 +432,7 @@ class ShareCoordinatorServiceTest {
             coordinatorMetrics,
             time,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -512,8 +513,7 @@ class ShareCoordinatorServiceTest {
             coordinatorMetrics,
             time,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -594,8 +594,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -642,8 +641,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -690,8 +688,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -738,8 +735,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -786,8 +782,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -834,8 +829,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         String groupId = "group1";
@@ -916,8 +910,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         String groupId = "group1";
@@ -980,8 +973,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         String groupId = "group1";
@@ -1044,8 +1036,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         String groupId = "group1";
@@ -1106,8 +1097,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         String groupId = "group1";
@@ -1167,8 +1157,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -1178,7 +1167,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new WriteShareGroupStateResponseData()
                 .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
@@ -1219,8 +1208,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -1230,7 +1218,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateResponseData()
                 .setResults(List.of(new ReadShareGroupStateResponseData.ReadStateResult()
@@ -1263,8 +1251,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -1274,7 +1261,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateSummaryResponseData()
                 .setResults(List.of(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
@@ -1307,8 +1294,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -1318,7 +1304,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new DeleteShareGroupStateResponseData()
                 .setResults(List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
@@ -1350,8 +1336,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -1360,7 +1345,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any())).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+        when(runtime.scheduleWriteOperation(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(
             new InitializeShareGroupStateResponseData().setResults(List.of(new InitializeShareGroupStateResponseData.InitializeStateResult()
@@ -1392,8 +1377,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         service.startup(() -> 1);
@@ -1422,8 +1406,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(),
             Time.SYSTEM,
             mock(Timer.class),
-            mock(PartitionWriter.class),
-            () -> true
+            mock(PartitionWriter.class)
         );
 
         String groupId = "group1";
@@ -1480,12 +1463,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1570,12 +1552,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 2);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1628,12 +1609,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1678,12 +1658,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1726,12 +1705,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
 
         verify(runtime, times(0))
             .scheduleWriteOperation(
@@ -1787,12 +1765,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1859,12 +1836,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1910,8 +1886,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         when(runtime.scheduleWriteAllOperation(
@@ -1920,7 +1895,7 @@ class ShareCoordinatorServiceTest {
         )).thenReturn(List.of(CompletableFuture.completedFuture(null)));
 
         service.startup(() -> 1);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteOperation(
                 eq("snapshot-cold-partitions"),
@@ -1969,12 +1944,11 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 2);
-        service.onMetadataUpdate(mock(MetadataDelta.class), mock(MetadataImage.class));
+        service.onMetadataUpdate(mock(MetadataDelta.class), mockMetadataImageWithShareGroupsEnabled());
         verify(runtime, times(0))
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
@@ -2013,8 +1987,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> false // So that the feature config is used.
+            writer
         ));
 
         // Prune job.
@@ -2109,8 +2082,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         List<String> propNames = List.of(
@@ -2142,8 +2114,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 3);
@@ -2192,8 +2163,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 3);
@@ -2228,8 +2198,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 3);
@@ -2238,6 +2207,8 @@ class ShareCoordinatorServiceTest {
         MetadataDelta delta = mock(MetadataDelta.class);
         MetadataImage image = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
         when(delta.topicsDelta()).thenReturn(null);
+        when(image.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort()))
+            .thenReturn((short) 1);
 
         assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
 
@@ -2263,8 +2234,7 @@ class ShareCoordinatorServiceTest {
             new ShareCoordinatorMetrics(metrics),
             time,
             timer,
-            writer,
-            () -> true
+            writer
         ));
 
         service.startup(() -> 3);
@@ -2287,7 +2257,7 @@ class ShareCoordinatorServiceTest {
             List.of(
                 CompletableFuture.completedFuture(null),
                 CompletableFuture.completedFuture(null),
-                FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+                CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
             )
         );
 

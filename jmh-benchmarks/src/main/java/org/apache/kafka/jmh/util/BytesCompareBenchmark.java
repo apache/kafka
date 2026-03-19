@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.jmh.util;
 
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.BytesUtils;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -45,7 +45,7 @@ public class BytesCompareBenchmark {
 
     private byte[][] tv;
     private TreeMap<byte[], Integer> oldMap = new TreeMap<>(new HandwrittenLexicoComparator());
-    private TreeMap<byte[], Integer> newMap = new TreeMap<>(Bytes.BYTES_LEXICO_COMPARATOR);
+    private TreeMap<byte[], Integer> newMap = new TreeMap<>(BytesUtils.BYTES_LEXICO_COMPARATOR);
 
     @Setup
     public void setup() {
@@ -74,7 +74,7 @@ public class BytesCompareBenchmark {
         }
     }
 
-    static class HandwrittenLexicoComparator implements Bytes.ByteArrayComparator {
+    static class HandwrittenLexicoComparator implements BytesUtils.ByteArrayComparator {
         @Override
         public int compare(byte[] buffer1, byte[] buffer2) {
             return compare(buffer1, 0, buffer1.length, buffer2, 0, buffer2.length);

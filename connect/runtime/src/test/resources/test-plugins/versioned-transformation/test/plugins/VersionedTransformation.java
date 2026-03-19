@@ -19,7 +19,6 @@ package test.plugins;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 
@@ -29,7 +28,7 @@ import java.util.Map;
  * Transformation to test multiverioning of plugins.
  * Any instance of the string PLACEHOLDER_FOR_VERSION will be replaced with the actual version during plugin compilation.
  */
-public class VersionedTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public class VersionedTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
 
     @Override

@@ -39,6 +39,7 @@ import org.apache.kafka.clients.consumer.internals.events.AllTopicsMetadataEvent
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
@@ -51,7 +52,6 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableApplication
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.clients.consumer.internals.events.CurrentLagEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
@@ -59,6 +59,8 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.events.PausePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResumePartitionsEvent;
@@ -143,6 +145,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -194,8 +197,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     process((ErrorEvent) event);
                     break;
 
-                case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
-                    process((ConsumerRebalanceListenerCallbackNeededEvent) event);
+                case PARTITIONS_ASSIGNED:
+                    process((PartitionsAssignedEvent) event);
+                    break;
+
+                case PARTITIONS_REMOVED:
+                    process((PartitionsRemovedEvent) event);
                     break;
 
                 case STREAMS_ON_TASKS_REVOKED_CALLBACK_NEEDED:
@@ -220,12 +227,51 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throw event.error();
         }
 
-        private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
+        /**
+         * Processing this event will perform the actions needed in the app thread when new partitions are reconciled in the background:
+         * - apply assignment changes (ensuring they happen in the background but triggered within the app thread poll)
+         * - run onPartitionsAssigned callback if present
+         * - notify background thread so it can carry on (e.g., send ack to the broker)
+         */
+        private void process(final PartitionsAssignedEvent event) {
+
+            applyNewAssignment(event);
+
+            if (subscriptions.rebalanceListener().isEmpty()) {
+                event.future().complete(null);
+            } else {
+                invokeRebalanceCallbackAndNotifyBackgroundThread(ON_PARTITIONS_ASSIGNED, event.addedPartitions(), event.future());
+            }
+        }
+
+        /**
+         * Send event to the background to update the assignment in the subscription state.
+         * Block on it to complete to ensure the assignment change happens within a call to
+         * consumer.poll.
+         * Note that this event only happens when there is a pending assignment (reconciliation
+         * completed in the background)
+         */
+        private void applyNewAssignment(final PartitionsAssignedEvent event) {
+            ApplyAssignmentEvent applyEvent = new ApplyAssignmentEvent(
+                event.assignedPartitions(),
+                event.addedPartitions()
+            );
+            applicationEventHandler.addAndGet(applyEvent);
+        }
+
+        private void process(final PartitionsRemovedEvent event) {
+            invokeRebalanceCallbackAndNotifyBackgroundThread(event.methodName(), event.partitions(), event.future());
+        }
+
+        private void invokeRebalanceCallbackAndNotifyBackgroundThread(
+                ConsumerRebalanceListenerMethodName methodName,
+                SortedSet<TopicPartition> partitions,
+                CompletableFuture<Void> future) {
             ConsumerRebalanceListenerCallbackCompletedEvent invokedEvent = invokeRebalanceCallbacks(
                 rebalanceListenerInvoker,
-                event.methodName(),
-                event.partitions(),
-                event.future()
+                methodName,
+                partitions,
+                future
             );
             applicationEventHandler.add(invokedEvent);
             if (invokedEvent.error().isPresent()) {
@@ -2252,9 +2298,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
      * partitions the consumer owns. However,
      * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
+     * {@link PartitionsRemovedEvent} on its background event queue. That event queue is
      * periodically queried by the application thread to see if there's work to be done. When the application thread
-     * sees {@link ConsumerRebalanceListenerCallbackNeededEvent}, it is processed, and then a
+     * sees {@link PartitionsRemovedEvent}, it is processed, and then a
      * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
      * application event queue. Moments later, the background thread will see that event, process it, and continue
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the

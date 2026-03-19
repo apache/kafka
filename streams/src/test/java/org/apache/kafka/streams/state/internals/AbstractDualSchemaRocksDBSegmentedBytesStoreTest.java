@@ -23,8 +23,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -1629,6 +1629,20 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.close();
     }
 
+    @Test
+    public void shouldLoadPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(stateDir, storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+        bytesStore.close();
+    }
+
     private Set<String> segmentDirs() {
         final File windowDir = new File(stateDir, storeName);
 
@@ -1652,9 +1666,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
         } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
             if (changeLog) {
-                return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+                return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
             }
-            return Bytes.wrap(TimeFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+            return Bytes.wrap(TimeFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else {
             throw new IllegalStateException("Unrecognized serde schema");
         }
@@ -1665,7 +1679,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         if (getIndexSchema() instanceof KeyFirstWindowKeySchema) {
             return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
         } else if (getIndexSchema() instanceof KeyFirstSessionKeySchema) {
-            return Bytes.wrap(KeyFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+            return Bytes.wrap(KeyFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else {
             throw new IllegalStateException("Unrecognized serde schema");
         }
@@ -1689,6 +1703,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
                         stateSerdes.valueDeserializer().deserialize("dummy", next.value)
@@ -1696,7 +1711,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                     results.add(deserialized);
                 } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
                     final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                        TimeFirstSessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
+                        TimeFirstSessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), new RecordHeaders(), "dummy"),
                         stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                     );
                     results.add(deserialized);

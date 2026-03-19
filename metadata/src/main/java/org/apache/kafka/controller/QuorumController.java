@@ -1076,6 +1076,11 @@ public final class QuorumController implements Controller {
         }
 
         @Override
+        public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+            reader.close();
+        }
+
+        @Override
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             appendRaftEvent("handleLeaderChange[" + newLeader.epoch() + "]", () -> {
                 final String newLeaderName = newLeader.leaderId().isPresent() ?

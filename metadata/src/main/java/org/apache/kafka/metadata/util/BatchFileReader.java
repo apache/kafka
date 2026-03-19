@@ -23,10 +23,10 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.Batch;
@@ -104,8 +104,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         List<ApiMessageAndVersion> messages = new ArrayList<>();
         for (Record record : input) {
             try {
-                short typeId = ControlRecordType.parseTypeId(record.key());
-                ControlRecordType type = ControlRecordType.fromTypeId(typeId);
+                ControlRecordType type = ControlRecordType.parse(record.key());
                 switch (type) {
                     case LEADER_CHANGE: {
                         LeaderChangeMessage message = new LeaderChangeMessage();

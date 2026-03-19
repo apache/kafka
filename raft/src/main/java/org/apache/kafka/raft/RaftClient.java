@@ -63,16 +63,15 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleLoadSnapshot(SnapshotReader<T> reader);
 
         /**
-         * Callback which is invoked when the Listener needs to load bootstrap metadata.
-         * Bootstrap snapshots are uncommitted and only used for initial cluster state.
+         * Callback which is invoked when the Listener needs to load bootstrap snapshot.
+         * Bootstrap snapshots are uncommitted and are used to store and load the initial application state.
          *
-         * The default implementation delegates to {@link #handleLoadSnapshot(SnapshotReader)}.
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * after consuming the reader.
          *
          * @param reader snapshot reader instance which must be iterated and closed
          */
-        default void handleLoadBootstrap(SnapshotReader<T> reader) {
-            handleLoadSnapshot(reader);
-        }
+        void handleLoadBootstrap(SnapshotReader<T> reader);
 
         /**
          * Called on any change to leadership. This includes both when a leader is elected and

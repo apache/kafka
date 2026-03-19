@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -170,11 +171,11 @@ public class MeteredWindowStoreTest {
         final Deserializer<String> valueDeserializer = mock(Deserializer.class);
         final Serializer<String> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
-        when(keySerializer.serialize(topic, KEY)).thenReturn(KEY.getBytes());
+        when(keySerializer.serialize(topic, new RecordHeaders(), KEY)).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-        when(valueDeserializer.deserialize(topic, VALUE_BYTES)).thenReturn(VALUE);
+        when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_BYTES)).thenReturn(VALUE);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
-        when(valueSerializer.serialize(topic, VALUE)).thenReturn(VALUE_BYTES);
+        when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE)).thenReturn(VALUE_BYTES);
         when(innerStoreMock.fetch(KEY_BYTES, TIMESTAMP)).thenReturn(VALUE_BYTES);
         store = new MeteredWindowStore<>(
             innerStoreMock,
@@ -349,11 +350,11 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldRecordFlushLatency() {
-        doNothing().when(innerStoreMock).flush();
+    public void shouldRecordCommitLatency() {
+        doNothing().when(innerStoreMock).commit(Map.of());
 
         store.init(context, store);
-        store.flush();
+        store.commit(Map.of());
 
         // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
@@ -439,6 +440,16 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
+    }
+
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        store.init(context, store);
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        // inner store is a mock (not InMemoryWindowStore), so returns -1
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
     }
 
     @SuppressWarnings("unused")

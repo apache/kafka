@@ -18,7 +18,7 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
-import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
@@ -424,6 +424,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 reader.close();
             }
         });
+    }
+
+    @Override
+    public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+        // MetadataLoader does not process uncommitted bootstrap snapshots.
+        reader.close();
     }
 
     /**
