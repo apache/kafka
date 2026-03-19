@@ -3904,7 +3904,7 @@ public class UnifiedLogTest {
         log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 10);
         assertEquals(Optional.of(10), log.latestEpoch());
         assertTrue(LeaderEpochCheckpointFile.newFile(log.dir()).exists());
-        assertFalse(LeaderEpochCheckpointFile.newFile(this.logDir).exists());
+        assertFalse(LeaderEpochCheckpointFile.newFile(logDir).exists());
     }
 
     @Test
@@ -3929,7 +3929,7 @@ public class UnifiedLogTest {
         log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 10);
         assertEquals(Optional.of(10), log.latestEpoch());
         assertTrue(PartitionMetadataFile.newFile(log.dir()).exists());
-        assertFalse(PartitionMetadataFile.newFile(this.logDir).exists());
+        assertFalse(PartitionMetadataFile.newFile(logDir).exists());
 
         // Check the topic ID remains in memory and was copied correctly.
         assertTrue(log.topicId().isPresent());
@@ -3954,7 +3954,7 @@ public class UnifiedLogTest {
         TopicPartition tp = UnifiedLog.parseTopicPartitionName(log.dir());
         log.renameDir(UnifiedLog.logDeleteDirName(tp), true);
         assertTrue(PartitionMetadataFile.newFile(log.dir()).exists());
-        assertFalse(PartitionMetadataFile.newFile(this.logDir).exists());
+        assertFalse(PartitionMetadataFile.newFile(logDir).exists());
 
         // Check the file holds the correct contents.
         assertTrue(log.partitionMetadataFile().get().exists());
@@ -4095,6 +4095,7 @@ public class UnifiedLogTest {
             assertEquals(0, nonEmptyReads);
         } finally {
             executor.shutdownNow();
+            assertDoesNotThrow(() -> executor.awaitTermination(60, TimeUnit.SECONDS));
         }
     }
 
@@ -4254,7 +4255,7 @@ public class UnifiedLogTest {
             new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, logStartOffset, Optional.empty()),
             ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
 
-        timestampAndEpochs = prepareLogWithSequentialRecords(this.log, 3);
+        timestampAndEpochs = prepareLogWithSequentialRecords(log, 3);
     }
 
     private List<TimestampAndEpoch> prepareLogWithSequentialRecords(UnifiedLog log, int recordCount) throws IOException {
