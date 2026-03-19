@@ -1893,6 +1893,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
 - shouldNotRetryWhenEndOffsetsThrowsTimeoutExceptionAndTaskTimeoutIsZero
 - shouldNotRetryWhenPartitionsForThrowsTimeoutExceptionAndTaskTimeoutIsZero
 - shouldNotRetryWhenPositionThrowsTimeoutExceptionAndTaskTimeoutIsZero
+- shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull
 - shouldReadCheckpointOffsets
 - shouldRestoreRecordsFromCheckpointToHighWatermark
 - shouldRestoreRecordsUpToHighwatermark
@@ -1914,6 +1915,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
 - shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets
 - shouldThrowStreamsExceptionIfNoPartitionsFoundForStore
 - shouldUsePollMsPlusRequestTimeoutInPollDuringRestoreAndTimeoutWhenNoProgressDuringRestore
+- shouldWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsPre43
 org.apache.kafka.streams.processor.internals.GlobalStateTaskTest:
 - shouldCommitDuringClose
 - shouldCommitDuringInitialization
@@ -2261,6 +2263,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldCloseStateStoresOnStateManagerClose
 - shouldCommitAndCloseLegacyStores
 - shouldCommitGoodStoresEvenSomeThrowsException
+- shouldExcludeCorruptedStoresFromDowngradeCheckpoint
 - shouldFindSingleStoreForChangelog
 - shouldGetChangelogPartitionForRegisteredStore
 - shouldGetRegisteredStore
@@ -2271,6 +2274,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldNotThrowTaskCorruptedExceptionAfterCheckpointing
 - shouldNotThrowTaskCorruptedWithoutInMemoryStoreCheckpointAndNonEmptyDir
 - shouldNotWriteCheckpointForStoresWithoutChangelogTopic
+- shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull
 - shouldOverrideOffsetsWhenRestoreAndProcess
 - shouldPreserveStreamsExceptionOnCloseIfStoreThrows
 - shouldPreserveStreamsExceptionOnCommitIfStoreThrows
@@ -2301,6 +2305,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldThrowProcessorStateExceptionOnCommitIfStoreThrowsAnException
 - shouldThrowProcessorStateExceptionOnFlushCacheIfStoreThrowsAFailedProcessingException
 - shouldThrowTaskCorruptedWithoutPersistentStoreCheckpointAndNonEmptyDir
+- shouldWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsPre43
 - shouldWritePositionCheckpointFile
 org.apache.kafka.streams.processor.internals.ProcessorTopologyTest:
 - inMemoryStoreShouldNotResultInPersistentLocalStore
@@ -4696,6 +4701,7 @@ org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStoreTest:
 - shouldAcceptNullOffsets
 - shouldBeNoOpForMigrationWhenNoLegacyFileExists
 - shouldBeNoOpForNonLCSSStoreInMaybeMarkCorrupted
+- shouldBeNoOpWhenUpgradeFromIsNull
 - shouldCloseWrappedStoreOnClose
 - shouldCommitWhenOldOffsetIsNull
 - shouldDeleteCheckpointFileAfterInitUnderEOS
@@ -4739,6 +4745,10 @@ org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStoreTest:
 - shouldWriteCheckpointOnClose
 - shouldWriteCheckpointOnCloseUnderEOS
 - shouldWriteCommittedOffsetsToCheckpointFile
+- shouldWriteDowngradeCheckpointForAllPre43Versions
+- shouldWriteDowngradeCheckpointForGlobalStore
+- shouldWriteDowngradeCheckpointWhenUpgradeFromIsPre43
+- shouldWriteNullOffsetsAsOffsetUnknownInDowngradeCheckpoint
 org.apache.kafka.streams.state.internals.ListValueStoreTest:
 - shouldAllowDeleteWhileIterateRecords
 - shouldGetAll
