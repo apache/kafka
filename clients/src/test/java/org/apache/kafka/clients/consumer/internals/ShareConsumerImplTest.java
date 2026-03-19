@@ -100,6 +100,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
@@ -844,7 +845,7 @@ public class ShareConsumerImplTest {
         ConsumerRecords<?, ?> result = consumer.poll(Duration.ofMillis(450));
         assertTrue(result.isEmpty());
 
-        verify(fetchBuffer, org.mockito.Mockito.atLeastOnce()).awaitNotEmpty(any(Timer.class));
+        verify(fetchBuffer, atLeastOnce()).awaitNotEmpty(any(Timer.class));
         verify(applicationEventHandler, times(1)).add(any(SharePollEvent.class));
     }
 
