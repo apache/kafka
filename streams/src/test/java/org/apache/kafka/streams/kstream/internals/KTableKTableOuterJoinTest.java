@@ -36,7 +36,8 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -56,10 +57,19 @@ public class KTableKTableOuterJoinTest {
     private final String topic2 = "topic2";
     private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
-    @Test
-    public void testJoin() {
+    private Properties getProps(final boolean withHeaders) {
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        if (withHeaders) {
+            props.put(org.apache.kafka.streams.StreamsConfig.DSL_STORE_FORMAT_CONFIG,
+                     org.apache.kafka.streams.StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+        return props;
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testJoin(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -79,7 +89,7 @@ public class KTableKTableOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(withHeaders))) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -182,8 +192,9 @@ public class KTableKTableOuterJoinTest {
         }
     }
 
-    @Test
-    public void testNotSendingOldValue() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNotSendingOldValue(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -199,7 +210,7 @@ public class KTableKTableOuterJoinTest {
 
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, getProps(withHeaders))) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -291,8 +302,9 @@ public class KTableKTableOuterJoinTest {
         }
     }
 
-    @Test
-    public void testSendingOldValue() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSendingOldValue(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -310,7 +322,7 @@ public class KTableKTableOuterJoinTest {
 
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, getProps(withHeaders))) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -402,8 +414,9 @@ public class KTableKTableOuterJoinTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
@@ -413,7 +426,7 @@ public class KTableKTableOuterJoinTest {
                 null
         ).get();
 
-        final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(props);
+        final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(getProps(withHeaders));
         context.setRecordMetadata("left", -1, -2);
         join.init(context);
 

@@ -27,7 +27,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -37,10 +38,17 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class KTableKTableRightJoinTest {
 
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private Properties getProps(final boolean withHeaders) {
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+        return props;
+    }
 
-    @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersionLatest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersionLatest(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
@@ -50,6 +58,7 @@ public class KTableKTableRightJoinTest {
             null
         ).get();
 
+        final Properties props = getProps(withHeaders);
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(props);
         context.setRecordMetadata("left", -1, -2);

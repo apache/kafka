@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -35,8 +36,8 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -63,8 +64,8 @@ public class KStreamKTableLeftJoinTest {
     private MockApiProcessor<Integer, String, Void, Void> processor;
     private StreamsBuilder builder;
 
-    @BeforeEach
-    public void setUp() {
+
+    public void setUp(final boolean withHeaders) {
         builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream;
@@ -77,6 +78,9 @@ public class KStreamKTableLeftJoinTest {
         stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         driver = new TopologyTestDriver(builder.build(), props);
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
@@ -111,8 +115,10 @@ public class KStreamKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void shouldRequireCopartitionedStreams() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRequireCopartitionedStreams(final boolean withHeaders) {
+        setUp(withHeaders);
         final Collection<Set<String>> copartitionGroups =
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
@@ -120,16 +126,20 @@ public class KStreamKTableLeftJoinTest {
         assertEquals(Set.of(streamTopic, tableTopic), copartitionGroups.iterator().next());
     }
 
-    @Test
-    public void shouldJoinWithEmptyTableOnStreamUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldJoinWithEmptyTableOnStreamUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+null", 0),
                 new KeyValueTimestamp<>(1, "X1+null", 1));
     }
 
-    @Test
-    public void shouldNotJoinOnTableUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotJoinOnTableUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+null", 0),
@@ -162,8 +172,10 @@ public class KStreamKTableLeftJoinTest {
         processor.checkAndClearProcessResult(EMPTY);
     }
 
-    @Test
-    public void shouldJoinRegardlessIfMatchFoundOnStreamUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldJoinRegardlessIfMatchFoundOnStreamUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
         processor.checkAndClearProcessResult(EMPTY);
@@ -177,8 +189,10 @@ public class KStreamKTableLeftJoinTest {
 
     }
 
-    @Test
-    public void shouldClearTableEntryOnNullValueUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldClearTableEntryOnNullValueUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push all four items to the table. this should not produce any item.
         pushToTable(4, "Y");
         processor.checkAndClearProcessResult(EMPTY);
@@ -202,8 +216,10 @@ public class KStreamKTableLeftJoinTest {
                 new KeyValueTimestamp<>(3, "XX3+Y3", 3));
     }
 
-    @Test
-    public void shouldNotDropLeftNullKey() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotDropLeftNullKey(final boolean withHeaders) {
+        setUp(withHeaders);
         // push all four items to the table. this should not produce any item.
         pushToTable(1, "Y");
         processor.checkAndClearProcessResult(EMPTY);
@@ -234,8 +250,10 @@ public class KStreamKTableLeftJoinTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterWhenSkippingNullLeftValue(final boolean withHeaders) {
+        setUp(withHeaders);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());

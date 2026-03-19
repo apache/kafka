@@ -33,7 +33,8 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Properties;
@@ -44,12 +45,16 @@ import static java.time.Duration.ofSeconds;
 public class KStreamKStreamSelfJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @Test
-    public void shouldMatchInnerJoinWithSelfJoinWithSingleStream() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMatchInnerJoinWithSelfJoinWithSingleStream(final boolean withHeaders) {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
@@ -113,10 +118,14 @@ public class KStreamKStreamSelfJoinTest {
     }
 
 
-    @Test
-    public void shouldMatchInnerJoinWithSelfJoinWithTwoStreams() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMatchInnerJoinWithSelfJoinWithTwoStreams(final boolean withHeaders) {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
@@ -183,10 +192,14 @@ public class KStreamKStreamSelfJoinTest {
         }
     }
 
-    @Test
-    public void shouldMatchInnerJoinWithSelfJoinDifferentBeforeAfterWindows() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMatchInnerJoinWithSelfJoinDifferentBeforeAfterWindows(final boolean withHeaders) {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
@@ -258,10 +271,14 @@ public class KStreamKStreamSelfJoinTest {
         }
     }
 
-    @Test
-    public void shouldMatchInnerJoinWithSelfJoinOutOfOrderMessages() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMatchInnerJoinWithSelfJoinOutOfOrderMessages(final boolean withHeaders) {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
         final StreamsBuilder streamsBuilder = new StreamsBuilder();

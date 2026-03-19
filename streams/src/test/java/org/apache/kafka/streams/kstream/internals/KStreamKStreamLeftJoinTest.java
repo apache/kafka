@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -35,7 +36,8 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -53,11 +55,20 @@ public class KStreamKStreamLeftJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private static final Properties PROPS = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    private Properties getProps(final boolean withHeaders) {
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+        return props;
+    }
 
     @SuppressWarnings("deprecation") // old join semantics; can be removed when `JoinWindows.of()` is removed
-    @Test
-    public void testLeftJoinWithSpuriousResultFixDisabledOldApi() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftJoinWithSpuriousResultFixDisabledOldApi(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -77,7 +88,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -116,8 +127,10 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @SuppressWarnings("deprecation") // old join semantics; can be removed when `JoinWindows.of()` is removed
-    @Test
-    public void testLeftJoinDuplicatesWithSpuriousResultFixDisabledOldApi() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftJoinDuplicatesWithSpuriousResultFixDisabledOldApi(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -135,7 +148,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -158,8 +171,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testLeftJoinDuplicates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftJoinDuplicates(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -177,7 +192,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -214,8 +229,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testLeftExpiredNonJoinedRecordsAreEmittedByTheLeftProcessor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftExpiredNonJoinedRecordsAreEmittedByTheLeftProcessor(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -233,7 +250,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -269,8 +286,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testLeftExpiredNonJoinedRecordsAreEmittedByTheRightProcessor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftExpiredNonJoinedRecordsAreEmittedByTheRightProcessor(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -288,7 +307,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -324,8 +343,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testRightNonJoinedRecordsAreNeverEmittedByTheLeftProcessor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRightNonJoinedRecordsAreNeverEmittedByTheLeftProcessor(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -343,7 +364,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -376,8 +397,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testRightNonJoinedRecordsAreNeverEmittedByTheRightProcessor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRightNonJoinedRecordsAreNeverEmittedByTheRightProcessor(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -395,7 +418,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -428,8 +451,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testLeftJoinedRecordsWithZeroAfterAreEmitted() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftJoinedRecordsWithZeroAfterAreEmitted(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -457,7 +482,7 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -606,8 +631,9 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testLeftJoinWithInMemoryCustomSuppliers() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftJoinWithInMemoryCustomSuppliers(final boolean withHeaders) {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(0L));
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
@@ -620,19 +646,22 @@ public class KStreamKStreamLeftJoinTest {
 
         final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
 
-        runLeftJoin(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+        runLeftJoin(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows, withHeaders);
     }
 
-    @Test
-    public void testLeftJoinWithDefaultSuppliers() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testLeftJoinWithDefaultSuppliers(final boolean withHeaders) {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
         final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
 
-        runLeftJoin(streamJoined, joinWindows);
+        runLeftJoin(streamJoined, joinWindows, withHeaders);
     }
 
     public void runLeftJoin(final StreamJoined<Integer, String, String> streamJoined,
-                            final JoinWindows joinWindows) {
+                            final JoinWindows joinWindows,
+                            final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -658,7 +687,7 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -744,8 +773,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testOrdering() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testOrdering(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -763,7 +794,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -795,8 +826,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testGracePeriod() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testGracePeriod(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -821,7 +854,7 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -867,8 +900,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void testWindowing() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testWindowing(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -893,7 +928,7 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -928,8 +963,10 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
-    @Test
-    public void shouldNotEmitLeftJoinResultForAsymmetricWindow() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotEmitLeftJoinResultForAsymmetricWindow(final boolean withHeaders) {
+        final Properties props = getProps(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -948,7 +985,7 @@ public class KStreamKStreamLeftJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =

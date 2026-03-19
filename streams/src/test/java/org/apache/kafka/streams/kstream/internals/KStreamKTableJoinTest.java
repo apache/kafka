@@ -41,8 +41,8 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -73,8 +73,7 @@ public class KStreamKTableJoinTest {
     private StreamsBuilder builder;
     private final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
-    @BeforeEach
-    public void setUp() {
+    private void setUp(final boolean withHeaders) {
         builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream;
@@ -85,6 +84,9 @@ public class KStreamKTableJoinTest {
         table = builder.table(tableTopic, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         driver = new TopologyTestDriver(builder.build(), props);
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
@@ -129,7 +131,7 @@ public class KStreamKTableJoinTest {
     }
 
 
-    private void makeJoin(final Duration grace) {
+    private void makeJoin(final Duration grace, final boolean withHeaders) {
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
         final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
@@ -144,6 +146,9 @@ public class KStreamKTableJoinTest {
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String(), "Grace", grace)
         ).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         driver = new TopologyTestDriver(builder.build(), props);
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic("tableTopic2", new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
@@ -151,11 +156,11 @@ public class KStreamKTableJoinTest {
         processor = supplier.theCapturedProcessor();
     }
 
-    @Test
-    public void shouldFailIfTableIsNotVersioned() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldFailIfTableIsNotVersioned(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final Properties props = new Properties();
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
 
@@ -167,11 +172,11 @@ public class KStreamKTableJoinTest {
         );
     }
 
-    @Test
-    public void shouldFailIfTableIsNotVersionedButMaterializationIsInherited() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldFailIfTableIsNotVersionedButMaterializationIsInherited(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final Properties props = new Properties();
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.inMemoryKeyValueStore("tableB")));
@@ -187,11 +192,16 @@ public class KStreamKTableJoinTest {
         );
     }
 
-    @Test
-    public void shouldNotFailIfTableIsVersionedButMaterializationIsInherited() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotFailIfTableIsVersionedButMaterializationIsInherited(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
@@ -201,14 +211,19 @@ public class KStreamKTableJoinTest {
         streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
 
         //should not throw an error
-        builder.build();
+        builder.build(props);
     }
 
-    @Test
-    public void shouldFailIfGracePeriodIsLongerThanHistoryRetention() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldFailIfGracePeriodIsLongerThanHistoryRetention(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
@@ -219,11 +234,16 @@ public class KStreamKTableJoinTest {
         assertThat(exception.getMessage(), is("History retention must be at least grace period."));
     }
 
-    @Test
-    public void shouldFailIfGracePeriodIsLongerThanHistoryRetentionAndInheritedStore() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldFailIfGracePeriodIsLongerThanHistoryRetentionAndInheritedStore(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(0))));
@@ -237,9 +257,11 @@ public class KStreamKTableJoinTest {
     }
 
 
-    @Test
-    public void shouldDelayJoinByGracePeriod() {
-        makeJoin(Duration.ofMillis(2));
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldDelayJoinByGracePeriod(final boolean withHeaders) {
+        setUp(withHeaders);
+        makeJoin(Duration.ofMillis(2), withHeaders);
 
         // push four items to the table. this should not produce any item.
         pushToTableNonRandom(4, "Y");
@@ -275,9 +297,11 @@ public class KStreamKTableJoinTest {
         processor.checkAndClearProcessResult(EMPTY);
     }
 
-    @Test
-    public void shouldHandleLateJoinsWithGracePeriod() {
-        makeJoin(Duration.ofMillis(2));
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldHandleLateJoinsWithGracePeriod(final boolean withHeaders) {
+        setUp(withHeaders);
+        makeJoin(Duration.ofMillis(2), withHeaders);
 
         // push four items to the table. this should not produce any item.
         pushToTableNonRandom(4, "Y");
@@ -295,11 +319,16 @@ public class KStreamKTableJoinTest {
             new KeyValueTimestamp<>(0, "X0+Y0", 0));
     }
 
-    @Test
-    public void shouldReuseRepartitionTopicWithGeneratedName() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReuseRepartitionTopicWithGeneratedName(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
@@ -310,11 +339,16 @@ public class KStreamKTableJoinTest {
         assertEquals(expectedTopologyWithGeneratedRepartitionTopicNames, topology.describe().toString());
     }
 
-    @Test
-    public void shouldCreateRepartitionTopicsWithUserProvidedName() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCreateRepartitionTopicsWithUserProvidedName(final boolean withHeaders) {
+        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
@@ -327,24 +361,34 @@ public class KStreamKTableJoinTest {
         assertEquals(expectedTopologyWithUserProvidedRepartitionTopicNames, topology.describe().toString());
     }
 
-    @Test
-    public void shouldRequireCopartitionedStreams() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRequireCopartitionedStreams(final boolean withHeaders) {
+        setUp(withHeaders);
+        final Properties props = new Properties();
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         final Collection<Set<String>> copartitionGroups =
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+            TopologyWrapper.getInternalTopologyBuilder(builder.build(props)).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(streamTopic, tableTopic), copartitionGroups.iterator().next());
     }
 
-    @Test
-    public void shouldNotJoinWithEmptyTableOnStreamUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotJoinWithEmptyTableOnStreamUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(EMPTY);
     }
 
-    @Test
-    public void shouldNotJoinOnTableUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotJoinOnTableUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(EMPTY);
@@ -378,8 +422,10 @@ public class KStreamKTableJoinTest {
         processor.checkAndClearProcessResult(EMPTY);
     }
 
-    @Test
-    public void shouldJoinOnlyIfMatchFoundOnStreamUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldJoinOnlyIfMatchFoundOnStreamUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
         processor.checkAndClearProcessResult(EMPTY);
@@ -392,8 +438,10 @@ public class KStreamKTableJoinTest {
         );
     }
 
-    @Test
-    public void shouldClearTableEntryOnNullValueUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldClearTableEntryOnNullValueUpdates(final boolean withHeaders) {
+        setUp(withHeaders);
         // push all four items to the table. this should not produce any item.
         pushToTable(4, "Y");
         processor.checkAndClearProcessResult(EMPTY);
@@ -419,8 +467,10 @@ public class KStreamKTableJoinTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKey() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterWhenSkippingNullLeftKey(final boolean withHeaders) {
+        setUp(withHeaders);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
@@ -448,8 +498,10 @@ public class KStreamKTableJoinTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterWhenSkippingNullLeftValue(final boolean withHeaders) {
+        setUp(withHeaders);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
