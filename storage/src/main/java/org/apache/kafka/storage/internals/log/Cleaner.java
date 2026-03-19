@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
@@ -207,7 +208,12 @@ public class Cleaner {
     }
 
     /**
-     * Clean a group of segments into a single replacement segment.
+     * Clean a group of segments into one or more replacement segments.
+     *
+     * <p>If cleaning would cause the destination segment's size or offset range to exceed Integer.MAX_VALUE
+     * (e.g. due to recompression or combining multiple source segments), the current cleaned segment is
+     * finalized and a new one is started. This avoids the {@link org.apache.kafka.storage.internals.log.LogSegmentOffsetOverflowException}
+     * that would otherwise be thrown by {@link LogSegment#append}.
      *
      * @param log The log being cleaned
      * @param segments The group of segments being cleaned
@@ -289,11 +295,14 @@ public class Cleaner {
                         // Complete current cleaned segment
                         currentCleaned.onBecomeInactiveSegment();
                         currentCleaned.flush();
-                        currentCleaned.setLastModified(segments.get(segments.size() - 1).lastModified());
+                        currentCleaned.setLastModified(currentSegment.lastModified());
                         cleanedSegments.add(currentCleaned);
 
-                        // Create new cleaned segment with base offset = next offset of completed segment
-                        long nextBaseOffset = currentCleaned.readNextOffset();
+                        // Use the base offset of the next batch to be cleaned as the new segment's base offset.
+                        // We cannot use currentCleaned.readNextOffset() because compaction may leave holes
+                        // in the offset sequence, so the next batch's base offset could be much larger.
+                        Iterator<FileChannelRecordBatch> nextBatches = currentSegment.log().batchesFrom(e.position()).iterator();
+                        long nextBaseOffset = nextBatches.hasNext() ? nextBatches.next().baseOffset() : currentCleaned.readNextOffset();
                         currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), nextBaseOffset);
                         transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
 
