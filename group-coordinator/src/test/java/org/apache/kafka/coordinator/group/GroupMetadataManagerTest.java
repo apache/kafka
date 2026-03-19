@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
@@ -87,6 +88,7 @@ import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
+import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
@@ -116,6 +118,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -127,6 +130,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpress
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
@@ -177,6 +181,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -21153,6 +21158,125 @@ public class GroupMetadataManagerTest {
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);
         context.assertNoRebalanceTimeout(groupId, memberId);
+    }
+
+    @Test
+    public void testDynamicBrokerAndGroupConfigs() {
+        testDynamicBrokerAndGroupConfig(
+            GroupMetadataManager::consumerGroupAssignmentIntervalMs,
+            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            2000, 1500, 1000, 500
+        );
+        testDynamicBrokerAndGroupConfig(
+            GroupMetadataManager::consumerGroupAssignorOffloadEnable,
+            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+            GroupConfig.CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+            true, false, true, false
+        );
+        testDynamicBrokerAndGroupConfig(
+            GroupMetadataManager::shareGroupAssignmentIntervalMs,
+            GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            2000, 1500, 1000, 500
+        );
+        testDynamicBrokerAndGroupConfig(
+            GroupMetadataManager::shareGroupAssignorOffloadEnable,
+            GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+            GroupConfig.SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+            true, false, true, false
+        );
+        testDynamicBrokerAndGroupConfig(
+            GroupMetadataManager::streamsGroupAssignmentIntervalMs,
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
+            2000, 1500, 1000, 500
+        );
+        testDynamicBrokerAndGroupConfig(
+            GroupMetadataManager::streamsGroupAssignorOffloadEnable,
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+            GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+            true, false, true, false
+        );
+    }
+
+    private <V> void testDynamicBrokerAndGroupConfig(
+        BiFunction<GroupMetadataManager, String, V> getValue,
+        String brokerConfigKey,
+        String groupConfigKey,
+        V initial,
+        V brokerOverride1,
+        V brokerOverride2,
+        V groupOverride
+    ) {
+        class DynamicConfig extends AbstractConfig {
+            private final Map<String, Object> overrides = new HashMap<>();
+
+            DynamicConfig(Map<?, ?> props) {
+                super(
+                    Utils.mergeConfigs(List.of(
+                        GroupCoordinatorConfig.CONFIG_DEF,
+                        ShareGroupConfig.CONFIG_DEF
+                    )),
+                    props,
+                    false
+                );
+            }
+
+            @Override
+            protected Object get(String key) {
+                return overrides.getOrDefault(key, super.get(key));
+            }
+
+            void put(String key, Object value) {
+                overrides.put(key, value);
+            }
+        }
+
+        MockTime time = new MockTime(0, 0, 0);
+        DynamicConfig kafkaConfig = new DynamicConfig(Map.of(brokerConfigKey, initial));
+        GroupCoordinatorConfig groupCoordinatorConfig = new GroupCoordinatorConfig(kafkaConfig);
+        ShareGroupConfig shareGroupConfig = new ShareGroupConfig(kafkaConfig);
+        GroupConfigManager groupConfigManager = new GroupConfigManager(
+            groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig),
+            groupCoordinatorConfig,
+            shareGroupConfig
+        );
+        GroupMetadataManager groupMetadataManager = new GroupMetadataManager.Builder()
+            .withTime(time)
+            .withTimer(new MockCoordinatorTimer<>(time))
+            .withExecutor(new MockCoordinatorExecutor<>())
+            .withConfig(groupCoordinatorConfig)
+            .withGroupCoordinatorMetricsShard(mock(GroupCoordinatorMetricsShard.class))
+            .withGroupConfigManager(groupConfigManager)
+            .build();
+
+        String groupId = "test-group";
+        assertEquals(initial, getValue.apply(groupMetadataManager, groupId));
+
+        // Set broker-level override.
+        kafkaConfig.put(brokerConfigKey, brokerOverride1);
+        assertEquals(brokerOverride1, getValue.apply(groupMetadataManager, groupId));
+
+        // Create a group config entry.
+        Properties groupConfig = new Properties();
+        groupConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 2000);
+        groupConfigManager.updateGroupConfig(groupId, groupConfig);
+
+        // Check that broker-level overrides still work. The group config must not bake in the value.
+        assertEquals(brokerOverride1, getValue.apply(groupMetadataManager, groupId));
+        kafkaConfig.put(brokerConfigKey, brokerOverride2);
+        assertEquals(brokerOverride2, getValue.apply(groupMetadataManager, groupId));
+
+        // Set group-level override.
+        groupConfig.put(groupConfigKey, String.valueOf(groupOverride));
+        groupConfigManager.updateGroupConfig(groupId, groupConfig);
+        assertEquals(groupOverride, getValue.apply(groupMetadataManager, groupId));
+
+        // Remove group-level override.
+        groupConfig.remove(groupConfigKey);
+        groupConfigManager.updateGroupConfig(groupId, groupConfig);
+        assertEquals(brokerOverride2, getValue.apply(groupMetadataManager, groupId));
     }
 
     @Test
