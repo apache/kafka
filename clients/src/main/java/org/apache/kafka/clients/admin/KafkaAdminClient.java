@@ -267,7 +267,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -545,16 +544,8 @@ public class KafkaAdminClient extends AdminClient {
                 ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
                 : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
 
-            // Create unresolved addresses for bootstrap cluster (defer DNS resolution to NetworkClient.poll())
-            List<InetSocketAddress> unresolvedAddresses = new ArrayList<>();
-            for (String address : bootstrapAddressesToUse) {
-                String host = Utils.getHost(address);
-                Integer port = Utils.getPort(address);
-                if (host != null && port != null) {
-                    unresolvedAddresses.add(InetSocketAddress.createUnresolved(host, port));
-                }
-            }
-            metadataManager.update(Cluster.bootstrap(unresolvedAddresses), time.milliseconds());
+            // Don't create bootstrap cluster here - let NetworkClient.ensureBootstrapped() handle it
+            // during the first poll after DNS resolution succeeds
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);

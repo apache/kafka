@@ -151,14 +151,13 @@ public class AdminMetadataManager {
 
         @Override
         public boolean isBootstrapped() {
-            // AdminClient bootstraps during construction via metadataManager.update(Cluster.bootstrap(...))
-            // so we check if the bootstrap cluster has been set
             return bootstrapCluster != null;
         }
 
         @Override
         public void bootstrap(List<InetSocketAddress> addresses) {
-            // Bootstrap is handled by NetworkClient.ensureBootstrapped() during poll
+            // Called by NetworkClient.ensureBootstrapped() after DNS resolution succeeds
+            AdminMetadataManager.this.update(Cluster.bootstrap(addresses), 0);
         }
 
         @Override

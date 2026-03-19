@@ -1268,6 +1268,11 @@ public class NetworkClient implements KafkaClient {
             pollDeadlineMs = currentTimeMs + pollTimeoutMs;
 
         while (true) {
+            // Check if client is still active (user may have called close())
+            if (!active()) {
+                return;
+            }
+
             long now = time.milliseconds();
             bootstrapTimer.update(now);
 
