@@ -6330,6 +6330,13 @@ org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest:
 - shouldTrackCount
 - shouldTrackMinTimestamp
 - shouldTrackSize
+org.apache.kafka.streams.state.internals.TimeOrderedSessionStoreUpgradeTest:
+- shouldAggregateSessionsViaDslWithOnWindowClose
+- shouldMigrateFromWithIndexToWithIndexAndHeaders
+- shouldMigrateFromWithoutHeadersToWithHeaders
+- shouldMigrateFromWithoutIndexToWithIndexAndHeaders
+- shouldMigrateViaDslSupplierPath
+- shouldWriteAndReadWithHeaders
 org.apache.kafka.streams.state.internals.TimeOrderedWindowStoreTest:
 - shouldBackwardFetchAndIterateOverExactKeys
 - shouldClearNamespaceCacheOnClose
