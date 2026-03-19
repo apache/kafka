@@ -6,6 +6,9 @@ org.apache.kafka.coordinator.group.GroupConfigManagerTest:
 - testUpdateConfigWithNullGroupId
 - testUpdateGroupConfig
 org.apache.kafka.coordinator.group.GroupConfigTest:
+- testAssignmentIntervalMsAbsentWhenNotConfigured
+- testAssignmentIntervalMsNotValidatedWhenNotConfigured
+- testAssignorOffloadEnableAbsentWhenNotConfigured
 - testEvaluateDoesNotModifyInput
 - testEvaluateEmptyPropsReturnsEmpty
 - testEvaluateMaxBoundedValueAboveMaxIsCapped
@@ -360,6 +363,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testDuplicateFullHeartbeatInUnreleasedPartitionsState
 - testDuplicateFullHeartbeatInUnrevokedPartitionsState
 - testDuplicateFullHeartbeatWithRevocationAck
+- testDynamicBrokerAndGroupConfigs
 - testDynamicMembersCanRejoinGroupWithMaxSizeWhileRebalancing
 - testDynamicMembersJoinGroupWithMaxSizeAndNotRequiredKnownMember
 - testDynamicMembersJoinGroupWithMaxSizeAndRequiredKnownMember
