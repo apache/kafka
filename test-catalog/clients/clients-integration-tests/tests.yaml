@@ -329,6 +329,8 @@ org.apache.kafka.clients.consumer.SaslPlainPlaintextConsumerTest:
 - testClassicConsumerSimpleConsumption
 org.apache.kafka.clients.consumer.ShareConsumerRackAwareTest:
 - testShareConsumerWithRackAwareAssignor
+org.apache.kafka.clients.consumer.ShareConsumerRackAwareTest$WithAssignmentBatchingDisabledTest:
+- testShareConsumerWithRackAwareAssignor
 org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testAcknowledgementCommitCallbackCallsShareConsumerDisallowed
 - testAcknowledgementCommitCallbackCallsShareConsumerWakeup

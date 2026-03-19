@@ -249,6 +249,8 @@ org.apache.kafka.raft.KafkaRaftClientSnapshotTest:
 - testLeaderImmediatelySendsSnapshotId
 - testLeaderListenerNotified
 - testLeaderShouldResignLeadershipIfNotGetFetchSnapshotRequestFromMajorityVoters
+- testListenerReceivesBootstrapSnapshot
+- testListenerReceivesBootstrapSnapshotViaFollowerFetch
 - testListenerRenotified
 - testPartialFetchSnapshotRequestAsLeader
 - testSecondListenerNotified
