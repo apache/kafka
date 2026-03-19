@@ -1218,7 +1218,7 @@ class KafkaConfigTest {
     assertEquals(1, config.brokerId)
     assertEndpointsEqual(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 1122),
       config.effectiveAdvertisedBrokerListeners.head)
-    assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
+    assertEquals(util.Map.of("127.0.0.1", 2, "127.0.0.2", 3), config.maxConnectionsPerIpOverrides)
     assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
