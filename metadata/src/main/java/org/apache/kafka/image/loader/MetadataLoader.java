@@ -426,6 +426,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         });
     }
 
+    @Override
+    public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+        // MetadataLoader does not process uncommitted bootstrap snapshots.
+        reader.close();
+    }
+
     /**
      * Load a snapshot. This is relatively straightforward since we don't track as many things as
      * we do in loadLogDelta. The main complication here is that we have to maintain an index

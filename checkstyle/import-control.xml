@@ -137,6 +137,9 @@
         <allow pkg="com.fasterxml.jackson.databind" />
         <allow pkg="org.jose4j" />
         <allow pkg="javax.crypto"/>
+        <allow pkg="org.testcontainers" />
+        <allow pkg="org.keycloak" />
+        <allow pkg="dasniko.testcontainers" />
       </subpackage>
     </subpackage>
 

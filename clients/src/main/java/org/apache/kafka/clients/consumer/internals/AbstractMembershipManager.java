@@ -506,20 +506,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
-     * Update a new assignment by setting the assigned partitions in the member subscription.
-     * This will mark the newly added partitions as pending callback, to prevent fetching records
-     * or updating positions for them while the callback runs.
-     *
-     * @param assignedPartitions Full assignment, to update in the subscription state
-     * @param addedPartitions    Newly added partitions
-     */
-    private void updateSubscriptionAwaitingCallback(TopicIdPartitionSet assignedPartitions,
-                                                    SortedSet<TopicPartition> addedPartitions) {
-        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
-        notifyAssignmentChange(assignedPartitions.topicPartitions());
-    }
-
-    /**
      * Transition to the {@link MemberState#JOINING} state, indicating that the member will
      * try to join the group on the next heartbeat request. This is expected to be invoked when
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
@@ -1192,12 +1178,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             TopicIdPartitionSet assignedPartitions,
             SortedSet<TopicPartition> addedPartitions) {
 
-        // Update assignment in the subscription state, and ensure that no fetching or positions
-        // initialization happens for the newly added partitions while the callback runs.
-        updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
+        // Signal that new partitions have been reconciled so that type-specific actions can be taken.
+        // - ShareMembershipManager: updates subscription immediately and returns completed future
+        // - ConsumerMembershipManager: enqueues event for app thread to apply assignment within poll() and run callbacks
+        CompletableFuture<Void> result = signalPartitionsAssigned(assignedPartitions, addedPartitions);
 
-        // Invoke user call back.
-        CompletableFuture<Void> result = signalPartitionsAssigned(addedPartitions);
         // Enable newly added partitions to start fetching and updating positions for them.
         result.whenComplete((__, exception) -> {
             if (exception == null) {
@@ -1230,10 +1215,12 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * Signals to the membership manager that partitions are being assigned so that actions
      * specific to the group type can be taken.
+     *
+     * @param assignedPartitions The full assignment to apply
+     * @param addedPartitions The newly added partitions (used for callback and subscription update)
      */
-    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> partitionsAssigned) {
-        return CompletableFuture.completedFuture(null);
-    }
+    protected abstract CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                                        SortedSet<TopicPartition> addedPartitions);
 
     /**
      * Signals to the membership manager that partitions are being revoked so that actions

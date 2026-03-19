@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,7 +99,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -235,7 +237,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -528,7 +531,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
                 new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -680,7 +684,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -746,7 +751,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
                 new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -796,12 +802,13 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
                 new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath()
             );
 
-            // Should only have DEFAULT and keyValueWithTimestampAndHeaders, not the legacy keyValueWithTimestamp
-            assertEquals(2, existingCFs.size(), "Expected only 2 column families after legacy CF is dropped");
+            // Should only have DEFAULT, OFFSETS and keyValueWithTimestampAndHeaders, not the legacy keyValueWithTimestamp
+            assertEquals(3, existingCFs.size(), "Expected only 3 column families after legacy CF is dropped");
 
             boolean hasDefault = false;
             boolean hasHeadersAware = false;
             boolean hasLegacy = false;
+            boolean hasOffsets = false;
 
             for (final byte[] cf : existingCFs) {
                 if (Arrays.equals(cf, RocksDB.DEFAULT_COLUMN_FAMILY)) {
@@ -810,9 +817,12 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
                     hasHeadersAware = true;
                 } else if (Arrays.equals(cf, "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8))) {
                     hasLegacy = true;
+                } else if (Arrays.equals(cf, OFFSETS_COLUMN_FAMILY_NAME)) {
+                    hasOffsets = true;
                 }
             }
 
+            assertTrue(hasOffsets, "Expected offsets column family to exist");
             assertTrue(hasDefault, "Expected default column family to exist");
             assertTrue(hasHeadersAware, "Expected headers-aware column family to exist");
             assertFalse(hasLegacy, "Expected legacy column family to be dropped");

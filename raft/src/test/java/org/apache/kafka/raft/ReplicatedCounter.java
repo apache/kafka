@@ -182,6 +182,12 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
+    public synchronized void handleLoadBootstrap(SnapshotReader<Integer> reader) {
+        // ReplicatedCounter does not process bootstrap snapshots.
+        reader.close();
+    }
+
+    @Override
     public synchronized void handleLeaderChange(LeaderAndEpoch newLeader) {
         if (newLeader.isLeader(nodeId)) {
             log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",

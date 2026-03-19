@@ -42,5 +42,10 @@ interface Segments<S extends Segment> {
 
     void commit(final Map<TopicPartition, Long> changelogOffsets);
 
+    @SuppressWarnings("deprecation")
+    boolean managesOffsets();
+
+    Long committedOffset(final TopicPartition partition);
+
     void close();
 }

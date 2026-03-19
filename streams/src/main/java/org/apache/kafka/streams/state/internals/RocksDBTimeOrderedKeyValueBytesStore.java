@@ -34,13 +34,17 @@ import java.util.Optional;
 /**
  * A RocksDB backed time-ordered segmented bytes store for window key schema.
  */
-public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
+public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment> {
 
     private long minTimestamp;
 
     RocksDBTimeOrderedKeyValueBytesStore(final String name,
                                          final String metricsScope) {
-        super(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE, new TimeFirstWindowKeySchema(), Optional.empty());
+        super(name,
+            Long.MAX_VALUE,
+            new TimeFirstWindowKeySchema(),
+            Optional.empty(),
+            new KeyValueSegments(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE));
         minTimestamp = Long.MAX_VALUE;
     }
 

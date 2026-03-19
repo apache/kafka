@@ -33,6 +33,19 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEqu
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
+object ConsumerGroupHeartbeatRequestTest {
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    )
+  )
+  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ConsumerGroupHeartbeatRequestTest(cluster) {
+  }
+}
+
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
@@ -41,6 +54,10 @@ import scala.jdk.CollectionConverters._
   )
 )
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+
+  protected def isConsumerAssignmentBatchingEnabled: Boolean = {
+    cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.consumerGroupAssignmentIntervalMs > 0)
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -1097,5 +1114,163 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify duplicate produces same response.
     assertEquals(expectedFirstResponse1, duplicateResponse1.data)
+  }
+
+  @ClusterTest
+  def testConsumerGroupHeartbeatRebalance(): Unit = {
+    createOffsetsTopic()
+
+    val memberId1 = Uuid.randomUuid().toString
+    val memberId2 = Uuid.randomUuid().toString
+    val groupId = "test-rebalance-grp"
+
+    // Create topic.
+    val topicId = createTopic(topic = "foo", numPartitions = 2)
+
+    // Member 1 joins and gets all partitions.
+    val request1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response1: ConsumerGroupHeartbeatResponse = null
+    val allPartitions = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1).asJava)).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      response1 = connectAndReceive[ConsumerGroupHeartbeatResponse](request1)
+      response1.data.errorCode == Errors.NONE.code &&
+        response1.data.assignment == allPartitions
+    }, msg = s"Member 1 could not get assignment. Last response $response1.")
+
+    // Expected assignment.
+    val expectedAssignment1 = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1).asJava)).asJava)
+
+    val expectedResponse1 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId1)
+      .setMemberEpoch(2)
+      .setHeartbeatIntervalMs(response1.data.heartbeatIntervalMs)
+      .setAssignment(expectedAssignment1)
+    assertEquals(expectedResponse1, response1.data)
+
+    val member1InitialEpoch = response1.data.memberEpoch
+
+    // Member 2 joins, triggering rebalance.
+    val request2 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId2)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response2: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
+      response2.data.errorCode == Errors.NONE.code
+    }, msg = s"Member 2 could not join. Last response $response2.")
+
+    // Expected assignment.
+    val expectedAssignment2 = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List.empty.asJava)
+
+    val expectedResponse2 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId2)
+      .setMemberEpoch(if (isConsumerAssignmentBatchingEnabled) member1InitialEpoch else member1InitialEpoch + 1)
+      .setHeartbeatIntervalMs(response2.data.heartbeatIntervalMs)
+      .setAssignment(expectedAssignment2)
+    assertEquals(expectedResponse2, response2.data)
+
+    val member2InitialEpoch = response2.data.memberEpoch
+
+    // Member 1 heartbeats and sees revoked partition.
+    val request3 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(member1InitialEpoch)
+    ).build()
+
+    var response3: ConsumerGroupHeartbeatResponse = null
+    if (isConsumerAssignmentBatchingEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        response3 = connectAndReceive[ConsumerGroupHeartbeatResponse](request3)
+        response3.data.errorCode == Errors.NONE.code &&
+          response3.data.assignment != null
+      }, msg = s"Member 1 did not get new assignment before timeout.")
+    } else {
+      response3 = connectAndReceive[ConsumerGroupHeartbeatResponse](request3)
+      assertEquals(Errors.NONE.code, response3.data.errorCode)
+    }
+
+    // Expected assignment.
+    val expectedAssignment3 = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0).asJava)).asJava)
+
+    val expectedResponse3 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId1)
+      .setMemberEpoch(member1InitialEpoch)
+      .setHeartbeatIntervalMs(response3.data.heartbeatIntervalMs)
+      .setAssignment(expectedAssignment3)
+    assertEquals(expectedResponse3, response3.data)
+
+    // Member 1 sends heartbeat acknowledging revocation (only reporting partition 0).
+    val ackRequest1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(member1InitialEpoch)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0).asJava)).asJava)
+    ).build()
+
+    val ackResponse1 = connectAndReceive[ConsumerGroupHeartbeatResponse](ackRequest1)
+    assertEquals(Errors.NONE.code, ackResponse1.data.errorCode)
+
+    val member1NewEpoch = ackResponse1.data.memberEpoch
+
+    // Member 2 heartbeats and is assigned new partition.
+    val request4 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId2)
+        .setMemberEpoch(member2InitialEpoch)
+    ).build()
+
+    val response4 = connectAndReceive[ConsumerGroupHeartbeatResponse](request4)
+    assertEquals(Errors.NONE.code, response3.data.errorCode)
+
+    val expectedAssignment4 = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](1).asJava)).asJava)
+
+    val expectedResponse4 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId2)
+      .setMemberEpoch(member1NewEpoch)
+      .setHeartbeatIntervalMs(response4.data.heartbeatIntervalMs)
+      .setAssignment(expectedAssignment4)
+    assertEquals(expectedResponse4, response4.data)
   }
 }

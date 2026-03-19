@@ -672,14 +672,16 @@ public final class Stores {
      *
      * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
-     * @param valueSerde    the value serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
      * @param <K>           key type
      * @param <V>           value type
      * @return an instance of {@link StoreBuilder} than can build a {@link SessionStoreWithHeaders}
      */
-    public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreBuilderWithHeaders(final SessionBytesStoreSupplier supplier,
-                                                                                                     final Serde<K> keySerde,
-                                                                                                     final Serde<V> valueSerde) {
+    public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreBuilderWithHeaders(
+            final SessionBytesStoreSupplier supplier,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }

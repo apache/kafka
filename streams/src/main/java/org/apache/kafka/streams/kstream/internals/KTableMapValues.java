@@ -16,19 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collections;
 import java.util.Set;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
@@ -109,16 +111,18 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         return newValue;
     }
 
-    private ValueAndTimestamp<VOut> computeValueAndTimestamp(final KIn key, final ValueAndTimestamp<VIn> valueAndTimestamp) {
+    private ValueTimestampHeaders<VOut> computeValueAndTimestamp(final KIn key, final ValueTimestampHeaders<VIn> valueTimestampHeaders) {
         VOut newValue = null;
         long timestamp = 0;
+        Headers headers = null;
 
-        if (valueAndTimestamp != null) {
-            newValue = mapper.apply(key, valueAndTimestamp.value());
-            timestamp = valueAndTimestamp.timestamp();
+        if (valueTimestampHeaders != null) {
+            newValue = mapper.apply(key, valueTimestampHeaders.value());
+            timestamp = valueTimestampHeaders.timestamp();
+            headers = valueTimestampHeaders.headers();
         }
 
-        return ValueAndTimestamp.make(newValue, timestamp);
+        return ValueTimestampHeaders.make(newValue, timestamp, headers);
     }
 
 
@@ -135,7 +139,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store.store(),
                     context,
-                    new TimestampedCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
                     sendOldValues);
             }
         }
@@ -146,7 +150,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
             final VOut oldValue = computeOldValue(record.key(), record.value());
 
             if (queryableName != null) {
-                final long putReturnCode = store.put(record.key(), newValue, record.timestamp());
+                final long putReturnCode = store.put(record.key(), newValue, record.timestamp(), new RecordHeaders());
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
@@ -181,12 +185,12 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         }
 
         @Override
-        public ValueAndTimestamp<VOut> get(final KIn key) {
+        public ValueTimestampHeaders<VOut> get(final KIn key) {
             return computeValueAndTimestamp(key, parentGetter.get(key));
         }
 
         @Override
-        public ValueAndTimestamp<VOut> get(final KIn key, final long asOfTimestamp) {
+        public ValueTimestampHeaders<VOut> get(final KIn key, final long asOfTimestamp) {
             return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp));
         }
 

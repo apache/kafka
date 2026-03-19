@@ -66,9 +66,11 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -121,7 +123,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -272,7 +273,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -290,7 +298,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPollMultiple() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1282,12 +1297,18 @@ public class ShareConsumerTest {
         broker.awaitShutdown();
 
         // Assert that close completes in less than 5 seconds, not the full 30-second timeout.
-        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
-            shareConsumer.close();
-        }, "Consumer close should not wait for full timeout when broker is already shutdown");
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> shareConsumer.close(),
+            "Consumer close should not wait for full timeout when broker is already shut down");
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupSequentialConsumption() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1323,7 +1344,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupConcurrentConsumption()
         throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
@@ -1357,7 +1385,14 @@ public class ShareConsumerTest {
         assertEquals(producerCount * messagesPerProducer, totalResult);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
         throws ExecutionException, InterruptedException, TimeoutException {
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
@@ -1470,7 +1505,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupFailureConcurrentConsumption()
         throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
@@ -1783,7 +1825,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1812,7 +1861,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
         String topic1 = "bar";
         String topic2 = "baz";
@@ -1872,7 +1928,7 @@ public class ShareConsumerTest {
             }
 
             // We delete records before offset 5, so the LSO should move to 5.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L))).all().get(), "Failed to delete records");
 
             int messageCount = consumeMessages(new AtomicInteger(0), 5, groupId, 1, 10, true);
             // The records returned belong to offsets 5-9.
@@ -1884,14 +1940,14 @@ public class ShareConsumerTest {
             }
 
             // We delete records before offset 14, so the LSO should move to 14.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(14L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(14L))).all().get(), "Failed to delete records");
 
             int consumeMessagesCount = consumeMessages(new AtomicInteger(0), 1, groupId, 1, 10, true);
             // The record returned belong to offset 14.
             assertEquals(1, consumeMessagesCount);
 
             // We delete records before offset 15, so the LSO should move to 15 and now no records should be returned.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(15L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(15L))).all().get(), "Failed to delete records");
 
             messageCount = consumeMessages(new AtomicInteger(0), 0, groupId, 1, 5, true);
             assertEquals(0, messageCount);
@@ -1965,7 +2021,7 @@ public class ShareConsumerTest {
             }
 
             // We delete records before offset 5, so the LSO should move to 5.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L))).all().get(), "Failed to delete records");
 
             int consumedMessageCount = consumeMessages(new AtomicInteger(0), 5, "group1", 1, 10, true);
             // The records returned belong to offsets 5-9.
@@ -2367,7 +2423,6 @@ public class ShareConsumerTest {
         brokers = 1,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
@@ -4044,13 +4099,17 @@ public class ShareConsumerTest {
         // Verify the config is readable via describe configs.
         try (Admin adminClient = createAdminClient()) {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            Map<ConfigResource, Config> configs = assertDoesNotThrow(() ->
-                adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS));
-            Config config = configs.get(configResource);
-            assertNotNull(config);
-            ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-            assertNotNull(entry);
-            assertEquals("500", entry.value());
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    try {
+                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
+                        Config config = configs.get(configResource);
+                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+                        return entry != null && entry.value().equals("500");
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
         }
 
         // Verify the config can be updated dynamically.
@@ -4058,13 +4117,17 @@ public class ShareConsumerTest {
 
         try (Admin adminClient = createAdminClient()) {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            Map<ConfigResource, Config> configs = assertDoesNotThrow(() ->
-                adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS));
-            Config config = configs.get(configResource);
-            assertNotNull(config);
-            ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-            assertNotNull(entry);
-            assertEquals("1000", entry.value());
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    try {
+                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
+                        Config config = configs.get(configResource);
+                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
+                        return entry != null && entry.value().equals("1000");
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
         }
     }
 
@@ -4372,6 +4435,23 @@ public class ShareConsumerTest {
 
     private void alterShareDeliveryCountLimit(String groupId, String newValue) {
         alterShareGroupConfig(groupId, GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, newValue);
+
+        // This config is changed dynamically in tests, and we need it to have propagated before the test proceeds.
+        // Describing the config with a new admin client is not totally foolproof, but it's better than just
+        // altering the config and continuing.
+        try (Admin adminClient = createAdminClient()) {
+            ConfigResource groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    try {
+                        Config config = adminClient.describeConfigs(List.of(groupConfigResource)).all().get().get(groupConfigResource);
+                        ConfigEntry entry = config.get(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
+                        return entry != null && entry.value().equals(newValue);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
+        }
     }
 
     private void alterShareIsolationLevel(String groupId, String newValue) {
