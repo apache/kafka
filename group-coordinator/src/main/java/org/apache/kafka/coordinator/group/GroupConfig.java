@@ -110,6 +110,9 @@ public final class GroupConfig extends AbstractConfig {
 
     public final int consumerHeartbeatIntervalMs;
 
+    // These have to be optionals because their default group coordinator configs are dynamic,
+    // so we must not capture the default value at the time of GroupConfig construction.
+    // KAFKA-20337 tracks the work to refactor GroupConfig into something more consistent.
     public final Optional<Integer> consumerAssignmentIntervalMs;
 
     public final Optional<Boolean> consumerAssignorOffloadEnable;
@@ -126,6 +129,9 @@ public final class GroupConfig extends AbstractConfig {
 
     public final String shareAutoOffsetReset;
 
+    // These have to be optionals because their default group coordinator configs are dynamic,
+    // so we must not capture the default value at the time of GroupConfig construction.
+    // KAFKA-20337 tracks the work to refactor GroupConfig into something more consistent.
     public final Optional<Integer> shareAssignmentIntervalMs;
 
     public final Optional<Boolean> shareAssignorOffloadEnable;
@@ -138,6 +144,9 @@ public final class GroupConfig extends AbstractConfig {
 
     public final int streamsInitialRebalanceDelayMs;
 
+    // These have to be optionals because their default group coordinator configs are dynamic,
+    // so we must not capture the default value at the time of GroupConfig construction.
+    // KAFKA-20337 tracks the work to refactor GroupConfig into something more consistent.
     public final Optional<Integer> streamsAssignmentIntervalMs;
 
     public final Optional<Boolean> streamsAssignorOffloadEnable;
@@ -276,6 +285,9 @@ public final class GroupConfig extends AbstractConfig {
         super(CONFIG, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        // These have to be optionals because their default group coordinator configs are dynamic,
+        // so we must not capture the default value at the time of GroupConfig construction.
+        // KAFKA-20337 tracks the work to refactor GroupConfig into something more consistent.
         this.consumerAssignmentIntervalMs = props.containsKey(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG) ?
             Optional.of(getInt(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
@@ -288,6 +300,9 @@ public final class GroupConfig extends AbstractConfig {
         this.shareDeliveryCountLimit = getInt(SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
         this.sharePartitionMaxRecordLocks = getInt(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         this.shareAutoOffsetReset = getString(SHARE_AUTO_OFFSET_RESET_CONFIG);
+        // These have to be optionals because their default group coordinator configs are dynamic,
+        // so we must not capture the default value at the time of GroupConfig construction.
+        // KAFKA-20337 tracks the work to refactor GroupConfig into something more consistent.
         this.shareAssignmentIntervalMs = props.containsKey(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG) ?
             Optional.of(getInt(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
@@ -298,6 +313,9 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        // These have to be optionals because their default group coordinator configs are dynamic,
+        // so we must not capture the default value at the time of GroupConfig construction.
+        // KAFKA-20337 tracks the work to refactor GroupConfig into something more consistent.
         this.streamsAssignmentIntervalMs = props.containsKey(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG) ?
             Optional.of(getInt(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
@@ -369,6 +387,9 @@ public final class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be less than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         }
+        // If no group-level consumer assignment interval is configured, do not attempt to validate it.
+        // TODO: It's not clear if we can run the validation unconditionally.
+        //       KAFKA-20337 tracks the work to clean this up.
         if (unparsedMap.containsKey(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)) {
             if (consumerAssignmentIntervalMs < groupCoordinatorConfig.consumerGroupMinAssignmentIntervalMs()) {
                 throw new InvalidConfigurationException(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
@@ -419,6 +440,9 @@ public final class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG + " must be less than or equal to " +
                 ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         }
+        // If no group-level share assignment interval is configured, do not attempt to validate it.
+        // TODO: It's not clear if we can run the validation unconditionally.
+        //       KAFKA-20337 tracks the work to clean this up.
         if (unparsedMap.containsKey(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG)) {
             if (shareAssignmentIntervalMs < groupCoordinatorConfig.shareGroupMinAssignmentIntervalMs()) {
                 throw new InvalidConfigurationException(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
@@ -449,6 +473,9 @@ public final class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(STREAMS_NUM_STANDBY_REPLICAS_CONFIG + " must be less than or equal to " +
                 GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
         }
+        // If no group-level streams assignment interval is configured, do not attempt to validate it.
+        // TODO: It's not clear if we can run the validation unconditionally.
+        //       KAFKA-20337 tracks the work to clean this up.
         if (unparsedMap.containsKey(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG)) {
             if (streamsAssignmentIntervalMs < groupCoordinatorConfig.streamsGroupMinAssignmentIntervalMs()) {
                 throw new InvalidConfigurationException(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
@@ -483,6 +510,8 @@ public final class GroupConfig extends AbstractConfig {
      * the broker-level defaults before validation.
      */
     public static void validate(Map<String, ?> props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+        // TODO: We shouldn't be re-deriving the default config from GroupConfigManager here.
+        //       KAFKA-20337 tracks the work to clean this up.
         Map<String, Object> combinedConfigs = new HashMap<>();
         combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
         combinedConfigs.putAll(props);
