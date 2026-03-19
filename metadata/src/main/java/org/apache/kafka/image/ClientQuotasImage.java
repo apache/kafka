@@ -59,20 +59,34 @@ public final class ClientQuotasImage {
     //   "client-id": { "client-id1": {entity3: image3}, "client-id2": {entity4: image4} },
     //   "ip": { "ip1": {entyty5: image5}, "ip2": {entyty6: image6} }
     // }
-    private final Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByType;
+    private final Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByTypeAndName;
+
+    // Map from entity type to set of entries. The entity type could be "user", "client-id", and "ip".
+    // {
+    //   "user": { entity1: image1, entity2: image2 },
+    //   "client-id": { entity3: image3, entity4: image4 },
+    //   "ip": { entyty5: image5, entyty6: image6 }
+    // }
+    private final Map<String, Map<ClientQuotaEntity, ClientQuotaImage>> entitiesByType;
 
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
-        var entitiesByType = new HashMap<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>>();
+        var entitiesByTypeAndName = new HashMap<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>>();
+        var entitiesByType = new HashMap<String, Map<ClientQuotaEntity, ClientQuotaImage>>();
         for (var entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             for (var entityEntry : entity.entries().entrySet()) {
-                entitiesByType
+                entitiesByTypeAndName
                     .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
                     .computeIfAbsent(entityEntry.getValue(), k -> new HashMap<>())
                     .put(entity, entry.getValue());
+
+                entitiesByType
+                    .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
+                    .put(entity, entry.getValue());
             }
         }
+        this.entitiesByTypeAndName = Collections.unmodifiableMap(entitiesByTypeAndName);
         this.entitiesByType = Collections.unmodifiableMap(entitiesByType);
     }
 
@@ -158,7 +172,7 @@ public final class ClientQuotasImage {
             for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
                 String entityType = exactMatchEntry.getKey();
                 String entityName = exactMatchEntry.getValue();
-                Map<ClientQuotaEntity, ClientQuotaImage> matches = entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Map.of());
+                Map<ClientQuotaEntity, ClientQuotaImage> matches = entitiesByTypeAndName.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Map.of());
                 if (candidates == null) {
                     candidates = new HashMap<>(matches);
                 } else {
@@ -167,19 +181,12 @@ public final class ClientQuotasImage {
             }
 
             for (String type : typeMatch) {
-                Set<ClientQuotaEntity> typeMatches = new HashSet<>();
-                for (Map<ClientQuotaEntity, ClientQuotaImage> entityToImage : entitiesByType.getOrDefault(type, Map.of()).values()) {
-                    typeMatches.addAll(entityToImage.keySet());
-                }
-                candidates.keySet().retainAll(typeMatches);
+                candidates.keySet().retainAll(entitiesByType.getOrDefault(type, Map.of()).keySet());
             }
         } else if (!typeMatch.isEmpty()) {
             // Case 2: no exact match, only type match exists
             for (String type : typeMatch) {
-                Map<ClientQuotaEntity, ClientQuotaImage> typeMatchesEntry = new HashMap<>();
-                for (Map<ClientQuotaEntity, ClientQuotaImage> entityToImage : entitiesByType.getOrDefault(type, Map.of()).values()) {
-                    typeMatchesEntry.putAll(entityToImage);
-                }
+                Map<ClientQuotaEntity, ClientQuotaImage> typeMatchesEntry = new HashMap<>(entitiesByType.getOrDefault(type, Map.of()));
                 if (candidates == null) {
                     candidates = typeMatchesEntry;
                 } else {
