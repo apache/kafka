@@ -17,22 +17,19 @@
 package kafka.server
 
 import java.io.File
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.{Optional, Properties}
 import org.apache.kafka.common.{KafkaException, Uuid}
+import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-
-import java.nio.file.Path
-
-import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
-import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
-import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
