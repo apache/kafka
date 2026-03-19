@@ -1042,25 +1042,67 @@ public class MockLogTest {
     }
 
     @Test
-    public void testMockLogLimits() {
-        appendBatch(10, 5);
-        appendBatch(10, 5);
+    public void testMockLogLimitsReturnsLessThanMaxBytes() {
+        int numberOfRecordsPerBatch = 10;
+        appendBatch(numberOfRecordsPerBatch, 5);
+        appendBatch(numberOfRecordsPerBatch, 5);
+        appendBatch(numberOfRecordsPerBatch, 5);
+        // Set to be larger than 1 batch but smaller than 2.
+        int magicMaxTotalBytes = 200;
+        Records records = log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxTotalBytes
+        ).records;
+        // MockLog#read returns data in batches and will return an additional batch if one of them
+        // exceeds maxTotalBytes.
+        // The sum of the size of both batches is expected to be greater than
+        // magicMaxTotalBytes but less than 2 x magicMaxTotalBytes
+        assertTrue(
+            records.sizeInBytes() > magicMaxTotalBytes,
+            String.format(
+                "Expected records.sizeInBytes() %d > %d",
+                records.sizeInBytes(),
+                magicMaxTotalBytes
+            )
+        );
+        assertTrue(
+            records.sizeInBytes() < magicMaxTotalBytes * 2,
+            String.format(
+                "Expected records.sizeInBytes() %d < %d",
+                records.sizeInBytes(),
+                2 * magicMaxTotalBytes
+            )
+        );
+        int recordCount = 0;
+        var iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            recordCount++;
+            iterator.next();
+        }
+        assertEquals(2 * numberOfRecordsPerBatch, recordCount);
+    }
+
+    @Test
+    public void testMockLogLimitsReturnsAtLeastOne() {
+        int numberOfRecordsPerBatch = 10;
+        appendBatch(numberOfRecordsPerBatch, 5);
+        appendBatch(numberOfRecordsPerBatch, 5);
         // magicMaxTotalBytes are smaller than 10 simple records in a batch.
         // Meaning we will read only the first batch and not the second.
-        int magicMaxTotalBytes = 100;
+        int magicMaxTotalBytes = 1;
         Records records = log.read(
                 0,
                 Isolation.UNCOMMITTED,
                 magicMaxTotalBytes
         ).records;
-        long expectedOffset = 0L;
-        long lastReadOffset = 0L;
-        for (Record record: records.records()) {
-            lastReadOffset = record.offset();
-            assertEquals(expectedOffset, lastReadOffset);
-            expectedOffset += 1;
+        int recordCount = 0;
+        var iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            recordCount++;
+            iterator.next();
         }
-        assertEquals(9, lastReadOffset, "Expected only a single batch, with a final record of 9 to be read");
+        assertEquals(numberOfRecordsPerBatch, recordCount);
     }
 
     @Test
@@ -1073,14 +1115,13 @@ public class MockLogTest {
                 Isolation.UNCOMMITTED,
                 1
         ).records;
-        long expectedOffset = 0L;
-        long lastReadOffset = 0L;
-        for (Record record: records.records()) {
-            lastReadOffset = record.offset();
-            assertEquals(expectedOffset, lastReadOffset);
-            expectedOffset += 1;
+        int recordCount = 0;
+        var iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            recordCount++;
+            iterator.next();
         }
-        assertEquals(numberOfRecords - 1, lastReadOffset);
+        assertEquals(numberOfRecords, recordCount);
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {

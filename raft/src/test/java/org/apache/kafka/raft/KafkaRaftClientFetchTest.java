@@ -109,7 +109,8 @@ public final class KafkaRaftClientFetchTest {
             local.directoryId().get()
         )
             .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
+                VoterSetTest.voterSet(Stream.of(local, electedLeader)),
+                KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
             // Explicitly change the configuration here.
@@ -140,7 +141,8 @@ public final class KafkaRaftClientFetchTest {
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
+                KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
             .withFetchMaxBytes(localMaxSizeBytes)
@@ -194,7 +196,8 @@ public final class KafkaRaftClientFetchTest {
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
+                KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
             .withFetchMaxBytes(localMaxSizeBytes)
@@ -239,7 +242,8 @@ public final class KafkaRaftClientFetchTest {
             .appendToLog(epoch, List.of("b", "b", "b"))
             .appendToLog(epoch, List.of("c", "c", "c"))
             .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
+                KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
             .withFetchMaxBytes(localMaxSizeBytes)
@@ -277,7 +281,7 @@ public final class KafkaRaftClientFetchTest {
         }
         // Only two batches will be returned
         assertEquals(2, batchCount);
-        // 3 batches with 3 records each
+        // 2 batches with 3 records each
         assertEquals(6, lastNextOffset);
     }
 
@@ -293,7 +297,8 @@ public final class KafkaRaftClientFetchTest {
             local.directoryId().get()
         )
             .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
+                VoterSetTest.voterSet(Stream.of(local, electedLeader)),
+                KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
             .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)

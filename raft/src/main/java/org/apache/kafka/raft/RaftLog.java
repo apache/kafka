@@ -61,8 +61,7 @@ public interface RaftLog extends AutoCloseable {
      *
      * @param startOffsetInclusive Records later and including this offset are returned.
      * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read.
-     * @param maxTotalBatchBytes Soft max for number of bytes to retrieve. Will stop returning batches once the
-     *                               size of previously returned batches exceeds maxTotalBatchBytes
+     * @param maxTotalBatchBytes The maximum number of bytes to read if there are more than one record batch.
      * @return Records and start offset information wrapped in a LogFetchInfo
      */
     LogFetchInfo read(long startOffsetInclusive, Isolation isolation, int maxTotalBatchBytes);

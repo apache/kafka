@@ -367,7 +367,7 @@ public class KafkaRaftLog implements RaftLog {
         long baseOffset = read(
             snapshotId.offset(),
             Isolation.COMMITTED,
-            1
+            1 // maxTotalBatchBytes - ensures that we only fetch one batch.
         ).startOffsetMetadata.offset();
 
         if (snapshotId.offset() != baseOffset) {
