@@ -45,6 +45,7 @@ import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
@@ -101,7 +102,27 @@ public class DumpLogSegments {
     // Visible for testing
     static final String RECORD_INDENT = "|";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
+        try {
+            execute(args);
+            return 0;
+        } catch (TerseException e) {
+            System.err.println(e.getMessage());
+            return 1;
+        } catch (Throwable e) {
+            System.err.println(e.getMessage());
+            System.err.println(Utils.stackTrace(e));
+            return 1;
+        }
+    }
+
+    // Visible for testing
+    static void execute(String[] args) throws Exception {
         DumpLogSegmentsOptions opts = new DumpLogSegmentsOptions(args);
         CommandLineUtils.maybePrintHelpOrVersion(
             opts,

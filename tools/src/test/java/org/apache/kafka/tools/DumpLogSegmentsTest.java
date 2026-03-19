@@ -103,9 +103,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
@@ -121,10 +119,10 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.tools.ToolsTestUtils.captureStandardErr;
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -561,9 +559,10 @@ public class DumpLogSegmentsTest {
 
         Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"));
 
-        RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath}));
-        assertInstanceOf(AccessDeniedException.class, thrown.getCause());
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--remote-log-metadata-decoder", "--files", logFilePath})));
+        assertTrue(errOutput.contains("AccessDeniedException"));
     }
 
     @Test
@@ -572,9 +571,10 @@ public class DumpLogSegmentsTest {
             throw new IllegalArgumentException(message);
         });
         try {
-            IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder"}));
-            assertEquals("Missing required argument \"[files]\"", thrown.getMessage());
+            String errOutput = captureStandardErr(
+                () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                    new String[] {"--remote-log-metadata-decoder"})));
+            assertTrue(errOutput.contains("Missing required argument \"[files]\""));
         } finally {
             Exit.resetExitProcedure();
         }
@@ -583,9 +583,16 @@ public class DumpLogSegmentsTest {
     @Test
     public void testDumpRemoteLogMetadataNoSuchFileException() {
         String noSuchFileLogPath = "/tmp/nosuchfile/00000000000000000000.log";
-        RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", noSuchFileLogPath}));
-        assertInstanceOf(NoSuchFileException.class, thrown.getCause());
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--remote-log-metadata-decoder", "--files", noSuchFileLogPath})));
+        assertTrue(errOutput.contains("NoSuchFileException"));
+    }
+
+    @Test
+    public void testMainNoExitReturnsZeroOnSuccess() throws Exception {
+        log = createTestLog();
+        assertEquals(0, DumpLogSegments.mainNoExit(new String[] {"--files", logFilePath}));
     }
 
     @Test
@@ -1360,13 +1367,7 @@ public class DumpLogSegmentsTest {
     }
 
     private String runDumpLogSegments(String[] args) {
-        return captureStandardOut(() -> {
-            try {
-                DumpLogSegments.main(args);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        return captureStandardOut(() -> DumpLogSegments.mainNoExit(args));
     }
 
     private Optional<Long> optionalLong(String value) {
