@@ -39,7 +39,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
-
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
+import java.util.concurrent.TimeoutException;
 import java.io.IOException;
 import java.text.ParseException;
 import java.time.Duration;
@@ -153,6 +155,9 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
             try (Admin adminClient = Admin.create(properties)) {
+                if (!options.hasForce()) {
+                    validateApplicationIdExists(groupId, adminClient);
+                }
                 maybeDeleteActiveConsumers(groupId, adminClient, options.hasForce());
 
                 allTopics.clear();
@@ -180,6 +185,31 @@ public class StreamsResetter {
             return EXIT_CODE_ERROR;
         }
     }
+
+
+    void validateApplicationIdExists(final String applicationId,
+                                             final Admin adminClient)
+            throws ExecutionException, InterruptedException, TimeoutException {
+
+        final Collection<GroupListing> groups = adminClient
+                .listGroups(new ListGroupsOptions())
+                .all()
+                .get(60, TimeUnit.SECONDS);
+
+        final boolean groupExists = groups.stream()
+                .anyMatch(group -> group.groupId().equals(applicationId));
+
+        if (!groupExists) {
+            throw new IllegalArgumentException(
+                    "No consumer group found with application.id '" + applicationId + "'. "
+                            + "Refusing to delete internal topics to avoid accidentally removing topics "
+                            + "that belong to other applications sharing a similar name prefix. "
+                            + "Verify your --application-id value. "
+                            + "Re-run with --force to bypass this check."
+            );
+        }
+    }
+
 
     // visible for testing
     void maybeDeleteActiveConsumers(final String groupId,
