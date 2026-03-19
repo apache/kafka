@@ -23,8 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,10 +67,7 @@ public class AdminBootstrapAddressesTest {
         AdminClientConfig config = new AdminClientConfig(map);
         AdminBootstrapAddresses addresses = AdminBootstrapAddresses.fromConfig(config);
         assertEquals(usingBootstrapControllers, addresses.usingBootstrapControllers());
-        assertEquals(Arrays.asList(
-            new InetSocketAddress("localhost", 9092),
-            new InetSocketAddress("localhost", 9093),
-            new InetSocketAddress("localhost", 9094)),
-                addresses.addresses());
+        assertEquals(0, addresses.addresses().size(),
+            "DNS resolution is deferred to NetworkClient.poll(), so addresses list should be empty");
     }
 }
