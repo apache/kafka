@@ -674,4 +674,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
     </Match>
 
+    <!-- KIP-1247: Comparators not intended for serialization -->
+    <Match>
+        <Or>
+            <!-- Internal comparator is not intended for serialization -->
+            <Class name="org.apache.kafka.common.utils.internals.BytesUtils$LexicographicByteArrayComparator"/>
+            <!-- Benchmark comparator is not intended for serialization -->
+            <Class name="org.apache.kafka.jmh.util.BytesCompareBenchmark$HandwrittenLexicoComparator"/>
+        </Or>
+        <Bug pattern="SE_COMPARATOR_SHOULD_BE_SERIALIZABLE"/>
+    </Match>
+
 </FindBugsFilter>

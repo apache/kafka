@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -48,6 +49,7 @@ import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -164,6 +166,14 @@ public final class StoreQueryUtils {
         }
     }
 
+    public static void maybeMigrateExistingPositionFile(final File stateDir, final String storeName, final Position position) {
+        final File positionCheckpointFile = new File(stateDir, storeName + ".position");
+        if (positionCheckpointFile.exists()) {
+            final Position existingPosition = readPositionFromCheckpoint(new OffsetCheckpoint(positionCheckpointFile));
+            position.merge(existingPosition);
+        }
+    }
+
     public static boolean isPermitted(
         final Position position,
         final PositionBound positionBound,
@@ -188,7 +198,7 @@ public final class StoreQueryUtils {
         return true;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "resource"})
     private static <R> QueryResult<R> runRangeQuery(
         final Query<R> query,
         final PositionBound positionBound,
@@ -409,7 +419,7 @@ public final class StoreQueryUtils {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked", "rawtypes", "resource"})
     public static <V> Function<byte[], V> deserializeValue(final StateSerdes<?, V> serdes, final StateStore wrapped) {
         final Serde<V> valueSerde = serdes.valueSerde();
         final boolean timestamped = WrappedStateStore.isTimestamped(wrapped) || isAdapter(wrapped);
@@ -421,9 +431,11 @@ public final class StoreQueryUtils {
         } else {
             deserializer = valueSerde.deserializer();
         }
-        return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+        // deserializeValue() is only used via IQ, so it's ok to not pass any headers
+        return byteArray -> deserializer.deserialize(serdes.topic(), new RecordHeaders(), byteArray);
     }
 
+    @SuppressWarnings("rawtypes")
     public static boolean isAdapter(final StateStore stateStore) {
         if (stateStore instanceof KeyValueToTimestampedKeyValueByteStoreAdapter) {
             return true;
@@ -434,22 +446,30 @@ public final class StoreQueryUtils {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("resource")
     public static <V> Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue(final StateSerdes<?, V> serdes) {
         final Serde<V> valueSerde = serdes.valueSerde();
         final Deserializer<V> deserializer = valueSerde.deserializer();
-        return rawVersionedRecord -> rawVersionedRecord.validTo().isPresent() ? new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
-                                                                                                      rawVersionedRecord.timestamp(),
-                                                                                                      rawVersionedRecord.validTo().get())
-                                                                              : new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
-                                                                                                      rawVersionedRecord.timestamp());
+        return rawVersionedRecord -> rawVersionedRecord.validTo().isPresent()
+            ? new VersionedRecord<>(
+                // deserializeValue s only used via IQ, so it's ok to not pass any headers
+                deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                rawVersionedRecord.timestamp(),
+                rawVersionedRecord.validTo().get())
+            : new VersionedRecord<>(
+                // deserializeValue s only used via IQ, so it's ok to not pass any headers
+                deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                rawVersionedRecord.timestamp());
     }
 
+    @SuppressWarnings("resource")
     public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes, final VersionedRecord<byte[]> rawVersionedRecord) {
         final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
-        final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
-        return rawVersionedRecord.validTo().isPresent() ? new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo().get())
-                                                        : new VersionedRecord<>(value, rawVersionedRecord.timestamp());
+        // deserializeValue s only used via IQ, so it's ok to not pass any headers
+        final V value = valueDeserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value());
+        return rawVersionedRecord.validTo().isPresent()
+            ? new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo().get())
+            : new VersionedRecord<>(value, rawVersionedRecord.timestamp());
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile, final Position position) {

@@ -70,6 +70,10 @@ object KafkaConfig {
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
   private[server] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala
 
+  def clampDynamicConfigs(props: java.util.Map[String, String]): Unit = {
+    GroupCoordinatorConfig.clampDynamicConfigs(props)
+  }
+
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
@@ -358,9 +362,25 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.SHARE)) {
-      warn(s"'${GroupType.SHARE}' in ${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG} is deprecated. " +
-        s"Share groups are controlled by the 'share.version' feature; this broker config will be ignored in a future release.")
+    if (doLog && protocols.contains(GroupType.SHARE)) {
+      warn(s"'${GroupType.SHARE}' in `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated. " +
+        s"Share groups are controlled by the 'share.version' feature. " +
+        s"This config will be removed in Kafka 5.0.")
+    }
+    if (doLog && originals().containsKey(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)) {
+      val defaultProtocols = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT
+        .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
+      val missingProtocols = defaultProtocols -- protocols
+      if (missingProtocols.nonEmpty) {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"The following protocol(s) are currently disabled: ${missingProtocols.mkString(", ")}. " +
+          s"In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+          s"(group.version, streams.version, share.version) via kafka-features.sh. " +
+          s"Please remove the configuration, which will restore all protocols to the default enabled state, to prepare for the upgrade.")
+      } else {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"Please remove the configuration to prepare for the upgrade.")
+      }
     }
     protocols
   }

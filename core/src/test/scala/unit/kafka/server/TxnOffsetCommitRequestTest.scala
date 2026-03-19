@@ -295,7 +295,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
       commitTxnOffset(
         groupId = groupId,
         memberId = if (version >= 3) memberId else JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        generationId = if (version >= 3) 1 else JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        generationId = if (version >= 3) memberEpoch else JoinGroupRequest.UNKNOWN_GENERATION_ID,
         producerId = producerIdAndEpoch.producerId,
         producerEpoch = producerIdAndEpoch.epoch,
         transactionalId = transactionalId,

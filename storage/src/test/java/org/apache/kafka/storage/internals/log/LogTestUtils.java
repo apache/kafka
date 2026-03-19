@@ -28,14 +28,22 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.RequestLocal;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class LogTestUtils {
     public static LogSegment createSegment(long offset, File logDir, int indexIntervalBytes, Time time) throws IOException {
@@ -146,14 +154,96 @@ public class LogTestUtils {
                                         short producerEpoch,
                                         int sequence,
                                         long baseOffset,
-                                        int partitionLeaderEpoch) {
+                                        int partitionLeaderEpoch,
+                                        long timestamp) {
         ByteBuffer buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records));
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
-            System.currentTimeMillis(), producerId, producerEpoch, sequence, false, partitionLeaderEpoch);
+            timestamp, producerId, producerEpoch, sequence, false, partitionLeaderEpoch);
 
         records.forEach(builder::append);
 
         return builder.build();
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        byte magicValue,
+                                        Compression codec,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int sequence,
+                                        long baseOffset,
+                                        int partitionLeaderEpoch) {
+        return records(records, magicValue, codec, producerId, producerEpoch, sequence, baseOffset, partitionLeaderEpoch, System.currentTimeMillis());
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int sequence,
+                                        long baseOffset) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, producerId, producerEpoch, sequence, baseOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, long timestamp) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH, timestamp);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, long baseOffset, int partitionLeaderEpoch) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, partitionLeaderEpoch);
+    }
+
+    public static void deleteProducerSnapshotFiles(File logDir) {
+        Stream.of(logDir.listFiles())
+                .filter(f -> f.isFile() && f.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX))
+                .forEach(f -> assertDoesNotThrow(() -> Utils.delete(f)));
+    }
+
+    public static List<Long> listProducerSnapshotOffsets(File logDir) throws IOException {
+        return ProducerStateManager.listSnapshotFiles(logDir).stream().map(f -> f.offset).sorted().toList();
+    }
+
+    public static void appendNonTransactionalAsLeader(UnifiedLog log, int numRecords) throws IOException {
+        List<SimpleRecord> simpleRecords = new ArrayList<>();
+        for (int i = 0; i < numRecords; i++) {
+            simpleRecords.add(new SimpleRecord(String.valueOf(i).getBytes()));
+        }
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, simpleRecords.toArray(new SimpleRecord[0]));
+        log.appendAsLeader(records, 0);
+    }
+
+    public static Consumer<Integer> appendTransactionalAsLeader(UnifiedLog log,
+                                                                long producerId,
+                                                                short producerEpoch,
+                                                                Time time) {
+        return appendIdempotentAsLeader(log, producerId, producerEpoch, time, true);
+    }
+
+    public static Consumer<Integer> appendIdempotentAsLeader(UnifiedLog log,
+                                                             long producerId,
+                                                             short producerEpoch,
+                                                             Time time,
+                                                             boolean isTransactional) {
+        final AtomicInteger sequence = new AtomicInteger(0);
+        return numRecords -> {
+            int baseSequence = sequence.get();
+            List<SimpleRecord> simpleRecords = new ArrayList<>();
+            for (int i = baseSequence; i < baseSequence + numRecords; i++) {
+                simpleRecords.add(new SimpleRecord(time.milliseconds(), String.valueOf(i).getBytes()));
+            }
+
+            MemoryRecords records = isTransactional
+                ? MemoryRecords.withTransactionalRecords(Compression.NONE, producerId,
+                        producerEpoch, baseSequence, simpleRecords.toArray(new SimpleRecord[0]))
+                : MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
+                        producerEpoch, baseSequence, simpleRecords.toArray(new SimpleRecord[0]));
+
+            assertDoesNotThrow(() -> log.appendAsLeader(records, 0));
+            sequence.addAndGet(numRecords);
+        };
     }
 
     public static class LogConfigBuilder {
@@ -238,4 +328,46 @@ public class LogTestUtils {
             return new LogConfig(configs);
         }
     }
+    
+    public static class FakeOffsetMap implements OffsetMap {
+
+        private final Map<String, Long> map = new HashMap<>();
+        private long latestOff = -1L;
+
+        @Override
+        public int slots() {
+            return Integer.MAX_VALUE;
+        }
+        
+        @Override
+        public void put(ByteBuffer key, long offset) {
+            latestOff = offset;
+            map.put(new String(Utils.readBytes(key.duplicate()), StandardCharsets.UTF_8), offset);
+        }
+        
+        @Override
+        public long get(ByteBuffer key) {
+            return map.getOrDefault(new String(Utils.readBytes(key.duplicate()), StandardCharsets.UTF_8), -1L);
+        }
+        
+        @Override
+        public void updateLatestOffset(long offset) {
+            latestOff = offset;
+        }
+        
+        @Override
+        public void clear() {
+            map.clear();
+        }
+        
+        @Override
+        public int size() {
+            return map.size();
+        }
+        
+        @Override
+        public long latestOffset() {
+            return latestOff;
+        }
+    } 
 }

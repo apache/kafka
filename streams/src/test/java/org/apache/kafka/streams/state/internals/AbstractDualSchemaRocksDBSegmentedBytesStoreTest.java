@@ -169,20 +169,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
         switch (schemaType()) {
             case WindowSchemaWithIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        true
+                        true,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case WindowSchemaWithoutIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        false
+                        false,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithIndex:
                 return new RocksDBTimeOrderedSessionSegmentedBytesStore(
@@ -1629,6 +1627,20 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.close();
     }
 
+    @Test
+    public void shouldLoadPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(stateDir, storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+        bytesStore.close();
+    }
+
     private Set<String> segmentDirs() {
         final File windowDir = new File(stateDir, storeName);
 
@@ -1689,6 +1701,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
                         stateSerdes.valueDeserializer().deserialize("dummy", next.value)

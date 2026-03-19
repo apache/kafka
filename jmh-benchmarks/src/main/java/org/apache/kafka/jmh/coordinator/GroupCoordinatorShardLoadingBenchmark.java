@@ -40,6 +40,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
@@ -103,6 +104,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
     private TopicPartition topicPartition;
     private MockTime time;
     private GroupCoordinatorConfig config;
+    private ShareGroupConfig shareGroupConfig;
     private GroupCoordinatorRecordSerde serde;
     private GroupCoordinatorShard coordinatorShard;
     private SnapshottableCoordinator<GroupCoordinatorShard, CoordinatorRecord> snapshottableCoordinator;
@@ -269,6 +271,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
         time = new MockTime();
         Map<String, Object> props = new HashMap<>();
         config = GroupCoordinatorConfig.fromProps(props);
+        shareGroupConfig = ShareGroupConfig.fromProps(props);
         serde = new GroupCoordinatorRecordSerde();
     }
 
@@ -287,7 +290,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
 
     @Setup(Level.Invocation)
     public void setupInvocation() {
-        GroupConfigManager configManager = new GroupConfigManager(new HashMap<>());
+        GroupConfigManager configManager = new GroupConfigManager(new HashMap<>(), config, shareGroupConfig);
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
 
