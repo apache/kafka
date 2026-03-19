@@ -97,7 +97,7 @@ public class LogCleanerIntegrationTest {
 
     private final Compression codec = Compression.lz4().build();
 
-    private int counter = 0;
+    private int counter;
 
     private final MockTime time = new MockTime(1400000000000L, 1000L);  // Tue May 13 16:53:20 UTC 2014
     private static final List<TopicPartition> TOPIC_PARTITIONS = List.of(
