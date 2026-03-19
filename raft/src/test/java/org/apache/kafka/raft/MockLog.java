@@ -521,7 +521,7 @@ public class MockLog implements RaftLog {
         long baseOffset = read(
             snapshotId.offset(),
             Isolation.COMMITTED,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            1 // Only needs to read the first batch.
         ).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(

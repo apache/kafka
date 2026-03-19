@@ -271,18 +271,28 @@ public final class KafkaRaftClientFetchTest {
                 remoteMaxSizeBytes * 2
             )
         );
-        int batchCount = 0;
-        long lastNextOffset = 0;
         var iterator = records.batchIterator();
-        while (iterator.hasNext()) {
-            var batch = iterator.next();
-            lastNextOffset = batch.nextOffset();
-            batchCount++;
-        }
-        // Only two batches will be returned
-        assertEquals(2, batchCount);
-        // 2 batches with 3 records each
-        assertEquals(6, lastNextOffset);
+        var firstBatch = iterator.next();
+        // First batch should be less than the maxSizeBytes.
+        assertTrue(
+            firstBatch.sizeInBytes() < remoteMaxSizeBytes,
+            String.format(
+                "Expected firstBatch.sizeInBytes() (%d) < remoteMaxSizeBytes (%d)",
+                firstBatch.sizeInBytes(),
+                remoteMaxSizeBytes
+            )
+        );
+        assertTrue(iterator.hasNext(), "Expected more than one batch to be fetched");
+        var secondBatch = iterator.next();
+        assertTrue(
+            firstBatch.sizeInBytes() < remoteMaxSizeBytes,
+            String.format(
+                "Expected secondBatch.sizeInBytes() (%d) < remoteMaxSizeBytes (%d)",
+                secondBatch.sizeInBytes(),
+                remoteMaxSizeBytes
+            )
+        );
+        assertFalse(iterator.hasNext(), "Expected two batches to be fetched");
     }
 
     @Test

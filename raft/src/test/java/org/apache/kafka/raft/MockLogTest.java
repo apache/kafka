@@ -1092,9 +1092,9 @@ public class MockLogTest {
         // Meaning we will read only the first batch and not the second.
         int magicMaxTotalBytes = 1;
         Records records = log.read(
-                0,
-                Isolation.UNCOMMITTED,
-                magicMaxTotalBytes
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxTotalBytes
         ).records;
         int recordCount = 0;
         var iterator = records.records().iterator();
@@ -1111,9 +1111,9 @@ public class MockLogTest {
         appendBatch(numberOfRecords, 5);
         // The MockLog is able to read a large internal batch
         Records records = log.read(
-                0,
-                Isolation.UNCOMMITTED,
-                1
+            0,
+            Isolation.UNCOMMITTED,
+            1
         ).records;
         int recordCount = 0;
         var iterator = records.records().iterator();
