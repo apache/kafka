@@ -138,12 +138,12 @@ public class ImplicitLinkedHashCollectionTest {
         int i = 0;
         while (iterator.hasNext()) {
             TestElement element = iterator.next();
-            assertTrue(i < sequence.length, "Iterator yieled " + (i + 1) + " elements, but only " +
+            assertTrue(i < sequence.length, "Iterator yield " + (i + 1) + " elements, but only " +
                 sequence.length + " were expected.");
             assertEquals(sequence[i].intValue(), element.key, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        assertEquals(sequence.length, i, "Iterator yieled " + (i + 1) + " elements, but " +
+        assertEquals(sequence.length, i, "Iterator yield " + (i + 1) + " elements, but " +
                 sequence.length + " were expected.");
     }
 
@@ -151,13 +151,13 @@ public class ImplicitLinkedHashCollectionTest {
         int i = 0;
         while (iter.hasNext()) {
             TestElement element = iter.next();
-            assertTrue(expectedIter.hasNext(), "Iterator yieled " + (i + 1) + " elements, but only " + i +
+            assertTrue(expectedIter.hasNext(), "Iterator yield " + (i + 1) + " elements, but only " + i +
                 " were expected.");
             Integer expected = expectedIter.next();
             assertEquals(expected.intValue(), element.key, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        assertFalse(expectedIter.hasNext(), "Iterator yieled " + i + " elements, but at least " + (i + 1) +
+        assertFalse(expectedIter.hasNext(), "Iterator yield " + i + " elements, but at least " + (i + 1) +
             " were expected.");
     }
 

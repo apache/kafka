@@ -594,12 +594,11 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             // Optimize away object allocations for empty sets.
             this.head = HeadElement.EMPTY;
             this.elements = EMPTY_ELEMENTS;
-            this.size = 0;
         } else {
             this.head = new HeadElement();
             this.elements = new Element[calculateCapacity(expectedNumElements)];
-            this.size = 0;
         }
+        this.size = 0;
     }
 
     /**
@@ -689,8 +688,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             array.add(e);
         }
         array.sort(comparator);
-        for (E e : array) {
-            add(e);
-        }
+        this.addAll(array);
     }
 }
