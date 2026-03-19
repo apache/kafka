@@ -143,14 +143,14 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
     ) {
         // advance stream time to the max timestamp in the batch
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long timestamp = timestampExtractor.apply(record.key()); //SessionKeySchema.extractEndTimestamp(record.key());
+            final long timestamp = timestampExtractor.apply(record.key());
             minTimestamp = Math.min(minTimestamp, timestamp);
             observedStreamTime = Math.max(observedStreamTime, timestamp);
         }
 
         final Map<S, WriteBatch> writeBatchMap = new HashMap<>();
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long timestamp = timestampExtractor.apply(record.key()); //SessionKeySchema.extractEndTimestamp(record.key());
+            final long timestamp = timestampExtractor.apply(record.key());
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
             if (segment != null) {
@@ -165,13 +165,13 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
                     // Assuming changelog record is serialized using SessionKeySchema
                     // from ChangeLoggingSessionBytesStore. Reconstruct key/value to restore
                     if (hasIndex()) {
-                        final byte[] indexKey = indexedKeyExtractor.apply(record.key()); // PrefixedSessionKeySchemas.KeyFirstSessionKeySchema.prefixNonPrefixSessionKey(record.key());
+                        final byte[] indexKey = indexedKeyExtractor.apply(record.key());
                         // Take care of tombstone
                         final byte[] value = record.value() == null ? null : new byte[0];
                         segment.addToBatch(new KeyValue<>(indexKey, value), batch);
                     }
 
-                    final byte[] baseKey = baseKeyExtractor.apply(record.key()); // PrefixedSessionKeySchemas.TimeFirstSessionKeySchema.extractWindowBytesFromNonPrefixSessionKey(record.key());
+                    final byte[] baseKey = baseKeyExtractor.apply(record.key());
                     segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error restoring batch to store " + name(), e);

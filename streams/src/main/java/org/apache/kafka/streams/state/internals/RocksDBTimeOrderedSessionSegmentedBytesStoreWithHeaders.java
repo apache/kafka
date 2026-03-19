@@ -50,11 +50,13 @@ import org.apache.kafka.streams.query.QueryResult;
 class RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders
     extends RocksDBTimeOrderedSessionSegmentedBytesStore<SessionSegmentWithHeaders> {
 
-    RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders(final String name,
-                                                             final String metricsScope,
-                                                             final long retention,
-                                                             final long segmentInterval,
-                                                             final boolean withIndex) {
+    RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders(
+        final String name,
+        final String metricsScope,
+        final long retention,
+        final long segmentInterval,
+        final boolean withIndex
+    ) {
         super(
             name,
             retention,
@@ -64,9 +66,11 @@ class RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders
     }
 
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
         final Position position = getPosition();
