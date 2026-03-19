@@ -299,7 +299,7 @@ public final class Stores {
                                                                  final Duration retentionPeriod,
                                                                  final Duration windowSize,
                                                                  final boolean retainDuplicates) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, false);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.DEFAULT_WINDOW_STORE);
     }
 
     /**
@@ -331,7 +331,7 @@ public final class Stores {
                                                                             final Duration retentionPeriod,
                                                                             final Duration windowSize,
                                                                             final boolean retainDuplicates) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE);
     }
 
     /**
@@ -348,6 +348,14 @@ public final class Stores {
                                                                                        final Duration retentionPeriod,
                                                                                        final Duration windowSize,
                                                                                        final boolean retainDuplicates) throws IllegalArgumentException {
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
+    }
+
+    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                  final Duration retentionPeriod,
+                                                                  final Duration windowSize,
+                                                                  final boolean retainDuplicates,
+                                                                  final RocksDbWindowBytesStoreSupplier.WindowStoreTypes timestampedStoreType) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -355,6 +363,13 @@ public final class Stores {
         final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
+
+        if (retentionMs < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSizeMs < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
 
         return new RocksDbWindowBytesStoreSupplier(
             name,
@@ -362,54 +377,8 @@ public final class Stores {
             defaultSegmentInterval,
             windowSizeMs,
             retainDuplicates,
-            RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
-    }
-
-    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                  final Duration retentionPeriod,
-                                                                  final Duration windowSize,
-                                                                  final boolean retainDuplicates,
-                                                                  final boolean timestampedStore) {
-        Objects.requireNonNull(name, "name cannot be null");
-        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
-        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
-
-        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
-
-        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval, timestampedStore);
-    }
-
-    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                  final long retentionPeriod,
-                                                                  final long windowSize,
-                                                                  final boolean retainDuplicates,
-                                                                  final long segmentInterval,
-                                                                  final boolean timestampedStore) {
-        Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0L) {
-            throw new IllegalArgumentException("retentionPeriod cannot be negative");
-        }
-        if (windowSize < 0L) {
-            throw new IllegalArgumentException("windowSize cannot be negative");
-        }
-        if (segmentInterval < 1L) {
-            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
-        }
-        if (windowSize > retentionPeriod) {
-            throw new IllegalArgumentException("The retention period of the window store "
-                + name + " must be no smaller than its window size. Got size=["
-                + windowSize + "], retention=[" + retentionPeriod + "]");
-        }
-
-        return new RocksDbWindowBytesStoreSupplier(
-            name,
-            retentionPeriod,
-            segmentInterval,
-            windowSize,
-            retainDuplicates,
-            timestampedStore);
+            timestampedStoreType
+        );
     }
 
     /**
