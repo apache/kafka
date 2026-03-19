@@ -43,11 +43,7 @@ public class Fetch<K, V> {
             boolean positionAdvanced,
             OffsetAndMetadata nextOffsetAndMetadata
     ) {
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
-                ? Map.of()
-                : Map.of(partition, records);
-        Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap = Map.of(partition, nextOffsetAndMetadata);
-        return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextOffsetAndMetadataMap);
+        return new Fetch<>(positionAdvanced, partition, records, nextOffsetAndMetadata);
     }
 
     private Fetch(
@@ -62,6 +58,21 @@ public class Fetch<K, V> {
         this.nextOffsetAndMetadata = nextOffsetAndMetadata;
     }
 
+    private Fetch(
+            boolean positionAdvanced,
+            TopicPartition partition,
+            List<ConsumerRecord<K, V>> records,
+            OffsetAndMetadata offsetAndMetadata
+    ) {
+        this.records = new HashMap<>();
+        if (!records.isEmpty()) {
+            this.records.put(partition, records);
+        }
+        this.positionAdvanced = positionAdvanced;
+        this.numRecords = records.size();
+        this.nextOffsetAndMetadata = new HashMap<>();
+        this.nextOffsetAndMetadata.put(partition, offsetAndMetadata);
+    }
     /**
      * Add another {@link Fetch} to this one; all of its records will be added to this fetch's
      * {@link #records() records}, and if the other fetch
