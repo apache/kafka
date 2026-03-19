@@ -1268,8 +1268,9 @@ public class NetworkClient implements KafkaClient {
             pollDeadlineMs = currentTimeMs + pollTimeoutMs;
 
         while (true) {
-            // Check if client is still active (user may have called close())
-            if (!active()) {
+            // Check if thread has been interrupted
+            if (Thread.interrupted()) {
+                log.debug("ensureBootstrapped interrupted, returning early");
                 return;
             }
 
