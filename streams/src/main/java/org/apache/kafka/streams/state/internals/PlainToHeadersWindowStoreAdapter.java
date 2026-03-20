@@ -101,55 +101,55 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final long timeFrom, final long timeTo) {
-        return new PlainToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final long timeFrom, final long timeTo) {
-        return new PlainToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return new PlainToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom, final long timeTo) {
-        return new PlainToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new PlainToHeadersIteratorAdapter<>(store.all());
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.all());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-        return new PlainToHeadersIteratorAdapter<>(store.backwardAll());
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.backwardAll());
     }
 
 
@@ -181,7 +181,7 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
-                    new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+                    MappingKeyValueIteratorAdapter.plainToHeaders(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;

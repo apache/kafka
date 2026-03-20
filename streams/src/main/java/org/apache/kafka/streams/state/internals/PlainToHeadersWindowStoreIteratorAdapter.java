@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
  * Iterator adapter for {@link WindowStoreIterator} that converts plain values
  * to timestamp-with-headers format by adding empty headers and timestamp=-1.
  * <p>
- * This extends {@link PlainToHeadersIteratorAdapter} to also implement the
+ * Extends {@link MappingKeyValueIteratorAdapter} to also implement the
  * {@link WindowStoreIterator} interface marker.
  */
 class PlainToHeadersWindowStoreIteratorAdapter
-    extends PlainToHeadersIteratorAdapter<Long>
+    extends MappingKeyValueIteratorAdapter<Long>
     implements WindowStoreIterator<byte[]> {
 
     PlainToHeadersWindowStoreIteratorAdapter(final WindowStoreIterator<byte[]> innerIterator) {
-        super(innerIterator);
+        super(innerIterator, HeadersBytesStore::convertFromPlainToHeaderFormat);
     }
 }

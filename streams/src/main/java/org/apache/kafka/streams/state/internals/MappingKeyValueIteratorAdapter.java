@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.function.Function;
@@ -36,6 +39,38 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
     ) {
         this.innerIterator = innerIterator;
         this.valueMapper = valueMapper;
+    }
+
+    /**
+     * Ensures backward compatibility between {@link org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders}
+     * and plain {@link org.apache.kafka.streams.state.KeyValueStore}: values are wrapped with empty headers
+     * and timestamp {@code -1}.
+     *
+     * @see PlainToHeadersStoreAdapter
+     */
+    static <K> KeyValueIterator<K, byte[]> plainToHeaders(final KeyValueIterator<K, byte[]> inner) {
+        return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertFromPlainToHeaderFormat);
+    }
+
+    /**
+     * Ensures backward compatibility between {@link org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders}
+     * and {@link org.apache.kafka.streams.state.TimestampedKeyValueStore}.
+     *
+     * @see TimestampedToHeadersStoreAdapter
+     */
+    static <K> KeyValueIterator<K, byte[]> timestampedToHeaders(final KeyValueIterator<K, byte[]> inner) {
+        return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertToHeaderFormat);
+    }
+
+    /**
+     * Ensures backward compatibility between {@link org.apache.kafka.streams.state.SessionStoreWithHeaders}
+     * and {@link org.apache.kafka.streams.state.SessionStore}.
+     *
+     * @see SessionToHeadersStoreAdapter
+     */
+    static KeyValueIterator<Windowed<Bytes>, byte[]> sessionToHeaders(
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner) {
+        return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertToHeaderFormat);
     }
 
     @Override

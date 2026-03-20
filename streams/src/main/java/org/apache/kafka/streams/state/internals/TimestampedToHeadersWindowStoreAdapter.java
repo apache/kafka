@@ -29,6 +29,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -102,55 +103,55 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.all());
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.all());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardAll());
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.backwardAll());
     }
 
     @Override
@@ -227,7 +228,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
-                    new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
+                    MappingKeyValueIteratorAdapter.timestampedToHeaders(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;
@@ -256,11 +257,11 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
      * to timestamp-with-headers format by adding empty headers.
      */
     private static class TimestampedWindowToHeadersWindowStoreIteratorAdapter
-        extends TimestampedToHeadersIteratorAdapter<Long>
+        extends MappingKeyValueIteratorAdapter<Long>
         implements WindowStoreIterator<byte[]> {
 
         TimestampedWindowToHeadersWindowStoreIteratorAdapter(final KeyValueIterator<Long, byte[]> innerIterator) {
-            super(innerIterator);
+            super(innerIterator, HeadersBytesStore::convertToHeaderFormat);
         }
     }
 }

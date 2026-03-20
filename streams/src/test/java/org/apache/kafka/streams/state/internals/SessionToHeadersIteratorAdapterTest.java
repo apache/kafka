@@ -57,8 +57,8 @@ public class SessionToHeadersIteratorAdapterTest {
         when(innerIterator.next())
             .thenReturn(KeyValue.pair(SESSION_KEY, RAW_VALUE));
 
-        final SessionToHeadersIteratorAdapter adapter =
-            new SessionToHeadersIteratorAdapter(innerIterator);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
+            MappingKeyValueIteratorAdapter.sessionToHeaders(innerIterator);
 
         assertTrue(adapter.hasNext());
         final KeyValue<Windowed<Bytes>, byte[]> result = adapter.next();
@@ -71,8 +71,8 @@ public class SessionToHeadersIteratorAdapterTest {
         when(innerIterator.next())
             .thenReturn(KeyValue.pair(SESSION_KEY, null));
 
-        final SessionToHeadersIteratorAdapter adapter =
-            new SessionToHeadersIteratorAdapter(innerIterator);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
+            MappingKeyValueIteratorAdapter.sessionToHeaders(innerIterator);
 
         final KeyValue<Windowed<Bytes>, byte[]> result = adapter.next();
         assertEquals(SESSION_KEY, result.key);
@@ -83,8 +83,8 @@ public class SessionToHeadersIteratorAdapterTest {
     public void shouldDelegateHasNext() {
         when(innerIterator.hasNext()).thenReturn(false);
 
-        final SessionToHeadersIteratorAdapter adapter =
-            new SessionToHeadersIteratorAdapter(innerIterator);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
+            MappingKeyValueIteratorAdapter.sessionToHeaders(innerIterator);
 
         assertFalse(adapter.hasNext());
     }
@@ -93,16 +93,16 @@ public class SessionToHeadersIteratorAdapterTest {
     public void shouldDelegatePeekNextKey() {
         when(innerIterator.peekNextKey()).thenReturn(SESSION_KEY);
 
-        final SessionToHeadersIteratorAdapter adapter =
-            new SessionToHeadersIteratorAdapter(innerIterator);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
+            MappingKeyValueIteratorAdapter.sessionToHeaders(innerIterator);
 
         assertEquals(SESSION_KEY, adapter.peekNextKey());
     }
 
     @Test
     public void shouldDelegateClose() {
-        final SessionToHeadersIteratorAdapter adapter =
-            new SessionToHeadersIteratorAdapter(innerIterator);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
+            MappingKeyValueIteratorAdapter.sessionToHeaders(innerIterator);
 
         adapter.close();
         verify(innerIterator).close();

@@ -110,7 +110,7 @@ public class SessionToHeadersStoreAdapterTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
         when(innerStore.findSessions(KEY, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.findSessions(KEY, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -119,7 +119,7 @@ public class SessionToHeadersStoreAdapterTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
         when(innerStore.backwardFindSessions(KEY, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.backwardFindSessions(KEY, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -129,7 +129,7 @@ public class SessionToHeadersStoreAdapterTest {
         when(innerStore.findSessions(KEY_FROM, KEY_TO, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result =
             adapter.findSessions(KEY_FROM, KEY_TO, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -139,7 +139,7 @@ public class SessionToHeadersStoreAdapterTest {
         when(innerStore.backwardFindSessions(KEY_FROM, KEY_TO, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result =
             adapter.backwardFindSessions(KEY_FROM, KEY_TO, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -148,7 +148,7 @@ public class SessionToHeadersStoreAdapterTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
         when(innerStore.fetch(KEY)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.fetch(KEY);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -157,7 +157,7 @@ public class SessionToHeadersStoreAdapterTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
         when(innerStore.backwardFetch(KEY)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.backwardFetch(KEY);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -166,7 +166,7 @@ public class SessionToHeadersStoreAdapterTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
         when(innerStore.fetch(KEY_FROM, KEY_TO)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.fetch(KEY_FROM, KEY_TO);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @SuppressWarnings("unchecked")
@@ -175,7 +175,7 @@ public class SessionToHeadersStoreAdapterTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
         when(innerStore.backwardFetch(KEY_FROM, KEY_TO)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.backwardFetch(KEY_FROM, KEY_TO);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertInstanceOf(MappingKeyValueIteratorAdapter.class, result);
     }
 
     @Test

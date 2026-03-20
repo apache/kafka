@@ -180,7 +180,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.range(from, to);
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertTrue(result instanceof MappingKeyValueIteratorAdapter);
     }
 
     @Test
@@ -193,7 +193,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseRange(from, to);
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertTrue(result instanceof MappingKeyValueIteratorAdapter);
     }
 
     @Test
@@ -204,7 +204,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.all();
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertTrue(result instanceof MappingKeyValueIteratorAdapter);
     }
 
     @Test
@@ -215,7 +215,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseAll();
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertTrue(result instanceof MappingKeyValueIteratorAdapter);
     }
 
     @Test
@@ -226,7 +226,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.prefixScan("prefix", (topic, data) -> data.getBytes());
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertTrue(result instanceof MappingKeyValueIteratorAdapter);
     }
 
     @Test
@@ -297,7 +297,7 @@ public class PlainToHeadersStoreAdapterTest {
 
         assertTrue(result.isSuccess());
         assertNotNull(result.getResult());
-        assertTrue(result.getResult() instanceof PlainToHeadersIteratorAdapter);
+        assertTrue(result.getResult() instanceof MappingKeyValueIteratorAdapter);
     }
 
     @Test
