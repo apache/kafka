@@ -31,22 +31,10 @@ public class Utils {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     /**
-     * Extract timestamp from serialized ValueTimestampHeaders.
+     * Check if the input value (with timestamp or not) contains headers size equal to zero
      */
-    public static long timestamp(final byte[] rawValueTimestampHeaders) {
-        // If the headers is empty, then do not need to skip the headers
-        if (Utils.hasEmptyHeaders(rawValueTimestampHeaders)) {
-            final byte[] rawTimestamp = new byte[StateSerdes.TIMESTAMP_SIZE];
-            System.arraycopy(rawValueTimestampHeaders, 1, rawTimestamp, 0, StateSerdes.TIMESTAMP_SIZE);
-            return LONG_DESERIALIZER.deserialize("", rawTimestamp);
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headersSize);
-
-        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
-        return LONG_DESERIALIZER.deserialize("", rawTimestamp);
+    public static boolean hasEmptyHeaders(final byte[] rawValueHeaders) {
+        return rawValueHeaders.length > 0 && rawValueHeaders[0] == 0x00;
     }
 
     /**
@@ -58,12 +46,44 @@ public class Utils {
         }
 
         // If the header is empty, simply return it
-        if (Utils.hasEmptyHeaders(valueWithHeaders)) {
+        if (hasEmptyHeaders(valueWithHeaders)) {
             return new RecordHeaders();
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(valueWithHeaders);
         return readHeaders(buffer);
+    }
+
+    /**
+     * Serialize the key with headers into bytes
+     * @param key the key to serialize
+     * @param headers the Headers as context
+     * @param serdes the StateSerdes as serializer
+     * @return the Bytes of the key
+     */
+    public static <K> Bytes keyBytes(final K key, final Headers headers, final StateSerdes<K, ?> serdes) {
+        return Bytes.wrap(serdes.rawKey(key, headers));
+    }
+
+    /**
+     * Serialize the key into bytes
+     * @param key the key to serialize
+     * @param serdes the StateSerdes as serializer
+     * @return the Bytes of the key
+     */
+    static <K> Bytes keyBytes(final K key, final StateSerdes<K, ?> serdes) {
+        return keyBytes(key, new RecordHeaders(), serdes);
+    }
+
+    /**
+     * Serialize the session key with headers into bytes
+     * @param sessionKey the Windowed session key to serialize
+     * @param headers the Headers as context
+     * @param serdes the StateSerdes as serializer
+     * @return the Bytes of the key
+     */
+    static <K> Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers, final StateSerdes<K, ?> serdes) {
+        return keyBytes(sessionKey.key(), headers, serdes);
     }
 
     /**
@@ -76,7 +96,7 @@ public class Utils {
         }
 
         // If the header is empty, then copy the value bytes directly
-        if (Utils.hasEmptyHeaders(aggregationWithHeaders)) {
+        if (hasEmptyHeaders(aggregationWithHeaders)) {
             // Strip header size's varint byte, and empty headers consume no bytes
             final byte[] aggregation = new byte[aggregationWithHeaders.length - 1]; 
             System.arraycopy(aggregationWithHeaders, 1, aggregation, 0, aggregation.length);
@@ -90,11 +110,6 @@ public class Utils {
         return readBytes(buffer, buffer.remaining());
     }
 
-    public static Headers readHeaders(final ByteBuffer buffer) {
-        final int headersSize = ByteUtils.readVarint(buffer);
-        final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HeadersDeserializer.deserialize(rawHeaders);
-    }
     /**
      * Extract raw plain value from serialized ValueTimestampHeaders.
      * This strips both the headers and timestamp portions.
@@ -124,13 +139,6 @@ public class Utils {
         final byte[] result = new byte[buffer.remaining()];
         buffer.get(result);
         return result;
-    }
-
-    /**
-     * Check if the input value (with timestamp or not) contains headers size equal to zero
-     */
-    public static boolean hasEmptyHeaders(final byte[] rawValueHeaders) {
-        return rawValueHeaders.length > 0 && rawValueHeaders[0] == 0x00;
     }
 
     /**
@@ -196,35 +204,29 @@ public class Utils {
         return bytes;
     }
 
-    /**
-     * Serialize the key with headers into bytes
-     * @param key the key to serialize
-     * @param headers the Headers as context
-     * @param serdes the StateSerdes as serializer
-     * @return the Bytes of the key
-     */
-    public static <K> Bytes keyBytes(final K key, final Headers headers, final StateSerdes<K, ?> serdes) {
-        return Bytes.wrap(serdes.rawKey(key, headers));
+    public static Headers readHeaders(final ByteBuffer buffer) {
+        final int headersSize = ByteUtils.readVarint(buffer);
+        final byte[] rawHeaders = readBytes(buffer, headersSize);
+        return HeadersDeserializer.deserialize(rawHeaders);
     }
 
     /**
-     * Serialize the key into bytes
-     * @param key the key to serialize
-     * @param serdes the StateSerdes as serializer
-     * @return the Bytes of the key
+     * Extract timestamp from serialized ValueTimestampHeaders.
      */
-    static <K> Bytes keyBytes(final K key, final StateSerdes<K, ?> serdes) {
-        return keyBytes(key, new RecordHeaders(), serdes);
+    public static long timestamp(final byte[] rawValueTimestampHeaders) {
+        // If the headers is empty, then do not need to skip the headers
+        if (hasEmptyHeaders(rawValueTimestampHeaders)) {
+            final byte[] rawTimestamp = new byte[StateSerdes.TIMESTAMP_SIZE];
+            System.arraycopy(rawValueTimestampHeaders, 1, rawTimestamp, 0, StateSerdes.TIMESTAMP_SIZE);
+            return LONG_DESERIALIZER.deserialize("", rawTimestamp);
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        buffer.position(buffer.position() + headersSize);
+
+        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
+        return LONG_DESERIALIZER.deserialize("", rawTimestamp);
     }
 
-    /**
-     * Serialize the session key with headers into bytes
-     * @param sessionKey the Windowed session key to serialize
-     * @param headers the Headers as context
-     * @param serdes the StateSerdes as serializer
-     * @return the Bytes of the key
-     */
-    static <K> Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers, final StateSerdes<K, ?> serdes) {
-        return keyBytes(sessionKey.key(), headers, serdes);
-    }
 }
