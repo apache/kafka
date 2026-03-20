@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -69,16 +70,86 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     public void put(final Windowed<K> sessionKey, final AggregationWithHeaders<AGG> aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         try {
-            final Headers headers = aggregate != null ? aggregate.headers() : new RecordHeaders();
-            final Bytes key = keyBytes(sessionKey, headers, serdes);
-            maybeMeasureLatency(() -> wrapped().put(new Windowed<>(key, sessionKey.window()),
-                serdes.rawValue(aggregate, headers)), time, putSensor);
+            maybeMeasureLatency(
+                () -> {
+                    if (aggregate == null) {
+                        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                        // Create new headers object to isolate tombstone operation from input record
+                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                        // Create temporary context with new headers
+                        final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                            currentContext.timestamp(),
+                            currentContext.offset(),
+                            currentContext.partition(),
+                            currentContext.topic(),
+                            deleteHeaders
+                        );
+
+                        try {
+                            internalContext.setRecordContext(temporaryContext);
+                            final Bytes key = keyBytes(sessionKey, deleteHeaders, serdes);
+                            wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(null, deleteHeaders));
+                        } finally {
+                            // Restore original context
+                            internalContext.setRecordContext(currentContext);
+                        }
+                    } else {
+                        final Headers headers = aggregate.headers();
+                        final Bytes key = keyBytes(sessionKey, headers, serdes);
+                        wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate, headers));
+                    }
+                },
+                time,
+                putSensor
+            );
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
         }
 
+    }
+
+    @Override
+    public void remove(final Windowed<K> sessionKey) {
+        Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        Objects.requireNonNull(sessionKey.key(), "sessionKey.key() can't be null");
+        Objects.requireNonNull(sessionKey.window(), "sessionKey.window() can't be null");
+
+        try {
+            maybeMeasureLatency(
+                () -> {
+                    final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                    // Create new headers object to isolate delete operation from input record
+                    final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                    // Create temporary context with new headers
+                    final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                        currentContext.timestamp(),
+                        currentContext.offset(),
+                        currentContext.partition(),
+                        currentContext.topic(),
+                        deleteHeaders
+                    );
+
+                    try {
+                        internalContext.setRecordContext(temporaryContext);
+                        final Bytes key = keyBytes(sessionKey, deleteHeaders, serdes);
+                        wrapped().remove(new Windowed<>(key, sessionKey.window()));
+                    } finally {
+                        // Restore original context
+                        internalContext.setRecordContext(currentContext);
+                    }
+                },
+                time,
+                removeSensor
+            );
+        } catch (final ProcessorStateException e) {
+            throw new ProcessorStateException(String.format(e.getMessage(), sessionKey.key()), e);
+        }
     }
 
     @SuppressWarnings("unchecked")

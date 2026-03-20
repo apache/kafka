@@ -1254,6 +1254,16 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
     }
 
+    @Test
+    public void shouldLoadPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), rocksDBStore.name + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        rocksDBStore.init(context, rocksDBStore);
+        assertEquals(position, rocksDBStore.getPosition());
+    }
+
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
         final List<ConsumerRecord<byte[], byte[]>> entries = new ArrayList<>();
         entries.add(createChangelogRecord("1".getBytes(UTF_8), "a".getBytes(UTF_8), "", 0, 1));

@@ -710,6 +710,21 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
     }
 
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldLoadPositionFromFile(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+    }
+
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         final Headers headers = new RecordHeaders();

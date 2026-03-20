@@ -274,11 +274,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
-            // without EOS the checkpoint file would not be deleted after loading, and
-            // with EOS we would not checkpoint ever during running state anyways.
-            // therefore we can initialize the snapshot as empty so that we would checkpoint right after loading
-            offsetSnapshotSinceLastFlush = Collections.emptyMap();
-
             transitionTo(State.RESTORING);
 
             log.info("Initialized");
@@ -304,7 +299,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 initializeTopology();
                 processorContext.initialize();
                 if (!eosEnabled) {
-                    maybeCheckpoint(true);
+                    maybeCheckpoint();
                 }
 
                 transitionTo(State.RUNNING);
@@ -525,14 +520,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RESTORING:
             case SUSPENDED:
-                maybeCheckpoint(enforceCheckpoint);
+                maybeCheckpoint();
                 log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
                 if (enforceCheckpoint || !eosEnabled) {
-                    maybeCheckpoint(enforceCheckpoint);
+                    maybeCheckpoint();
                 }
                 log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
@@ -631,14 +626,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public void maybeCheckpoint(final boolean enforceCheckpoint) {
-        // commitNeeded indicates we may have processed some records since last commit
-        // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
-        if (commitNeeded || enforceCheckpoint) {
-            stateMgr.updateChangelogOffsets(checkpointableOffsets());
-        }
-
-        super.maybeCheckpoint(enforceCheckpoint);
+    public void maybeCheckpoint() {
+        stateMgr.updateChangelogOffsets(checkpointableOffsets());
+        super.maybeCheckpoint();
     }
 
     private void validateClean() {

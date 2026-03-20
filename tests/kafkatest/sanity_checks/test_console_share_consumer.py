@@ -36,11 +36,11 @@ class ConsoleShareConsumerTest(Test):
         self.consumer = ConsoleShareConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic)
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_kraft, use_share_groups=[True])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_kraft)
     @cluster(num_nodes=4)
-    @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'], metadata_quorum=quorum.all_kraft, use_share_groups=[True])
-    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], metadata_quorum=quorum.all_kraft, use_share_groups=[True])
-    def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI', metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'], metadata_quorum=quorum.all_kraft)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], metadata_quorum=quorum.all_kraft)
+    def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI', metadata_quorum=quorum.isolated_kraft):
         """Check that console share consumer starts/stops properly, and that we are capturing log output."""
 
         self.kafka.security_protocol = security_protocol

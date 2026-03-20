@@ -232,16 +232,30 @@ public class ConsumerIntegrationTest {
         }
     }
 
-    @ClusterTest(
-        types = {Type.KRAFT},
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
-            @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
-            @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
-        }
-    )
+    @ClusterTests({
+        @ClusterTest(
+            types = {Type.KRAFT},
+            brokers = 3,
+            serverProperties = {
+                @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
+                @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
+                @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            }
+        ),
+        @ClusterTest(
+            types = {Type.KRAFT},
+            brokers = 3,
+            serverProperties = {
+                @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
+                @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
+                @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            }
+        )
+    })
     public void testRackAwareAssignment(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String topic = "test-topic";
         try (Admin admin = clusterInstance.admin();

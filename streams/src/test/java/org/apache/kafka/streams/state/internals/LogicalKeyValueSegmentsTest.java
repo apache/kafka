@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -52,7 +51,7 @@ public class LogicalKeyValueSegmentsTest {
     private static final String METRICS_SCOPE = "metrics-scope";
     private static final String DB_FILE_DIR = "rocksdb";
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
 
     private LogicalKeyValueSegments segments;
 
@@ -72,7 +71,6 @@ public class LogicalKeyValueSegmentsTest {
             SEGMENT_INTERVAL,
             new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME)
         );
-        segments.setPosition(Position.emptyPosition());
         segments.openExisting(context, 0L);
     }
 
@@ -159,7 +157,7 @@ public class LogicalKeyValueSegmentsTest {
         final List<LogicalKeyValueSegment> allSegments = segments.allSegments(true);
         assertEquals(1, allSegments.size());
         assertEquals(segment2, allSegments.get(0));
-        assertEquals(reservedSegment, segments.getReservedSegment(-1));
+        assertEquals(reservedSegment, segments.getReservedSegment());
     }
 
     @Test
@@ -227,7 +225,7 @@ public class LogicalKeyValueSegmentsTest {
         segments.close();
 
         assertThat(segments.segmentForTimestamp(0), is(nullValue()));
-        assertThat(segments.getReservedSegment(-1), is(nullValue()));
+        assertThat(segments.getReservedSegment(), is(nullValue()));
         // verify iterators closed as well
         assertThrows(InvalidStateStoreException.class, all1::hasNext);
         assertThrows(InvalidStateStoreException.class, all2::hasNext);

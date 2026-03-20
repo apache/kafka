@@ -14,30 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.streams.state.internals;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
-/**
- * A scheduler implementation that uses the system clock.
- *
- * Use Scheduler.SYSTEM instead of constructing an instance of this class.
- */
-public class SystemScheduler implements Scheduler {
-    SystemScheduler() {
-    }
+public class RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndexTest extends AbstractRocksDBWindowStoreTest {
 
     @Override
-    public Time time() {
-        return Time.SYSTEM;
-    }
-
-    @Override
-    public <T> Future<T> schedule(final ScheduledExecutorService executor,
-                                  final Callable<T> callable, long delayMs) {
-        return executor.schedule(callable, delayMs, TimeUnit.MILLISECONDS);
+    StoreType storeType() {
+        return StoreType.RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndex;
     }
 }

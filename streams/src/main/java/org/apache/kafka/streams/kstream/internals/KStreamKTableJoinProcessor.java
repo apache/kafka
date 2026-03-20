@@ -28,7 +28,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import org.slf4j.Logger;
@@ -40,7 +40,7 @@ import java.util.Optional;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
 class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, VOut>
     extends ContextualProcessor<StreamKey, StreamValue, StreamKey, VOut> {
@@ -134,10 +134,10 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
 
     private TableValue getTableValue(final Record<StreamKey, StreamValue> record, final TableKey mappedKey) {
         if (mappedKey == null) return null;
-        final ValueAndTimestamp<TableValue> valueAndTimestamp = valueGetter.isVersioned()
+        final ValueTimestampHeaders<TableValue> valueTimestampHeaders = valueGetter.isVersioned()
             ? valueGetter.get(mappedKey, record.timestamp())
             : valueGetter.get(mappedKey);
-        return getValueOrNull(valueAndTimestamp);
+        return getValueOrNull(valueTimestampHeaders);
     }
 
     private boolean maybeDropRecord(final Record<StreamKey, StreamValue> record) {

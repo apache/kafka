@@ -48,8 +48,8 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -62,8 +62,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -167,17 +165,17 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testActiveTasksAreNullInHeartbeatResponse() {
-        testTasksAreNullInHeartbeatResponse(null, Collections.emptyList(), Collections.emptyList());
+        testTasksAreNullInHeartbeatResponse(null, List.of(), List.of());
     }
 
     @Test
     public void testStandbyTasksAreNullInHeartbeatResponse() {
-        testTasksAreNullInHeartbeatResponse(Collections.emptyList(), null, Collections.emptyList());
+        testTasksAreNullInHeartbeatResponse(List.of(), null, List.of());
     }
 
     @Test
     public void testWarmupTasksAreNullInHeartbeatResponse() {
-        testTasksAreNullInHeartbeatResponse(Collections.emptyList(), Collections.emptyList(), null);
+        testTasksAreNullInHeartbeatResponse(List.of(), List.of(), null);
     }
 
     private void testTasksAreNullInHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
@@ -1999,9 +1997,9 @@ public class StreamsMembershipManagerTest {
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             statuses
         );
@@ -2031,9 +2029,9 @@ public class StreamsMembershipManagerTest {
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             statuses
         );
@@ -2063,9 +2061,9 @@ public class StreamsMembershipManagerTest {
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             statuses
         );
@@ -2095,9 +2093,9 @@ public class StreamsMembershipManagerTest {
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             statuses
         );
@@ -2121,9 +2119,9 @@ public class StreamsMembershipManagerTest {
         joining();
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             null
         );
@@ -2153,9 +2151,9 @@ public class StreamsMembershipManagerTest {
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             statuses
         );
@@ -2179,9 +2177,9 @@ public class StreamsMembershipManagerTest {
         joining();
 
         final StreamsGroupHeartbeatResponse responseWithTasks = makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
+            List.of(),
             MEMBER_EPOCH,
             null
         );
@@ -2366,16 +2364,14 @@ public class StreamsMembershipManagerTest {
     private void setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(final String subtopologyId,
                                                                            final String topicName) {
         lenient().when(streamsRebalanceData.subtopologies()).thenReturn(
-            mkMap(
-                mkEntry(
-                    subtopologyId,
-                    new StreamsRebalanceData.Subtopology(
-                        Set.of(topicName),
-                        Set.of(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
-                        Collections.emptyList()
-                    )
+            Map.of(
+                subtopologyId,
+                new StreamsRebalanceData.Subtopology(
+                    Set.of(topicName),
+                    Set.of(),
+                    Map.of(),
+                    Map.of(),
+                    List.of()
                 )
             )
         );
@@ -2386,26 +2382,22 @@ public class StreamsMembershipManagerTest {
                                                                 final String subtopologyId2,
                                                                 final String topicName2) {
         lenient().when(streamsRebalanceData.subtopologies()).thenReturn(
-            mkMap(
-                mkEntry(
-                    subtopologyId1,
-                    new StreamsRebalanceData.Subtopology(
-                        Set.of(topicName1),
-                        Set.of(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
-                        Collections.emptyList()
-                    )
+            Map.of(
+                subtopologyId1,
+                new StreamsRebalanceData.Subtopology(
+                    Set.of(topicName1),
+                    Set.of(),
+                    Map.of(),
+                    Map.of(),
+                    List.of()
                 ),
-                mkEntry(
-                    subtopologyId2,
-                    new StreamsRebalanceData.Subtopology(
-                        Set.of(topicName2),
-                        Set.of(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
-                        Collections.emptyList()
-                    )
+                subtopologyId2,
+                new StreamsRebalanceData.Subtopology(
+                    Set.of(topicName2),
+                    Set.of(),
+                    Map.of(),
+                    Map.of(),
+                    List.of()
                 )
             )
         );
@@ -2437,13 +2429,13 @@ public class StreamsMembershipManagerTest {
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithStandbyTasks(final String subtopologyId,
                                                                                 final List<Integer> partitions) {
         return makeHeartbeatResponse(
-            Collections.emptyList(),
+            List.of(),
             List.of(
                 new StreamsGroupHeartbeatResponseData.TaskIds()
                     .setSubtopologyId(subtopologyId)
                     .setPartitions(partitions)
             ),
-            Collections.emptyList(),
+            List.of(),
             MEMBER_EPOCH
         );
     }
@@ -2451,8 +2443,8 @@ public class StreamsMembershipManagerTest {
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithWarmupTasks(final String subtopologyId,
                                                                                final List<Integer> partitions) {
         return makeHeartbeatResponse(
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
             List.of(
                 new StreamsGroupHeartbeatResponseData.TaskIds()
                     .setSubtopologyId(subtopologyId)
@@ -2479,7 +2471,7 @@ public class StreamsMembershipManagerTest {
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithActiveTasks(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
                                                                                final int memberEpoch) {
-        return makeHeartbeatResponse(activeTasks, Collections.emptyList(), Collections.emptyList(), memberEpoch);
+        return makeHeartbeatResponse(activeTasks, List.of(), List.of(), memberEpoch);
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,

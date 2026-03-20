@@ -208,6 +208,7 @@ public class MockProcessorContextAPITest {
         assertThat(context.committed(), is(false));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldStoreAndReturnStateStores() {
         final Processor<String, Long, Void, Void> processor = new Processor<>() {

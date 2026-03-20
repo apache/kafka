@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -465,7 +466,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
         contextRegistersStateStore(stateMgr);
 
         try {
@@ -567,7 +568,7 @@ public class ProcessorStateManagerTest {
 
             stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
         } finally {
-            stateMgr.flush();
+            stateMgr.commit();
 
             assertTrue(persistentStore.committed);
             assertTrue(nonPersistentStore.committed);
@@ -576,7 +577,7 @@ public class ProcessorStateManagerTest {
             assertThat(persistentStore.getLastCommitCount(), Matchers.lessThan(nonPersistentStore.getLastCommitCount()));
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
-            stateMgr.flush();
+            stateMgr.commit();
 
             assertTrue(storeCheckpointFile.exists());
 
@@ -616,7 +617,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStorePartition, 220L),
                 mkEntry(irrelevantPartition, 9000L)
             ));
-            stateMgr.flush();
+            stateMgr.commit();
 
             assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
             assertThat(storeMetadata.offset(), equalTo(220L));
@@ -640,7 +641,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
 
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 987L));
-            stateMgr.flush();
+            stateMgr.commit();
 
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(emptyMap()));
@@ -679,7 +680,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
 
-        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::commit);
         assertEquals(exception, thrown.getCause());
     }
 
@@ -695,7 +696,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
 
-        final StreamsException thrown = assertThrows(StreamsException.class, stateManager::flush);
+        final StreamsException thrown = assertThrows(StreamsException.class, stateManager::commit);
         assertEquals(exception, thrown);
     }
 
@@ -743,7 +744,7 @@ public class ProcessorStateManagerTest {
         };
         stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
 
-        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::commit);
         assertEquals(exception, thrown.getCause());
         assertFalse(exception.getMessage().contains("FailedProcessingException"));
         assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
@@ -806,7 +807,7 @@ public class ProcessorStateManagerTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 25_000L));
-            stateMgr.flush();
+            stateMgr.commit();
 
             boolean foundExpectedLogMessage = false;
             for (final LogCaptureAppender.Event event : appender.getEvents()) {
@@ -889,7 +890,7 @@ public class ProcessorStateManagerTest {
         stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback, null);
 
         try {
-            stateManager.flush();
+            stateManager.commit();
         } catch (final ProcessorStateException expected) { /* ignore */ }
 
         assertTrue(committedStore.get());
@@ -934,7 +935,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -963,7 +964,7 @@ public class ProcessorStateManagerTest {
         );
         checkpoint.write(offsets);
 
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
         contextRegistersStateStore(stateMgr);
 
         try {
@@ -977,7 +978,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldNotThrowTaskCorruptedExceptionAfterCheckpointing() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
         contextRegistersStateStore(stateMgr);
 
         try {
@@ -991,7 +992,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(nonPersistentStorePartition, 876L),
                 mkEntry(persistentStorePartition, 666L))
             );
-            stateMgr.flush();
+            stateMgr.commit();
 
             // reset the state and offsets, for example as in a corrupted task
             stateMgr.close();
@@ -1012,7 +1013,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIllegalStateIfInitializingOffsetsForCorruptedTasks() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -1027,7 +1028,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldBeAbleToCloseWithoutRegisteringAnyStores() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
 
         stateMgr.close();
     }
@@ -1050,7 +1051,7 @@ public class ProcessorStateManagerTest {
 
         assertFalse(persistentCheckpoint.getFile().exists());
 
-        stateMgr.flush();
+        stateMgr.commit();
 
         assertTrue(persistentCheckpoint.getFile().exists());
 
@@ -1086,7 +1087,7 @@ public class ProcessorStateManagerTest {
 
         final ProcessorStateException processorStateException = assertThrows(
             ProcessorStateException.class,
-            stateMgr::flush
+            stateMgr::commit
         );
 
         assertThat(
@@ -1147,12 +1148,69 @@ public class ProcessorStateManagerTest {
         }
     }
 
+    @Test
+    public void shouldWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsPre43() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, false, UpgradeFromValues.UPGRADE_FROM_42);
 
+        contextRegistersStateStore(stateMgr);
+        persistentStore.init(context, persistentStore);
+        stateMgr.initializeStoreOffsets(false);
 
+        // update the offset for the persistent store
+        stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 100L));
 
+        stateMgr.close();
 
+        // verify the legacy per-task checkpoint was written
+        final File legacyFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertTrue(legacyFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        assertEquals(100L, written.get(persistentStorePartition));
+    }
 
-    private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled) {
+    @Test
+    public void shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+
+        contextRegistersStateStore(stateMgr);
+        persistentStore.init(context, persistentStore);
+        stateMgr.initializeStoreOffsets(false);
+
+        stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 100L));
+        stateMgr.close();
+
+        final File legacyFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertFalse(legacyFile.exists());
+    }
+
+    @Test
+    public void shouldExcludeCorruptedStoresFromDowngradeCheckpoint() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, false, UpgradeFromValues.UPGRADE_FROM_42);
+
+        contextRegistersStateStore(stateMgr);
+        persistentStore.init(context, persistentStore);
+        persistentStoreTwo.init(context, persistentStoreTwo);
+        stateMgr.initializeStoreOffsets(false);
+
+        stateMgr.updateChangelogOffsets(mkMap(
+            mkEntry(persistentStorePartition, 100L),
+            mkEntry(persistentStoreTwoPartition, 200L)
+        ));
+
+        // mark the first store as corrupted
+        stateMgr.markChangelogAsCorrupted(singletonList(persistentStorePartition));
+
+        stateMgr.close();
+
+        final File legacyFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
+        assertTrue(legacyFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        // only the non-corrupted store should be in the checkpoint
+        assertFalse(written.containsKey(persistentStorePartition));
+        assertEquals(200L, written.get(persistentStoreTwoPartition));
+    }
+
+    private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled, final UpgradeFromValues upgradeFrom) {
         return new ProcessorStateManager(
             taskId,
             taskType,
@@ -1164,11 +1222,12 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            emptySet());
+            emptySet(),
+            upgradeFrom);
     }
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {
-        return getStateManager(taskType, false);
+        return getStateManager(taskType, false, null);
     }
 
     private void contextRegistersStateStore(final StateManager stateManager) {

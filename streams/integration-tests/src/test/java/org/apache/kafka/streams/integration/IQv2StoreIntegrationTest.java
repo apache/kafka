@@ -1315,7 +1315,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
                 assertThat(partitionResult.getFailureMessage(), matchesPattern(
                     "This store"
-                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
+                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore.*\\)"
                         + " doesn't know how to execute the given query"
                         + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
                         + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."

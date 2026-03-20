@@ -21,8 +21,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -38,27 +38,26 @@ import java.util.TreeMap;
  * This class is a generic version of the in-memory key-value store that is useful for testing when you
  *  need a basic KeyValueStore for arbitrary types and don't have/want to write a serde
  */
-@SuppressWarnings("deprecation")
-public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
-    extends WrappedStateStore<StateStore, K, ValueAndTimestamp<V>>
-    implements TimestampedKeyValueStore<K, V> {
+public class GenericInMemoryTimestampedKeyValueStoreWithHeaders<K extends Comparable, V>
+    extends WrappedStateStore<StateStore, K, ValueTimestampHeaders<V>>
+    implements TimestampedKeyValueStoreWithHeaders<K, V> {
 
     private final String name;
-    private final NavigableMap<K, ValueAndTimestamp<V>> map;
+    private final NavigableMap<K, ValueTimestampHeaders<V>> map;
     private volatile boolean open = false;
 
-    public GenericInMemoryTimestampedKeyValueStore(final String name) {
+    public GenericInMemoryTimestampedKeyValueStoreWithHeaders(final String name) {
         // it's not really a `WrappedStateStore` so we pass `null`
         // however, we need to implement `WrappedStateStore` to make the store usable
         super(null);
         this.name = name;
 
-        this.map = new TreeMap<>();
+        map = new TreeMap<>();
     }
 
     @Override
     public String name() {
-        return this.name;
+        return name;
     }
 
     @Override
@@ -67,11 +66,11 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
             stateStoreContext.register(root, null);
         }
 
-        this.open = true;
+        open = true;
     }
 
     @Override
-    public boolean setFlushListener(final CacheFlushListener<K, ValueAndTimestamp<V>> listener,
+    public boolean setFlushListener(final CacheFlushListener<K, ValueTimestampHeaders<V>> listener,
                                     final boolean sendOldValues) {
         return false;
     }
@@ -83,28 +82,28 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
 
     @Override
     public boolean isOpen() {
-        return this.open;
+        return open;
     }
 
     @Override
-    public synchronized ValueAndTimestamp<V> get(final K key) {
-        return this.map.get(key);
+    public synchronized ValueTimestampHeaders<V> get(final K key) {
+        return map.get(key);
     }
 
     @Override
     public synchronized void put(final K key,
-                                 final ValueAndTimestamp<V> value) {
+                                 final ValueTimestampHeaders<V> value) {
         if (value == null) {
-            this.map.remove(key);
+            map.remove(key);
         } else {
-            this.map.put(key, value);
+            map.put(key, value);
         }
     }
 
     @Override
-    public synchronized ValueAndTimestamp<V> putIfAbsent(final K key,
-                                                         final ValueAndTimestamp<V> value) {
-        final ValueAndTimestamp<V> originalValue = get(key);
+    public synchronized ValueTimestampHeaders<V> putIfAbsent(final K key,
+                                                             final ValueTimestampHeaders<V> value) {
+        final ValueTimestampHeaders<V> originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -112,34 +111,33 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
     }
 
     @Override
-    public synchronized void putAll(final List<KeyValue<K, ValueAndTimestamp<V>>> entries) {
-        for (final KeyValue<K, ValueAndTimestamp<V>> entry : entries) {
+    public synchronized void putAll(final List<KeyValue<K, ValueTimestampHeaders<V>>> entries) {
+        for (final KeyValue<K, ValueTimestampHeaders<V>> entry : entries) {
             put(entry.key, entry.value);
         }
     }
 
     @Override
-    public synchronized ValueAndTimestamp<V> delete(final K key) {
-        return this.map.remove(key);
+    public synchronized ValueTimestampHeaders<V> delete(final K key) {
+        return map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
-        final K to) {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new GenericInMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+    public synchronized KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
+                                                                            final K to) {
+        final TreeMap<K, ValueTimestampHeaders<V>> copy = new TreeMap<>(map.subMap(from, true, to, true));
+        return new DelegatingPeekingKeyValueIterator<>(name, new GenericInMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 
     @Override
-    public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> all() {
-        final TreeMap<K, ValueAndTimestamp<V>> copy = new TreeMap<>(this.map);
+    public synchronized KeyValueIterator<K, ValueTimestampHeaders<V>> all() {
+        final TreeMap<K, ValueTimestampHeaders<V>> copy = new TreeMap<>(map);
         return new DelegatingPeekingKeyValueIterator<>(name, new GenericInMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 
     @Override
     public long approximateNumEntries() {
-        return this.map.size();
+        return map.size();
     }
 
     @Override
@@ -149,14 +147,14 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
 
     @Override
     public void close() {
-        this.map.clear();
-        this.open = false;
+        map.clear();
+        open = false;
     }
 
-    private static class GenericInMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, ValueAndTimestamp<V>> {
-        private final Iterator<Entry<K, ValueAndTimestamp<V>>> iter;
+    private static class GenericInMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, ValueTimestampHeaders<V>> {
+        private final Iterator<Entry<K, ValueTimestampHeaders<V>>> iter;
 
-        private GenericInMemoryKeyValueIterator(final Iterator<Map.Entry<K, ValueAndTimestamp<V>>> iter) {
+        private GenericInMemoryKeyValueIterator(final Iterator<Map.Entry<K, ValueTimestampHeaders<V>>> iter) {
             this.iter = iter;
         }
 
@@ -166,8 +164,8 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
         }
 
         @Override
-        public KeyValue<K, ValueAndTimestamp<V>> next() {
-            final Map.Entry<K, ValueAndTimestamp<V>> entry = iter.next();
+        public KeyValue<K, ValueTimestampHeaders<V>> next() {
+            final Map.Entry<K, ValueTimestampHeaders<V>> entry = iter.next();
             return new KeyValue<>(entry.getKey(), entry.getValue());
         }
 

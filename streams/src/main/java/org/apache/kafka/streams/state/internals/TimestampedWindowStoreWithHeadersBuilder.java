@@ -115,6 +115,9 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
             return true;
         }
+        if (stateStore instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).store);
+        }
         if (stateStore instanceof WrappedStateStore) {
             return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
         }

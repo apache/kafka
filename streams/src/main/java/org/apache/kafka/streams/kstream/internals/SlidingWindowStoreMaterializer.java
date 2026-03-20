@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -60,29 +61,23 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     public StoreBuilder<?> builder() {
         final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().windowStore(new DslWindowParams(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.timeDifferenceMs()),
-                        false,
-                        emitStrategy,
-                        true,
-                        storeFormat
-                ))
-                : (WindowBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().windowStore(new DslWindowParams(
+            materialized.storeName(),
+            Duration.ofMillis(retentionPeriod),
+            Duration.ofMillis(windows.timeDifferenceMs()),
+            false,
+            emitStrategy,
+            true,
+            storeFormat
+        ))
+            : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<?> builder;
-        if (storeFormat == DslStoreFormat.HEADERS) {
-            builder = Stores.timestampedWindowStoreWithHeadersBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-        } else {
-            builder = Stores.timestampedWindowStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-        }
+        final StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> builder = Stores
+            .timestampedWindowStoreWithHeadersBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

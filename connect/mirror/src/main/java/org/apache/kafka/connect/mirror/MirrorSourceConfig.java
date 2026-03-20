@@ -94,6 +94,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             " If set to false, heartbeats topics will only be replicated if the topic filter allows.";
     public static final boolean HEARTBEATS_REPLICATION_ENABLED_DEFAULT = true;
 
+    public static final String METRIC_NAMES_FORMAT = "metric.names.formats";
+    public static final List<String> METRIC_NAMES_FORMAT_DEFAULT = List.of(METRIC_NAMES_LEGACY);
+    public static final String METRIC_NAMES_FORMAT_DOC = "Deprecated. The formats in which metrics are emitted. Valid values are legacy and new. " +
+            "When set to legacy, the metrics have the following name \"kafka.connect.mirror:type=MirrorSourceConnector,source={SOURCE},target={TARGET},topic={TOPIC},partition={PARTITION}\". " +
+            "When set to new, the metrics have the following name \"kafka.connect:type=plugins,connector={CONNECTOR},task={TASK},source={SOURCE},target={TARGET},topic={TOPIC},partition={PARTITION}\". " +
+            "When set to \"legacy,new\" the connector will emit metrics with both names, this can be useful when migrating to the new format but it doubles the amount of metrics that are emitted.\n" +
+            "In Kafka 5.0 the legacy format and this configuration will be removed and the metrics will always use the new names.";
+
     public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-producer";
     public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-producer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
@@ -201,6 +209,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     boolean heartbeatsReplicationEnabled() {
         return getBoolean(HEARTBEATS_REPLICATION_ENABLED);
+    }
+
+    List<String> metricNamesFormats() {
+        return getList(METRIC_NAMES_FORMAT);
     }
 
     private static ConfigDef defineSourceConfig(ConfigDef baseConfig) {
@@ -318,6 +330,14 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         HEARTBEATS_REPLICATION_ENABLED_DEFAULT,
                         ConfigDef.Importance.LOW,
                         HEARTBEATS_REPLICATION_ENABLED_DOC
+                )
+                .define(
+                        METRIC_NAMES_FORMAT,
+                        ConfigDef.Type.LIST,
+                        METRIC_NAMES_FORMAT_DEFAULT,
+                        ConfigDef.ValidList.in(false, METRIC_NAMES_LEGACY, METRIC_NAMES_NEW),
+                        ConfigDef.Importance.LOW,
+                        METRIC_NAMES_FORMAT_DOC
                 );
     }
 

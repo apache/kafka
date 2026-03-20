@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -51,6 +53,7 @@ import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -115,6 +118,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private final Map<String, StateStoreMetadata> storeMetadata = new HashMap<>();
     private final boolean eosEnabled;
+    private final UpgradeFromValues upgradeFrom;
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
@@ -159,6 +163,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         final boolean globalEnabled = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
         processingExceptionHandler = globalEnabled ? config.processingExceptionHandler() : null;
         eosEnabled = StreamsConfigUtils.eosEnabled(config);
+        final String upgradeFromStr = config.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        upgradeFrom = upgradeFromStr != null ? UpgradeFromValues.fromString(upgradeFromStr) : null;
     }
 
     @Override
@@ -179,7 +185,20 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             final List<TopicPartition> storePartitions = topicPartitionsForStore(stateStore);
             final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
                     stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
-            maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
+            try {
+                maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
+            } catch (final ProcessorStateException e) {
+                if (eosEnabled) {
+                    log.warn("{}Detected unclean shutdown for global store {}. " +
+                            "Wiping global state directory.", logPrefix, stateStore.name(), e);
+                    try {
+                        Utils.delete(stateDirectory.globalStateDir().getAbsoluteFile());
+                    } catch (final IOException ioe) {
+                        e.addSuppressed(ioe);
+                    }
+                }
+                throw e;
+            }
 
             for (final TopicPartition storePartition : storePartitions) {
                 wrappedStores.put(storePartition, maybeWrappedStore);
@@ -552,7 +571,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void flush() {
+    public void commit() {
         log.debug("Committing all global globalStores registered in the state manager");
         for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
             if (entry.getValue().isPresent()) {
@@ -566,7 +585,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     // only add offsets for persistent stores
                     if (store.persistent()) {
                         for (final TopicPartition storePartition : storePartitions) {
-                            storeOffsets.put(storePartition, currentOffsets.get(storePartition));
+                            final Long offset = currentOffsets.get(storePartition);
+                            if (offset != null) {
+                                storeOffsets.put(storePartition, offset);
+                            }
                         }
                     }
                     store.commit(storeOffsets);
@@ -580,10 +602,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
-    }
-
-    @Override
-    public void checkpoint() {
     }
 
     @Override
@@ -610,6 +628,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 log.info("Skipping to close non-initialized store {}", entry.getKey());
             }
         }
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(logPrefix, upgradeFrom, stateDirectory, null, currentOffsets);
 
         if (closeFailed.length() > 0) {
             throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);

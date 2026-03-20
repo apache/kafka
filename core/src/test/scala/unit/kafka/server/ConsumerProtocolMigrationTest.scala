@@ -19,19 +19,33 @@ package kafka.server
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Timeout
 
 import java.nio.ByteBuffer
 import java.util.Collections
 import scala.jdk.CollectionConverters._
+
+
+object ConsumerProtocolMigrationTest {
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    )
+  )
+  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ConsumerProtocolMigrationTest(cluster) {
+  }
+}
 
 @Timeout(120)
 @ClusterTestDefaults(
@@ -42,6 +56,11 @@ import scala.jdk.CollectionConverters._
   )
 )
 class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+
+  protected def isConsumerAssignmentBatchingEnabled: Boolean = {
+    cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.consumerGroupAssignmentIntervalMs > 0)
+  }
+
   @ClusterTest(
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
@@ -299,33 +318,8 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       syncGroupWithOldProtocol(
         groupId = groupId,
         memberId = memberId2,
-        generationId = 3
+        generationId = if (isConsumerAssignmentBatchingEnabled) 2 else 3
       )
-    )
-
-    // Member 2 heartbeats.
-    heartbeat(
-      groupId = groupId,
-      generationId = 3,
-      memberId = memberId2
-    )
-
-    // Member 1 heartbeats to revoke partitions.
-    consumerGroupHeartbeat(
-      groupId = groupId,
-      memberId = memberId1,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.NONE
-    )
-
-    // Member 2 heartbeats and gets REBALANCE_IN_PROGRESS.
-    heartbeat(
-      groupId = groupId,
-      generationId = 3,
-      memberId = memberId2,
-      expectedError = Errors.REBALANCE_IN_PROGRESS
     )
 
     // Downgrade the group by leaving member 1.
@@ -793,15 +787,25 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     }
 
     // The joining request with a consumer group member 2 is accepted.
-    val memberId2 = consumerGroupHeartbeat(
-      groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
-      instanceId = if (useStaticMembers) instanceId2 else null,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.NONE
-    ).memberId
+    val memberId2 = Uuid.randomUuid.toString
+    assertEquals(
+      new ConsumerGroupHeartbeatResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMemberId(memberId2)
+        .setMemberEpoch(2)
+        .setHeartbeatIntervalMs(5000)
+        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+          .setTopicPartitions(List.empty.asJava)),
+      consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId2,
+        instanceId = if (useStaticMembers) instanceId2 else null,
+        rebalanceTimeoutMs = 5 * 60 * 1000,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = List.empty,
+        expectedError = Errors.NONE
+      )
+    )
 
     // The group has become a consumer group.
     assertEquals(
@@ -965,6 +969,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     ).assignment.topicPartitions.get(0).partitions
+    assertTrue(partitionsOfMember2.size < 3)
 
     // The group has been stabilized.
     assertEquals(
@@ -1041,6 +1046,18 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       expectedAssignment = assignment(List(0, 1, 2).filter(!partitionsOfMember2.contains(_)))
     )
 
+    if (isConsumerAssignmentBatchingEnabled) {
+      // Member 2 changes subscription and the assignment becomes out of date.
+      val memberEpoch2 = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId2,
+        memberEpoch = 2,
+        subscribedTopicNames = List("foo", "bar"),
+        expectedError = Errors.NONE
+      ).memberEpoch
+      assertEquals(2, memberEpoch2)
+    }
+
     if (!useStaticMembers) {
       // Downgrade the group by leaving member 2.
       leaveGroupWithNewProtocol(
@@ -1060,15 +1077,16 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     }
 
     // The group has become a classic group.
-    // If the downgrade is triggered by the static member replacement,
-    // the group should remain STABLE, otherwise, a rebalance is triggered.
+    // If the downgrade is triggered by the static member replacement and the
+    // assignment is up to date, the group should remain STABLE, otherwise,
+    // a rebalance is triggered.
     assertEquals(
       List(
         new ListGroupsResponseData.ListedGroup()
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(
-            if (useStaticMembers)
+            if (useStaticMembers && !isConsumerAssignmentBatchingEnabled)
               ClassicGroupState.STABLE.toString
             else
               ClassicGroupState.PREPARING_REBALANCE.toString
@@ -1128,15 +1146,25 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     }
 
     // The joining request with a consumer group member 2 is accepted.
-    val memberId2 = consumerGroupHeartbeat(
-      groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
-      instanceId = if (useStaticMembers) instanceId2 else null,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.NONE
-    ).memberId
+    val memberId2 = Uuid.randomUuid.toString
+    assertEquals(
+      new ConsumerGroupHeartbeatResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMemberId(memberId2)
+        .setMemberEpoch(2)
+        .setHeartbeatIntervalMs(5000)
+        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+          .setTopicPartitions(List.empty.asJava)),
+      consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId2,
+        instanceId = if (useStaticMembers) instanceId2 else null,
+        rebalanceTimeoutMs = 5 * 60 * 1000,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = List.empty,
+        expectedError = Errors.NONE
+      )
+    )
 
     // The group has become a consumer group.
     assertEquals(
@@ -1239,6 +1267,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         generationId = 1
       ).assignment()
     )).partitions()
+    assertTrue(partitionsOfMember1.size < 3)
 
     // Member 1 heartbeats and gets REBALANCE_IN_PROGRESS.
     heartbeat(
@@ -1271,7 +1300,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // Member 2 rejoins to retrieve partitions pending assignment.
-    consumerGroupHeartbeat(
+    val partitionsOfMember2 = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId2,
       memberEpoch = 2,
@@ -1279,7 +1308,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
-    )
+    ).assignment.topicPartitions.get(0).partitions
+    assertEquals(3, partitionsOfMember1.size + partitionsOfMember2.size)
+    assertTrue(partitionsOfMember1.asScala.intersect(partitionsOfMember2.asScala).isEmpty)
 
     // The group has been stabilized.
     assertEquals(
@@ -1295,6 +1326,18 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         typesFilter = List(Group.GroupType.CONSUMER.toString)
       )
     )
+
+    if (isConsumerAssignmentBatchingEnabled) {
+      // Member 2 changes subscription and the assignment becomes out of date.
+      val memberEpoch2 = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId2,
+        memberEpoch = 2,
+        subscribedTopicNames = List("foo", "bar"),
+        expectedError = Errors.NONE
+      ).memberEpoch
+      assertEquals(2, memberEpoch2)
+    }
 
     if (!useStaticMembers) {
       // Downgrade the group by leaving member 2.
@@ -1315,15 +1358,16 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     }
 
     // The group has become a classic group.
-    // If the downgrade is triggered by the static member replacement,
-    // the group should remain STABLE, otherwise, a rebalance is triggered.
+    // If the downgrade is triggered by the static member replacement and the
+    // assignment is up to date, the group should remain STABLE, otherwise,
+    // a rebalance is triggered.
     assertEquals(
       List(
         new ListGroupsResponseData.ListedGroup()
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(
-            if (useStaticMembers)
+            if (useStaticMembers && !isConsumerAssignmentBatchingEnabled)
               ClassicGroupState.STABLE.toString
             else
               ClassicGroupState.PREPARING_REBALANCE.toString

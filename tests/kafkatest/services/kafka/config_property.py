@@ -75,9 +75,13 @@ DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
+CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS = "group.consumer.assignment.interval.ms"
 
 SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
+SHARE_GROUP_ASSIGNMENT_INTERVAL_MS = "group.share.assignment.interval.ms"
+
+STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS = "group.streams.assignment.interval.ms"
 
 UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
 UNSTABLE_FEATURE_VERSIONS_ENABLE = "unstable.feature.versions.enable"

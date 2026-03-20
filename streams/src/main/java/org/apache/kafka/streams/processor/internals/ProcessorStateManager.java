@@ -25,6 +25,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -181,6 +182,7 @@ public class ProcessorStateManager implements StateManager {
 
     private final StateDirectory stateDirectory;
     private final File baseDir;
+    private final UpgradeFromValues upgradeFrom;
 
     private TaskType taskType;
     private Logger log;
@@ -203,7 +205,8 @@ public class ProcessorStateManager implements StateManager {
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
+                                 final Collection<TopicPartition> sourcePartitions,
+                                 final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -211,11 +214,27 @@ public class ProcessorStateManager implements StateManager {
         this.taskType = taskType;
         this.eosEnabled = eosEnabled;
         this.sourcePartitions = sourcePartitions;
+        this.upgradeFrom = upgradeFrom;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.stateDirectory = stateDirectory;
 
         log.debug("Created state store manager for task {}", taskId);
+    }
+
+    /**
+     * Convenience constructor that defaults {@code upgradeFrom} to {@code null}.
+     *
+     * @throws ProcessorStateException if the task directory does not exist and could not be created
+     */
+    public ProcessorStateManager(final TaskId taskId,
+                                 final TaskType taskType,
+                                 final boolean eosEnabled,
+                                 final LogContext logContext,
+                                 final StateDirectory stateDirectory,
+                                 final Map<String, String> storeToChangelogTopic,
+                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
+        this(taskId, taskType, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
     }
 
     /**
@@ -481,50 +500,48 @@ public class ProcessorStateManager implements StateManager {
      *                          or committing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public void flush() {
+    public void commit() {
         RuntimeException firstException = null;
         // attempting to commit the stores
         if (!stores.isEmpty()) {
             log.debug("Committing all stores registered in the state manager: {}", stores);
             for (final StateStoreMetadata metadata : stores.values()) {
-                if (!metadata.corrupted) {
-                    final StateStore store = metadata.stateStore;
-                    log.trace("Committing store {}", store.name());
-                    try {
-                        if (metadata.changelogPartition == null || metadata.offset == null || !store.persistent()) {
-                            store.commit(Map.of());
-                        } else {
-                            store.commit(Map.of(metadata.changelogPartition, metadata.offset));
-                        }
+                final StateStore store = metadata.stateStore;
+                log.trace("Committing store {}", store.name());
+                try {
+                    if (metadata.changelogPartition == null || metadata.offset == null || metadata.corrupted || !store.persistent()) {
+                        store.commit(Map.of());
+                    } else {
+                        store.commit(Map.of(metadata.changelogPartition, metadata.offset));
+                    }
 
-                        if (metadata.commitCallback != null) {
-                            try {
-                                metadata.commitCallback.onCommit();
-                            } catch (final IOException e) {
-                                throw new ProcessorStateException(
-                                        format("%sException caught while trying to checkpoint store, " +
-                                                "changelog partition %s", logPrefix, metadata.changelogPartition),
-                                        e
-                                );
-                            }
+                    if (!metadata.corrupted && metadata.commitCallback != null) {
+                        try {
+                            metadata.commitCallback.onCommit();
+                        } catch (final IOException e) {
+                            throw new ProcessorStateException(
+                                    format("%sException caught while trying to checkpoint store, " +
+                                            "changelog partition %s", logPrefix, metadata.changelogPartition),
+                                    e
+                            );
                         }
-                    } catch (final RuntimeException exception) {
-                        if (firstException == null) {
-                            // do NOT wrap the error if it is actually caused by Streams itself
-                            // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
-                            if (exception instanceof FailedProcessingException)
-                                firstException = new ProcessorStateException(
-                                        format("%sFailed to commit state store %s", logPrefix, store.name()),
-                                        exception.getCause());
-                            else if (exception instanceof StreamsException)
-                                firstException = exception;
-                            else
-                                firstException = new ProcessorStateException(
-                                        format("%sFailed to commit state store %s", logPrefix, store.name()), exception);
-                            log.error("Failed to commit state store {}: ", store.name(), firstException);
-                        } else {
-                            log.error("Failed to commit state store {}: ", store.name(), exception);
-                        }
+                    }
+                } catch (final RuntimeException exception) {
+                    if (firstException == null) {
+                        // do NOT wrap the error if it is actually caused by Streams itself
+                        // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
+                        if (exception instanceof FailedProcessingException)
+                            firstException = new ProcessorStateException(
+                                    format("%sFailed to commit state store %s", logPrefix, store.name()),
+                                    exception.getCause());
+                        else if (exception instanceof StreamsException)
+                            firstException = exception;
+                        else
+                            firstException = new ProcessorStateException(
+                                    format("%sFailed to commit state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to commit state store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to commit state store {}: ", store.name(), exception);
                     }
                 }
             }
@@ -533,10 +550,6 @@ public class ProcessorStateManager implements StateManager {
         if (firstException != null) {
             throw firstException;
         }
-    }
-
-    @Override
-    public void checkpoint() {
     }
 
     public void flushCache() {
@@ -594,12 +607,14 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
+        final Map<TopicPartition, Long> allOffsets = new HashMap<>();
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
         if (!stores.isEmpty()) {
             for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
-                final StateStore store = entry.getValue().stateStore;
+                final StateStoreMetadata metadata = entry.getValue();
+                final StateStore store = metadata.stateStore;
                 log.trace("Closing store {}", store.name());
                 try {
                     store.close();
@@ -621,10 +636,17 @@ public class ProcessorStateManager implements StateManager {
                         log.error("Failed to close state store {}: ", store.name(), exception);
                     }
                 }
+
+                // collect offsets for potential downgrade checkpoint
+                if (metadata.changelogPartition != null && !metadata.corrupted) {
+                    allOffsets.put(metadata.changelogPartition, metadata.offset);
+                }
             }
 
             stores.clear();
         }
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(logPrefix, upgradeFrom, stateDirectory, taskId, allOffsets);
 
         if (firstException != null) {
             throw firstException;
