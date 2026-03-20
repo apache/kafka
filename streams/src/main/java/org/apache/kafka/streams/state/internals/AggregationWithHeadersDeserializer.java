@@ -92,7 +92,7 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         }
 
         // If the header is empty, simply return it
-        if (rawAggregationWithHeaders.length > 0 && rawAggregationWithHeaders[0] == 0x00) {
+        if (Utils.hasEmptyHeaders(rawAggregationWithHeaders)) {
             return new RecordHeaders();
         }
 
@@ -110,7 +110,7 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         }
 
         // If the header is empty, then copy the value bytes directly
-        if (aggregationWithHeaders.length > 0 && aggregationWithHeaders[0] == 0x00) {
+        if (Utils.hasEmptyHeaders(aggregationWithHeaders)) {
             // Strip header size's varint byte, and empty headers consume no bytes
             final byte[] aggregation = new byte[aggregationWithHeaders.length - 1]; 
             System.arraycopy(aggregationWithHeaders, 1, aggregation, 0, aggregation.length);

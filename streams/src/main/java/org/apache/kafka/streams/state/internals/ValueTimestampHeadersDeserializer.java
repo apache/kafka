@@ -137,7 +137,7 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
         }
 
         // If the header is empty, simply return it
-        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
+        if (Utils.hasEmptyHeaders(rawValueTimestampHeaders)) {
             return new RecordHeaders();
         }
 

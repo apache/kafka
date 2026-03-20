@@ -58,19 +58,11 @@ public class Utils {
         return result;
     }
 
-    public static boolean hasEmptyHeaders(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders.length > 0 && rawValueTimestampHeaders[0] == 0x00) {
-            // Header size (varint 1 byte), empty headers (no bytes), and timestamp
-            if (rawValueTimestampHeaders.length - 1 - StateSerdes.TIMESTAMP_SIZE < 0) {
-                throw new SerializationException(
-                    "Invalid format: input length " + rawValueTimestampHeaders.length +
-                    " is less than min length of timestamped value with empty headers " +
-                    (1 + StateSerdes.TIMESTAMP_SIZE)
-                );
-            }
-            return true;
-        }
-        return false;
+    /**
+     * Check if the input value (with timestamp or not) contains headers size equal to zero
+     */
+    public static boolean hasEmptyHeaders(final byte[] rawValueHeaders) {
+        return rawValueHeaders.length > 0 && rawValueHeaders[0] == 0x00;
     }
 
     /**

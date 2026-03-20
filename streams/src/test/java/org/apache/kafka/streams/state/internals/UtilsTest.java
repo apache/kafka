@@ -89,12 +89,6 @@ public class UtilsTest {
         assertArrayEquals(VALUE, res);
     }
 
-    @Test
-    public void testRawPlainValueWithEmptyHeadersAndInvalidTimestamp() {
-        final byte[] invalid = timestampedValueWithEmptyHeadersInvalidTimestamp();
-        assertThrows(SerializationException.class, () -> rawPlainValue(invalid));
-    }
-
     @ParameterizedTest
     @ValueSource(strings = { VALUE_STR, "" })
     public void testRawTimestampedValue(final String valueStr) {
@@ -118,12 +112,6 @@ public class UtilsTest {
         final byte[] resValue = new byte[buf.remaining()];
         buf.get(resValue);
         assertArrayEquals(VALUE, resValue);
-    }
-
-    @Test
-    public void testRawTimestampedValueWithEmptyHeadersAndInvalidTimestamp() {
-        final byte[] invalid = timestampedValueWithEmptyHeadersInvalidTimestamp();
-        assertThrows(SerializationException.class, () -> rawTimestampedValue(invalid));
     }
 
     @ParameterizedTest
@@ -154,13 +142,6 @@ public class UtilsTest {
             assertEquals(TIMESTAMP, output.timestamp());
             assertEquals(VALUE_STR, output.value());
         }
-    }
-
-    @Test
-    public void testEmptyHeadersAndTimestampMinLength() {
-        final byte[] less = new byte[MIN_SIZE - 1];
-        less[0] = (byte) 0x00; // header size
-        assertThrows(SerializationException.class, () -> hasEmptyHeaders(less));
     }
 
     @Test
