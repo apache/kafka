@@ -1824,7 +1824,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * Get the current subscription.  or an empty set if no such call has
+     * Get the current subscription, or an empty set if no such call has
      * been made.
      * @return The set of topics currently subscribed to
      */
