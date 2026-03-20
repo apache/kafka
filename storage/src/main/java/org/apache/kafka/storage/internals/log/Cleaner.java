@@ -210,10 +210,9 @@ public class Cleaner {
     /**
      * Clean a group of segments into one or more replacement segments.
      *
-     * <p>If cleaning would cause the destination segment's size or offset range to exceed Integer.MAX_VALUE
+     * <p>If cleaning would cause the destination segment's size or offset range to exceed the configured limit
      * (e.g. due to recompression or combining multiple source segments), the current cleaned segment is
-     * finalized and a new one is started. This avoids the {@link org.apache.kafka.storage.internals.log.LogSegmentOffsetOverflowException}
-     * that would otherwise be thrown by {@link LogSegment#append}.
+     * finalized and a new one is started.
      *
      * @param log The log being cleaned
      * @param segments The group of segments being cleaned
@@ -265,11 +264,9 @@ public class Cleaner {
 
                 // Start cleaning from position 0
                 int position = 0;
-                boolean cleaningComplete = false;
 
-                while (!cleaningComplete) {
-                    try {
-                        cleanInto(
+                while (true) {
+                    Optional<Integer> overflowOpt = cleanInto(
                             log.topicPartition(),
                             currentSegment.log(),
                             currentCleaned,
@@ -283,16 +280,12 @@ public class Cleaner {
                             upperBoundOffsetOfCleaningRound,
                             stats,
                             currentTime
-                        );
+                    );
 
-                        // If cleanInto completes without exception, we're done with this segment
-                        cleaningComplete = true;
-
-                    } catch (SegmentSizeOverflowException e) {
+                    if (overflowOpt.isPresent()) {
                         // Overflow detected - complete current segment and create new one
                         logger.info("Completing cleaned segment {} due to overflow, creating new segment", currentCleaned.baseOffset());
 
-                        // Complete current cleaned segment
                         currentCleaned.onBecomeInactiveSegment();
                         currentCleaned.flush();
                         currentCleaned.setLastModified(currentSegment.lastModified());
@@ -301,14 +294,16 @@ public class Cleaner {
                         // Use the base offset of the next batch to be cleaned as the new segment's base offset.
                         // We cannot use currentCleaned.readNextOffset() because compaction may leave holes
                         // in the offset sequence, so the next batch's base offset could be much larger.
-                        Iterator<FileChannelRecordBatch> nextBatches = currentSegment.log().batchesFrom(e.position()).iterator();
+                        int overflowPosition = overflowOpt.get();
+                        Iterator<FileChannelRecordBatch> nextBatches = currentSegment.log().batchesFrom(overflowPosition).iterator();
                         long nextBaseOffset = nextBatches.hasNext() ? nextBatches.next().baseOffset() : currentCleaned.readNextOffset();
                         currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), nextBaseOffset);
                         transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
 
                         logger.info("Created new cleaned segment with base offset {} for partition {}", nextBaseOffset, log.topicPartition());
-                        // Resume cleaning from the position where overflow occurred
-                        position = e.position();
+                        position = overflowPosition;
+                    } else {
+                        break;
                     }
                 }
 
@@ -364,10 +359,10 @@ public class Cleaner {
      * @param stats Collector for cleaning statistics
      * @param currentTime The time at which the clean was initiated
      *
-     * @throws SegmentSizeOverflowException if the destination segment would overflow,
-     *         contains the position where overflow was detected
+     * @return {@code Optional.of(position)} if the destination segment would overflow (position is where overflow
+     *         was detected in the source), or {@code Optional.empty()} if cleaning completed normally
      */
-    private void cleanInto(TopicPartition topicPartition,
+    private Optional<Integer> cleanInto(TopicPartition topicPartition,
                            FileRecords sourceRecords,
                            LogSegment dest,
                            int startPosition,
@@ -473,7 +468,7 @@ public class Cleaner {
                 boolean sizeOverflow = retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
                 boolean offsetOverflow = result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
                 if (sizeOverflow || offsetOverflow) {
-                    throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
+                    return Optional.of(position - result.bytesRead());
                 }
 
                 // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
@@ -488,6 +483,7 @@ public class Cleaner {
                 growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records);
         }
         restoreBuffers();
+        return Optional.empty();
     }
 
 

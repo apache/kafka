@@ -1636,7 +1636,7 @@ class LogCleanerTest extends Logging {
   def testCleanedSegmentSizeOverflow(): Unit = {
     // Put one record per source segment so each filterTo() call reads exactly one batch.
     // After cleaning source segment 0 into currentCleaned, cleaning source segment 1 would push
-    // currentCleaned over maxCleanedSegmentSize, triggering SegmentSizeOverflowException and
+    // currentCleaned over maxCleanedSegmentSize, triggering overflow and
     // rolling to a second cleaned segment.
     val logProps = new Properties()
     logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096: java.lang.Integer)
@@ -1675,7 +1675,7 @@ class LogCleanerTest extends Logging {
     // Put one record per source segment so each filterTo() call reads exactly one batch.
     // After cleaning source segment 0 into currentCleaned (offset 0), cleaning source segment 1
     // would push the offset range of currentCleaned over maxCleanedOffsetRange, triggering
-    // SegmentSizeOverflowException and rolling to a second cleaned segment.
+    // overflow and rolling to a second cleaned segment.
     val logProps = new Properties()
     logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
