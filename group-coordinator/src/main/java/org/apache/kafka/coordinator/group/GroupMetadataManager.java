@@ -2729,9 +2729,15 @@ public class GroupMetadataManager {
             member,
             updatedMember,
             records
-        ) || initializedAssignmentPending(group);
+        );
 
         int groupEpoch = group.groupEpoch();
+        if (group.assignmentEpoch() >= groupEpoch) {
+            // A new assignment is needed if no assignment is pending and there are unassigned
+            // initialized partitions.
+            bumpGroupEpoch |= initializedAssignmentPending(group);
+        }
+
         Map<String, SubscriptionCount> subscribedTopicNamesMap = group.subscribedTopicNames();
         SubscriptionType subscriptionType = group.subscriptionType();
 
@@ -3788,6 +3794,39 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Checks whether the next target assignment can be computed right now.
+     *
+     * @param assignmentTimestampMs The time at which the last target assignment calculation finished,
+     *                              or 0 if there is no previous assignment.
+     * @param assignmentIntervalMs  The interval between assignment updates
+     * @param currentTimeMs         The current time in milliseconds.
+     * @return {@code true} if the next target assignment can be computed right now, {@code false} otherwise.
+     */
+    // package private for testing
+    static boolean canComputeNextTargetAssignment(
+        long assignmentTimestampMs,
+        int assignmentIntervalMs,
+        long currentTimeMs
+    ) {
+        // The next target assignment can be computed immediately
+        //  * when there is no existing target assignment,
+        //  * or we do not know when the existing target assignment was computed.
+        if (assignmentTimestampMs == 0) {
+            return true;
+        }
+
+        // The next target assignment can be computed immediately when the assignment interval is
+        // zero. This provides an escape hatch if the wall clock undergoes a large backwards
+        // correction.
+        if (assignmentIntervalMs == 0) {
+            return true;
+        }
+
+        // Otherwise, we wait for the assignment interval to elapse.
+        return currentTimeMs >= assignmentTimestampMs + assignmentIntervalMs;
+    }
+
+    /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
      * @param group            The ConsumerGroup.
@@ -3808,6 +3847,15 @@ public class GroupMetadataManager {
     ) {
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
+            return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+        }
+
+        boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
+            group.assignmentTimestamp(),
+            consumerGroupAssignmentIntervalMs(group.groupId()),
+            time.milliseconds()
+        );
+        if (!canComputeNextTargetAssignment) {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
@@ -3883,6 +3931,15 @@ public class GroupMetadataManager {
     ) {
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
+            return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+        }
+
+        boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
+            group.assignmentTimestamp(),
+            shareGroupAssignmentIntervalMs(group.groupId()),
+            time.milliseconds()
+        );
+        if (!canComputeNextTargetAssignment) {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
@@ -3968,6 +4025,21 @@ public class GroupMetadataManager {
 
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
+            return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+        }
+
+        boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
+            group.assignmentTimestamp(),
+            streamsGroupAssignmentIntervalMs(group.groupId()),
+            time.milliseconds()
+        );
+        if (!canComputeNextTargetAssignment) {
+            returnedStatus.ifPresent(statusList -> statusList.add(
+                new Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment delayed due to the configured assignment interval.")
+            ));
+
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
@@ -8704,7 +8776,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     int consumerGroupAssignmentIntervalMs(String groupId) {
-        return config.consumerGroupAssignmentIntervalMs();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::consumerAssignmentIntervalMs)
+            .orElse(config.consumerGroupAssignmentIntervalMs());
     }
 
     /**
@@ -8712,7 +8786,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     boolean consumerGroupAssignorOffloadEnable(String groupId) {
-        return config.consumerGroupAssignorOffloadEnable();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::consumerAssignorOffloadEnable)
+            .orElse(config.consumerGroupAssignorOffloadEnable());
     }
 
     /**
@@ -8738,7 +8814,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     int shareGroupAssignmentIntervalMs(String groupId) {
-        return config.shareGroupAssignmentIntervalMs();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::shareAssignmentIntervalMs)
+            .orElse(config.shareGroupAssignmentIntervalMs());
     }
 
     /**
@@ -8746,7 +8824,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     boolean shareGroupAssignorOffloadEnable(String groupId) {
-        return config.shareGroupAssignorOffloadEnable();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::shareAssignorOffloadEnable)
+            .orElse(config.shareGroupAssignorOffloadEnable());
     }
 
     /**
@@ -8772,7 +8852,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     int streamsGroupAssignmentIntervalMs(String groupId) {
-        return config.streamsGroupAssignmentIntervalMs();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsAssignmentIntervalMs)
+            .orElse(config.streamsGroupAssignmentIntervalMs());
     }
 
     /**
@@ -8780,7 +8862,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     boolean streamsGroupAssignorOffloadEnable(String groupId) {
-        return config.streamsGroupAssignorOffloadEnable();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsAssignorOffloadEnable)
+            .orElse(config.streamsGroupAssignorOffloadEnable());
     }
 
     /**

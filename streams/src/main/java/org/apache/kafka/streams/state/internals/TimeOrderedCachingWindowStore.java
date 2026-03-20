@@ -91,7 +91,7 @@ public class TimeOrderedCachingWindowStore
     }
 
     private void enforceWrappedStore(final WindowStore<Bytes, byte[]> underlying) {
-        final RocksDBTimeOrderedWindowStore timeOrderedWindowStore = getWrappedStore(underlying);
+        final RocksDBTimeOrderedWindowStore<?> timeOrderedWindowStore = getWrappedStore(underlying);
         if (timeOrderedWindowStore == null) {
             throw new IllegalArgumentException("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store");
         }
@@ -100,9 +100,9 @@ public class TimeOrderedCachingWindowStore
     }
 
     @SuppressWarnings("unchecked")
-    private RocksDBTimeOrderedWindowStore getWrappedStore(final StateStore wrapped) {
+    private RocksDBTimeOrderedWindowStore<?> getWrappedStore(final StateStore wrapped) {
         if (wrapped instanceof RocksDBTimeOrderedWindowStore) {
-            return (RocksDBTimeOrderedWindowStore) wrapped;
+            return (RocksDBTimeOrderedWindowStore<?>) wrapped;
         }
         if (wrapped instanceof WrappedStateStore) {
             return getWrappedStore(((WrappedStateStore<?, Bytes, byte[]>) wrapped).wrapped());

@@ -30,6 +30,20 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull
 
 import scala.jdk.CollectionConverters._
 
+object StreamsGroupHeartbeatRequestTest {
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    )
+  )
+  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends StreamsGroupHeartbeatRequestTest(cluster) {
+  }
+}
+
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
@@ -189,7 +203,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           warmupTasks = List.empty,
           topology = topology
         )
-        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse.memberEpoch > 2
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Active task assignment should be available
@@ -285,7 +300,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .getOrElse(List.empty),
           topology = topology
         )
-        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.memberEpoch > streamsGroupHeartbeatResponse1.memberEpoch()
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify second member gets assigned
@@ -679,6 +695,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           processId = "process-2"
         )
         streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.memberEpoch > streamsGroupHeartbeatResponse1.memberEpoch() &&
           streamsGroupHeartbeatResponse2.activeTasks() != null
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
