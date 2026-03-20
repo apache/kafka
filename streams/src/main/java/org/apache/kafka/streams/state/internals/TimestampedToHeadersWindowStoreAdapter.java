@@ -58,7 +58,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * </ul>
  */
 public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
-    private final WindowStore<Bytes, byte[]> store;
+    final WindowStore<Bytes, byte[]> store;
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
