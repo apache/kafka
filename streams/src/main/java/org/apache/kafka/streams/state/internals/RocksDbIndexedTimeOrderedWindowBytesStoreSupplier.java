@@ -117,7 +117,7 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
     public WindowStore<Bytes, byte[]> get() {
         switch (windowStoreType) {
             case DEFAULT_WINDOW_STORE:
-                return new RocksDBTimeOrderedWindowStore(
+                return new RocksDBTimeOrderedWindowStore<>(
                     new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         name,
                         retentionPeriod,
@@ -126,7 +126,7 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
                     retainDuplicates,
                     windowSize);
             case INDEXED_WINDOW_STORE:
-                return new RocksDBTimeOrderedWindowStore(
+                return new RocksDBTimeOrderedWindowStore<>(
                     new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         name,
                         retentionPeriod,

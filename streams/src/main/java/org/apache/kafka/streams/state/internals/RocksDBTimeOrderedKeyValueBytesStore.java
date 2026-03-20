@@ -19,15 +19,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 
-import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,8 +32,6 @@ import java.util.Optional;
  */
 public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment> {
 
-    private long minTimestamp;
-
     RocksDBTimeOrderedKeyValueBytesStore(final String name,
                                          final String metricsScope) {
         super(name,
@@ -45,7 +39,6 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
             new TimeFirstWindowKeySchema(),
             Optional.empty(),
             new KeyValueSegments(name, metricsScope, Long.MAX_VALUE, Long.MAX_VALUE));
-        minTimestamp = Long.MAX_VALUE;
     }
 
     @Override
@@ -55,31 +48,12 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
 
     @Override
     Map<KeyValueSegment, WriteBatch> getWriteBatches(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
-            observedStreamTime = Math.max(observedStreamTime, timestamp);
-            minTimestamp = Math.min(minTimestamp, timestamp);
-            final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
-            if (segment != null) {
-                //null segment is if it has expired, so  we don't want those records
-                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                    record,
-                    consistencyEnabled,
-                    position
-                );
-                try {
-                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
-
-                    final byte[] baseKey = TimeFirstWindowKeySchema.fromNonPrefixWindowKey(record.key());
-                    segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
-                } catch (final RocksDBException e) {
-                    throw new ProcessorStateException("Error restoring batch to store " + name(), e);
-                }
-            }
-        }
-        return writeBatchMap;
+        return getWriteBatches(
+            records,
+            WindowKeySchema::extractStoreTimestamp,
+            null, // never an indexed store -- not needed
+            TimeFirstWindowKeySchema::fromNonPrefixWindowKey
+        );
     }
 
     @Override
@@ -87,7 +61,4 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
         throw new UnsupportedOperationException("Do not use for TimeOrderedKeyValueStore");
     }
 
-    protected long minTimestamp() {
-        return minTimestamp;
-    }
 }

@@ -8776,7 +8776,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     int consumerGroupAssignmentIntervalMs(String groupId) {
-        return config.consumerGroupAssignmentIntervalMs();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::consumerAssignmentIntervalMs)
+            .orElse(config.consumerGroupAssignmentIntervalMs());
     }
 
     /**
@@ -8784,7 +8786,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     boolean consumerGroupAssignorOffloadEnable(String groupId) {
-        return config.consumerGroupAssignorOffloadEnable();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::consumerAssignorOffloadEnable)
+            .orElse(config.consumerGroupAssignorOffloadEnable());
     }
 
     /**
@@ -8810,7 +8814,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     int shareGroupAssignmentIntervalMs(String groupId) {
-        return config.shareGroupAssignmentIntervalMs();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::shareAssignmentIntervalMs)
+            .orElse(config.shareGroupAssignmentIntervalMs());
     }
 
     /**
@@ -8818,7 +8824,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     boolean shareGroupAssignorOffloadEnable(String groupId) {
-        return config.shareGroupAssignorOffloadEnable();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::shareAssignorOffloadEnable)
+            .orElse(config.shareGroupAssignorOffloadEnable());
     }
 
     /**
@@ -8844,7 +8852,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     int streamsGroupAssignmentIntervalMs(String groupId) {
-        return config.streamsGroupAssignmentIntervalMs();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsAssignmentIntervalMs)
+            .orElse(config.streamsGroupAssignmentIntervalMs());
     }
 
     /**
@@ -8852,7 +8862,9 @@ public class GroupMetadataManager {
      */
     // package private for testing
     boolean streamsGroupAssignorOffloadEnable(String groupId) {
-        return config.streamsGroupAssignorOffloadEnable();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsAssignorOffloadEnable)
+            .orElse(config.streamsGroupAssignorOffloadEnable());
     }
 
     /**

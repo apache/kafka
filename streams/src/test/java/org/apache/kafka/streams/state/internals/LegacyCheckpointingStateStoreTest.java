@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -649,6 +650,87 @@ public class LegacyCheckpointingStateStoreTest {
         assertThrows(ProcessorStateException.class, () ->
             LegacyCheckpointingStateStore.migrateLegacyOffsets(
                 LOG_PREFIX, stateDirectory, taskId, Collections.singletonMap(partition, throwingStore)));
+    }
+
+    // =====================================================================
+    // maybeDowngradeOffsets()
+    // =====================================================================
+
+    @Test
+    public void shouldWriteDowngradeCheckpointWhenUpgradeFromIsPre43() throws IOException {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(partition, 100L);
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, UpgradeFromValues.UPGRADE_FROM_42, stateDirectory, taskId, offsets);
+
+        final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+        assertTrue(legacyFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        assertEquals(100L, written.get(partition));
+    }
+
+    @Test
+    public void shouldBeNoOpWhenUpgradeFromIsNull() {
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, null, stateDirectory, taskId, Collections.singletonMap(partition, 100L));
+
+        final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+        assertFalse(legacyFile.exists());
+    }
+
+    @Test
+    public void shouldWriteNullOffsetsAsOffsetUnknownInDowngradeCheckpoint() throws IOException {
+        final TopicPartition otherPartition = new TopicPartition("other-topic", 0);
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(partition, 100L);
+        offsets.put(otherPartition, null);
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, UpgradeFromValues.UPGRADE_FROM_42, stateDirectory, taskId, offsets);
+
+        final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        assertEquals(2, written.size());
+        assertEquals(100L, written.get(partition));
+        assertEquals(OffsetCheckpoint.OFFSET_UNKNOWN, written.get(otherPartition));
+    }
+
+    @Test
+    public void shouldWriteDowngradeCheckpointForGlobalStore() throws IOException {
+        // ensure global state dir exists
+        stateDirectory.globalStateDir().mkdirs();
+
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(partition, 200L);
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, UpgradeFromValues.UPGRADE_FROM_40, stateDirectory, null, offsets);
+
+        final File legacyGlobalFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, null, null);
+        assertTrue(legacyGlobalFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyGlobalFile).read();
+        assertEquals(200L, written.get(partition));
+    }
+
+    @Test
+    public void shouldWriteDowngradeCheckpointForAllPre43Versions() throws IOException {
+        for (final UpgradeFromValues version : UpgradeFromValues.values()) {
+            // clean up any existing checkpoint from previous iteration
+            final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+            if (legacyFile.exists()) {
+                legacyFile.delete();
+            }
+
+            LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+                LOG_PREFIX, version, stateDirectory, taskId, Collections.singletonMap(partition, 100L));
+
+            if (version.ordinal() <= UpgradeFromValues.UPGRADE_FROM_42.ordinal()) {
+                assertTrue(legacyFile.exists(),
+                    "Expected downgrade checkpoint for " + version);
+            } else {
+                assertFalse(legacyFile.exists(),
+                    "Expected no downgrade checkpoint for " + version);
+            }
+        }
     }
 
     // =====================================================================
