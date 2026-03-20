@@ -110,7 +110,7 @@ public class StateManagerUtilTest {
             topology, stateManager, stateDirectory, processorContext);
 
         inOrder.verify(stateManager).registerStateStores(stateStores, processorContext);
-        inOrder.verify(stateManager).initializeStoreOffsetsFromCheckpoint(true);
+        inOrder.verify(stateManager).initializeStoreOffsets(true);
         verifyNoMoreInteractions(stateManager);
     }
 

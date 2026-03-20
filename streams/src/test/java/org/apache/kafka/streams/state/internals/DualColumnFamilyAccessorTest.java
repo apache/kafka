@@ -22,9 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.state.internals.RocksDBStore.DBAccessor;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -57,7 +55,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class DualColumnFamilyAccessorTest {
+public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTest {
 
     @Mock
     private ColumnFamilyHandle oldCF;
@@ -65,19 +63,15 @@ public class DualColumnFamilyAccessorTest {
     @Mock
     private ColumnFamilyHandle newCF;
 
-    @Mock
-    private DBAccessor dbAccessor;
-
     private Function<byte[], byte[]> valueConverter;
-    private DualColumnFamilyAccessor accessor;
 
     private static final String STORE_NAME = "test-store";
     private static final byte[] KEY = "key".getBytes();
     private static final byte[] OLD_VALUE = "old-value".getBytes();
     private static final byte[] NEW_VALUE = "new-value".getBytes();
 
-    @BeforeEach
-    public void setUp() {
+    @Override
+    AbstractColumnFamilyAccessor createColumnFamilyAccessor() {
         // Create a real Position object
         final Position position = Position.emptyPosition();
 
@@ -95,8 +89,9 @@ public class DualColumnFamilyAccessorTest {
             return ByteBuffer.allocate(oldValue.length + 10).put("converted:".getBytes()).put(oldValue).array();
         };
 
-        accessor = new DualColumnFamilyAccessor(oldCF, newCF, valueConverter, store);
+        return new DualColumnFamilyAccessor(offsetsCF, oldCF, newCF, valueConverter, store, storeOpen);
     }
+
 
     @Test
     public void shouldPutValueToNewColumnFamilyAndDeleteFromOld() throws RocksDBException {
@@ -353,7 +348,7 @@ public class DualColumnFamilyAccessorTest {
 
         accessor.commit(dbAccessor, offsets);
 
-        verify(dbAccessor).flush(oldCF, newCF);
+        verify(dbAccessor).flush(oldCF, newCF, offsetsCF);
     }
 
     @Test
@@ -418,8 +413,8 @@ public class DualColumnFamilyAccessorTest {
     }
 
     @Test
-    public void shouldCloseBothColumnFamilies() {
-        accessor.close();
+    public void shouldCloseBothColumnFamilies() throws RocksDBException {
+        accessor.close(dbAccessor);
 
         verify(oldCF).close();
         verify(newCF).close();

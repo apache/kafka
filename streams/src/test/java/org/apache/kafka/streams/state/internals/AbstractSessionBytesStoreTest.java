@@ -150,28 +150,14 @@ public abstract class AbstractSessionBytesStoreTest {
             }
             case RocksDBTimeOrderedSessionStoreWithHeadersWithIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true) {
-                            @Override
-                            public SessionStore<Bytes, byte[]> get() {
-                                return new RocksDBTimeOrderedSessionStoreWithHeaders(
-                                    new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(), true));
-                            }
-                        },
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true, true),
                         keySerde,
                         valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithHeadersWithoutIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false) {
-                            @Override
-                            public SessionStore<Bytes, byte[]> get() {
-                                return new RocksDBTimeOrderedSessionStoreWithHeaders(
-                                    new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(), false));
-                            }
-                        },
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false, true),
                         keySerde,
                         valueSerde
                 ).build();

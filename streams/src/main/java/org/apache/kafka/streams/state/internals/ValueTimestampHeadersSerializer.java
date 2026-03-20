@@ -16,18 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -51,18 +47,15 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  */
 class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
     public final Serializer<V> valueSerializer;
-    private final LongSerializer timestampSerializer;
 
     ValueTimestampHeadersSerializer(final Serializer<V> valueSerializer) {
         Objects.requireNonNull(valueSerializer);
         this.valueSerializer = valueSerializer;
-        this.timestampSerializer = new LongSerializer();
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         valueSerializer.configure(configs, isKey);
-        timestampSerializer.configure(configs, isKey);
     }
 
     @Override
@@ -89,30 +82,24 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
             return null;
         }
 
-        final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + 8 + rawValue.length;
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
 
-            ByteUtils.writeVarint(rawHeaders.length, out);  // headersSize (it may be 0 due to null/empty headers)
-            out.write(rawHeaders);                          // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-            out.write(rawTimestamp);                        // [timestamp(8)]
-            out.write(rawValue);                            // [value]
-
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to serialize ValueTimestampHeaders", e);
-        }
+        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
+            .putLong(timestamp)
+            .put(rawValue)
+            .array();
     }
 
     @Override
     public void close() {
         valueSerializer.close();
-        timestampSerializer.close();
     }
 
     @Override

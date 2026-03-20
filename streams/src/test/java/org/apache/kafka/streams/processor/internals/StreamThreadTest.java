@@ -3576,6 +3576,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             UUID.randomUUID(),
             Optional.empty(),
+            Optional.empty(),
             Map.of(),
             Map.of()
         );
@@ -3634,6 +3635,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -3704,6 +3706,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
                 Optional.empty(),
+                Optional.empty(),
                 Map.of(),
                 Map.of()
         );
@@ -3765,6 +3768,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             UUID.randomUUID(),
             Optional.empty(),
+            Optional.empty(),
             Map.of(),
             Map.of()
         );
@@ -3823,6 +3827,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -3892,6 +3897,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()

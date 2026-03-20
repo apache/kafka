@@ -85,12 +85,16 @@ import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogSegment;
+import org.apache.kafka.storage.internals.log.ProducerStateEntry;
+import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
+import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -99,6 +103,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
@@ -117,10 +122,12 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.tools.ToolsTestUtils.captureStandardErr;
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -328,6 +335,25 @@ public class DumpLogSegmentsTest {
         assertEquals(Collections.emptyMap(), errors.misMatchesForTimeIndexFilesMap);
         assertEquals(Collections.emptyMap(), errors.outOfOrderTimestamp);
         assertEquals(Collections.emptyMap(), errors.shallowOffsetNotFound);
+    }
+
+    @Test
+    public void testIndexSanityCheck() throws Exception {
+        log = createTestLog();
+        addSimpleRecords(log, new ArrayList<>());
+
+        String output = runDumpLogSegments(new String[] {"--index-sanity-check", "--files", indexFilePath});
+        assertTrue(output.contains("passed sanity check"), output);
+    }
+
+    @Test
+    public void testTimeIndexVerifyOnly() throws Exception {
+        log = createTestLog();
+        addSimpleRecords(log, new ArrayList<>());
+
+        String errOutput = captureStandardErr(
+            () -> runDumpLogSegments(new String[] {"--verify-index-only", "--files", indexFilePath}));
+        assertTrue(errOutput.isEmpty(), errOutput);
     }
 
     private int countSubstring(String str, String sub) {
@@ -1454,5 +1480,147 @@ public class DumpLogSegmentsTest {
         assertEquals(openBraces, closeBraces,
             "Output should have balanced braces (no unmatched closing brace). " +
             "Found " + openBraces + " '{' and " + closeBraces + " '}'");
+    }
+
+    @Test
+    public void testDumpTxnIndex() throws Exception {
+        File txnIndexFile = new File(logDir, segmentName + ".txnindex");
+        try (TransactionIndex index = new TransactionIndex(0L, txnIndexFile)) {
+            index.append(new AbortedTxn(1L, 0, 10, 11));
+            index.append(new AbortedTxn(2L, 15, 25, 26));
+            index.flush();
+        }
+
+        String output = runDumpLogSegments(new String[]{"--files", txnIndexFile.getAbsolutePath()});
+        assertTrue(output.contains("version: 0 producerId: 1 firstOffset: 0 lastOffset: 10 lastStableOffset: 11"), output);
+        assertTrue(output.contains("version: 0 producerId: 2 firstOffset: 15 lastOffset: 25 lastStableOffset: 26"), output);
+    }
+
+    @Test
+    public void testDumpProducerIdSnapshot() throws Exception {
+        File snapshotFile = new File(logDir, segmentName + ".snapshot");
+        Map<Long, ProducerStateEntry> entries = new HashMap<>();
+        entries.put(1L, new ProducerStateEntry(1L, (short) 5, 10, 12345L, OptionalLong.of(100L)));
+        entries.put(2L, new ProducerStateEntry(2L, (short) 3, 7, 67890L, OptionalLong.empty()));
+        ProducerStateManager.writeSnapshot(snapshotFile, entries, true);
+
+        String output = runDumpLogSegments(new String[]{"--files", snapshotFile.getAbsolutePath()});
+        assertTrue(output.contains("producerId: 1"), output);
+        assertTrue(output.contains("producerEpoch: 5"), output);
+        assertTrue(output.contains("coordinatorEpoch: 10"), output);
+        assertTrue(output.contains("lastTimestamp: 12345"), output);
+        assertTrue(output.contains("currentTxnFirstOffset: OptionalLong[100]"), output);
+        assertTrue(output.contains("producerId: 2"), output);
+        assertTrue(output.contains("producerEpoch: 3"), output);
+        assertTrue(output.contains("coordinatorEpoch: 7"), output);
+        assertTrue(output.contains("lastTimestamp: 67890"), output);
+        assertTrue(output.contains("currentTxnFirstOffset: OptionalLong.empty"), output);
+    }
+
+    @Test
+    public void testDumpProducerIdSnapshotWithBatchMetadata() throws Exception {
+        log = createTestLog();
+        log.appendAsLeader(MemoryRecords.withIdempotentRecords(Compression.NONE, 42L, (short) 1, 0,
+            new SimpleRecord("a".getBytes()),
+            new SimpleRecord("b".getBytes())
+        ), 0);
+        log.roll();
+
+        // Find the snapshot file in the log directory
+        File[] snapshotFiles = logDir.listFiles((dir, name) -> name.endsWith(".snapshot"));
+        assertTrue(snapshotFiles != null && snapshotFiles.length > 0, "Expected at least one snapshot file");
+
+        String output = runDumpLogSegments(new String[]{"--files", snapshotFiles[0].getAbsolutePath()});
+        assertTrue(output.contains("producerId: 42"), output);
+        assertTrue(output.contains("producerEpoch: 1"), output);
+        assertTrue(output.contains("coordinatorEpoch: -1"), output);
+        assertTrue(output.contains("currentTxnFirstOffset: OptionalLong.empty"), output);
+        assertTrue(output.contains("lastTimestamp: -1"), output);
+        assertTrue(output.contains("firstSequence: 0"), output);
+        assertTrue(output.contains("lastSequence: 1"), output);
+        assertTrue(output.contains("lastOffset: 1"), output);
+        assertTrue(output.contains("offsetDelta: 1"), output);
+        assertTrue(output.contains("timestamp: -1"), output);
+    }
+
+    @Test
+    public void testDumpProducerIdSnapshotCorrupt() throws Exception {
+        File snapshotFile = new File(logDir, segmentName + ".snapshot");
+        Files.write(snapshotFile.toPath(), new byte[]{0, 1, 2, 3, 4, 5});
+
+        String errOutput = captureStandardErr(() -> {
+            try {
+                DumpLogSegments.main(new String[]{"--files", snapshotFile.getAbsolutePath()});
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        assertFalse(errOutput.isEmpty(), "Expected error output for corrupt snapshot");
+    }
+
+    @Test
+    public void testTimeIndexDumpErrorsPrintErrors() {
+        DumpLogSegments.TimeIndexDumpErrors errors = new DumpLogSegments.TimeIndexDumpErrors();
+        File fakeFile = new File("/tmp/fake.timeindex");
+
+        errors.recordMismatchTimeIndex(fakeFile, 100L, 200L);
+        errors.recordOutOfOrderIndexTimestamp(fakeFile, 50L, 100L);
+        errors.recordShallowOffsetNotFound(fakeFile, 10L, -1L);
+
+        String errOutput = captureStandardErr(errors::printErrors);
+        assertTrue(errOutput.contains("Found timestamp mismatch in"), errOutput);
+        assertTrue(errOutput.contains("Index timestamp: 100, log timestamp: 200"), errOutput);
+        assertTrue(errOutput.contains("Found out of order timestamp in"), errOutput);
+        assertTrue(errOutput.contains("Index timestamp: 50, Previously indexed timestamp: 100"), errOutput);
+        assertTrue(errOutput.contains("The following indexed offsets are not found in"), errOutput);
+        assertTrue(errOutput.contains("Indexed offset: 10, found log offset: -1"), errOutput);
+    }
+
+    @Test
+    public void testPrintTrailingBytes() throws Exception {
+        log = createTestLog();
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
+            new SimpleRecord("a".getBytes())), 0);
+        log.flush(false);
+        Utils.closeQuietly(log, "UnifiedLog");
+        log = null;
+
+        // Append trailing garbage bytes to the log file
+        try (FileOutputStream fos = new FileOutputStream(logFilePath, true)) {
+            fos.write(new byte[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+        }
+
+        String output = runDumpLogSegments(new String[]{"--files", logFilePath});
+        assertTrue(output.contains("Found 10 invalid bytes at the end of"), output);
+    }
+
+    @Test
+    public void testInvalidDecoderClass() {
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+            () -> runDumpLogSegments(new String[]{
+                "--value-decoder-class", "org.apache.kafka.tools.api.NonExistentDecoder",
+                "--files", logFilePath
+            }));
+        assertTrue(thrown.getMessage().contains("Failed to load decoder class"), thrown.getMessage());
+    }
+
+    @Test
+    public void testDumpUnknownFileSuffix() throws Exception {
+        File unknownFile = new File(logDir, "testfile.xyz");
+        Files.write(unknownFile.toPath(), new byte[0]);
+
+        String errOutput = captureStandardErr(
+            () -> runDumpLogSegments(new String[]{"--files", unknownFile.getAbsolutePath()}));
+        assertTrue(errOutput.contains("Ignoring unknown file"), errOutput);
+    }
+
+    @Test
+    public void testDumpFileWithNoDotInName() throws Exception {
+        File noDotFile = new File(logDir, "nodotfile");
+        Files.write(noDotFile.toPath(), new byte[0]);
+
+        String errOutput = captureStandardErr(
+            () -> runDumpLogSegments(new String[]{"--files", noDotFile.getAbsolutePath()}));
+        assertTrue(errOutput.contains("Ignoring unknown file"), errOutput);
     }
 }

@@ -43,8 +43,8 @@ import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
@@ -52,7 +52,7 @@ import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
-import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
@@ -96,7 +96,6 @@ public class KStreamKStreamJoinTest {
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-
     private final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(50), Duration.ofMillis(50));
     private final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
@@ -454,7 +453,7 @@ public class KStreamKStreamJoinTest {
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
-        final WindowStoreBuilder<String, String> otherStoreBuilder = new WindowStoreBuilder<>(
+        final TimestampedWindowStoreWithHeadersBuilder<String, String> otherStoreBuilder = new TimestampedWindowStoreWithHeadersBuilder<>(
             new InMemoryWindowBytesStoreSupplier(
                 "other",
                 1000L,
@@ -479,7 +478,7 @@ public class KStreamKStreamJoinTest {
 
         final Processor<String, String, String, String> joinProcessor = join.get();
         final MockInternalProcessorContext<String, String> procCtx = new MockInternalProcessorContext<>();
-        final WindowStore<String, String> otherStore = otherStoreBuilder.build();
+        final TimestampedWindowStoreWithHeaders<String, String> otherStore = otherStoreBuilder.build();
 
         final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore =
             Mockito.spy(outerStoreBuilder.build());

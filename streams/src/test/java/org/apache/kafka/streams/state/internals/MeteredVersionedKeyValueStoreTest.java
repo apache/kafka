@@ -168,6 +168,7 @@ public class MeteredVersionedKeyValueStoreTest {
         when(keySerde.serializer()).thenReturn(keySerializer);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        when(context.headers()).thenReturn(new RecordHeaders());
 
         store.close();
         store = new MeteredVersionedKeyValueStore<>(

@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -33,11 +36,17 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
+import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.time.Duration;
@@ -493,64 +502,127 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
      * @return a {@link StateStoreContext} that delegates to this ProcessorContext.
      */
     public StateStoreContext getStateStoreContext() {
-        return new StateStoreContext() {
-            @Override
-            public String applicationId() {
-                return MockProcessorContext.this.applicationId();
-            }
+        return new MockContext();
+    }
 
-            @Override
-            public TaskId taskId() {
-                return MockProcessorContext.this.taskId();
-            }
+    @SuppressWarnings("unchecked")
+    private final class MockContext extends AbstractProcessorContext<Object, Object> implements StateStoreContext {
+        public MockContext() {
+            super(
+                new TaskId(0, 0),
+                new StreamsConfig(MockProcessorContext.this.appConfigs()),
+                (StreamsMetricsImpl) MockProcessorContext.this.metrics(),
+                new ThreadCache(new LogContext(), 0, (StreamsMetricsImpl) MockProcessorContext.this.metrics()));
+        }
+        @Override
+        public String applicationId() {
+            return MockProcessorContext.this.applicationId();
+        }
 
-            @Override
-            public Optional<RecordMetadata> recordMetadata() {
-                return MockProcessorContext.this.recordMetadata();
-            }
+        @Override
+        public TaskId taskId() {
+            return MockProcessorContext.this.taskId();
+        }
 
-            @Override
-            public Serde<?> keySerde() {
-                return MockProcessorContext.this.keySerde();
-            }
+        @Override
+        public Optional<RecordMetadata> recordMetadata() {
+            return MockProcessorContext.this.recordMetadata();
+        }
 
-            @Override
-            public Serde<?> valueSerde() {
-                return MockProcessorContext.this.valueSerde();
-            }
+        @Override
+        public Serde<?> keySerde() {
+            return MockProcessorContext.this.keySerde();
+        }
 
-            @Override
-            public File stateDir() {
-                return MockProcessorContext.this.stateDir();
-            }
+        @Override
+        public Serde<?> valueSerde() {
+            return MockProcessorContext.this.valueSerde();
+        }
 
-            @Override
-            public StreamsMetrics metrics() {
-                return MockProcessorContext.this.metrics();
-            }
+        @Override
+        public File stateDir() {
+            return MockProcessorContext.this.stateDir();
+        }
 
-            @Override
-            public void register(final StateStore store,
-                                 final StateRestoreCallback stateRestoreCallback) {
-                register(store, stateRestoreCallback, () -> { });
-            }
+        @Override
+        public StreamsMetricsImpl metrics() {
+            return (StreamsMetricsImpl) MockProcessorContext.this.metrics();
+        }
 
-            @Override
-            public void register(final StateStore store,
-                                 final StateRestoreCallback stateRestoreCallback,
-                                 final CommitCallback checkpoint) {
-                stateStores.put(store.name(), store);
-            }
+        @Override
+        public void register(final StateStore store,
+                             final StateRestoreCallback stateRestoreCallback) {
+            register(store, stateRestoreCallback, () -> { });
+        }
 
-            @Override
-            public Map<String, Object> appConfigs() {
-                return MockProcessorContext.this.appConfigs();
-            }
+        @Override
+        public void register(final StateStore store,
+                             final StateRestoreCallback stateRestoreCallback,
+                             final CommitCallback checkpoint) {
+            stateStores.put(store.name(), store);
+        }
 
-            @Override
-            public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-                return MockProcessorContext.this.appConfigsWithPrefix(prefix);
-            }
-        };
+        @Override
+        public Map<String, Object> appConfigs() {
+            return MockProcessorContext.this.appConfigs();
+        }
+
+        @Override
+        public Map<String, Object> appConfigsWithPrefix(final String prefix) {
+            return MockProcessorContext.this.appConfigsWithPrefix(prefix);
+        }
+
+        // only needed for `AbstractProcessorContext` -- not expose to the user
+
+        @SuppressWarnings("rawtypes")
+        @Override
+        public void forward(final Record record, final String childName) { }
+        @SuppressWarnings("rawtypes")
+        @Override
+        public void forward(final Record record) { }
+        @SuppressWarnings("rawtypes")
+        @Override
+        public void forward(final FixedKeyRecord record, final String childName) { }
+        @SuppressWarnings("rawtypes")
+        @Override
+        public void forward(final FixedKeyRecord record) { }
+        @Override
+        public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+            return null;
+        }
+        @Override
+        public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
+            return null;
+        }
+        @Override
+        public void commit() { }
+        @Override
+        public long currentStreamTimeMs() {
+            return 0;
+        }
+        @Override
+        public void forward(final Object key, final Object value, final To to) { }
+        @Override
+        public void forward(final Object key, final Object value) { }
+        @Override
+        public StateStore getStateStore(final String name) {
+            return null;
+        }
+        @Override
+        public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) { }
+        @Override
+        public void transitionToStandby(final ThreadCache newCache) { }
+        @Override
+        public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) { }
+        @Override
+        public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) { }
+        @Override
+        public String changelogFor(final String storeName) {
+            return "changelog";
+        }
+        @Override
+        protected StateManager stateManager() {
+            return null;
+        }
     }
 }

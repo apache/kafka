@@ -29,22 +29,27 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT;
@@ -62,7 +67,6 @@ public class GroupConfigTest {
     private static final long OFFSETS_RETENTION_CHECK_INTERVAL_MS = 1000L;
     private static final int OFFSETS_RETENTION_MINUTES = 24 * 60;
 
-    private static final boolean SHARE_GROUP_ENABLE = true;
     private static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS = 200;
     private static final int SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS = 100;
     private static final int SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS = 10000;
@@ -74,12 +78,17 @@ public class GroupConfigTest {
     private static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS = 60000;
 
     @Test
+    @SuppressWarnings("CyclomaticComplexity")
     public void testFromPropsInvalid() {
         GroupConfig.configNames().forEach(name -> {
             if (GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
+            } else if (GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-1", "1.2");
+            } else if (GroupConfig.CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
@@ -96,6 +105,10 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "hello", "1.0");
             } else if (GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean", "1");
+            } else if (GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-1", "1.2");
+            } else if (GroupConfig.SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG.equals(name)) {
@@ -104,6 +117,12 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-1", "1.0");
+            } else if (GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-1", "1.2");
+            } else if (GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_boolean");
+            } else if (GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "1.0");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -121,7 +140,7 @@ public class GroupConfigTest {
     @Test
     public void testValidShareAutoOffsetResetValues() {
 
-        Properties props = createValidGroupConfig();
+        Map<String, String> props = createValidGroupConfig();
 
         // Check for value "latest"
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
@@ -140,7 +159,7 @@ public class GroupConfigTest {
     @Test
     public void testValidShareIsolationLevelValues() {
         // Check for value READ_UNCOMMITTED
-        Properties props = createValidGroupConfig();
+        Map<String, String> props = createValidGroupConfig();
         props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_committed");
         doTestValidProps(props);
 
@@ -153,7 +172,7 @@ public class GroupConfigTest {
     @Test
     public void testInvalidProps() {
 
-        Properties props = createValidGroupConfig();
+        Map<String, String> props = createValidGroupConfig();
 
         // Check for invalid consumerSessionTimeoutMs, < MIN
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "1");
@@ -172,6 +191,16 @@ public class GroupConfigTest {
 
         // Check for invalid consumerHeartbeatIntervalMs, > MAX
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "70000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid consumerAssignmentIntervalMs, < MIN
+        props.put(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "500");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid consumerAssignmentIntervalMs, > MAX
+        props.put(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000");
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
@@ -242,6 +271,16 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
         props = createValidGroupConfig();
 
+        // Check for invalid shareAssignmentIntervalMs, < MIN
+        props.put(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "500");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid shareAssignmentIntervalMs, > MAX
+        props.put(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
         // Check for invalid streamsSessionTimeoutMs, < MIN
         props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "1");
         doTestInvalidProps(props, InvalidConfigurationException.class);
@@ -262,6 +301,21 @@ public class GroupConfigTest {
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
+        // Check for invalid streamsAssignmentIntervalMs, < MIN
+        props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "500");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid streamsAssignmentIntervalMs, > MAX
+        props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid streamsTaskOffsetIntervalMs, < MIN
+        props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "1000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
         // Check for invalid shareIsolationLevel.
         props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_commit");
         doTestInvalidProps(props, ConfigException.class);
@@ -277,11 +331,11 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
     }
 
-    private void doTestInvalidProps(Properties props, Class<? extends Exception> exceptionClassName) {
+    private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
         assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
-    private void doTestValidProps(Properties props) {
+    private void doTestValidProps(Map<String, String> props) {
         assertDoesNotThrow(() -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
@@ -290,6 +344,8 @@ public class GroupConfigTest {
         Map<String, String> defaultValue = new HashMap<>();
         defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
+        defaultValue.put(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "5000");
+        defaultValue.put(GroupConfig.CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         defaultValue.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "2000");
@@ -297,10 +353,15 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "500");
         defaultValue.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
         defaultValue.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        defaultValue.put(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "2500");
+        defaultValue.put(GroupConfig.SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         defaultValue.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "2000");
         defaultValue.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
         defaultValue.put(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, "3000");
+        defaultValue.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
+        defaultValue.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+        defaultValue.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
         defaultValue.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "true");
 
         Properties props = new Properties();
@@ -309,6 +370,8 @@ public class GroupConfigTest {
 
         assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+        assertEquals(5000, config.getInt(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG));
+        assertEquals(false, config.getBoolean(GroupConfig.CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG));
         assertEquals(10, config.getInt(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(10, config.getInt(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(2000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG));
@@ -316,16 +379,55 @@ public class GroupConfigTest {
         assertEquals(500, config.getInt(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG));
         assertEquals("latest", config.getString(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG));
         assertEquals("read_uncommitted", config.getString(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG));
+        assertEquals(2500, config.getInt(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG));
+        assertEquals(false, config.getBoolean(GroupConfig.SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG));
         assertEquals(10, config.getInt(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(2000, config.getInt(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(1, config.getInt(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG));
         assertEquals(3000, config.getInt(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG));
+        assertEquals(1250, config.getInt(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG));
+        assertEquals(false, config.getBoolean(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG));
+        assertEquals(30000, config.getInt(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG));
         assertEquals(true, config.getBoolean(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG));
     }
 
     @Test
-    public void testInvalidConfigName() {
+    public void testAssignmentIntervalMsAbsentWhenNotConfigured() {
+        // When the assignment interval config is absent, the group-level value is empty.
         Properties props = new Properties();
+        GroupConfig config = GroupConfig.fromProps(Map.of(), props);
+        assertEquals(Optional.empty(), config.consumerAssignmentIntervalMs());
+        assertEquals(Optional.empty(), config.shareAssignmentIntervalMs());
+        assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
+    }
+
+    @Test
+    public void testAssignmentIntervalMsNotValidatedWhenNotConfigured() {
+        // When the assignment interval config is absent, validation should not use the default assignment interval.
+        GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfig.fromProps(Map.of(
+            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
+            GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
+            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
+            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000
+        ));
+        assertDoesNotThrow(() -> GroupConfig.validate(Map.of(), groupCoordinatorConfig, createShareGroupConfig()));
+    }
+
+    @Test
+    public void testAssignorOffloadEnableAbsentWhenNotConfigured() {
+        // When the offload enable config is absent, the group-level value is empty.
+        Properties props = new Properties();
+        GroupConfig config = GroupConfig.fromProps(Map.of(), props);
+        assertEquals(Optional.empty(), config.consumerAssignorOffloadEnable());
+        assertEquals(Optional.empty(), config.shareAssignorOffloadEnable());
+        assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
+    }
+
+    @Test
+    public void testInvalidConfigName() {
+        Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
@@ -348,7 +450,7 @@ public class GroupConfigTest {
         ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
         assertDoesNotThrow(() ->
-            GroupConfig.validate(new Properties(), groupCoordinatorConfig, shareGroupConfig));
+            GroupConfig.validate(new HashMap<>(), groupCoordinatorConfig, shareGroupConfig));
     }
 
     @Test
@@ -389,6 +491,11 @@ public class GroupConfigTest {
                 3000, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
                 20000, CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT
             ),
+            Arguments.of(
+                GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
+                0, /* CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG = */ 500,
+                20000, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT
+            ),
             // Share group configs
             Arguments.of(
                 GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG,
@@ -415,6 +522,11 @@ public class GroupConfigTest {
                 50, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT,
                 5000, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT
             ),
+            Arguments.of(
+                GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
+                0, /* SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG = */ 500,
+                20000, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT
+            ),
             // Streams group configs
             Arguments.of(
                 GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG,
@@ -425,6 +537,11 @@ public class GroupConfigTest {
                 GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
                 3000, STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT,
                 20000, STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT
+            ),
+            Arguments.of(
+                GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
+                0, /* STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG = */ 500,
+                20000, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT
             )
         );
     }
@@ -438,6 +555,19 @@ public class GroupConfigTest {
             Arguments.of(
                 GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
                 5, STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT
+            )
+        );
+    }
+
+    /**
+     * Data source for configs with min-only evaluation (no max bound enforced by evaluate).
+     * Each entry: (configKey, tooLow, expectedMax).
+     */
+    private static Stream<Arguments> minBoundedConfigs() {
+        return Stream.of(
+            Arguments.of(
+                GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
+                1000, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT
             )
         );
     }
@@ -470,7 +600,12 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(key, tooLow);
         Properties result = GroupConfig.evaluate(props, "test-group",
-            GroupCoordinatorConfig.fromProps(new HashMap<>()), ShareGroupConfig.fromProps(new HashMap<>()));
+            GroupCoordinatorConfig.fromProps(Map.of(
+                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 500,
+                GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 500,
+                GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 500
+            )),
+            ShareGroupConfig.fromProps(Map.of()));
         assertEquals(expectedMin, result.get(key));
     }
 
@@ -488,8 +623,22 @@ public class GroupConfigTest {
         assertEquals(expectedMax, result.get(key));
     }
 
-    private Properties createValidGroupConfig() {
+    @ParameterizedTest(name = "testEvaluateMinBoundedValueBelowMinIsCapped[{0}]")
+    @MethodSource("minBoundedConfigs")
+    public void testEvaluateMinBoundedValueBelowMinIsCapped(
+        String key,
+        int tooLow,
+        int expectedMin
+    ) {
         Properties props = new Properties();
+        props.put(key, tooLow);
+        Properties result = GroupConfig.evaluate(props, "test-group",
+            GroupCoordinatorConfig.fromProps(new HashMap<>()), ShareGroupConfig.fromProps(new HashMap<>()));
+        assertEquals(expectedMin, result.get(key));
+    }
+
+    private Map<String, String> createValidGroupConfig() {
+        Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000");
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
         props.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "45000");
@@ -503,16 +652,26 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
         props.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
         props.put(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, "3000");
+        props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "45000");
         props.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "true");
         return props;
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
-        return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(OFFSET_METADATA_MAX_SIZE, OFFSETS_RETENTION_CHECK_INTERVAL_MS, OFFSETS_RETENTION_MINUTES);
+        return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
+            OFFSET_METADATA_MAX_SIZE,
+            OFFSETS_RETENTION_CHECK_INTERVAL_MS,
+            OFFSETS_RETENTION_MINUTES,
+            Map.of(
+                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+                GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+                GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
+            )
+        );
     }
 
     private ShareGroupConfig createShareGroupConfig() {
-        return ShareGroupConfigTest.createShareGroupConfig(SHARE_GROUP_ENABLE, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS,
+        return ShareGroupConfigTest.createShareGroupConfig(SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS,
                 SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS,
                 SHARE_GROUP_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT,
                 SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);

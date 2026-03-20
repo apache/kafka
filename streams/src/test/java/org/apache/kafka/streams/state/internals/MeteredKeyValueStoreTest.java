@@ -175,6 +175,7 @@ public class MeteredKeyValueStoreTest {
         when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_BYTES)).thenReturn(VALUE);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE)).thenReturn(VALUE_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_BYTES);
         metered = new MeteredKeyValueStore<>(
             inner,
@@ -467,6 +468,17 @@ public class MeteredKeyValueStoreTest {
 
         final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        setUp();
+        when(inner.approximateNumEntries()).thenReturn(42L);
+        init();
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(42L));
     }
 
     @SuppressWarnings("unused")
