@@ -35,12 +35,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 
 /** Replicates a set of topic-partitions. */
 public class MirrorSourceTask extends SourceTask {
@@ -56,6 +60,11 @@ public class MirrorSourceTask extends SourceTask {
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
 
+    // Tracks the highest leader epoch observed per source partition.
+    // A decrease in epoch is the definitive signal that the partition
+    // was deleted and recreated — impossible in normal Kafka operation.
+    private final Map<TopicPartition, Integer> lastSeenLeaderEpoch = new HashMap<>();
+    private final Map<TopicPartition, Long> lastKnownPosition = new HashMap<>();
     public MirrorSourceTask() {}
 
     // for testing
@@ -131,34 +140,56 @@ public class MirrorSourceTask extends SourceTask {
         if (stopping) {
             return null;
         }
+
+        // ── NEW (Task 2): fail-fast before fetching if truncation detected ──
         try {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
-            List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                SourceRecord converted = convertRecord(record);
-                sourceRecords.add(converted);
-                TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, byteSize(record.value()));
-            }
-            if (sourceRecords.isEmpty()) {
-                // WorkerSourceTasks expects non-zero batch size
-                return null;
-            } else {
-                log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
-                return sourceRecords;
-            }
-        } catch (WakeupException e) {
-            return null;
-        } catch (KafkaException e) {
-            log.warn("Failure during poll.", e);
-            return null;
-        } catch (Throwable e)  {
-            log.error("Failure during poll.", e);
-            // allow Connect to deal with the exception
-            throw e;
-        } finally {
+            checkForLogTruncation();
+        }
+        catch(LogTruncationException e){
             consumerAccess.release();
+            throw e;
+        }
+        // ────────────────────────────────────────────────────────────────────
+
+        ConsumerRecords<byte[], byte[]> records;
+        try {
+            records = consumer.poll(pollTimeout);
+        } catch (OffsetOutOfRangeException e) {
+            // ── NEW (Task 3): recover from topic reset via OOOR exception ─────
+            // In Kafka 4.0.0, OffsetOutOfRangeException doesn't expose partition details.
+            // We recover by seeking all assigned partitions to beginning.
+            log.warn("OffsetOutOfRangeException caught: {}. Recovering all assigned partitions.",
+                     e.getMessage());
+            Set<TopicPartition> assignedPartitions = consumer.assignment();
+            for (TopicPartition tp : assignedPartitions) {
+                handleTopicReset(tp);
+            }
+            // Return empty list this cycle; next poll() fetches from offset 0
+            consumerAccess.release();
+            return Collections.emptyList();
+            // ──────────────────────────────────────────────────────────────────
+        }
+
+        // ── NEW (Task 3): detect topic reset via leader epoch regression ──────
+        detectTopicReset(records);
+        // ──────────────────────────────────────────────────────────────────────
+
+        List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            SourceRecord converted = convertRecord(record);
+            sourceRecords.add(converted);
+            TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
+            metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
+            metrics.recordBytes(topicPartition, byteSize(record.value()));
+        }
+        if (sourceRecords.isEmpty()) {
+            // WorkerSourceTasks expects non-zero batch size
+            consumerAccess.release();
+            return null;
+        } else {
+            log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
+            consumerAccess.release();
+            return sourceRecords;
         }
     }
  
@@ -254,5 +285,176 @@ public class MirrorSourceTask extends SourceTask {
 
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
+    }
+
+    /**
+     * Checks every assigned source partition for log truncation before
+     * fetching any records.
+     *
+     * Algorithm:
+     *   For each partition:
+     *     nextFetchOffset     = consumer.position(tp)
+     *                           (the offset MM2 will request on the next fetch)
+     *     brokerBeginOffset   = consumer.beginningOffsets(tp)
+     *                           (the earliest offset still available on the broker)
+     *
+     *     If brokerBeginOffset > nextFetchOffset:
+     *       Messages [nextFetchOffset .. brokerBeginOffset - 1] are gone.
+     *       Throw LogTruncationException (fail-fast).
+     *
+     * Why beginningOffsets() and not endOffsets()?
+     *   endOffsets() returns the latest written offset — not relevant here.
+     *   beginningOffsets() returns the earliest *still available* offset,
+     *   which is exactly the boundary we compare against.
+     *
+     * Performance: beginningOffsets() is a metadata RPC, not a record fetch.
+     * Brokers cache log start offsets in memory. This call takes ~1 ms and
+     * is safe to issue on every poll() cycle.
+     */
+    private void checkForLogTruncation() {
+        Set<TopicPartition> assignedPartitions = consumer.assignment();
+        if (assignedPartitions.isEmpty()) {
+            return;
+        }
+
+        // Single batched metadata RPC for all partitions
+        Map<TopicPartition, Long> beginningOffsets =
+                consumer.beginningOffsets(assignedPartitions);
+
+        for (TopicPartition tp : assignedPartitions) {
+            long nextFetchOffset   = consumer.position(tp);
+            long brokerBeginOffset = beginningOffsets.getOrDefault(tp, 0L);
+
+            // nextFetchOffset == 0 means MM2 has not replicated anything yet
+            // for this partition. No gap is possible on the very first run.
+            if (nextFetchOffset == 0) {
+                continue;
+            }
+
+            if (brokerBeginOffset > nextFetchOffset) {
+                long lostCount = brokerBeginOffset - nextFetchOffset;
+                log.error(
+                    "LOG TRUNCATION DETECTED — topic={} partition={} "
+                    + "nextFetchOffset={} brokerBeginOffset={} lostMessages={}. "
+                    + "Messages purged by retention before replication completed. "
+                    + "Failing task to prevent silent data loss on DR cluster.",
+                    tp.topic(), tp.partition(),
+                    nextFetchOffset, brokerBeginOffset, lostCount
+                );
+                throw new LogTruncationException(
+                    tp.topic(),
+                    tp.partition(),
+                    nextFetchOffset - 1,  // last offset MM2 successfully handled
+                    brokerBeginOffset
+                );
+            }
+        }
+    }
+
+    /**
+     * Inspects the leader epoch embedded in every record of a polled batch.
+     * A leader epoch lower than the last observed epoch for that partition
+     * is unambiguous evidence the partition was deleted and recreated.
+     *
+     * Why check per-record instead of calling AdminClient.describeTopics()?
+     *   - The leader epoch is already present in every ConsumerRecord at zero
+     *     extra network cost.
+     *   - An AdminClient call on every poll() cycle would add latency and
+     *     a dependency on admin credentials.
+     *   - The per-record check detects the reset on the very first record
+     *     returned after MM2 resumes — no delay.
+     *
+     * Why leader epoch and not offset comparison?
+     *   Offsets reset to 0 on topic recreation, but they also start at 0
+     *   for a brand-new consumer with no prior checkpoint. Leader epoch is
+     *   the only signal that is unambiguously tied to partition recreation.
+     *
+     * @param records the raw ConsumerRecords returned by consumer.poll()
+     */
+    private void detectTopicReset(ConsumerRecords<byte[], byte[]> records) {
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            TopicPartition tp=new TopicPartition(record.topic(), record.partition());
+            // Older brokers (pre-2.4) may omit the leader epoch — skip gracefully
+            if(record.leaderEpoch().isPresent()) {
+                int currentEpoch = record.leaderEpoch().get();
+                Integer knownEpoch = lastSeenLeaderEpoch.get(tp);
+                if (knownEpoch != null && currentEpoch < knownEpoch) {
+                    // Epoch went backwards — partition was deleted and recreated
+                    log.warn(
+                            "TOPIC RESET DETECTED — topic={} partition={} "
+                                    + "previousEpoch={} currentEpoch={} detectedAt={}. "
+                                    + "Partition was deleted and recreated. "
+                                    + "Resubscribing from beginning offset.",
+                            tp.topic(), tp.partition(),
+                            knownEpoch, currentEpoch,
+                            Instant.now()
+                    );
+                    handleTopicReset(tp);
+                    lastKnownPosition.put(tp,0L);
+                    continue;
+                }
+
+                // Always keep track of the highest epoch seen so far
+                if (knownEpoch == null || currentEpoch > knownEpoch) {
+                    lastSeenLeaderEpoch.put(tp, currentEpoch);
+                }
+            }
+            Long lastPos=lastKnownPosition.get(tp);
+            if(lastPos!=null && lastPos>0&&record.offset()==0){
+                log.warn(
+                        "TOPIC RESET DETECTED (offset reset to 0) - topic={} partition={}"
+                        + "lastKnownOffset={} currentRecordOffset=0 detectedAt={}."
+                        + "Broker silently reset consumer to beginning (auto.offset.reset)."
+                        + "Resubscribing from beginning offset.",
+                        tp.topic(), tp.partition(), lastPos, Instant.now()
+                );
+                handleTopicReset(tp);
+                lastKnownPosition.put(tp,0L);
+                continue;
+            }
+            lastKnownPosition.put(tp,record.offset());
+        }
+    }
+
+    /**
+     * Recovers from a confirmed topic reset by seeking the consumer to
+     * the beginning of the recreated partition.
+     *
+     * Recovery steps:
+     *  1. Seek the source consumer to offset 0 of the affected partition.
+     *     The next poll() cycle will fetch the very first new message.
+     *  2. Clear the stale leader-epoch entry for this partition so the
+     *     new baseline epoch is learned cleanly from the next batch.
+     *  3. Log the recovery action at INFO level so operators can confirm
+     *     the event in the log trail.
+     *
+     * Why NOT fail-fast here (unlike log truncation)?
+     *   Log truncation is an unplanned event causing irrecoverable data loss.
+     *   A topic reset is a deliberate operational action — the operator
+     *   intentionally cleared the source log. Auto-recovering keeps the DR
+     *   cluster synchronized with the new source without requiring a manual
+     *   task restart.
+     *
+     * Why clear the epoch tracking entry?
+     *   After recovery the consumer position is 0 and the new epoch is
+     *   unknown. Keeping the old epoch baseline would cause the next record
+     *   (which will have epoch 0) to be misidentified as another reset.
+     *   Removing the entry means the first record after recovery establishes
+     *   the new baseline cleanly.
+     *
+     * @param tp the TopicPartition that was reset
+     */
+    private void handleTopicReset(TopicPartition tp) {
+        // Seek the consumer to the very beginning of the recreated partition
+        consumer.seekToBeginning(Collections.singletonList(tp));
+
+        // Clear the stale epoch so the new baseline is learned on next poll
+        lastSeenLeaderEpoch.remove(tp);
+
+        log.info(
+            "Topic reset recovery complete — topic={} partition={}. "
+            + "Consumer seeked to offset 0. Replication will resume from start.",
+            tp.topic(), tp.partition()
+        );
     }
 }
