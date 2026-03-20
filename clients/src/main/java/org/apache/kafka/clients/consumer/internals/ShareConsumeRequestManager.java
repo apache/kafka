@@ -720,38 +720,38 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeAcks.nodeId(), k -> new HashMap<>());
                 Acknowledgements prevAcks = acksMap.putIfAbsent(tip, nodeAcks.acknowledgements());
                 if (prevAcks != null) {
-                    acksMap.get(tip).merge(nodeAcks.acknowledgements());
+                    prevAcks.merge(nodeAcks.acknowledgements());
                 }
             }
         });
 
-        sessionHandlers.forEach((nodeId, sessionHandler) -> {
-            // Add any waiting piggyback acknowledgements for the node.
-            Map<TopicIdPartition, Acknowledgements> fetchAcks = fetchAcknowledgementsToSend.remove(nodeId);
-            if (fetchAcks != null) {
-                fetchAcks.forEach((tip, acks) -> {
-                    if (!isLeaderKnownToHaveChanged(nodeId, tip)) {
-                        Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeId, k -> new HashMap<>());
-                        Acknowledgements prevAcks = acksMap.putIfAbsent(tip, acks);
-                        if (prevAcks != null) {
-                            acksMap.get(tip).merge(acks);
-                        }
-                    } else {
-                        acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
-                        maybeSendShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
+        // Add any waiting piggyback acknowledgements.
+        fetchAcknowledgementsToSend.forEach((nodeId, nodeAcks) ->
+            nodeAcks.forEach((tip, acks) -> {
+                if ((cluster.nodeById(nodeId) == null) || isLeaderKnownToHaveChanged(nodeId, tip)) {
+                    acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                    maybeSendShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
+                } else {
+                    Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeId, k -> new HashMap<>());
+                    Acknowledgements prevAcks = acksMap.putIfAbsent(tip, acks);
+                    if (prevAcks != null) {
+                        prevAcks.merge(acks);
                     }
-                });
-            }
+                }
+            })
+        );
 
-            Map<TopicIdPartition, Acknowledgements> acknowledgementsMapForNode = acknowledgementsMapAllNodes.get(nodeId);
-            if (acknowledgementsMapForNode != null) {
-                acknowledgementsMapForNode.forEach((tip, acknowledgements) -> {
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
+            Map<TopicIdPartition, Acknowledgements> nodeAcknowledgements = acknowledgementsMapAllNodes.get(nodeId);
+            if (nodeAcknowledgements != null) {
+                nodeAcknowledgements.forEach((tip, acknowledgements) -> {
+                    resultCount.incrementAndGet();
+
                     metricsManager.recordAcknowledgementSent(acknowledgements.size());
                     log.debug("Added closing acknowledge request for partition {} to node {}", tip.topicPartition(), nodeId);
-                    resultCount.incrementAndGet();
                 });
             } else {
-                acknowledgementsMapForNode = new HashMap<>();
+                nodeAcknowledgements = new HashMap<>();
             }
 
             acknowledgeRequestStates.putIfAbsent(nodeId, new Tuple<>(null, null, null));
@@ -760,12 +760,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             // and only one request can be active at a time.
             if (acknowledgeRequestStates.get(nodeId).getCloseRequest() != null && isRequestStateInProgress(acknowledgeRequestStates.get(nodeId).getCloseRequest())) {
                 log.error("Attempt to call close() when there is an existing close request for node {}-{}", nodeId, acknowledgeRequestStates.get(nodeId).getSyncRequestQueue());
-                acknowledgementsMapForNode.forEach((tip, acks) -> {
+                nodeAcknowledgements.forEach((tip, acks) -> {
                     acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
                     maybeSendShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
                 });
-                closeFuture.completeExceptionally(
-                        new IllegalStateException("Attempt to call close() when there is an existing close request for node : " + nodeId));
+                closeFuture.completeExceptionally(new IllegalStateException("Attempt to call close() when there is an existing close request for node " + nodeId));
             } else {
                 // There can only be one close() happening at a time. So per node, there will be one acknowledge request state.
                 acknowledgeRequestStates.get(nodeId).setCloseRequest(
@@ -776,7 +775,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         retryBackoffMaxMs,
                         sessionHandler,
                         nodeId,
-                        acknowledgementsMapForNode,
+                        nodeAcknowledgements,
                         resultHandler,
                         AcknowledgeRequestType.CLOSE
                 ));
