@@ -62,7 +62,7 @@ class HeadersSerializer {
     }
 
     // for testing
-    public static byte[] serialize(final Headers headers) {
+   static byte[] serialize(final Headers headers) {
         final PreSerializedHeaders prep = prepareSerialization(headers);
         final ByteBuffer buffer = ByteBuffer.allocate(prep.requiredBufferSizeForHeaders);
         serialize(prep, buffer);
