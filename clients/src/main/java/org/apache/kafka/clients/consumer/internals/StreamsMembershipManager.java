@@ -477,6 +477,9 @@ public class StreamsMembershipManager implements RequestManager {
     private void transitionToStale() {
         transitionTo(MemberState.STALE);
 
+        // Mark partitions as pending revocation to stop fetching before callback
+        subscriptionState.markPendingRevocation(subscriptionState.assignedPartitions());
+
         final CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
         staleMemberAssignmentRelease = onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
@@ -514,6 +517,9 @@ public class StreamsMembershipManager implements RequestManager {
             maybeCompleteLeaveInProgress();
             return;
         }
+
+        // Mark partitions as pending revocation to stop fetching before callback
+        subscriptionState.markPendingRevocation(subscriptionState.assignedPartitions());
 
         CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
         onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
@@ -819,6 +825,9 @@ public class StreamsMembershipManager implements RequestManager {
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
             "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
+
+        // Mark partitions as pending revocation to stop fetching before callback
+        subscriptionState.markPendingRevocation(subscriptionState.assignedPartitions());
 
         CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
         onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
