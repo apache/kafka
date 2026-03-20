@@ -37,18 +37,11 @@ class FetchTest {
 
     @Test
     void testAddToForPartitionFetch() {
-        List<ConsumerRecord<String, String>> records0 = List.of(
-                new ConsumerRecord<>("topic", 0, 0, "key0", "value0")
-        );
-        Fetch<String, String> target = Fetch.forPartition(TP0, records0, true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var records0 = List.of(new ConsumerRecord<>("topic", 0, 0, "key0", "value0"));
+        var target = Fetch.forPartition(TP0, records0, true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
-        List<ConsumerRecord<String, String>> records1 = List.of(
-                new ConsumerRecord<>("topic", 1, 0, "key1", "value1")
-        );
-        Fetch<String, String> source = Fetch.forPartition(TP1, records1, true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
-
+        var records1 = List.of(new ConsumerRecord<>("topic", 1, 0, "key1", "value1"));
+        var source = Fetch.forPartition(TP1, records1, true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         target.add(source);
 
@@ -63,11 +56,8 @@ class FetchTest {
     void testAddForPartitionFetchToEmptyFetch() {
         Fetch<String, String> target = Fetch.empty();
 
-        List<ConsumerRecord<String, String>> records = List.of(
-                new ConsumerRecord<>("topic", 0, 0, "key", "value")
-        );
-        Fetch<String, String> source = Fetch.forPartition(TP0, records, true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var records = List.of(new ConsumerRecord<>("topic", 0, 0, "key", "value"));
+        var source = Fetch.forPartition(TP0, records, true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         target.add(source);
 
@@ -78,8 +68,7 @@ class FetchTest {
 
     @Test
     void testForPartitionWithEmptyRecords() {
-        Fetch<String, String> fetch = Fetch.forPartition(TP0, List.of(), true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var fetch = Fetch.forPartition(TP0, List.of(), true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         assertTrue(fetch.records().isEmpty());
         assertEquals(0, fetch.numRecords());
@@ -90,16 +79,10 @@ class FetchTest {
 
     @Test
     void testAddWithSamePartitionMergesRecords() {
-        List<ConsumerRecord<String, String>> records0 = List.of(
-                new ConsumerRecord<>("topic", 0, 0, "key0", "value0")
-        );
-        List<ConsumerRecord<String, String>> records1 = List.of(
-                new ConsumerRecord<>("topic", 0, 1, "key1", "value1")
-        );
-        Fetch<String, String> target = Fetch.forPartition(TP0, records0, true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
-        Fetch<String, String> source = Fetch.forPartition(TP0, records1, true,
-                new OffsetAndMetadata(2, Optional.empty(), ""));
+        var records0 = List.of(new ConsumerRecord<>("topic", 0, 0, "key0", "value0"));
+        var records1 = List.of(new ConsumerRecord<>("topic", 0, 1, "key1", "value1"));
+        var target = Fetch.forPartition(TP0, records0, true, new OffsetAndMetadata(1, Optional.empty(), ""));
+        var source = Fetch.forPartition(TP0, records1, true, new OffsetAndMetadata(2, Optional.empty(), ""));
 
         target.add(source);
 
@@ -109,10 +92,8 @@ class FetchTest {
 
     @Test
     void testAddPropagatesPositionAdvanced() {
-        Fetch<String, String> target = Fetch.forPartition(TP0, List.of(), false,
-                new OffsetAndMetadata(0, Optional.empty(), ""));
-        Fetch<String, String> source = Fetch.forPartition(TP1, List.of(), true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var target = Fetch.forPartition(TP0, List.of(), false, new OffsetAndMetadata(0, Optional.empty(), ""));
+        var source = Fetch.forPartition(TP1, List.of(), true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         assertFalse(target.positionAdvanced());
 
@@ -123,11 +104,8 @@ class FetchTest {
 
     @Test
     void testForPartitionWithoutPositionAdvanced() {
-        List<ConsumerRecord<String, String>> records = List.of(
-                new ConsumerRecord<>("topic", 0, 0, "key", "value")
-        );
-        Fetch<String, String> fetch = Fetch.forPartition(TP0, records, false,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var records = List.of(new ConsumerRecord<>("topic", 0, 0, "key", "value"));
+        var fetch = Fetch.forPartition(TP0, records, false, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         assertFalse(fetch.positionAdvanced());
         assertFalse(fetch.isEmpty());
@@ -136,23 +114,16 @@ class FetchTest {
 
     @Test
     void testRecordsReturnsUnmodifiableMap() {
-        List<ConsumerRecord<String, String>> records = List.of(
-                new ConsumerRecord<>("topic", 0, 0, "key", "value")
-        );
-        Fetch<String, String> fetch = Fetch.forPartition(TP0, records, true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var records = List.of(new ConsumerRecord<>("topic", 0, 0, "key", "value"));
+        var fetch = Fetch.forPartition(TP0, records, true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
-        assertThrows(UnsupportedOperationException.class,
-                () -> fetch.records().put(TP1, List.of()));
+        assertThrows(UnsupportedOperationException.class, () -> fetch.records().put(TP1, List.of()));
     }
 
     @Test
     void testNextOffsetsReturnsUnmodifiableMap() {
-        List<ConsumerRecord<String, String>> records = List.of(
-                new ConsumerRecord<>("topic", 0, 0, "key", "value")
-        );
-        Fetch<String, String> fetch = Fetch.forPartition(TP0, records, true,
-                new OffsetAndMetadata(1, Optional.empty(), ""));
+        var records = List.of(new ConsumerRecord<>("topic", 0, 0, "key", "value"));
+        var fetch = Fetch.forPartition(TP0, records, true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         assertThrows(UnsupportedOperationException.class,
                 () -> fetch.nextOffsets().put(TP1, new OffsetAndMetadata(99, Optional.empty(), "")));
