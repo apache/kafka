@@ -1312,8 +1312,6 @@ public class ShareConsumerTest {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                System.out.println("EXCEPTION " + exception);
-                exception.printStackTrace();
                 assertInstanceOf(NotLeaderOrFollowerException.class, exception);
                 callbackCalled.set(true);
             });
