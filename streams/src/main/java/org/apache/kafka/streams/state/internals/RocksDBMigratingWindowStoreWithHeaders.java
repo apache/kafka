@@ -53,6 +53,11 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
     static final byte[] WINDOW_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME =
         "windowKeyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
 
+    public RocksDBMigratingWindowStoreWithHeaders(final String name,
+                                                   final String metricsScope) {
+        super(name, metricsScope);
+    }
+
     RocksDBMigratingWindowStoreWithHeaders(final String name,
                                             final String parentDir,
                                             final RocksDBMetricsRecorder metricsRecorder) {
