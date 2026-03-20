@@ -60,13 +60,12 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
 
     @Override
     public  StoreBuilder<SessionStoreWithHeaders<K, V>> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat();
         final SessionBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().sessionStore(new DslSessionParams(
                         materialized.storeName(),
                         Duration.ofMillis(retentionPeriod),
                         emitStrategy,
-                        storeFormat))
+                        dslStoreFormat()))
                 : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<SessionStoreWithHeaders<K, V>> builder = Stores.sessionStoreBuilderWithHeaders(

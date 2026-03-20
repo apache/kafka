@@ -96,8 +96,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
-        final DslStoreFormat storeFormat = dslStoreFormat();
-        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, storeFormat);
+        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, dslStoreFormat());
         final KeyValueBytesStoreSupplier supplier;
 
         if (passedInDslStoreSuppliers != null) {

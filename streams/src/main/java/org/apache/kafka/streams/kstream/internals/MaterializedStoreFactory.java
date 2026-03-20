@@ -32,7 +32,7 @@ public abstract class MaterializedStoreFactory<K, V, S extends StateStore> exten
     protected final MaterializedInternal<K, V, S> materialized;
 
     public MaterializedStoreFactory(final MaterializedInternal<K, V, S> materialized,
-                                       final DslStoreFormat defaultStoreFormat) {
+                                    final DslStoreFormat defaultStoreFormat) {
         super(materialized.dslStoreSuppliers().orElse(null), defaultStoreFormat);
         this.materialized = materialized;
     }

@@ -27,12 +27,13 @@ import java.util.Set;
 public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private final Set<String> connectedProcessorNames = new HashSet<>();
     private DslStoreSuppliers dslStoreSuppliers;
-    private DslStoreFormat dslStoreFormat;
+    private final DslStoreFormat defaultStoreDefaultFormat;
+    private DslStoreFormat dslStoreFormatOverwrite;
 
     public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers,
-                                               final DslStoreFormat defaultStoreFormat) {
+                                            final DslStoreFormat defaultStoreDefaultFormat) {
         this.dslStoreSuppliers = initialStoreSuppliers;
-        this.dslStoreFormat = defaultStoreFormat;
+        this.defaultStoreDefaultFormat = defaultStoreDefaultFormat;
     }
 
     @Override
@@ -46,9 +47,8 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
         }
         final String dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
         if (dslStoreFormatValue.equalsIgnoreCase(StreamsConfig.DSL_STORE_FORMAT_HEADERS)) {
-            dslStoreFormat = DslStoreFormat.HEADERS;
+            dslStoreFormatOverwrite = DslStoreFormat.HEADERS;
         }
-        // else dslStoreFormat keeps the defaultStoreFormat provided by the subclass
     }
 
     @Override
@@ -57,7 +57,7 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     }
 
     public DslStoreFormat dslStoreFormat() {
-        return dslStoreFormat;
+        return dslStoreFormatOverwrite == null ? defaultStoreDefaultFormat : dslStoreFormatOverwrite;
     }
 
     protected DslStoreSuppliers dslStoreSuppliers() {
