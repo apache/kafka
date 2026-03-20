@@ -71,6 +71,12 @@ The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, a
 
 Kafka Streams now allows to purge local state directories and checkpoint files during application startup if they have not been modified for a certain period of time. This can be configured via the new `state.cleanup.dir.max.age.ms` config. More details can be found in [KIP-1259](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1259%3A+Add+configuration+to+wipe+Kafka+Streams+local+state+on+startup)
 
+### Record headers in state stores (KIP-1271)
+
+By default, DSL state stores retain keys, values, and timestamps (where applicable) but not Kafka record headers. You can opt in to **headers-aware** stores that also persist the headers from input records by setting `dsl.store.format` to `headers` (case-insensitive). The default `default` preserves the pre-4.3 store layout for each operator. Changing this setting affects changelog serialization and RocksDB layout for the affected stores; perform a rolling upgrade and allow tasks to restore from changelogs. Interactive Queries, `TopologyTestDriver`, and built-in upgrade paths support the new formats—see [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores) and the [Processor API state store documentation](developer-guide/processor-api.html#headers-in-state-stores-kip-1271).
+
+Processor API applications can use the new `Stores` helpers and `*BuilderWithHeaders` factory methods (for example `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreBuilderWithHeaders`) without setting `dsl.store.format`.
+
 ### Deprecation of streams-scala module (KIP-1244)
 
 The `kafka-streams-scala` module (`org.apache.kafka.streams.scala` package) is deprecated in 4.3.0 and will be removed in 5.0.

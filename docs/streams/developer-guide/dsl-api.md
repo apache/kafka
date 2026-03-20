@@ -917,11 +917,13 @@ Kafka Streams will manage the topic for `repartition()`. Generated topic is trea
 
 Stateful transformations depend on state for processing inputs and producing outputs and require a [state store](../architecture.html#streams_architecture_state) associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per window. In join operations, a windowing state store is used to collect all of the records received so far within the defined window boundary.
 
-**Note:** Following store types are used regardless of the possibly specified type (via the parameter `materialized`): 
+**Note:** Unless you provide a custom store via `Materialized`, the DSL picks built-in store implementations from your [`dsl.store.format`](config-streams.html) setting and the operator semantics below:
 
-  * non-windowed aggregations and non-windowed KTables use [TimestampedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html)s or [VersionedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html)s, depending on whether the parameter `materialized` is versioned
-  * time-windowed aggregations and KStream-KStream joins use [TimestampedWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html)s
-  * session windowed aggregations use [SessionStore](/{version}/javadoc/org/apache/kafka/streams/state/SessionStore.html)s (there is no timestamped session store as of now)
+  * With **`dsl.store.format=default`** (the default):
+      * non-windowed aggregations and non-windowed KTables use [TimestampedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html)s or [VersionedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html)s, depending on whether the parameter `materialized` is versioned
+      * time-windowed aggregations and KStream-KStream joins use [TimestampedWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html)s
+      * session windowed aggregations use [SessionStore](/{version}/javadoc/org/apache/kafka/streams/state/SessionStore.html)s (there is no timestamped session store as of now)
+  * With **`dsl.store.format=headers`**, operators that support the feature use headers-aware variants—for example [TimestampedKeyValueStoreWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStoreWithHeaders.html), [TimestampedWindowStoreWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStoreWithHeaders.html), and [SessionStoreWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/SessionStoreWithHeaders.html)—so input record headers are stored with each update. Versioned KTables continue to use `VersionedKeyValueStore`. See [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores).
 
 
 

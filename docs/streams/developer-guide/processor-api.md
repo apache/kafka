@@ -299,7 +299,13 @@ You can query timestamped state stores both with and without a timestamp.
   * For DSL operators, store data is upgraded lazily in the background.
   * No upgrade happens if you provide a custom XxxBytesStoreSupplier, but you can opt-in by implementing the [TimestampedBytesStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedBytesStore.html) interface. In this case, the old format is retained, and Streams uses a proxy store that removes/adds timestamps on read/write.
 
+## Headers in state stores (KIP-1271)
 
+Since Kafka 4.3, you can materialize state that includes Kafka [record headers](https://kafka.apache.org/documentation/#recordheaders) in addition to keys, values, and timestamps. This is useful when header metadata must survive stateful processing (aggregations, joins, and similar operations).
+
+In the **Processor API**, use [`Stores`](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html) factory methods whose names end with `WithHeaders`, together with the matching `*BuilderWithHeaders` builders—for example `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreBuilderWithHeaders`, `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`, and `persistentSessionStoreWithHeaders` with `sessionStoreBuilderWithHeaders`. Key-value reads use [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html); session aggregation reads use [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html).
+
+In the **DSL**, enable the corresponding built-in stores with the `dsl.store.format` application setting; see the [configuration reference](config-streams.html) and [DSL stateful operators](dsl-api.html#stateful-transformations). Details and migration notes are in [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores).
 
 ## Versioned Key-Value State Stores
 

@@ -602,6 +602,23 @@ Defines a default state store implementation to be used by any stateful DSL oper
 <tr>  
 <td>
 
+dsl.store.format
+</td>  
+<td>
+
+Low
+</td>  
+<td>
+
+Controls whether DSL operators materialize headers-aware state stores. The value `default` keeps existing timestamped or plain store variants per operator. The value `headers` selects headers-aware stores (where supported) so that Kafka record headers are stored and propagated with state updates alongside values and timestamps. Case-insensitive.
+</td>  
+<td>
+
+`default`
+</td> </tr>  
+<tr>  
+<td>
+
 ensure.explicit.internal.resource.naming
 </td>  
 <td>
