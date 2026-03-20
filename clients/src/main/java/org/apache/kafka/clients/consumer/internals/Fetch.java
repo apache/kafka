@@ -34,7 +34,7 @@ public class Fetch<K, V> {
     private int numRecords;
 
     public static <K, V> Fetch<K, V> empty() {
-        return new Fetch<>(new HashMap<>(), false, 0, new HashMap<>());
+        return new Fetch<>(false, 0);
     }
 
     public static <K, V> Fetch<K, V> forPartition(
@@ -47,15 +47,13 @@ public class Fetch<K, V> {
     }
 
     private Fetch(
-            Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
             boolean positionAdvanced,
-            int numRecords,
-            Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata
+            int numRecords
     ) {
-        this.records = records;
+        this.records = new HashMap<>();
         this.positionAdvanced = positionAdvanced;
         this.numRecords = numRecords;
-        this.nextOffsetAndMetadata = nextOffsetAndMetadata;
+        this.nextOffsetAndMetadata = new HashMap<>();
     }
 
     private Fetch(
