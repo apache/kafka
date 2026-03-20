@@ -34,12 +34,14 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
     private final boolean retainDuplicates;
     private final WindowStoreTypes windowStoreType;
 
-    public RocksDbWindowBytesStoreSupplier(final String name,
-                                           final long retentionPeriod,
-                                           final long segmentInterval,
-                                           final long windowSize,
-                                           final boolean retainDuplicates,
-                                           final WindowStoreTypes windowStoreType) {
+    public RocksDbWindowBytesStoreSupplier(
+        final String name,
+        final long retentionPeriod,
+        final long segmentInterval,
+        final long windowSize,
+        final boolean retainDuplicates,
+        final WindowStoreTypes windowStoreType
+    ) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.segmentInterval = segmentInterval;
