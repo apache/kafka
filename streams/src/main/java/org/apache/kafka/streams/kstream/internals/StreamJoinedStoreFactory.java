@@ -95,11 +95,12 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                 ))
                 : storeSupplier;
 
-        final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.windowStoreBuilder(
+        final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
                 supplier,
                 joinedInternal.keySerde(),
                 valueSerde
         );
+
 
         if (joinedInternal.loggingEnabled()) {
             builder.withLoggingEnabled(logConfig);

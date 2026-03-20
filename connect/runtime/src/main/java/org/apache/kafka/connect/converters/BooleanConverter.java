@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.BooleanDeserializer;
 import org.apache.kafka.common.serialization.BooleanSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -42,7 +41,7 @@ import java.util.Map;
  * When converting from bytes to Kafka Connect format, the converter will always return an optional
  * BOOLEAN schema.
  */
-public class BooleanConverter implements Converter, HeaderConverter, Versioned {
+public class BooleanConverter implements Converter, HeaderConverter {
 
     private final BooleanSerializer serializer = new BooleanSerializer();
     private final BooleanDeserializer deserializer = new BooleanDeserializer();

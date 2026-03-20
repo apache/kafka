@@ -306,14 +306,14 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testSharePollEventCallsShareManagers() {
-        SharePollEvent event = new SharePollEvent(12345);
+        SharePollEvent event = new SharePollEvent(12346, 12345);
 
         setupShareProcessor();
+        when(shareHeartbeatRequestManager.membershipManager()).thenReturn(shareMembershipManager);
         processor.process(event);
-
+        assertTrue(event.isComplete());
         verify(shareMembershipManager).maybeReconcile(true);
         verify(shareMembershipManager).onConsumerPoll();
-
         verify(shareHeartbeatRequestManager).resetPollTimer(event.pollTimeMs());
     }
 

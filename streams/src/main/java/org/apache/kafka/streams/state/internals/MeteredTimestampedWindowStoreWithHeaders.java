@@ -21,8 +21,10 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -44,6 +46,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
 
 /**
  * A Metered {@link TimestampedWindowStoreWithHeaders} wrapper that is used for recording operation metrics,
@@ -80,10 +83,37 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     @Override
     public void put(final K key, final ValueTimestampHeaders<V> value, final long windowStartTimestamp) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Headers headers = value == null || value.headers() == null ? new RecordHeaders() : value.headers();
         try {
             maybeMeasureLatency(
-                () -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers), windowStartTimestamp),
+                () -> {
+                    if (value == null) {
+                        // Deletion path
+                        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                        // Create new headers object to isolate delete operation from input record
+                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                        // Create temporary context with new headers
+                        final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                            currentContext.timestamp(),
+                            currentContext.offset(),
+                            currentContext.partition(),
+                            currentContext.topic(),
+                            deleteHeaders
+                        );
+
+                        try {
+                            internalContext.setRecordContext(temporaryContext);
+                            wrapped().put(keyBytes(key, deleteHeaders), null, windowStartTimestamp);
+                        } finally {
+                            // Restore original context
+                            internalContext.setRecordContext(currentContext);
+                        }
+                    } else {
+                        final Headers headers = value.headers() == null ? new RecordHeaders() : value.headers();
+                        wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers), windowStartTimestamp);
+                    }
+                },
                 time,
                 putSensor
             );
@@ -282,15 +312,147 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         return result;
     }
 
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetch(final K keyFrom,
+                                                                         final K keyTo,
+                                                                         final long timeFrom,
+                                                                         final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().fetch(
+                keyBytes(keyFrom, new RecordHeaders()),
+                keyBytes(keyTo, new RecordHeaders()),
+                timeFrom,
+                timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetch(final K keyFrom,
+                                                                                 final K keyTo,
+                                                                                 final long timeFrom,
+                                                                                 final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardFetch(
+                keyBytes(keyFrom, new RecordHeaders()),
+                keyBytes(keyTo, new RecordHeaders()),
+                timeFrom,
+                timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().fetchAll(timeFrom, timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardFetchAll(timeFrom, timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> all() {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().all()
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardAll() {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardAll()
+        );
+    }
+
+    private class MeteredTimestampedWindowStoreWithHeadersKeyValueIterator
+        implements KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>>, MeteredIterator {
+
+        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
+        private final long startNs;
+        private final long startTimestampMs;
+        private KeyValue<Windowed<K>, ValueTimestampHeaders<V>> cachedNext;
+
+        private MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
+            this.iter = iter;
+            this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return this.startTimestampMs;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cachedNext != null || iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<Windowed<K>, ValueTimestampHeaders<V>> next() {
+            if (cachedNext != null) {
+                final KeyValue<Windowed<K>, ValueTimestampHeaders<V>> result = cachedNext;
+                cachedNext = null;
+                return result;
+            }
+
+            final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
+            final ValueTimestampHeaders<V> valueTimestampHeaders = serdes.valueFrom(next.value, new RecordHeaders());
+            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
+            final K key = serdes.keyFrom(next.key.key().get(), headers);
+            final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
+            return KeyValue.pair(windowedKey, valueTimestampHeaders);
+        }
+
+        @Override
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                final long duration = time.nanoseconds() - startNs;
+                fetchSensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
+            }
+        }
+
+        @Override
+        public Windowed<K> peekNextKey() {
+            if (cachedNext == null) {
+                cachedNext = next();
+            }
+            return cachedNext.key;
+        }
+    }
+
     private boolean isUnderlyingStoreTimestamped() {
         Object store = wrapped();
         do {
-            if (store instanceof TimestampedBytesStore
-                    || store instanceof TimestampedToHeadersWindowStoreAdapter) {
+            // Check adapters first before attempting to unwrap
+            if (store instanceof TimestampedToHeadersWindowStoreAdapter) {
                 return true;
             }
-            store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        } while ((store instanceof WrappedStateStore));
-        return store instanceof TimestampedBytesStore;
+            if (store instanceof PlainToHeadersWindowStoreAdapter) {
+                return false; // Plain store doesn't preserve timestamps
+            }
+            if (store instanceof TimestampedBytesStore) {
+                return true;
+            }
+            // Only unwrap if it's a WrappedStateStore
+            if (store instanceof WrappedStateStore) {
+                store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
+            } else {
+                break;
+            }
+        } while (true);
+        return false;
     }
 }

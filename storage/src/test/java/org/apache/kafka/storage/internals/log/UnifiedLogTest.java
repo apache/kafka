@@ -16,64 +16,115 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.InconsistentTopicIdException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordVersion;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.common.TransactionVersion;
+import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;
+import org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.purgatory.DelayedRemoteListOffsets;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.UnexpectedAppendOffsetException;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
+import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.internals.utils.Throttler;
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Meter;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.security.DigestException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
+import java.util.Random;
+import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 
@@ -90,8 +141,9 @@ public class UnifiedLogTest {
     private final int maxTransactionTimeoutMs = 60 * 60 * 1000;
     private final ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(maxTransactionTimeoutMs, false);
     private final List<UnifiedLog> logsToClose = new ArrayList<>();
-
+    private RemoteLogManager remoteLogManager;
     private UnifiedLog log;
+    private List<TimestampAndEpoch> timestampAndEpochs;
 
     @AfterEach
     public void tearDown() throws IOException {
@@ -111,7 +163,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldApplyEpochToMessageOnAppendIfLeader() throws IOException {
-        SimpleRecord[] records = java.util.stream.IntStream.range(0, 50)
+        SimpleRecord[] records = IntStream.range(0, 50)
             .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
             .toArray(SimpleRecord[]::new);
 
@@ -136,7 +188,7 @@ public class UnifiedLogTest {
 
     @Test
     public void followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache() throws IOException {
-        int[] messageIds = java.util.stream.IntStream.range(0, 50).toArray();
+        int[] messageIds = IntStream.range(0, 50).toArray();
         SimpleRecord[] records = Arrays.stream(messageIds)
             .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
             .toArray(SimpleRecord[]::new);
@@ -1601,6 +1653,709 @@ public class UnifiedLogTest {
         assertEquals(3, log.logStartOffset());
     }
 
+    @Test
+    public void testRetentionIdempotency() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(TEN_KB)
+                .retentionBytes(-1)
+                .retentionMs(900)
+                .fileDeleteDelayMs(0)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord(mockTime.milliseconds() + 100, "a".getBytes()))), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord(mockTime.milliseconds(), "b".getBytes()))), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord(mockTime.milliseconds() + 100, "c".getBytes()))), 0);
+
+        mockTime.sleep(901);
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+        assertEquals(
+                2, 
+                log.deleteOldSegments(),
+                "Expecting two segment deletions as log start offset retention should unblock time based retention"
+        );
+        assertEquals(0, log.deleteOldSegments());
+    }
+
+    @Test
+    public void testLogStartOffsetMovementDeletesSnapshots() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(TEN_KB)
+                .retentionBytes(-1)
+                .fileDeleteDelayMs(0)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        long pid1 = 1L;
+        short epoch = 0;
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("a".getBytes())), pid1, epoch, 0, 0L), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("b".getBytes())), pid1, epoch, 1, 0L), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("c".getBytes())), pid1, epoch, 2, 0L), 0);
+        log.updateHighWatermark(log.logEndOffset());
+        assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size());
+
+        // Increment the log start offset to exclude the first two segments.
+        log.maybeIncrementLogStartOffset(log.logEndOffset() - 1, LogStartOffsetIncrementReason.ClientRecordDeletion);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        // Sleep to breach the file delete delay and run scheduled file deletion tasks
+        mockTime.sleep(1);
+        assertEquals(1, ProducerStateManager.listSnapshotFiles(logDir).size(),
+                "expect a single producer state snapshot remaining");
+    }
+
+    @Test
+    public void testCompactionDeletesProducerStateSnapshots() throws IOException, DigestException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(TEN_KB)
+                .cleanupPolicy(TopicConfig.CLEANUP_POLICY_COMPACT)
+                .fileDeleteDelayMs(0)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        long pid1 = 1L;
+        short epoch = 0;
+
+        OffsetMap fakeOffsetMap = new LogTestUtils.FakeOffsetMap();
+
+        Cleaner cleaner = new Cleaner(0, fakeOffsetMap, 64 * 1024, 64 * 1024, 0.75,
+                new Throttler(Double.MAX_VALUE, Long.MAX_VALUE, "throttler", "entries", mockTime),
+                mockTime, tp -> { });
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("a".getBytes(), "a".getBytes())), pid1, epoch, 0, 0L), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("a".getBytes(), "b".getBytes())), pid1, epoch, 1, 0L), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("a".getBytes(), "c".getBytes())), pid1, epoch, 2, 0L), 0);
+        log.updateHighWatermark(log.logEndOffset());
+
+        List<Long> expectedSnapshotOffsets = log.logSegments()
+                .stream()
+                .map(LogSegment::baseOffset)
+                .sorted()
+                .skip(1)
+                .collect(Collectors.toList());
+        List<Long> snapshotOffsets = ProducerStateManager.listSnapshotFiles(logDir)
+                .stream()
+                .map(f -> f.offset)
+                .sorted()
+                .collect(Collectors.toList());
+        assertEquals(
+                expectedSnapshotOffsets, 
+                snapshotOffsets,
+                "expected a snapshot file per segment base offset, except the first segment"
+        );
+        assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size());
+
+        // Clean segments, this should delete everything except the active segment since there only
+        // exists the key "a".
+        cleaner.clean(new LogToClean(log, 0, log.logEndOffset(), false));
+        // There is no other key so we don't delete anything
+        assertEquals(0, log.deleteOldSegments());
+        // Sleep to breach the file delete delay and run scheduled file deletion tasks
+        mockTime.sleep(1);
+
+        List<Long> expectedSnapshotOffsets2 = log.logSegments().stream()
+                .map(LogSegment::baseOffset).sorted().skip(1).collect(Collectors.toList());
+        List<Long> snapshotOffsets2 = ProducerStateManager.listSnapshotFiles(logDir).stream()
+                .map(f -> f.offset).sorted().collect(Collectors.toList());
+        assertEquals(expectedSnapshotOffsets2, snapshotOffsets2,
+                "expected a snapshot file per segment base offset, excluding the first");
+    }
+
+    /**
+     * After loading the log, producer state is truncated such that there are no producer state snapshot files which
+     * exceed the log end offset. This test verifies that these are removed.
+     */
+    @Test
+    public void testLoadingLogDeletesProducerStateSnapshotsPastLogEndOffset() throws IOException {
+        Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath());
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(TEN_KB)
+                .retentionBytes(-1)
+                .fileDeleteDelayMs(0)
+                .build();
+        createLog(logDir, logConfig);
+        assertEquals(0, ProducerStateManager.listSnapshotFiles(logDir).size(),
+                "expected producer state snapshots greater than the log end offset to be cleaned up");
+    }
+
+    @Test
+    public void testProducerIdMapTruncateFullyAndStartAt() throws IOException {
+        MemoryRecords records = singletonRecords("foo".getBytes());
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes())
+                .retentionBytes((long) records.sizeInBytes() * 2)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.appendAsLeader(records, 0);
+        log.takeProducerSnapshot();
+
+        log.appendAsLeader(singletonRecords("bar".getBytes()), 0);
+        log.appendAsLeader(singletonRecords("baz".getBytes()), 0);
+        log.takeProducerSnapshot();
+
+        assertEquals(3, log.logSegments().size());
+        assertEquals(3, log.latestProducerStateEndOffset());
+        assertEquals(OptionalLong.of(3), log.latestProducerSnapshotOffset());
+
+        log.truncateFullyAndStartAt(29, Optional.empty());
+        assertEquals(1, log.logSegments().size());
+        assertEquals(OptionalLong.empty(), log.latestProducerSnapshotOffset());
+        assertEquals(29, log.latestProducerStateEndOffset());
+    }
+
+    @Test
+    public void testProducerIdExpirationOnSegmentDeletion() throws IOException {
+        long pid1 = 1L;
+        short epoch = 0;
+        MemoryRecords records = LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())), pid1, epoch, 0, 0L);
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes())
+                .retentionBytes((long) records.sizeInBytes() * 2)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.appendAsLeader(records, 0);
+        log.takeProducerSnapshot();
+
+        long pid2 = 2L;
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("bar".getBytes())), pid2, epoch, 0, 0L), 0);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("baz".getBytes())), pid2, epoch, 1, 0L), 0);
+        log.takeProducerSnapshot();
+
+        assertEquals(3, log.logSegments().size());
+        assertEquals(Set.of(pid1, pid2), log.activeProducersWithLastSequence().keySet());
+
+        log.updateHighWatermark(log.logEndOffset());
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+
+        // Producer state should not be removed when deleting log segment
+        assertEquals(2, log.logSegments().size());
+        assertEquals(Set.of(pid1, pid2), log.activeProducersWithLastSequence().keySet());
+    }
+
+    @Test
+    public void testTakeSnapshotOnRollAndDeleteSnapshotOnRecoveryPointCheckpoint() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.appendAsLeader(singletonRecords("a".getBytes()), 0);
+        log.roll(Optional.of(1L));
+        assertEquals(OptionalLong.of(1L), log.latestProducerSnapshotOffset());
+        assertEquals(OptionalLong.of(1L), log.oldestProducerSnapshotOffset());
+
+        log.appendAsLeader(singletonRecords("b".getBytes()), 0);
+        log.roll(Optional.of(2L));
+        assertEquals(OptionalLong.of(2L), log.latestProducerSnapshotOffset());
+        assertEquals(OptionalLong.of(1L), log.oldestProducerSnapshotOffset());
+
+        log.appendAsLeader(singletonRecords("c".getBytes()), 0);
+        log.roll(Optional.of(3L));
+        assertEquals(OptionalLong.of(3L), log.latestProducerSnapshotOffset());
+
+        // roll triggers a flush at the starting offset of the new segment, we should retain all snapshots
+        assertEquals(OptionalLong.of(1L), log.oldestProducerSnapshotOffset());
+
+        // even if we flush within the active segment, the snapshot should remain
+        log.appendAsLeader(singletonRecords("baz".getBytes()), 0);
+        log.flushUptoOffsetExclusive(4L);
+        assertEquals(OptionalLong.of(3L), log.latestProducerSnapshotOffset());
+    }
+
+    @Test
+    public void testProducerSnapshotAfterSegmentRollOnAppend() throws IOException {
+        long producerId = 1L;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        log.appendAsLeader(LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), new byte[512])),
+                producerId, (short) 0, 0, 0L), 0);
+
+        // The next append should overflow the segment and cause it to roll
+        log.appendAsLeader(LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), new byte[512])),
+                producerId, (short) 0, 1, 0L), 0);
+
+        assertEquals(2, log.logSegments().size());
+        assertEquals(1L, log.activeSegment().baseOffset());
+        assertEquals(OptionalLong.of(1L), log.latestProducerSnapshotOffset());
+
+        // Force a reload from the snapshot to check its consistency
+        log.truncateTo(1L);
+
+        assertEquals(2, log.logSegments().size());
+        assertEquals(1L, log.activeSegment().baseOffset());
+        assertFalse(log.activeSegment().log().batches().iterator().hasNext());
+        assertEquals(OptionalLong.of(1L), log.latestProducerSnapshotOffset());
+
+        ProducerStateEntry lastEntry = log.producerStateManager().lastEntry(producerId).orElse(null);
+        assertNotNull(lastEntry);
+        assertEquals(0L, lastEntry.firstDataOffset());
+        assertEquals(0L, lastEntry.lastDataOffset());
+    }
+
+    @Test
+    public void testRebuildTransactionalState() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        long pid = 137L;
+        short epoch = 5;
+        int seq = 0;
+
+        // add some transactional records
+        MemoryRecords txnRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
+                new SimpleRecord("foo".getBytes()),
+                new SimpleRecord("bar".getBytes()),
+                new SimpleRecord("baz".getBytes()));
+        log.appendAsLeader(txnRecords, 0);
+        LogAppendInfo abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch,
+                ControlRecordType.ABORT, mockTime.milliseconds(), 0, 0,
+                TransactionVersion.TV_0.featureLevel());
+        log.updateHighWatermark(abortAppendInfo.lastOffset() + 1);
+
+        // now there should be no first unstable offset
+        assertEquals(Optional.empty(), log.firstUnstableOffset());
+
+        log.close();
+
+        UnifiedLog reopenedLog = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats,
+                mockTime.scheduler, mockTime, producerStateManagerConfig, false,
+                Optional.empty(), false);
+        reopenedLog.updateHighWatermark(abortAppendInfo.lastOffset() + 1);
+        assertEquals(Optional.empty(), reopenedLog.firstUnstableOffset());
+    }
+
+    @Test
+    public void testPeriodicProducerIdExpiration() throws IOException {
+        ProducerStateManagerConfig customConfig = new ProducerStateManagerConfig(200, false);
+        int producerIdExpirationCheckIntervalMs = 100;
+
+        long pid = 23L;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats,
+                mockTime.scheduler, mockTime, customConfig, true, Optional.empty(), false,
+                producerIdExpirationCheckIntervalMs);
+        log.appendAsLeader(LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), "foo".getBytes())),
+                pid, (short) 0, 0, 0L), 0);
+
+        assertEquals(Set.of(pid), log.activeProducersWithLastSequence().keySet());
+
+        mockTime.sleep(producerIdExpirationCheckIntervalMs);
+        assertEquals(Set.of(pid), log.activeProducersWithLastSequence().keySet());
+
+        mockTime.sleep(producerIdExpirationCheckIntervalMs);
+        assertEquals(Set.of(), log.activeProducersWithLastSequence().keySet());
+    }
+
+    @Test
+    public void testDuplicateAppends() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogTestUtils.LogConfigBuilder().build());
+        long pid = 1L;
+        short epoch = 0;
+
+        int[] seq = {0};
+        // Pad the beginning of the log.
+        for (int i = 0; i <= 5; i++) {
+            MemoryRecords record = LogTestUtils.records(
+                    List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
+                    pid, epoch, seq[0], 0L);
+            log.appendAsLeader(record, 0);
+            seq[0]++;
+        }
+        // Append an entry with multiple log records.
+        Supplier<MemoryRecords> createRecords = () -> LogTestUtils.records(List.of(
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes()),
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes()),
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes())
+        ), pid, epoch, seq[0], 0L);
+        LogAppendInfo multiEntryAppendInfo = log.appendAsLeader(createRecords.get(), 0);
+        assertEquals(3, multiEntryAppendInfo.lastOffset() - multiEntryAppendInfo.firstOffset() + 1,
+                "should have appended 3 entries");
+
+        // Append a Duplicate of the tail, when the entry at the tail has multiple records.
+        LogAppendInfo dupMultiEntryAppendInfo = log.appendAsLeader(createRecords.get(), 0);
+        assertEquals(multiEntryAppendInfo.firstOffset(), dupMultiEntryAppendInfo.firstOffset(),
+                "Somehow appended a duplicate entry with multiple log records to the tail");
+        assertEquals(multiEntryAppendInfo.lastOffset(), dupMultiEntryAppendInfo.lastOffset(),
+                "Somehow appended a duplicate entry with multiple log records to the tail");
+
+        seq[0] += 3;
+
+        // Append a partial duplicate of the tail. This is not allowed.
+        MemoryRecords partialDup = LogTestUtils.records(List.of(
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes()),
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes())
+        ), pid, epoch, seq[0] - 2, 0L);
+        assertThrows(OutOfOrderSequenceException.class, () -> log.appendAsLeader(partialDup, 0),
+                () -> "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records in the middle of the log.");
+
+        // Append a duplicate of the batch which is 4th from the tail. This should succeed without error since we
+        // retain the batch metadata of the last 5 batches.
+        MemoryRecords duplicateOfFourth = LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
+                pid, epoch, 2, 0L);
+        log.appendAsLeader(duplicateOfFourth, 0);
+
+        // Duplicates at older entries are reported as OutOfOrderSequence errors
+        MemoryRecords oldDup = LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), "key-1".getBytes(), "value-1".getBytes())),
+                pid, epoch, 1, 0L);
+        assertThrows(OutOfOrderSequenceException.class, () -> log.appendAsLeader(oldDup, 0),
+                () -> "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a batch which is older than the last 5 appended batches.");
+
+        // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
+        Supplier<MemoryRecords> createRecordsWithDuplicate = () -> LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
+                pid, epoch, seq[0], 0L);
+        LogAppendInfo origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate.get(), 0);
+        LogAppendInfo newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate.get(), 0);
+        assertEquals(origAppendInfo.firstOffset(), newAppendInfo.firstOffset(), "Inserted a duplicate records into the log");
+        assertEquals(origAppendInfo.lastOffset(), newAppendInfo.lastOffset(), "Inserted a duplicate records into the log");
+    }
+
+    @Test
+    public void testMultipleProducerIdsPerMemoryRecord() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogTestUtils.LogConfigBuilder().build());
+
+        short producerEpoch = 0;
+        int partitionLeaderEpoch = 0;
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+
+        MemoryRecordsBuilder builder = MemoryRecords.builder(
+                buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), 1L, producerEpoch, 0, false,
+                partitionLeaderEpoch);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), 2L, producerEpoch, 0, false,
+                partitionLeaderEpoch);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        builder = MemoryRecords.builder(
+                buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), 3L, producerEpoch, 0, false,
+                partitionLeaderEpoch);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        builder = MemoryRecords.builder(
+                buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), 4L, producerEpoch, 0, false,
+                partitionLeaderEpoch);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        buffer.flip();
+        MemoryRecords memoryRecords = MemoryRecords.readableRecords(buffer);
+
+        log.appendAsFollower(memoryRecords, partitionLeaderEpoch);
+        log.flush(false);
+
+        FetchDataInfo fetchedData = log.read(0, Integer.MAX_VALUE, FetchIsolation.LOG_END, true);
+
+        Iterator<? extends RecordBatch> origIterator = memoryRecords.batches().iterator();
+        for (RecordBatch batch : fetchedData.records.batches()) {
+            assertTrue(origIterator.hasNext());
+            RecordBatch origEntry = origIterator.next();
+            assertEquals(origEntry.producerId(), batch.producerId());
+            assertEquals(origEntry.baseOffset(), batch.baseOffset());
+            assertEquals(origEntry.baseSequence(), batch.baseSequence());
+        }
+    }
+
+    @Test
+    public void testDuplicateAppendToFollower() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        short producerEpoch = 0;
+        long pid = 1L;
+        int baseSequence = 0;
+        int partitionLeaderEpoch = 0;
+        // The point of this test is to ensure that validation isn't performed on the follower.
+        // this is a bit contrived. to trigger the duplicate case for a follower append, we have to append
+        // a batch with matching sequence numbers, but valid increasing offsets
+        assertEquals(0L, log.logEndOffset());
+        log.appendAsFollower(
+                MemoryRecords.withIdempotentRecords(0L, Compression.NONE, pid, producerEpoch, baseSequence,
+                        partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())),
+                partitionLeaderEpoch);
+        log.appendAsFollower(
+                MemoryRecords.withIdempotentRecords(2L, Compression.NONE, pid, producerEpoch, baseSequence,
+                        partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())),
+                partitionLeaderEpoch);
+
+        // Ensure that even the duplicate sequences are accepted on the follower.
+        assertEquals(4L, log.logEndOffset());
+    }
+
+    @Test
+    public void testMultipleProducersWithDuplicatesInSingleAppend() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        long pid1 = 1L;
+        long pid2 = 2L;
+        short producerEpoch = 0;
+
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+
+        // pid1 seq = 0
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), pid1, producerEpoch, 0);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        // pid2 seq = 0
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), pid2, producerEpoch, 0);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        // pid1 seq = 1
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), pid1, producerEpoch, 1);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        // pid2 seq = 1
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), pid2, producerEpoch, 1);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        // pid1 seq = 1 (duplicate)
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, 4L, mockTime.milliseconds(), pid1, producerEpoch, 1);
+        builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+        builder.close();
+
+        buffer.flip();
+
+        int epoch = 0;
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        records.batches().forEach(b -> b.setPartitionLeaderEpoch(epoch));
+
+        // Ensure that batches with duplicates are accepted on the follower.
+        assertEquals(0L, log.logEndOffset());
+        log.appendAsFollower(records, epoch);
+        assertEquals(5L, log.logEndOffset());
+    }
+
+    @Test
+    public void testOldProducerEpoch() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogTestUtils.LogConfigBuilder().build());
+        long pid = 1L;
+        short newEpoch = 1;
+        short oldEpoch = 0;
+
+        MemoryRecords records = LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
+                pid, newEpoch, 0, 0L);
+        log.appendAsLeader(records, 0);
+
+        MemoryRecords nextRecords = LogTestUtils.records(
+                List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
+                pid, oldEpoch, 0, 0L);
+        assertThrows(InvalidProducerEpochException.class, () -> log.appendAsLeader(nextRecords, 0));
+    }
+
+    @Test
+    public void testDeleteSnapshotsOnIncrementLogStartOffset() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        long pid1 = 1L;
+        long pid2 = 2L;
+        short epoch = 0;
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())), pid1, epoch, 0, 0L), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord(mockTime.milliseconds(), "b".getBytes())), pid2, epoch, 0, 0L), 0);
+        log.roll();
+
+        assertEquals(2, log.activeProducersWithLastSequence().size());
+        assertEquals(2, ProducerStateManager.listSnapshotFiles(log.dir()).size());
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(2L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        // force retention to kick in so that the snapshot files are cleaned up.
+        mockTime.sleep(logConfig.fileDeleteDelayMs + 1000); // advance the clock so file deletion takes place
+
+        // Deleting records should not remove producer state but should delete snapshots after the file deletion delay.
+        assertEquals(2, log.activeProducersWithLastSequence().size());
+        assertEquals(1, ProducerStateManager.listSnapshotFiles(log.dir()).size());
+        int retainedLastSeq = log.activeProducersWithLastSequence().get(pid2);
+        assertEquals(0, retainedLastSeq);
+    }
+
+    /**
+     * Test for jitter for time based log roll. This test appends messages then changes the time
+     * using the mock clock to force the log to roll and checks the number of segments.
+     */
+    @Test
+    public void testTimeBasedLogRollJitter() throws IOException {
+        MemoryRecords set = singletonRecords("test".getBytes(), mockTime.milliseconds());
+        long maxJitter = 20 * 60L;
+        // create a log
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentMs(ONE_HOUR)
+                .segmentJitterMs(maxJitter)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        assertEquals(1, log.numberOfSegments(), "Log begins with a single empty segment.");
+        log.appendAsLeader(set, 0);
+
+        mockTime.sleep(log.config().segmentMs - maxJitter);
+        set = singletonRecords("test".getBytes(), mockTime.milliseconds());
+        log.appendAsLeader(set, 0);
+        assertEquals(1, log.numberOfSegments(),
+                "Log does not roll on this append because it occurs earlier than max jitter");
+        mockTime.sleep(maxJitter - log.activeSegment().rollJitterMs() + 1);
+        set = singletonRecords("test".getBytes(), mockTime.milliseconds());
+        log.appendAsLeader(set, 0);
+        assertEquals(2, log.numberOfSegments(),
+                "Log should roll after segmentMs adjusted by random jitter");
+    }
+
+    /**
+     * Test that appending more than the maximum segment size rolls the log
+     */
+    @Test
+    public void testSizeBasedLogRoll() throws IOException {
+        MemoryRecords createRecords = singletonRecords("test".getBytes(), mockTime.milliseconds());
+        int setSize = createRecords.sizeInBytes();
+        int msgPerSeg = 10;
+        int segmentSize = msgPerSeg * (setSize - 1); // each segment will be 10 messages
+        // create a log
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(segmentSize).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
+
+        // segments expire in size
+        for (int i = 0; i <= msgPerSeg; i++) {
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds()), 0);
+        }
+        assertEquals(2, log.numberOfSegments(), "There should be exactly 2 segments.");
+    }
+
+    /**
+     * Test that we can open and append to an empty log
+     */
+    @Test
+    public void testLoadEmptyLog() throws IOException {
+        Files.createFile(LogFileUtils.logFile(logDir, 0).toPath());
+        Files.createFile(LogFileUtils.offsetIndexFile(logDir, 0).toPath());
+        UnifiedLog log = createLog(logDir, new LogTestUtils.LogConfigBuilder().build());
+        log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds()), 0);
+    }
+
+    /**
+     * This test case appends a bunch of messages and checks that we can read them all back using sequential offsets.
+     */
+    @Test
+    public void testAppendAndReadWithSequentialOffsets() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(71).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        byte[][] values = IntStream.iterate(0, i -> i + 2).limit(50)
+                .mapToObj(id -> String.valueOf(id).getBytes())
+                .toArray(byte[][]::new);
+
+        for (byte[] value : values) {
+            log.appendAsLeader(singletonRecords(value), 0);
+        }
+
+        for (int i = 0; i < values.length; i++) {
+            RecordBatch read = log.read(i, 1, FetchIsolation.LOG_END, true).records.batches().iterator().next();
+            assertEquals(i, read.lastOffset(), "Offset read should match order appended.");
+            Record actual = read.iterator().next();
+            assertNull(actual.key(), "Key should be null");
+            assertEquals(ByteBuffer.wrap(values[i]), actual.value(), "Values not equal");
+        }
+        long count = 0;
+        for (RecordBatch batch : log.read(values.length, 100, FetchIsolation.LOG_END, true).records.batches()) {
+            assertNotNull(batch);
+            count++;
+        }
+        assertEquals(0, count, "Reading beyond the last message returns nothing.");
+    }
+
+    /**
+     * This test appends a bunch of messages with non-sequential offsets and checks that we can read the correct message
+     * from any offset less than the logEndOffset including offsets not appended.
+     */
+    @Test
+    public void testAppendAndReadWithNonSequentialOffsets() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(72).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        int[] seqPart = IntStream.range(0, 50).toArray();
+        int[] nonSeqPart = IntStream.iterate(50, n -> n + 7).limit(22).toArray(); // 50,57,...,197
+        // combined message ids
+        int[] messageIds = new int[seqPart.length + nonSeqPart.length];
+        System.arraycopy(seqPart, 0, messageIds, 0, seqPart.length);
+        System.arraycopy(nonSeqPart, 0, messageIds, seqPart.length, nonSeqPart.length);
+        SimpleRecord[] records = Arrays.stream(messageIds)
+                .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
+                .toArray(SimpleRecord[]::new);
+
+        // now test the case that we give the offsets and use non-sequential offsets
+        for (int i = 0; i < records.length; i++) {
+            log.appendAsFollower(
+                    MemoryRecords.withRecords(messageIds[i], Compression.NONE, 0, records[i]),
+                    Integer.MAX_VALUE);
+        }
+
+        int maxId = Arrays.stream(messageIds).max().getAsInt();
+        for (int i = 50; i < maxId; i++) {
+            final int offset = i;
+            int idx = 0;
+            while (idx < messageIds.length && messageIds[idx] < offset) idx++;
+            Record read = log.read(i, 100, FetchIsolation.LOG_END, true).records.records().iterator().next();
+            assertEquals(messageIds[idx], read.offset(), "Offset read should match message id.");
+            assertEquals(records[idx], new SimpleRecord(read), "Message should match appended.");
+        }
+    }
+
+    /**
+     * This test covers an odd case where we have a gap in the offsets that falls at the end of a log segment.
+     * Specifically we create a log where the last message in the first segment has offset 0. If we
+     * then read offset 1, we should expect this read to come from the second segment, even though the
+     * first segment has the greatest lower bound on the offset.
+     */
+    @Test
+    public void testReadAtLogGap() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(300).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        // keep appending until we have two segments with only a single message in the second segment
+        while (log.numberOfSegments() == 1) {
+            log.appendAsLeader(singletonRecords("42".getBytes()), 0);
+        }
+
+        // now manually truncate off all but one message from the first segment to create a gap in the messages
+        log.logSegments().get(0).truncateTo(1);
+
+        assertEquals(log.logEndOffset() - 1,
+                log.read(1, 200, FetchIsolation.LOG_END, true).records.batches().iterator().next().lastOffset(),
+                "A read should now return the last message in the log");
+    }
+
+    @Test
+    public void testLogRollAfterLogHandlerClosed() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.closeHandlers();
+        assertThrows(KafkaStorageException.class, () -> log.roll(Optional.of(1L)));
+    }
+
     private void assertValidLogOffsetMetadata(UnifiedLog log, LogOffsetMetadata offsetMetadata) throws IOException {
         assertFalse(offsetMetadata.messageOffsetOnly());
 
@@ -1650,6 +2405,11 @@ public class UnifiedLogTest {
                 producerStateManagerConfig, true, Optional.empty(), remoteStorageSystemEnable);
     }
 
+    private UnifiedLog createLog(File dir, LogConfig config, long recoveryPoint) throws IOException {
+        return createLog(dir, config, 0L, recoveryPoint, brokerTopicStats, mockTime.scheduler, mockTime,
+                producerStateManagerConfig, true, Optional.empty(), false);
+    }
+
     private UnifiedLog createLog(
             File dir,
             LogConfig config,
@@ -1662,6 +2422,24 @@ public class UnifiedLogTest {
             boolean lastShutdownClean,
             Optional<Uuid> topicId,
             boolean remoteStorageSystemEnable) throws IOException {
+        return createLog(dir, config, logStartOffset, recoveryPoint, brokerTopicStats, scheduler, time,
+                producerStateManagerConfig, lastShutdownClean, topicId, remoteStorageSystemEnable,
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT);
+    }
+
+    private UnifiedLog createLog(
+            File dir,
+            LogConfig config,
+            long logStartOffset,
+            long recoveryPoint,
+            BrokerTopicStats brokerTopicStats,
+            Scheduler scheduler,
+            MockTime time,
+            ProducerStateManagerConfig producerStateManagerConfig,
+            boolean lastShutdownClean,
+            Optional<Uuid> topicId,
+            boolean remoteStorageSystemEnable,
+            int producerIdExpirationCheckIntervalMs) throws IOException {
 
         UnifiedLog log = UnifiedLog.create(
                 dir,
@@ -1673,7 +2451,7 @@ public class UnifiedLogTest {
                 time,
                 3600000,
                 producerStateManagerConfig,
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                producerIdExpirationCheckIntervalMs,
                 new LogDirFailureChannel(10),
                 lastShutdownClean,
                 topicId,
@@ -1684,10 +2462,6 @@ public class UnifiedLogTest {
 
         logsToClose.add(log);
         return log;
-    }
-
-    public static MemoryRecords singletonRecords(byte[] value, byte[] key) {
-        return singletonRecords(value, key, Compression.NONE, RecordBatch.NO_TIMESTAMP, RecordBatch.CURRENT_MAGIC_VALUE);
     }
 
     public static MemoryRecords singletonRecords(byte[] value, long timestamp) {
@@ -1912,6 +2686,1651 @@ public class UnifiedLogTest {
         // Percentage = (20 * 100) / 10 = 200%
         assertEquals(200, yammerMetricValue(metricName),
                 "Metric should be updated in finally block even when exception occurs");
+    }
+    
+    @Test
+    public void testReadWithMinMessage() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(72)
+                .build();
+        log = createLog(logDir, logConfig);
+        int[] messageIds = IntStream.concat(
+                IntStream.range(0, 50),
+                IntStream.iterate(50, i -> i < 200, i -> i + 7)
+        ).toArray();
+        SimpleRecord[] records = Arrays.stream(messageIds)
+                .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
+                .toArray(SimpleRecord[]::new);
+
+        // now test the case that we give the offsets and use non-sequential offsets
+        for (int i = 0; i < records.length; i++) {
+            log.appendAsFollower(
+                    MemoryRecords.withRecords(messageIds[i], Compression.NONE, 0, records[i]),
+                    Integer.MAX_VALUE
+            );
+        }
+
+        int maxMessageId = Arrays.stream(messageIds).max().getAsInt();
+        for (int i = 50; i < maxMessageId; i++) {
+            int offset = i;
+            int idx = IntStream.range(0, messageIds.length)
+                    .filter(j -> messageIds[j] >= offset)
+                    .findFirst()
+                    .getAsInt();
+
+            List<FetchDataInfo> fetchResults = List.of(
+                    log.read(i, 1, FetchIsolation.LOG_END, true),
+                    log.read(i, 100000, FetchIsolation.LOG_END, true),
+                    log.read(i, 100, FetchIsolation.LOG_END, true)
+            );
+            for (FetchDataInfo fetchDataInfo : fetchResults) {
+                Record read = fetchDataInfo.records.records().iterator().next();
+                assertEquals(messageIds[idx], read.offset(), "Offset read should match message id.");
+                assertEquals(records[idx], new SimpleRecord(read), "Message should match appended.");
+            }
+        }
+    }
+
+    @Test
+    public void testReadWithTooSmallMaxLength() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(72)
+                .build();
+        log = createLog(logDir, logConfig);
+        int[] messageIds = IntStream.concat(
+                IntStream.range(0, 50),
+                IntStream.iterate(50, i -> i < 200, i -> i + 7)
+        ).toArray();
+        SimpleRecord[] records = Arrays.stream(messageIds)
+                .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
+                .toArray(SimpleRecord[]::new);
+
+        // now test the case that we give the offsets and use non-sequential offsets
+        for (int i = 0; i < records.length; i++) {
+            log.appendAsFollower(
+                    MemoryRecords.withRecords(messageIds[i], Compression.NONE, 0, records[i]),
+                    Integer.MAX_VALUE
+            );
+        }
+
+        int maxMessageId = Arrays.stream(messageIds).max().getAsInt();
+        for (int i = 50; i < maxMessageId; i++) {
+            assertEquals(MemoryRecords.EMPTY, log.read(i, 0, FetchIsolation.LOG_END, false).records);
+
+            // we return an incomplete message instead of an empty one for the case below
+            // we use this mechanism to tell consumers of the fetch request version 2 and below that the message size is
+            // larger than the fetch size
+            // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
+            // partition
+            FetchDataInfo fetchInfo = log.read(i, 1, FetchIsolation.LOG_END, false);
+            assertTrue(fetchInfo.firstEntryIncomplete);
+            assertInstanceOf(FileRecords.class, fetchInfo.records);
+            assertEquals(1, fetchInfo.records.sizeInBytes());
+        }
+    }
+
+    /**
+     * Test reading at the boundary of the log, specifically
+     * - reading from the logEndOffset should give an empty message set
+     * - reading from the maxOffset should give an empty message set
+     * - reading beyond the log end offset should throw an OffsetOutOfRangeException
+     */
+    @Test
+    public void testReadOutOfRange() throws IOException {
+        // create empty log files to simulate a log starting at offset 1024
+        Files.createFile(LogFileUtils.logFile(logDir, 1024).toPath());
+        Files.createFile(LogFileUtils.offsetIndexFile(logDir, 1024).toPath());
+
+        // set up replica log starting with offset 1024 and with one message (at offset 1024)
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024)
+                .build();
+        log = createLog(logDir, logConfig);
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("42".getBytes())), 0);
+
+        assertEquals(
+                0,
+                log.read(1025, 1000, FetchIsolation.LOG_END, true).records.sizeInBytes(),
+                "Reading at the log end offset should produce 0 byte read."
+        );
+
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(0, 1000, FetchIsolation.LOG_END, true));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(1026, 1000, FetchIsolation.LOG_END, true));
+    }
+
+    @Test
+    public void testFlushingEmptyActiveSegments() throws IOException {
+        log = createLog(logDir, new LogConfig(new Properties()));
+        MemoryRecords message = MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(mockTime.milliseconds(), null, "Test".getBytes())
+        );
+        
+        log.appendAsLeader(message, 0);
+        log.roll();
+        assertEquals(2, logDir.listFiles(f -> f.getName().endsWith(".log")).length);
+        assertEquals(1, logDir.listFiles(f -> f.getName().endsWith(".index")).length);
+        assertEquals(0, log.activeSegment().size());
+        log.flush(true);
+        assertEquals(2, logDir.listFiles(f -> f.getName().endsWith(".log")).length);
+        assertEquals(2, logDir.listFiles(f -> f.getName().endsWith(".index")).length);
+    }
+
+    /**
+     * Test that covers reads and writes on a multisegment log. This test appends a bunch of messages
+     * and then reads them all back and checks that the message read and offset matches what was appended.
+     */
+    @Test
+    public void testLogRolls() throws IOException, InterruptedException {
+        // create a multipart log with 100 messages
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(100)
+                .build();
+        log = createLog(logDir, logConfig);
+        int numMessages = 100;
+        MemoryRecords[] messageSets = IntStream.range(0, numMessages)
+                .mapToObj(i -> MemoryRecords.withRecords(
+                        Compression.NONE,
+                        new SimpleRecord(mockTime.milliseconds(), null, String.valueOf(i).getBytes()))
+                ).toArray(MemoryRecords[]::new);
+        for (MemoryRecords messageSet : messageSets) {
+            log.appendAsLeader(messageSet, 0);
+        }
+        log.flush(false);
+
+        // do successive reads to ensure all our messages are there
+        long offset = 0L;
+        for (int i = 0; i < numMessages; i++) {
+            Iterable<? extends RecordBatch> batches = log.read(offset, 1024 * 1024, FetchIsolation.LOG_END, true).records.batches();
+            RecordBatch head = batches.iterator().next();
+            assertEquals(offset, head.lastOffset(), "Offsets not equal");
+
+            Record expected = messageSets[i].records().iterator().next();
+            Record actual = head.iterator().next();
+            assertEquals(expected.key(), actual.key(), "Keys not equal at offset " + offset);
+            assertEquals(expected.value(), actual.value(), "Values not equal at offset " + offset);
+            assertEquals(expected.timestamp(), actual.timestamp(), "Timestamps not equal at offset " + offset);
+            offset = head.lastOffset() + 1;
+        }
+        Records lastRead = log.read(numMessages, 1024 * 1024, FetchIsolation.LOG_END, true).records;
+        assertFalse(lastRead.records().iterator().hasNext(), "Should be no more messages");
+
+        // check that rolling the log forced a flush, the flush is async so retry in case of failure
+        TestUtils.retryOnExceptionWithTimeout(1000L, () ->
+                assertTrue(log.recoveryPoint() >= log.activeSegment().baseOffset(), "Log roll should have forced flush")
+        );
+    }
+
+    /**
+     * Test reads at offsets that fall within compressed message set boundaries.
+     */
+    @Test
+    public void testCompressedMessages() throws IOException {
+        // this log should roll after every message set
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(110)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        // append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(),
+                new SimpleRecord("hello".getBytes()), new SimpleRecord("there".getBytes())), 0);
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(),
+                new SimpleRecord("alpha".getBytes()), new SimpleRecord("beta".getBytes())), 0);
+
+        // we should always get the first message in the compressed set when reading any offset in the set
+        assertEquals(0, read(log, 0).iterator().next().offset(), "Read at offset 0 should produce 0");
+        assertEquals(0, read(log, 1).iterator().next().offset(), "Read at offset 1 should produce 0");
+        assertEquals(2, read(log, 2).iterator().next().offset(), "Read at offset 2 should produce 2");
+        assertEquals(2, read(log, 3).iterator().next().offset(), "Read at offset 3 should produce 2");
+    }
+
+    private Iterable<Record> read(UnifiedLog log, long offset) throws IOException {
+        return log.read(offset, 4096, FetchIsolation.LOG_END, true).records.records();
+    }
+
+    /**
+     * Test garbage collecting old segments
+     */
+    @Test
+    public void testThatGarbageCollectingSegmentsDoesntChangeOffset() throws IOException {
+        for (int messagesToAppend : List.of(0, 1, 25)) {
+            logDir.mkdirs();
+            // first test a log segment starting at 0
+            LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                    .segmentBytes(100)
+                    .retentionMs(0)
+                    .build();
+            UnifiedLog testLog = createLog(logDir, logConfig);
+            for (int i = 0; i < messagesToAppend; i++) {
+                testLog.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+                        new SimpleRecord(mockTime.milliseconds() - 10, null, String.valueOf(i).getBytes())), 0);
+            }
+
+            long currOffset = testLog.logEndOffset();
+            assertEquals(currOffset, messagesToAppend);
+
+            // time goes by; the log file is deleted
+            testLog.updateHighWatermark(currOffset);
+            testLog.deleteOldSegments();
+
+            assertEquals(currOffset, testLog.logEndOffset(), "Deleting segments shouldn't have changed the logEndOffset");
+            assertEquals(1, testLog.numberOfSegments(), "We should still have one segment left");
+            assertEquals(0, testLog.deleteOldSegments(), "Further collection shouldn't delete anything");
+            assertEquals(currOffset, testLog.logEndOffset(), "Still no change in the logEndOffset");
+            assertEquals(currOffset,
+                    testLog.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+                            new SimpleRecord(mockTime.milliseconds(), null, "hello".getBytes())), 0).firstOffset(),
+                    "Should still be able to append and should get the logEndOffset assigned to the new append");
+
+            // cleanup the log
+            logsToClose.remove(testLog);
+            testLog.delete();
+        }
+    }
+
+    /**
+     * MessageSet size shouldn't exceed the config.segmentSize, check that it is properly enforced by
+     * appending a message set larger than the config.segmentSize setting and checking that an exception is thrown.
+     */
+    @Test
+    public void testMessageSetSizeCheck() throws IOException {
+        MemoryRecords messageSet = MemoryRecords.withRecords(Compression.NONE,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        // append messages to log
+        int configSegmentSize = messageSet.sizeInBytes() - 1;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(configSegmentSize)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(messageSet, 0));
+    }
+
+    @Test
+    public void testCompactedTopicConstraints() throws IOException {
+        SimpleRecord keyedMessage = new SimpleRecord("and here it is".getBytes(), "this message has a key".getBytes());
+        SimpleRecord anotherKeyedMessage = new SimpleRecord("another key".getBytes(), "this message also has a key".getBytes());
+        SimpleRecord unkeyedMessage = new SimpleRecord("this message does not have a key".getBytes());
+
+        MemoryRecords messageSetWithUnkeyedMessage = MemoryRecords.withRecords(Compression.NONE, unkeyedMessage, keyedMessage);
+        MemoryRecords messageSetWithOneUnkeyedMessage = MemoryRecords.withRecords(Compression.NONE, unkeyedMessage);
+        MemoryRecords messageSetWithCompressedKeyedMessage = MemoryRecords.withRecords(Compression.gzip().build(), keyedMessage);
+        MemoryRecords messageSetWithCompressedUnkeyedMessage = MemoryRecords.withRecords(Compression.gzip().build(), keyedMessage, unkeyedMessage);
+        MemoryRecords messageSetWithKeyedMessage = MemoryRecords.withRecords(Compression.NONE, keyedMessage);
+        MemoryRecords messageSetWithKeyedMessages = MemoryRecords.withRecords(Compression.NONE, keyedMessage, anotherKeyedMessage);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .cleanupPolicy(TopicConfig.CLEANUP_POLICY_COMPACT)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        String errorMsgPrefix = "Compacted topic cannot accept message without key";
+
+        RecordValidationException e = assertThrows(RecordValidationException.class,
+                () -> log.appendAsLeader(messageSetWithUnkeyedMessage, 0));
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
+        assertEquals(1, e.recordErrors().size());
+        assertEquals(0, e.recordErrors().get(0).batchIndex);
+        assertTrue(e.recordErrors().get(0).message.startsWith(errorMsgPrefix));
+
+        e = assertThrows(RecordValidationException.class,
+                () -> log.appendAsLeader(messageSetWithOneUnkeyedMessage, 0));
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
+        assertEquals(1, e.recordErrors().size());
+        assertEquals(0, e.recordErrors().get(0).batchIndex);
+        assertTrue(e.recordErrors().get(0).message.startsWith(errorMsgPrefix));
+
+        e = assertThrows(RecordValidationException.class,
+                () -> log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, 0));
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
+        assertEquals(1, e.recordErrors().size());
+        assertEquals(1, e.recordErrors().get(0).batchIndex);  // batch index is 1
+        assertTrue(e.recordErrors().get(0).message.startsWith(errorMsgPrefix));
+
+        // check if metric for NoKeyCompactedTopicRecordsPerSec is logged
+        assertEquals(1, KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+                .filter(k -> k.getMBeanName().endsWith(BrokerTopicMetrics.NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC))
+                .count());
+        assertTrue(meterCount(BrokerTopicMetrics.NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC) > 0);
+
+        // the following should succeed without any InvalidMessageException
+        log.appendAsLeader(messageSetWithKeyedMessage, 0);
+        log.appendAsLeader(messageSetWithKeyedMessages, 0);
+        log.appendAsLeader(messageSetWithCompressedKeyedMessage, 0);
+    }
+
+    /**
+     * We have a max size limit on message appends, check that it is properly enforced by appending a message larger than the
+     * setting and checking that an exception is thrown.
+     */
+    @Test
+    public void testMessageSizeCheck() throws IOException {
+        MemoryRecords first = MemoryRecords.withRecords(Compression.NONE,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        MemoryRecords second = MemoryRecords.withRecords(Compression.NONE,
+                new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes()),
+                new SimpleRecord("More padding boo hoo".getBytes()));
+
+        // append messages to log
+        int maxMessageSize = second.sizeInBytes() - 1;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .maxMessageBytes(maxMessageSize)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        // should be able to append the small message
+        log.appendAsLeader(first, 0);
+
+        assertThrows(
+                RecordTooLargeException.class, 
+                () -> log.appendAsLeader(second, 0),
+                "Second message set should throw MessageSizeTooLargeException."
+        );
+    }
+
+    @Test
+    public void testMessageSizeCheckInAppendAsFollower() throws IOException {
+        MemoryRecords first = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        MemoryRecords second = MemoryRecords.withRecords(5, Compression.NONE, 0,
+                new SimpleRecord("change (I need more bytes)... blah blah blah.".getBytes()),
+                new SimpleRecord("More padding boo hoo".getBytes()));
+
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .maxMessageBytes(second.sizeInBytes() - 1)
+                .build());
+
+        log.appendAsFollower(first, Integer.MAX_VALUE);
+        // the second record is larger than limit but appendAsFollower does not validate the size.
+        log.appendAsFollower(second, Integer.MAX_VALUE);
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(InvalidMemoryRecordsProvider.class)
+    public void testInvalidMemoryRecords(MemoryRecords records, Optional<Class<Exception>> expectedException) throws IOException {
+        log = createLog(logDir, new LogConfig(new Properties()));
+        long previousEndOffset = log.logEndOffsetMetadata().messageOffset;
+
+        if (expectedException.isPresent()) {
+            assertThrows(expectedException.get(), () -> log.appendAsFollower(records, Integer.MAX_VALUE));
+        } else {
+            log.appendAsFollower(records, Integer.MAX_VALUE);
+        }
+
+        assertEquals(previousEndOffset, log.logEndOffsetMetadata().messageOffset);
+    }
+
+    @Test
+    public void testRandomRecords() throws IOException {
+        Random random = new Random();
+        for (int i = 0; i < 100; i++) {
+            int size = random.nextInt(128) + 1;
+            byte[] bytes = new byte[size];
+            random.nextBytes(bytes);
+            MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
+
+            File tempDir = TestUtils.tempDirectory();
+            File randomLogDir = TestUtils.randomPartitionLogDir(tempDir);
+            UnifiedLog testLog = createLog(randomLogDir, new LogConfig(new Properties()));
+            try {
+                long previousEndOffset = testLog.logEndOffsetMetadata().messageOffset;
+
+                // Depending on the corruption, unified log sometimes throws and sometimes returns an
+                // empty set of batches
+                assertThrows(CorruptRecordException.class, () -> {
+                    LogAppendInfo info = testLog.appendAsFollower(records, Integer.MAX_VALUE);
+                    if (info.firstOffset() == UnifiedLog.UNKNOWN_OFFSET) {
+                        throw new CorruptRecordException("Unknown offset is test");
+                    }
+                });
+
+                assertEquals(previousEndOffset, testLog.logEndOffsetMetadata().messageOffset);
+            } finally {
+                logsToClose.remove(testLog);
+                testLog.close();
+                Utils.delete(tempDir);
+            }
+        }
+    }
+
+    @Test
+    public void testInvalidLeaderEpoch() throws IOException {
+        log = createLog(logDir, new LogConfig(new Properties()));
+        long previousEndOffset = log.logEndOffsetMetadata().messageOffset;
+        int epoch = log.latestEpoch().orElse(0) + 1;
+        int numberOfRecords = 10;
+
+        SimpleRecord[] recordsForBatch = IntStream.range(0, numberOfRecords)
+                .mapToObj(n -> new SimpleRecord(String.valueOf(n).getBytes()))
+                .toArray(SimpleRecord[]::new);
+
+        MemoryRecords batchWithValidEpoch = MemoryRecords.withRecords(
+                previousEndOffset, Compression.NONE, epoch, recordsForBatch);
+
+        MemoryRecords batchWithInvalidEpoch = MemoryRecords.withRecords(
+                previousEndOffset + numberOfRecords, Compression.NONE, epoch + 1, recordsForBatch);
+
+        ByteBuffer buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
+        buffer.put(batchWithValidEpoch.buffer());
+        buffer.put(batchWithInvalidEpoch.buffer());
+        buffer.flip();
+
+        MemoryRecords combinedRecords = MemoryRecords.readableRecords(buffer);
+        log.appendAsFollower(combinedRecords, epoch);
+
+        // Check that only the first batch was appended
+        assertEquals(previousEndOffset + numberOfRecords, log.logEndOffsetMetadata().messageOffset);
+        // Check that the last fetched epoch matches the first batch
+        assertEquals(epoch, (int) log.latestEpoch().get());
+    }
+
+    @Test
+    public void testLogFlushesPartitionMetadataOnAppend() throws IOException {
+        log = createLog(logDir, new LogConfig(new Properties()));
+        MemoryRecords record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("simpleValue".getBytes()));
+
+        Uuid topicId = Uuid.randomUuid();
+        log.partitionMetadataFile().get().record(topicId);
+
+        // Should trigger a synchronous flush
+        log.appendAsLeader(record, 0);
+        assertTrue(log.partitionMetadataFile().get().exists());
+        assertEquals(topicId, log.partitionMetadataFile().get().read().topicId());
+    }
+
+    @Test
+    public void testLogFlushesPartitionMetadataOnClose() throws IOException {
+        LogConfig logConfig = new LogConfig(new Properties());
+        UnifiedLog firstLog = createLog(logDir, logConfig);
+        Uuid topicId = Uuid.randomUuid();
+        firstLog.partitionMetadataFile().get().record(topicId);
+
+        // Should trigger a synchronous flush
+        firstLog.close();
+
+        // We open the log again, and the partition metadata file should exist with the same ID.
+        log = createLog(logDir, logConfig);
+        assertTrue(log.partitionMetadataFile().get().exists());
+        assertEquals(topicId, log.partitionMetadataFile().get().read().topicId());
+    }
+
+    @Test
+    public void testLogRecoversTopicId() throws IOException {
+        LogConfig logConfig = new LogConfig(new Properties());
+        UnifiedLog firstLog = createLog(logDir, logConfig);
+        Uuid topicId = Uuid.randomUuid();
+        firstLog.assignTopicId(topicId);
+        firstLog.close();
+
+        // test recovery case
+        log = createLog(logDir, logConfig);
+        assertTrue(log.topicId().isPresent());
+        assertEquals(topicId, log.topicId().get());
+    }
+
+    @Test
+    public void testLogFailsWhenInconsistentTopicIdSet() throws IOException {
+        LogConfig logConfig = new LogConfig(new Properties());
+        UnifiedLog firstLog = createLog(logDir, logConfig);
+        Uuid topicId = Uuid.randomUuid();
+        firstLog.assignTopicId(topicId);
+        firstLog.close();
+
+        // test creating a log with a new ID
+        assertThrows(InconsistentTopicIdException.class, () ->
+                createLog(logDir, logConfig, 0L, 0L, brokerTopicStats, mockTime.scheduler, mockTime,
+                        producerStateManagerConfig, false, Optional.of(Uuid.randomUuid()), false));
+    }
+
+    /**
+     * Test building the time index on the follower by setting assignOffsets to false.
+     */
+    @Test
+    public void testBuildTimeIndexWhenNotAssigningOffsets() throws IOException {
+        int numMessages = 100;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(10000)
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        for (int i = 0; i < numMessages; i++) {
+            log.appendAsFollower(
+                    MemoryRecords.withRecords(100 + i, Compression.NONE, 0,
+                            new SimpleRecord(mockTime.milliseconds() + i, String.valueOf(i).getBytes())),
+                    Integer.MAX_VALUE);
+        }
+
+        int timeIndexEntries = log.logSegments().stream()
+                .mapToInt(segment -> {
+                    try {
+                        return segment.timeIndex().entries();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).sum();
+        assertEquals(numMessages - 1, timeIndexEntries,
+                "There should be " + (numMessages - 1) + " time index entries");
+        assertEquals(mockTime.milliseconds() + numMessages - 1,
+                log.activeSegment().timeIndex().lastEntry().timestamp(),
+                "The last time index entry should have timestamp " + (mockTime.milliseconds() + numMessages - 1));
+    }
+
+    @Test
+    public void testFetchOffsetByTimestampIncludesLeaderEpoch() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        assertEquals(new OffsetResultHolder(Optional.empty()),
+                log.fetchOffsetByTimestamp(0L, Optional.empty()));
+
+        long firstTimestamp = mockTime.milliseconds();
+        int firstLeaderEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), firstLeaderEpoch);
+
+        long secondTimestamp = firstTimestamp + 1;
+        int secondLeaderEpoch = 1;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), secondLeaderEpoch);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))),
+                log.fetchOffsetByTimestamp(firstTimestamp, Optional.empty()));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))),
+                log.fetchOffsetByTimestamp(secondTimestamp, Optional.empty()));
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Optional.empty()));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.empty()));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.empty()));
+
+        // The cache can be updated directly after a leader change.
+        // The new latest offset should reflect the updated epoch.
+        log.assignEpochStartOffset(2, 2L);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.empty()));
+    }
+
+    @Test
+    public void testFetchOffsetByTimestampWithMaxTimestampIncludesTimestamp() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        assertEquals(new OffsetResultHolder(Optional.empty()),
+                log.fetchOffsetByTimestamp(0L, Optional.empty()));
+
+        long firstTimestamp = mockTime.milliseconds();
+        int leaderEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), leaderEpoch);
+
+        long secondTimestamp = firstTimestamp + 1;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), leaderEpoch);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), leaderEpoch);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(leaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+    }
+
+    @Test
+    public void testFetchOffsetByTimestampFromRemoteStorage() throws Exception {
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
+        RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
+                0,
+                logDir.getAbsolutePath(),
+                "clusterId",
+                mockTime,
+                tp -> Optional.empty(),
+                (tp, offset) -> { },
+                brokerTopicStats,
+                new Metrics(),
+                Optional.empty()));
+        remoteLogManager.setDelayedOperationPurgatory(purgatory);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        // Note that the log is empty, so remote offset read won't happen
+        assertEquals(new OffsetResultHolder(Optional.empty()),
+                log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)));
+
+        long firstTimestamp = mockTime.milliseconds();
+        int firstLeaderEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), firstLeaderEpoch);
+
+        long secondTimestamp = firstTimestamp + 1;
+        int secondLeaderEpoch = 1;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), secondLeaderEpoch);
+
+        doAnswer(ans -> {
+            long timestamp = ans.getArgument(1);
+            return Optional.of(timestamp)
+                    .filter(t -> t == firstTimestamp)
+                    .map(t -> new FileRecords.TimestampAndOffset(t, 0L, Optional.of(firstLeaderEpoch)));
+        }).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()), anyLong(), anyLong(), eq(log.leaderEpochCache()));
+        log.updateLocalLogStartOffset(1);
+
+        // In the assertions below we test that offset 0 (first timestamp) is in remote and offset 1 (second timestamp) is in local storage.
+        assertFetchOffsetByTimestamp(remoteLogManager, new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch)), firstTimestamp, log);
+        assertFetchOffsetByTimestamp(remoteLogManager, new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch)), secondTimestamp, log);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Optional.of(remoteLogManager)));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)));
+
+        log.assignEpochStartOffset(2, 2L);
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)));
+    }
+
+    @Test
+    public void testFetchLatestTieredTimestampNoRemoteStorage() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Optional.empty()));
+
+        long firstTimestamp = mockTime.milliseconds();
+        int leaderEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), leaderEpoch);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp + 1), leaderEpoch);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Optional.empty()));
+    }
+
+    @Test
+    public void testFetchLatestTieredTimestampWithRemoteStorage() throws Exception {
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
+        RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
+                0,
+                logDir.getAbsolutePath(),
+                "clusterId",
+                mockTime,
+                tp -> Optional.empty(),
+                (tp, offset) -> { },
+                brokerTopicStats,
+                new Metrics(),
+                Optional.empty()));
+        remoteLogManager.setDelayedOperationPurgatory(purgatory);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        // Note that the log is empty, so remote offset read won't happen
+        assertEquals(new OffsetResultHolder(Optional.empty()),
+                log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty())),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)));
+
+        long firstTimestamp = mockTime.milliseconds();
+        int firstLeaderEpoch = 0;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), firstTimestamp), firstLeaderEpoch);
+
+        long secondTimestamp = firstTimestamp + 1;
+        int secondLeaderEpoch = 1;
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), secondTimestamp), secondLeaderEpoch);
+
+        doAnswer(ans -> {
+            long timestamp = ans.getArgument(1);
+            return Optional.of(timestamp)
+                    .filter(t -> t == firstTimestamp)
+                    .map(t -> new FileRecords.TimestampAndOffset(t, 0L, Optional.of(firstLeaderEpoch)));
+        }).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()), anyLong(), anyLong(), eq(log.leaderEpochCache()));
+        log.updateLocalLogStartOffset(1);
+        log.updateHighestOffsetInRemoteStorage(0);
+
+        // In the assertions below we test that offset 0 (first timestamp) is in remote and offset 1 (second timestamp) is in local storage.
+        assertFetchOffsetByTimestamp(remoteLogManager, new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch)), firstTimestamp, log);
+        assertFetchOffsetByTimestamp(remoteLogManager, new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch)), secondTimestamp, log);
+
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Optional.of(remoteLogManager)));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Optional.of(remoteLogManager)));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)));
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)));
+
+        log.assignEpochStartOffset(2, 2L);
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)));
+    }
+
+    @Test
+    public void testFetchEarliestPendingUploadTimestampNoRemoteStorage() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        // Test initial state before any records
+        assertFetchOffsetBySpecialTimestamp(log, Optional.empty(), 
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+
+        // Append records
+        prepareLogWithSequentialRecords(log, 2);
+
+        // Test state after records are appended
+        assertFetchOffsetBySpecialTimestamp(log, Optional.empty(),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+    }
+
+    @Test
+    public void testFetchEarliestPendingUploadTimestampWithRemoteStorage() throws Exception {
+        int logStartOffset = 0;
+        prepare(logStartOffset);
+
+        long firstTimestamp = timestampAndEpochs.get(0).timestamp;
+        int firstLeaderEpoch = timestampAndEpochs.get(0).leaderEpoch;
+        long secondTimestamp = timestampAndEpochs.get(1).timestamp;
+        int secondLeaderEpoch = timestampAndEpochs.get(1).leaderEpoch;
+        int thirdLeaderEpoch = timestampAndEpochs.get(2).leaderEpoch;
+
+        doAnswer(ans -> {
+            long timestamp = ans.getArgument(1);
+            if (timestamp == firstTimestamp) {
+                return Optional.of(new FileRecords.TimestampAndOffset(timestamp, 0L, Optional.of(firstLeaderEpoch)));
+            }
+            return Optional.empty();
+        }).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()),
+                anyLong(),
+                anyLong(),
+                eq(log.leaderEpochCache()));
+
+        // Offset 0 (first timestamp) is in remote storage and deleted locally. Offset 1 (second timestamp) is in local storage.
+        log.updateLocalLogStartOffset(1);
+        log.updateHighestOffsetInRemoteStorage(0);
+
+        // In the assertions below we test that offset 0 (first timestamp) is only in remote and offset 1 (second timestamp) is in local storage.
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
+            ListOffsetsRequest.LATEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+    }
+
+    @Test
+    public void testFetchEarliestPendingUploadTimestampWithRemoteStorageNoLocalDeletion() throws Exception {
+        int logStartOffset = 0;
+        prepare(logStartOffset);
+
+        long firstTimestamp = timestampAndEpochs.get(0).timestamp;
+        int firstLeaderEpoch = timestampAndEpochs.get(0).leaderEpoch;
+        long secondTimestamp = timestampAndEpochs.get(1).timestamp;
+        int secondLeaderEpoch = timestampAndEpochs.get(1).leaderEpoch;
+        int thirdLeaderEpoch = timestampAndEpochs.get(2).leaderEpoch;
+
+        // Offsets upto 1 are in remote storage
+        doAnswer(ans -> {
+            long timestamp = ans.getArgument(1);
+            if (timestamp == firstTimestamp) {
+                return Optional.of(new FileRecords.TimestampAndOffset(timestamp, 0L, Optional.of(firstLeaderEpoch)));
+            } else if (timestamp == secondTimestamp) {
+                return Optional.of(new FileRecords.TimestampAndOffset(timestamp, 1L, Optional.of(secondLeaderEpoch)));
+            }
+            return Optional.empty();
+        }).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()),
+                anyLong(),
+                anyLong(),
+                eq(log.leaderEpochCache()));
+
+        // Offsets 0, 1 (first and second timestamps) are in remote storage and not deleted locally.
+        log.updateLocalLogStartOffset(0);
+        log.updateHighestOffsetInRemoteStorage(1);
+
+        // In the assertions below we test that offset 0 (first timestamp) and offset 1 (second timestamp) are on both remote and local storage
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
+            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
+            ListOffsetsRequest.LATEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(thirdLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+    }
+
+    @Test
+    public void testFetchEarliestPendingUploadTimestampNoSegmentsUploaded() throws Exception {
+        int logStartOffset = 0;
+        prepare(logStartOffset);
+
+        long firstTimestamp = timestampAndEpochs.get(0).timestamp;
+        int firstLeaderEpoch = timestampAndEpochs.get(0).leaderEpoch;
+        long secondTimestamp = timestampAndEpochs.get(1).timestamp;
+        int secondLeaderEpoch = timestampAndEpochs.get(1).leaderEpoch;
+        int thirdLeaderEpoch = timestampAndEpochs.get(2).leaderEpoch;
+
+        // No offsets are in remote storage
+        doAnswer(ans -> Optional.empty()).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()),
+                anyLong(),
+                anyLong(),
+                eq(log.leaderEpochCache()));
+
+        // Offsets 0, 1, 2 (first, second and third timestamps) are in local storage only and not uploaded to remote storage.
+        log.updateLocalLogStartOffset(0);
+        log.updateHighestOffsetInRemoteStorage(-1);
+
+        // In the assertions below we test that offset 0 (first timestamp), offset 1 (second timestamp) and offset 2 (third timestamp) are only on the local storage.
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1L, Optional.of(-1)),
+            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
+            ListOffsetsRequest.LATEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+    }
+
+    @Test
+    public void testFetchEarliestPendingUploadTimestampStaleHighestOffsetInRemote() throws Exception {
+        int logStartOffset = 100;
+        prepare(logStartOffset);
+
+        long firstTimestamp = timestampAndEpochs.get(0).timestamp;
+        int firstLeaderEpoch = timestampAndEpochs.get(0).leaderEpoch;
+        long secondTimestamp = timestampAndEpochs.get(1).timestamp;
+        int secondLeaderEpoch = timestampAndEpochs.get(1).leaderEpoch;
+        int thirdLeaderEpoch = timestampAndEpochs.get(2).leaderEpoch;
+
+        // Offsets 100, 101, 102 (first, second and third timestamps) are in local storage and not uploaded to remote storage.
+        // Tiered storage copy was disabled and then enabled again, because of which the remote log segments are deleted but
+        // the highest offset in remote storage has become stale
+        doAnswer(ans -> Optional.empty()).when(remoteLogManager).findOffsetByTimestamp(
+                eq(log.topicPartition()),
+                anyLong(),
+                anyLong(),
+                eq(log.leaderEpochCache()));
+
+        log.updateLocalLogStartOffset(100);
+        log.updateHighestOffsetInRemoteStorage(50);
+
+        // In the assertions below we test that offset 100 (first timestamp), offset 101 (second timestamp) and offset 102 (third timestamp) are only on the local storage.
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 100L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+        assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
+            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 101L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 50L, Optional.empty()),
+            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 103L, Optional.of(thirdLeaderEpoch)),
+            ListOffsetsRequest.LATEST_TIMESTAMP);
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+    }
+
+    /**
+     * Test the Log truncate operations
+     */
+    @Test
+    public void testTruncateTo() throws IOException {
+        MemoryRecords createRecords = singletonRecords("test".getBytes(), mockTime.milliseconds());
+        int setSize = createRecords.sizeInBytes();
+        int msgPerSeg = 10;
+        int segmentSize = msgPerSeg * setSize; // each segment will be 10 messages
+
+        // create a log
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(segmentSize).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
+
+        for (int i = 0; i < msgPerSeg; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds()), 0);
+
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segments.");
+        assertEquals(msgPerSeg, log.logEndOffset(), "Log end offset should be equal to number of messages");
+
+        long lastOffset = log.logEndOffset();
+        long size = log.size();
+        log.truncateTo(log.logEndOffset()); // keep the entire log
+        assertEquals(lastOffset, log.logEndOffset(), "Should not change offset");
+        assertEquals(size, log.size(), "Should not change log size");
+        log.truncateTo(log.logEndOffset() + 1); // try to truncate beyond lastOffset
+        assertEquals(lastOffset, log.logEndOffset(), "Should not change offset but should log error");
+        assertEquals(size, log.size(), "Should not change log size");
+        log.truncateTo(msgPerSeg / 2); // truncate somewhere in between
+        assertEquals(msgPerSeg / 2, log.logEndOffset(), "Should change offset");
+        assertTrue(log.size() < size, "Should change log size");
+        log.truncateTo(0); // truncate the entire log
+        assertEquals(0, log.logEndOffset(), "Should change offset");
+        assertEquals(0, log.size(), "Should change log size");
+
+        for (int i = 0; i < msgPerSeg; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds()), 0);
+
+        assertEquals(lastOffset, log.logEndOffset(), "Should be back to original offset");
+        assertEquals(size, log.size(), "Should be back to original size");
+        log.truncateFullyAndStartAt(log.logEndOffset() - (msgPerSeg - 1), Optional.empty());
+        assertEquals(lastOffset - (msgPerSeg - 1), log.logEndOffset(), "Should change offset");
+        assertEquals(0, log.size(), "Should change log size");
+
+        for (int i = 0; i < msgPerSeg; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds()), 0);
+
+        assertTrue(log.logEndOffset() > msgPerSeg, "Should be ahead of to original offset");
+        assertEquals(size, log.size(), "log size should be same as before");
+        log.truncateTo(0); // truncate before first start offset in the log
+        assertEquals(0, log.logEndOffset(), "Should change offset");
+        assertEquals(0, log.size(), "Should change log size");
+    }
+
+    /**
+     * Verify that when we truncate a log the index of the last segment is resized to the max index size to allow more appends
+     */
+    @Test
+    public void testIndexResizingAtTruncation() throws IOException {
+        int setSize = singletonRecords("test".getBytes(), mockTime.milliseconds()).sizeInBytes();
+        int msgPerSeg = 10;
+        int segmentSize = msgPerSeg * setSize; // each segment will be 10 messages
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(segmentSize)
+                .indexIntervalBytes(setSize - 1)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
+
+        for (int i = 1; i <= msgPerSeg; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds() + i), 0);
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
+
+        mockTime.sleep(msgPerSeg);
+        for (int i = 1; i <= msgPerSeg; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds() + i), 0);
+        assertEquals(2, log.numberOfSegments(), "There should be exactly 2 segment.");
+        int expectedEntries = msgPerSeg - 1;
+
+        List<LogSegment> segments = new ArrayList<>(log.logSegments());
+        assertEquals(expectedEntries, segments.get(0).offsetIndex().maxEntries(),
+            "The index of the first segment should have " + expectedEntries + " entries");
+        assertEquals(expectedEntries, segments.get(0).timeIndex().maxEntries(),
+            "The time index of the first segment should have " + expectedEntries + " entries");
+
+        log.truncateTo(0);
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
+        assertEquals(log.config().maxIndexSize / 8, new ArrayList<>(log.logSegments()).get(0).offsetIndex().maxEntries(),
+            "The index of segment 1 should be resized to maxIndexSize");
+        assertEquals(log.config().maxIndexSize / 12, new ArrayList<>(log.logSegments()).get(0).timeIndex().maxEntries(),
+            "The time index of segment 1 should be resized to maxIndexSize");
+
+        mockTime.sleep(msgPerSeg);
+        for (int i = 1; i <= msgPerSeg; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds() + i), 0);
+        assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
+    }
+
+    /**
+     * Test that deleted files are deleted after the appropriate time.
+     */
+    @Test
+    public void testAsyncDelete() throws IOException {
+        MemoryRecords createRecords = singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000L);
+        int asyncDeleteMs = 1000;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(createRecords.sizeInBytes() * 5)
+                .segmentIndexBytes(1000)
+                .indexIntervalBytes(10000)
+                .retentionMs(999)
+                .fileDeleteDelayMs(asyncDeleteMs)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        // append some messages to create some segments
+        for (int i = 0; i < 100; i++)
+            log.appendAsLeader(singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000L), 0);
+
+        // files should be renamed
+        List<LogSegment> segments = new ArrayList<>(log.logSegments());
+        List<File> oldFiles = new ArrayList<>();
+        for (LogSegment segment : segments) {
+            oldFiles.add(segment.log().file());
+            oldFiles.add(segment.offsetIndexFile());
+        }
+
+        log.updateHighWatermark(log.logEndOffset());
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+
+        assertEquals(1, log.numberOfSegments(), "Only one segment should remain.");
+        assertTrue(segments.stream().allMatch(s -> s.log().file().getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) &&
+            segments.stream().allMatch(s -> s.offsetIndexFile().getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX)),
+            "All log and index files should end in .deleted");
+        assertTrue(segments.stream().allMatch(s -> s.log().file().exists()) &&
+            segments.stream().allMatch(s -> s.offsetIndexFile().exists()),
+            "The .deleted files should still be there.");
+        assertTrue(oldFiles.stream().noneMatch(File::exists), "The original file should be gone.");
+
+        // when enough time passes the files should be deleted
+        List<File> deletedFiles = new ArrayList<>();
+        for (LogSegment segment : segments) {
+            deletedFiles.add(segment.log().file());
+            deletedFiles.add(segment.offsetIndexFile());
+        }
+        mockTime.sleep(asyncDeleteMs + 1);
+        assertTrue(deletedFiles.stream().noneMatch(File::exists), "Files should all be gone.");
+    }
+
+    @Test
+    public void testAppendMessageWithNullPayload() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, null)), 0);
+        Record head = LogTestUtils.readLog(log, 0, 4096).records.records().iterator().next();
+        assertEquals(0, head.offset());
+        assertFalse(head.hasValue(), "Message payload should be null.");
+    }
+
+    @Test
+    public void testAppendWithOutOfOrderOffsetsThrowsException() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+
+        int epoch = 0;
+        long[] appendOffsets = {0L, 1L, 3L, 2L, 4L};
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        for (long offset : appendOffsets) {
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+                TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(), 1L, (short) 0, 0, false, epoch);
+            builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
+            builder.close();
+        }
+        buffer.flip();
+        MemoryRecords memoryRecords = MemoryRecords.readableRecords(buffer);
+
+        assertThrows(OffsetsOutOfOrderException.class, () -> log.appendAsFollower(memoryRecords, epoch));
+    }
+
+    private static Stream<Arguments> magicAndCompressionTypes() {
+        return Stream.of(
+            RecordBatch.MAGIC_VALUE_V0,
+            RecordBatch.MAGIC_VALUE_V1,
+            RecordBatch.MAGIC_VALUE_V2
+        ).flatMap(magic -> Stream.of(CompressionType.NONE, CompressionType.LZ4)
+            .map(compressionType -> Arguments.of(magic, compressionType)));
+    }
+
+    @ParameterizedTest(name = "magic={0}, compressionType={1}")
+    @MethodSource("magicAndCompressionTypes")
+    public void testAppendBelowExpectedOffsetThrowsException(byte magic, CompressionType compressionType) throws IOException {
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        for (int id = 0; id < 2; id++)
+            log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(Integer.toString(id).getBytes())), 0);
+
+        Compression compression = Compression.of(compressionType).build();
+        MemoryRecords invalidRecord = MemoryRecords.withRecords(magic, compression,
+            new SimpleRecord(Integer.toString(1).getBytes()));
+        assertThrows(
+            UnexpectedAppendOffsetException.class,
+            () -> log.appendAsFollower(invalidRecord, Integer.MAX_VALUE)
+        );
+    }
+
+    @ParameterizedTest(name = "magic={0}, compressionType={1}")
+    @MethodSource("magicAndCompressionTypes")
+    public void testAppendEmptyLogBelowLogStartOffsetThrowsException(byte magic, CompressionType compressionType) throws IOException {
+        createEmptyLogs(logDir, 7);
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        assertEquals(7L, log.logStartOffset());
+        assertEquals(7L, log.logEndOffset());
+
+        long firstOffset = 4L;
+        MemoryRecords batch = LogTestUtils.records(
+            List.of(new SimpleRecord("k1".getBytes(), "v1".getBytes()),
+                    new SimpleRecord("k2".getBytes(), "v2".getBytes()),
+                    new SimpleRecord("k3".getBytes(), "v3".getBytes())),
+            magic, Compression.of(compressionType).build(),
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            firstOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        UnexpectedAppendOffsetException exception = assertThrows(
+            UnexpectedAppendOffsetException.class,
+            () -> log.appendAsFollower(batch, Integer.MAX_VALUE)
+        );
+        assertEquals(firstOffset, exception.firstOffset,
+            "UnexpectedAppendOffsetException#firstOffset");
+        assertEquals(firstOffset + 2, exception.lastOffset,
+            "UnexpectedAppendOffsetException#lastOffset");
+    }
+
+    @Test
+    public void testAppendWithNoTimestamp() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+            new SimpleRecord(RecordBatch.NO_TIMESTAMP, "key".getBytes(), "value".getBytes())), 0);
+    }
+
+    @Test
+    public void testAppendToOrReadFromLogInFailedLogDir() throws IOException {
+        long pid = 1L;
+        short epoch = 0;
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        log.appendAsLeader(LogTestUtils.singletonRecords(null, null), 0);
+        assertEquals(0, LogTestUtils.readLog(log, 0, 4096).records.records().iterator().next().offset());
+        Consumer<Integer> append = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime);
+        append.accept(10);
+        // Kind of a hack, but renaming the index to a directory ensures that the append
+        // to the index will fail.
+        log.activeSegment().txnIndex().renameTo(log.dir());
+        assertThrows(KafkaStorageException.class, () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 1, 0, TransactionVersion.TV_0.featureLevel()));
+        assertThrows(KafkaStorageException.class, () -> log.appendAsLeader(LogTestUtils.singletonRecords(null, null), 0));
+        assertThrows(KafkaStorageException.class, () -> LogTestUtils.readLog(log, 0, 4096).records.records().iterator().next().offset());
+    }
+
+    @Test
+    public void testWriteLeaderEpochCheckpointAfterDirectoryRename() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1000)
+                .indexIntervalBytes(1)
+                .maxMessageBytes(64 * 1024)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 5);
+        assertEquals(Optional.of(5), log.latestEpoch());
+
+        // Ensure that after a directory rename, the epoch cache is written to the right location
+        TopicPartition tp = UnifiedLog.parseTopicPartitionName(log.dir());
+        log.renameDir(UnifiedLog.logDeleteDirName(tp), true);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 10);
+        assertEquals(Optional.of(10), log.latestEpoch());
+        assertTrue(LeaderEpochCheckpointFile.newFile(log.dir()).exists());
+        assertFalse(LeaderEpochCheckpointFile.newFile(logDir).exists());
+    }
+
+    @Test
+    public void testTopicIdTransfersAfterDirectoryRename() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1000)
+                .indexIntervalBytes(1)
+                .maxMessageBytes(64 * 1024)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
+        Uuid topicId = Uuid.randomUuid();
+        log.assignTopicId(topicId);
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 5);
+        assertEquals(Optional.of(5), log.latestEpoch());
+
+        // Ensure that after a directory rename, the partition metadata file is written to the right location.
+        TopicPartition tp = UnifiedLog.parseTopicPartitionName(log.dir());
+        log.renameDir(UnifiedLog.logDeleteDirName(tp), true);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 10);
+        assertEquals(Optional.of(10), log.latestEpoch());
+        assertTrue(PartitionMetadataFile.newFile(log.dir()).exists());
+        assertFalse(PartitionMetadataFile.newFile(logDir).exists());
+
+        // Check the topic ID remains in memory and was copied correctly.
+        assertTrue(log.topicId().isPresent());
+        assertEquals(topicId, log.topicId().get());
+        assertEquals(topicId, log.partitionMetadataFile().get().read().topicId());
+    }
+
+    @Test
+    public void testTopicIdFlushesBeforeDirectoryRename() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1000)
+                .indexIntervalBytes(1)
+                .maxMessageBytes(64 * 1024)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
+        Uuid topicId = Uuid.randomUuid();
+        log.partitionMetadataFile().get().record(topicId);
+
+        // Ensure that after a directory rename, the partition metadata file is written to the right location.
+        TopicPartition tp = UnifiedLog.parseTopicPartitionName(log.dir());
+        log.renameDir(UnifiedLog.logDeleteDirName(tp), true);
+        assertTrue(PartitionMetadataFile.newFile(log.dir()).exists());
+        assertFalse(PartitionMetadataFile.newFile(logDir).exists());
+
+        // Check the file holds the correct contents.
+        assertTrue(log.partitionMetadataFile().get().exists());
+        assertEquals(topicId, log.partitionMetadataFile().get().read().topicId());
+    }
+
+    @Test
+    public void testLeaderEpochCacheClearedAfterDowngradeInAppendedMessages() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1000)
+                .indexIntervalBytes(1)
+                .maxMessageBytes(64 * 1024)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 5);
+        assertEquals(Optional.of(5), log.leaderEpochCache().latestEpoch());
+
+        log.appendAsFollower(
+            LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())), RecordVersion.V1.value, 1L),
+            5
+        );
+        assertEquals(Optional.empty(), log.leaderEpochCache().latestEpoch());
+    }
+
+    @Test
+    public void testLeaderEpochCacheCreatedAfterMessageFormatUpgrade() throws IOException {
+        Properties logProps = new Properties();
+        logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000");
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1");
+        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536");
+        LogConfig logConfig = new LogConfig(logProps);
+        UnifiedLog log = createLog(logDir, logConfig);
+        log.appendAsLeaderWithRecordVersion(LogTestUtils.records(List.of(new SimpleRecord("bar".getBytes())),
+            RecordBatch.MAGIC_VALUE_V1, 0L), 5, RecordVersion.V1);
+        assertTrue(log.latestEpoch().isEmpty());
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 5);
+        assertEquals(5, log.latestEpoch().get());
+    }
+
+    @Test
+    public void testSplitOnOffsetOverflow() throws IOException {
+        // create a log such that one log segment has offsets that overflow, and call the split API on that segment
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .fileDeleteDelayMs(1000)
+                .build();
+        LogSegment segmentWithOverflow = createLogWithOverflow(logConfig);
+        assertTrue(LogTestUtils.hasOffsetOverflow(log), "At least one segment must have offset overflow");
+
+        List<Record> allRecordsBeforeSplit = allRecords(log);
+
+        // split the segment with overflow
+        log.splitOverflowedSegment(segmentWithOverflow);
+
+        // assert we were successfully able to split the segment
+        assertEquals(4, log.numberOfSegments());
+        verifyRecordsInLog(log, allRecordsBeforeSplit);
+
+        // verify we do not have offset overflow anymore
+        assertFalse(LogTestUtils.hasOffsetOverflow(log));
+    }
+
+    @Test
+    public void testDegenerateSegmentSplit() throws IOException {
+        // This tests a scenario where all of the batches appended to a segment have overflowed.
+        // When we split the overflowed segment, only one new segment will be created.
+
+        long overflowOffset = (long) Integer.MAX_VALUE + 1;
+        MemoryRecords batch1 = MemoryRecords.withRecords(overflowOffset, Compression.NONE, 0,
+            new SimpleRecord("a".getBytes()));
+        MemoryRecords batch2 = MemoryRecords.withRecords(overflowOffset + 1, Compression.NONE, 0,
+            new SimpleRecord("b".getBytes()));
+
+        testDegenerateSplitSegmentWithOverflow(0L, List.of(batch1, batch2));
+    }
+
+    @Test
+    public void testDegenerateSegmentSplitWithOutOfRangeBatchLastOffset() throws IOException {
+        // Degenerate case where the only batch in the segment overflows. In this scenario,
+        // the first offset of the batch is valid, but the last overflows.
+
+        long firstBatchBaseOffset = (long) Integer.MAX_VALUE - 1;
+        MemoryRecords records = MemoryRecords.withRecords(firstBatchBaseOffset, Compression.NONE, 0,
+            new SimpleRecord("a".getBytes()),
+            new SimpleRecord("b".getBytes()),
+            new SimpleRecord("c".getBytes()));
+
+        testDegenerateSplitSegmentWithOverflow(0L, List.of(records));
+    }
+
+    @Test
+    public void testReadCommittedWithConcurrentHighWatermarkUpdates() throws Exception {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024 * 1024 * 5)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        long lastOffset = 50L;
+
+        short producerEpoch = 0;
+        long producerId = 15L;
+        Consumer<Integer> appendProducer = LogTestUtils.appendTransactionalAsLeader(log, producerId, producerEpoch, mockTime);
+
+        // Thread 1 writes single-record transactions and attempts to read them
+        // before they have been aborted, and then aborts them
+        Callable<Integer> txnWriteAndReadLoop = () -> {
+            int nonEmptyReads = 0;
+            while (log.logEndOffset() < lastOffset) {
+                long currentLogEndOffset = log.logEndOffset();
+
+                appendProducer.accept(1);
+
+                FetchDataInfo readInfo = log.read(currentLogEndOffset, Integer.MAX_VALUE, FetchIsolation.TXN_COMMITTED, false);
+
+                if (readInfo.records.sizeInBytes() > 0)
+                    nonEmptyReads += 1;
+
+                LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT,
+                    mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+            }
+            return nonEmptyReads;
+        };
+
+        // Thread 2 watches the log and updates the high watermark
+        Runnable hwUpdateLoop = () -> assertDoesNotThrow(() -> {
+            while (log.logEndOffset() < lastOffset) {
+                log.updateHighWatermark(log.logEndOffset());
+            }
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            executor.submit(hwUpdateLoop);
+
+            Future<Integer> future = executor.submit(txnWriteAndReadLoop);
+            int nonEmptyReads = future.get();
+
+            assertEquals(0, nonEmptyReads);
+        } finally {
+            executor.shutdownNow();
+            assertDoesNotThrow(() -> executor.awaitTermination(60, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    public void testTransactionIndexUpdated() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024 * 1024 * 5)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        short epoch = 0;
+
+        long pid1 = 1L;
+        long pid2 = 2L;
+        long pid3 = 3L;
+        long pid4 = 4L;
+
+        Consumer<Integer> appendPid1 = LogTestUtils.appendTransactionalAsLeader(log, pid1, epoch, mockTime);
+        Consumer<Integer> appendPid2 = LogTestUtils.appendTransactionalAsLeader(log, pid2, epoch, mockTime);
+        Consumer<Integer> appendPid3 = LogTestUtils.appendTransactionalAsLeader(log, pid3, epoch, mockTime);
+        Consumer<Integer> appendPid4 = LogTestUtils.appendTransactionalAsLeader(log, pid4, epoch, mockTime);
+
+        // mix transactional and non-transactional data
+        appendPid1.accept(5); // nextOffset: 5
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3); // 8
+        appendPid2.accept(2); // 10
+        appendPid1.accept(4); // 14
+        appendPid3.accept(3); // 17
+        LogTestUtils.appendNonTransactionalAsLeader(log, 2); // 19
+        appendPid1.accept(10); // 29
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 30
+        appendPid2.accept(6); // 36
+        appendPid4.accept(3); // 39
+        LogTestUtils.appendNonTransactionalAsLeader(log, 10); // 49
+        appendPid3.accept(9); // 58
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 59
+        appendPid4.accept(8); // 67
+        appendPid2.accept(7); // 74
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 75
+        LogTestUtils.appendNonTransactionalAsLeader(log, 10); // 85
+        appendPid4.accept(4); // 89
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 90
+
+        List<AbortedTxn> abortedTransactions = new ArrayList<>();
+        for (LogSegment segment : log.logSegments()) {
+            abortedTransactions.addAll(segment.txnIndex().allAbortedTxns());
+        }
+        List<AbortedTxn> expectedTransactions = List.of(
+            new AbortedTxn(pid1, 0L, 29L, 8L),
+            new AbortedTxn(pid2, 8L, 74L, 36L)
+        );
+        assertEquals(expectedTransactions, abortedTransactions);
+
+        // Verify caching of the segment position of the first unstable offset
+        log.updateHighWatermark(30L);
+        assertCachedFirstUnstableOffset(log, 8L);
+
+        log.updateHighWatermark(75L);
+        assertCachedFirstUnstableOffset(log, 36L);
+
+        log.updateHighWatermark(log.logEndOffset());
+        assertEquals(Optional.empty(), log.firstUnstableOffset());
+    }
+
+    private void createEmptyLogs(File dir, int... offsets) throws IOException {
+        for (int offset : offsets) {
+            Files.createFile(LogFileUtils.logFile(dir, offset).toPath());
+            Files.createFile(LogFileUtils.offsetIndexFile(dir, offset).toPath());
+        }
+    }
+
+    private static List<Record> allRecords(UnifiedLog log) {
+        List<Record> recordsFound = new ArrayList<>();
+        for (LogSegment logSegment : log.logSegments()) {
+            for (RecordBatch batch : logSegment.log().batches()) {
+                batch.iterator().forEachRemaining(recordsFound::add);
+            }
+        }
+        return recordsFound;
+    }
+
+    private static void verifyRecordsInLog(UnifiedLog log, List<Record> expectedRecords) {
+        assertEquals(expectedRecords, allRecords(log));
+    }
+
+    private LogSegment createLogWithOverflow(LogConfig logConfig) throws IOException {
+        LogTestUtils.initializeLogDirWithOverflowedSegment(logDir);
+        log = createLog(logDir, logConfig, Long.MAX_VALUE);
+        return LogTestUtils.firstOverflowSegment(log).orElseThrow(
+            () -> new AssertionError("Failed to create log with a segment which has overflowed offsets"));
+    }
+
+    private void testDegenerateSplitSegmentWithOverflow(long segmentBaseOffset, List<MemoryRecords> records) throws IOException {
+        try (FileRecords segment = LogTestUtils.rawSegment(logDir, segmentBaseOffset)) {
+            // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
+            Files.createFile(LogFileUtils.offsetIndexFile(logDir, segmentBaseOffset).toPath());
+            Files.createFile(LogFileUtils.timeIndexFile(logDir, segmentBaseOffset).toPath());
+            for (MemoryRecords record : records)
+                segment.append(record);
+        }
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .fileDeleteDelayMs(1000)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, Long.MAX_VALUE);
+
+        LogSegment segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).orElseThrow(
+            () -> new AssertionError("Failed to create log with a segment which has overflowed offsets"));
+
+        List<Record> allRecordsBeforeSplit = allRecords(log);
+        log.splitOverflowedSegment(segmentWithOverflow);
+
+        assertEquals(1, log.numberOfSegments());
+
+        long firstBatchBaseOffset = records.get(0).batches().iterator().next().baseOffset();
+        assertEquals(firstBatchBaseOffset, log.activeSegment().baseOffset());
+        verifyRecordsInLog(log, allRecordsBeforeSplit);
+
+        assertFalse(LogTestUtils.hasOffsetOverflow(log));
+    }
+
+    private record TimestampAndEpoch(long timestamp, int leaderEpoch) { }
+
+    private void prepare(int logStartOffset) throws IOException {
+        RemoteLogManagerConfig config = createRemoteLogManagerConfig();
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = 
+            new DelayedOperationPurgatory<>("RemoteListOffsets", 0);
+        remoteLogManager = spy(new RemoteLogManager(
+            config,
+            0,
+            logDir.getAbsolutePath(),
+            "clusterId",
+            mockTime,
+            tp -> Optional.empty(),
+            (tp, l) -> { },
+            brokerTopicStats,
+            new Metrics(),
+            Optional.empty()
+        ));
+        remoteLogManager.setDelayedOperationPurgatory(purgatory);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(200)
+                .indexIntervalBytes(1)
+                .remoteLogStorageEnable(true)
+                .build();
+
+        log = createLog(logDir, logConfig, logStartOffset, 0L, brokerTopicStats,
+                mockTime.scheduler, mockTime, producerStateManagerConfig, true, Optional.empty(), true);
+
+        // Verify earliest pending upload offset for empty log
+        assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
+            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, logStartOffset, Optional.empty()),
+            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+
+        timestampAndEpochs = prepareLogWithSequentialRecords(log, 3);
+    }
+
+    private List<TimestampAndEpoch> prepareLogWithSequentialRecords(UnifiedLog log, int recordCount) throws IOException {
+        long firstTimestamp = mockTime.milliseconds();
+        List<TimestampAndEpoch> result = new ArrayList<>();
+
+        for (int i = 0; i < recordCount; i++) {
+            TimestampAndEpoch timestampAndEpoch = new TimestampAndEpoch(firstTimestamp + i, i);
+            log.appendAsLeader(
+                singletonRecords(TestUtils.randomBytes(10), firstTimestamp + i),
+                timestampAndEpoch.leaderEpoch
+            );
+            result.add(timestampAndEpoch);
+        }
+
+        return result;
+    }
+
+    private void assertFetchOffsetBySpecialTimestamp(UnifiedLog log, 
+                                                      Optional<RemoteLogManager> remoteLogManagerOpt,
+                                                      FileRecords.TimestampAndOffset expected, 
+                                                      long timestamp) {
+        Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
+        OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
+        assertEquals(new OffsetResultHolder(expected), offsetResultHolder);
+    }
+
+    private void assertFetchOffsetByTimestamp(UnifiedLog log,
+                                               Optional<RemoteLogManager> remoteLogManagerOpt,
+                                               Optional<FileRecords.TimestampAndOffset> expected,
+                                               long timestamp) throws Exception {
+        Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
+        OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
+        assertTrue(offsetResultHolder.futureHolderOpt().isPresent());
+        offsetResultHolder.futureHolderOpt().get().taskFuture().get(1, TimeUnit.SECONDS);
+        assertTrue(offsetResultHolder.futureHolderOpt().get().taskFuture().isDone());
+        assertTrue(offsetResultHolder.futureHolderOpt().get().taskFuture().get().hasTimestampAndOffset());
+        assertEquals(expected.get(), offsetResultHolder.futureHolderOpt().get().taskFuture().get().timestampAndOffset().orElse(null));
+    }
+
+    private void assertCachedFirstUnstableOffset(UnifiedLog log, long expectedOffset) throws IOException {
+        assertTrue(log.producerStateManager().firstUnstableOffset().isPresent());
+        LogOffsetMetadata firstUnstableOffset = log.producerStateManager().firstUnstableOffset().get();
+        assertEquals(expectedOffset, firstUnstableOffset.messageOffset);
+        assertFalse(firstUnstableOffset.messageOffsetOnly());
+        assertValidLogOffsetMetadata(log, firstUnstableOffset);
+    }
+
+    private void assertFetchOffsetByTimestamp(RemoteLogManager remoteLogManager,
+                                               FileRecords.TimestampAndOffset expected,
+                                               long timestamp,
+                                               UnifiedLog testLog) throws Exception {
+        OffsetResultHolder offsetResultHolder = testLog.fetchOffsetByTimestamp(timestamp, Optional.of(remoteLogManager));
+        assertTrue(offsetResultHolder.futureHolderOpt().isPresent());
+        offsetResultHolder.futureHolderOpt().get().taskFuture().get(1, TimeUnit.SECONDS);
+        assertTrue(offsetResultHolder.futureHolderOpt().get().taskFuture().isDone());
+        assertTrue(offsetResultHolder.futureHolderOpt().get().taskFuture().get().hasTimestampAndOffset());
+        assertEquals(expected, offsetResultHolder.futureHolderOpt().get().taskFuture().get().timestampAndOffset().orElse(null));
+    }
+
+    private RemoteLogManagerConfig createRemoteLogManagerConfig() {
+        Properties props = new Properties();
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "2");
+        return new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), props));
+    }
+
+    private long meterCount(String metricName) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                .filter(e -> e.getKey().getMBeanName().endsWith(metricName))
+                .map(e -> ((Meter) e.getValue()).count())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Unable to find metric " + metricName));
     }
 
     @SuppressWarnings("unchecked")

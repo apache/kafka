@@ -115,6 +115,21 @@ public class GroupConfigManagerTest {
         assertEquals(49000, configManager.groupConfig(groupId).get().getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
     }
 
+    @Test
+    public void testGroupIsRemovedWhenDynamicConfigsAreRemoved() {
+        String groupId1 = "foo";
+        String groupId2 = "bar";
+        Properties props = new Properties();
+        props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        configManager.updateGroupConfig(groupId1, props);
+        configManager.updateGroupConfig(groupId2, props);
+        assertTrue(configManager.groupIds().contains(groupId1));
+
+        configManager.updateGroupConfig(groupId1, new Properties());
+        assertFalse(configManager.groupIds().contains(groupId1));
+        assertTrue(configManager.groupIds().contains(groupId2));
+    }
+
     public static GroupConfigManager createConfigManager() {
         return createConfigManager(new HashMap<>());
     }

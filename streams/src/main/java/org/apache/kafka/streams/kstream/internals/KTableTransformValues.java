@@ -26,13 +26,13 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
@@ -109,7 +109,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store.store(),
                     context,
-                    new TimestampedCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
                     sendOldValues);
             }
         }
@@ -120,7 +120,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
             if (queryableName != null) {
                 final VOut oldValue = sendOldValues ? getValueOrNull(store.get(record.key())) : null;
-                final long putReturnCode = store.put(record.key(), newValue, record.timestamp());
+                final long putReturnCode = store.put(record.key(), newValue, record.timestamp(), new RecordHeaders());
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
@@ -157,12 +157,12 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
         }
 
         @Override
-        public ValueAndTimestamp<VOut> get(final K key) {
+        public ValueTimestampHeaders<VOut> get(final K key) {
             return transformValue(key, parentGetter.get(key));
         }
 
         @Override
-        public ValueAndTimestamp<VOut> get(final K key, final long asOfTimestamp) {
+        public ValueTimestampHeaders<VOut> get(final K key, final long asOfTimestamp) {
             return transformValue(key, parentGetter.get(key, asOfTimestamp));
         }
 
@@ -177,11 +177,11 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             valueTransformer.close();
         }
 
-        private ValueAndTimestamp<VOut> transformValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+        private ValueTimestampHeaders<VOut> transformValue(final K key, final ValueTimestampHeaders<V> valueTimestampHeaders) {
             final ProcessorRecordContext currentContext = internalProcessorContext.recordContext();
 
             internalProcessorContext.setRecordContext(new ProcessorRecordContext(
-                valueAndTimestamp == null ? UNKNOWN : valueAndTimestamp.timestamp(),
+                valueTimestampHeaders == null ? UNKNOWN : valueTimestampHeaders.timestamp(),
                 -1L, // we don't know the original offset
                 // technically, we know the partition, but in the new `api.Processor` class,
                 // we move to `RecordMetadata` than would be `null` for this case and thus
@@ -189,12 +189,14 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
                 // here either, to not introduce a regression later on
                 -1,
                 null, // we don't know the upstream input topic
-                new RecordHeaders()
+                valueTimestampHeaders == null ? new RecordHeaders() : valueTimestampHeaders.headers()
             ));
 
-            final ValueAndTimestamp<VOut> result = ValueAndTimestamp.make(
-                valueTransformer.transform(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? UNKNOWN : valueAndTimestamp.timestamp());
+            final ValueTimestampHeaders<VOut> result = ValueTimestampHeaders.make(
+                valueTransformer.transform(key, getValueOrNull(valueTimestampHeaders)),
+                valueTimestampHeaders == null ? UNKNOWN : valueTimestampHeaders.timestamp(),
+                valueTimestampHeaders == null ? null : valueTimestampHeaders.headers()
+                );
 
             internalProcessorContext.setRecordContext(currentContext);
 

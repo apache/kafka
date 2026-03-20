@@ -20,6 +20,8 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -1330,14 +1332,6 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected final Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
-        return new Meter(new WindowedCount(),
-                metrics.metricName(baseName + "-rate", groupName,
-                        String.format("The number of %s per second", descriptiveName)),
-                metrics.metricName(baseName + "-total", groupName,
-                        String.format("The total number of %s", descriptiveName)));
-    }
-
     /**
      * Visible for testing.
      */
@@ -1345,7 +1339,22 @@ public abstract class AbstractCoordinator implements Closeable {
         return heartbeatThread;
     }
 
-    private class GroupCoordinatorMetrics {
+    protected class AbstractCoordinatorMetrics extends AbstractConsumerMetricsManager {
+
+        protected AbstractCoordinatorMetrics(MetricsLedger metrics) {
+            super(metrics);
+        }
+
+        protected final Meter createMeter(String groupName, String baseName, String descriptiveName) {
+            return new Meter(new WindowedCount(),
+                metrics.metricName(baseName + "-rate", groupName,
+                    String.format("The number of %s per second", descriptiveName)),
+                metrics.metricName(baseName + "-total", groupName,
+                    String.format("The total number of %s", descriptiveName)));
+        }
+    }
+
+    private class GroupCoordinatorMetrics extends AbstractCoordinatorMetrics {
         public final String metricGrpName;
 
         public final Sensor heartbeatSensor;
@@ -1355,13 +1364,18 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor failedRebalanceSensor;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this(new MetricsLedger(metrics), metricGrpPrefix);
+        }
+
+        private GroupCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
+            super(metrics);
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.heartbeatSensor = metrics.sensor("heartbeat-latency");
             this.heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
                 this.metricGrpName,
                 "The max time taken to receive a response to a heartbeat request"), new Max());
-            this.heartbeatSensor.add(createMeter(metrics, metricGrpName, "heartbeat", "heartbeats"));
+            this.heartbeatSensor.add(createMeter(metricGrpName, "heartbeat", "heartbeats"));
 
             this.joinSensor = metrics.sensor("join-latency");
             this.joinSensor.add(metrics.metricName("join-time-avg",
@@ -1370,7 +1384,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.joinSensor.add(metrics.metricName("join-time-max",
                 this.metricGrpName,
                 "The max time taken for a group rejoin"), new Max());
-            this.joinSensor.add(createMeter(metrics, metricGrpName, "join", "group joins"));
+            this.joinSensor.add(createMeter(metricGrpName, "join", "group joins"));
 
             this.syncSensor = metrics.sensor("sync-latency");
             this.syncSensor.add(metrics.metricName("sync-time-avg",
@@ -1379,7 +1393,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.syncSensor.add(metrics.metricName("sync-time-max",
                 this.metricGrpName,
                 "The max time taken for a group sync"), new Max());
-            this.syncSensor.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
+            this.syncSensor.add(createMeter(metricGrpName, "sync", "group syncs"));
 
             this.successfulRebalanceSensor = metrics.sensor("rebalance-latency");
             this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-avg",

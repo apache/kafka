@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -87,7 +87,7 @@ public interface TimeOrderedKeyValueBuffer<K, V, T> extends StateStore {
 
     void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, T>> callback);
 
-    Maybe<ValueAndTimestamp<V>> priorValueForBuffered(K key);
+    Maybe<ValueTimestampHeaders<V>> priorValueForBuffered(K key);
 
     boolean put(long time, Record<K, T> record, ProcessorRecordContext recordContext);
 

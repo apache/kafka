@@ -28,18 +28,15 @@ import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingKeyValueBytesStore;
-import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.ChangeLoggingVersionedKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
-import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.MeteredVersionedKeyValueStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -109,38 +106,38 @@ public class KeyValueStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateTimestampedBuilderWithCachingAndLoggingEnabledByDefault() {
+    public void shouldCreateHeadersBuilderWithCachingAndLoggingEnabledByDefault() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final StateStore logging = caching.wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
         assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
     }
 
     @Test
-    public void shouldCreateDefaultTimestampedBuilderWithCachingDisabled() {
+    public void shouldCreateDefaultHeadersBuilderWithCachingDisabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled(), nameProvider, STORE_PREFIX
         );
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         assertThat(logging, instanceOf(ChangeLoggingKeyValueBytesStore.class));
     }
 
     @Test
-    public void shouldCreateDefaultTimestampedBuilderWithLoggingDisabled() {
+    public void shouldCreateDefaultHeadersBuilderWithLoggingDisabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, STORE_PREFIX
         );
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         assertThat(caching, instanceOf(CachingKeyValueStore.class));
@@ -148,12 +145,12 @@ public class KeyValueStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateDefaultTimestampedBuilderWithCachingAndLoggingDisabled() {
+    public void shouldCreateDefaultHeadersBuilderWithCachingAndLoggingDisabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX
         );
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(wrapped, not(instanceOf(CachingKeyValueStore.class)));
@@ -161,29 +158,29 @@ public class KeyValueStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateTimestampedStoreWithProvidedSupplierAndCachingAndLoggingEnabledByDefault() {
+    public void shouldCreateHeadersStoreWithProvidedSupplierAndCachingAndLoggingEnabledByDefault() {
         mockKeyValueStoreSupplier();
 
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(keyValueStoreSupplier), nameProvider, STORE_PREFIX);
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final StateStore logging = caching.wrapped();
         assertThat(innerKeyValueStore.name(), equalTo(store.name()));
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
         assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
     }
 
     @Test
-    public void shouldCreateTimestampedStoreWithProvidedSupplierAndCachingDisabled() {
+    public void shouldCreateHeadersStoreWithProvidedSupplierAndCachingDisabled() {
         mockKeyValueStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withCachingDisabled(), nameProvider, STORE_PREFIX);
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         assertThat(innerKeyValueStore.name(), equalTo(store.name()));
@@ -191,12 +188,12 @@ public class KeyValueStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateTimestampedStoreWithProvidedSupplierAndLoggingDisabled() {
+    public void shouldCreateHeadersStoreWithProvidedSupplierAndLoggingDisabled() {
         mockKeyValueStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         assertThat(innerKeyValueStore.name(), equalTo(store.name()));
@@ -205,12 +202,12 @@ public class KeyValueStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateTimestampedStoreWithProvidedSupplierAndCachingAndLoggingDisabled() {
+    public void shouldCreateHeadersStoreWithProvidedSupplierAndCachingAndLoggingDisabled() {
         mockKeyValueStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
-        final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(innerKeyValueStore.name(), equalTo(store.name()));
@@ -264,74 +261,12 @@ public class KeyValueStoreMaterializerTest {
         assertThat(innerVersionedStore, equalTo(inner));
     }
 
-    @Test
-    public void shouldCreateHeadersAwareStoreWithLoggingEnabledByDefault() {
-        doReturn("headers")
-                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
-                .withCachingDisabled(), nameProvider, STORE_PREFIX);
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
-
-        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
-    }
-
-    @Test
-    public void shouldCreateHeadersAwareStoreWithLoggingDisabled() {
-        doReturn("headers")
-                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, STORE_PREFIX
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
-
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(wrapped, not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
-    }
-
-    @Test
-    public void shouldBuildHeadersAwareStoreWithCachingEnabledByDefault() {
-        doReturn("headers")
-                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
-
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
-    }
-
-    @Test
-    public void shouldCreateHeadersAwareStoreWithProvidedSupplierAndLoggingEnabled() {
-        mockKeyValueStoreSupplier();
-        doReturn("headers")
-                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.<String, String>as(keyValueStoreSupplier).withCachingDisabled(), nameProvider, STORE_PREFIX);
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersAwareStore(materialized);
-
-        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
-        assertThat(innerKeyValueStore.name(), equalTo(store.name()));
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
-    }
-
     @SuppressWarnings("unchecked")
-    private TimestampedKeyValueStore<String, String> getTimestampedStore(
+    private TimestampedKeyValueStoreWithHeaders<String, String> getHeadersStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         materializer.configure(streamsConfig);
-        return (TimestampedKeyValueStore<String, String>) materializer.builder().build();
+        return (TimestampedKeyValueStoreWithHeaders<String, String>) materializer.builder().build();
     }
 
     @SuppressWarnings("unchecked")
@@ -340,13 +275,5 @@ public class KeyValueStoreMaterializerTest {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         materializer.configure(streamsConfig);
         return (VersionedKeyValueStore<String, String>) materializer.builder().build();
-    }
-
-    @SuppressWarnings("unchecked")
-    private TimestampedKeyValueStoreWithHeaders<String, String> getHeadersAwareStore(
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
-        final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        materializer.configure(streamsConfig);
-        return (TimestampedKeyValueStoreWithHeaders<String, String>) materializer.builder().build();
     }
 }

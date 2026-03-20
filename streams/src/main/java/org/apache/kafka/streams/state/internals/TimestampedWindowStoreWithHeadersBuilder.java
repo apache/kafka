@@ -68,7 +68,11 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
 
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
-                store = new TimestampedToHeadersWindowStoreAdapter(store);
+                if (store instanceof TimestampedBytesStore) {
+                    store = new TimestampedToHeadersWindowStoreAdapter(store);
+                } else {
+                    store = new PlainToHeadersWindowStoreAdapter(store);
+                }
             } else {
                 store = new InMemoryTimestampedWindowStoreWithHeadersMarker(store);
             }
@@ -110,6 +114,9 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
     private boolean isTimeOrderedStore(final StateStore stateStore) {
         if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
             return true;
+        }
+        if (stateStore instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).store);
         }
         if (stateStore instanceof WrappedStateStore) {
             return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());

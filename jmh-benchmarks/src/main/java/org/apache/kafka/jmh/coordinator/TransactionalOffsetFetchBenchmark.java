@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.GroupMetadataManager;
@@ -100,7 +101,7 @@ public class TransactionalOffsetFetchBenchmark {
             .withTime(TIME)
             .withGroupMetadataManager(groupMetadataManager)
             .withGroupCoordinatorConfig(mock(GroupCoordinatorConfig.class))
-            .withMetadataImage(image)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
             .withGroupCoordinatorMetricsShard(mock(GroupCoordinatorMetricsShard.class))
             .build();
 
