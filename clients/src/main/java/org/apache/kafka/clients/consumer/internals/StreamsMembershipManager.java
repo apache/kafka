@@ -406,7 +406,7 @@ public class StreamsMembershipManager implements RequestManager {
      * @param assignedPartitions The full assignment to apply
      * @param addedPartitions The newly added partitions
      */
-    public void applyAssignment(SortedSet<TopicPartition> assignedPartitions, SortedSet<TopicPartition> addedPartitions) {
+    public void applyAssignment(Set<TopicPartition> assignedPartitions, Set<TopicPartition> addedPartitions) {
         subscriptionState.assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
         notifyAssignmentChange(assignedPartitions);
     }
