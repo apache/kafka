@@ -20,13 +20,13 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 
-import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.rawAggregation;
+import static org.apache.kafka.streams.state.internals.ValueWithHeadersDeserializer.headers;
+import static org.apache.kafka.streams.state.internals.ValueWithHeadersDeserializer.rawAggregation;
 
 /**
  * Change-logging wrapper for a session bytes store whose values also carry headers.
  * <p>
- * The header-aware serialized value format is produced by {@link AggregationWithHeadersSerializer}.
+ * The header-aware serialized value format is produced by {@link ValueWithHeadersSerializer}.
  * <p>
  * Semantics:
  *  - The inner store value format is:

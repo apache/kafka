@@ -61,7 +61,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             final Serde<AggregationWithHeaders<AGG>> valueSerde,
             final SerdeGetter getter) {
         if (valueSerde == null) {
-            return new AggregationWithHeadersSerde<>((Serde<AGG>) getter.valueSerde());
+            return new ValueWithHeadersSerde<>((Serde<AGG>) getter.valueSerde());
         }
         return super.prepareValueSerdeForStore(valueSerde, getter);
     }

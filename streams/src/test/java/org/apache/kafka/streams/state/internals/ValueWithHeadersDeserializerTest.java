@@ -34,10 +34,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class AggregationWithHeadersDeserializerTest {
+public class ValueWithHeadersDeserializerTest {
 
     private final Deserializer<Long> longDeserializer = Serdes.Long().deserializer();
-    private final AggregationWithHeadersDeserializer<Long> deserializer = new AggregationWithHeadersDeserializer<>(longDeserializer);
+    private final ValueWithHeadersDeserializer<Long> deserializer = new ValueWithHeadersDeserializer<>(longDeserializer);
 
     @Test
     public void shouldDeserializeNullAsNull() {
@@ -51,7 +51,7 @@ public class AggregationWithHeadersDeserializerTest {
         final Headers headers = new RecordHeaders();
         final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
 
-        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
+        final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
         final AggregationWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
@@ -69,7 +69,7 @@ public class AggregationWithHeadersDeserializerTest {
         headers.add("key2", "value2".getBytes());
         final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
 
-        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
+        final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
         final AggregationWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
@@ -101,10 +101,10 @@ public class AggregationWithHeadersDeserializerTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
 
-        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
+        final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-        final Headers extractedHeaders = AggregationWithHeadersDeserializer.headers(serialized);
+        final Headers extractedHeaders = ValueWithHeadersDeserializer.headers(serialized);
         assertNotNull(extractedHeaders);
 
         final Header header = extractedHeaders.iterator().next();
@@ -114,6 +114,6 @@ public class AggregationWithHeadersDeserializerTest {
 
     @Test
     public void shouldReturnNullForNullInput() {
-        assertNull(AggregationWithHeadersDeserializer.headers(null));
+        assertNull(ValueWithHeadersDeserializer.headers(null));
     }
 }

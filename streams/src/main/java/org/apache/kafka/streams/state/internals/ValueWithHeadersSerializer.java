@@ -30,60 +30,60 @@ import java.util.Objects;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
 
 /**
- * Serializer for AggregationWithHeaders.
- <p>
+ * Serializer for values with headers.
+ * <p>
  * Serialization format (per KIP-1271):
- * [headersSize(varint)][headersBytes][aggregation]
+ * [headersSize(varint)][headersBytes][value]
  * <p>
  * Where:
  * - headersSize: Size of the headersBytes section in bytes, encoded as varint
  * - headersBytes:
  *   - For null/empty headers: headersSize = 0, headersBytes is omitted (0 bytes)
  *   - For non-empty headers: headersSize > 0, serialized headers ([count(varint)][header1][header2]...) from HeadersSerializer
- * - aggregation: Serialized aggregation using the provided aggregation serializer
+ * - value: Serialized value using the provided value serializer
  * <p>
- * This is used by KIP-1271 to serialize aggregations with headers for session state stores.
+ * This is used by KIP-1271 to serialize values with headers for session and window state stores.
  */
-class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerializer<AggregationWithHeaders<AGG>, Void, AGG> {
-    public final Serializer<AGG> aggregationSerializer;
+class ValueWithHeadersSerializer<V> implements WrappingNullableSerializer<AggregationWithHeaders<V>, Void, V> {
+    public final Serializer<V> valueSerializer;
 
-    AggregationWithHeadersSerializer(final Serializer<AGG> aggregationSerializer) {
-        Objects.requireNonNull(aggregationSerializer);
-        this.aggregationSerializer = aggregationSerializer;
+    ValueWithHeadersSerializer(final Serializer<V> valueSerializer) {
+        Objects.requireNonNull(valueSerializer);
+        this.valueSerializer = valueSerializer;
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        aggregationSerializer.configure(configs, isKey);
+        valueSerializer.configure(configs, isKey);
     }
 
     @Override
-    public byte[] serialize(final String topic, final AggregationWithHeaders<AGG> aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
+    public byte[] serialize(final String topic, final AggregationWithHeaders<V> valueWithHeaders) {
+        if (valueWithHeaders == null) {
             return null;
         }
-        return serialize(topic, aggregationWithHeaders.aggregation(), aggregationWithHeaders.headers());
+        return serialize(topic, valueWithHeaders.aggregation(), valueWithHeaders.headers());
     }
 
-    private byte[] serialize(final String topic, final AGG plainAggregation, final Headers headers) {
-        if (plainAggregation == null) {
+    private byte[] serialize(final String topic, final V plainValue, final Headers headers) {
+        if (plainValue == null) {
             return null;
         }
 
-        final byte[] rawAggregation = aggregationSerializer.serialize(topic, headers, plainAggregation);
+        final byte[] rawValue = valueSerializer.serialize(topic, headers, plainValue);
 
         // Since we can't control the result of the internal serializer, we make sure that the result
         // is not null as well.
         // Serializing non-null values to null can be useful when working with Optional-like values
         // where the Optional.empty case is serialized to null.
         // See the discussion here: https://github.com/apache/kafka/pull/7679
-        if (rawAggregation == null) {
+        if (rawValue == null) {
             return null;
         }
 
         final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + rawAggregation.length;
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + rawValue.length;
 
         // Format: [headersSize(varint)][headersBytes][value]
         final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
@@ -91,17 +91,17 @@ class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerialize
 
         // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
         return HeadersSerializer.serialize(preSerializedHeaders, buffer)
-            .put(rawAggregation)
+            .put(rawValue)
             .array();
     }
 
     @Override
     public void close() {
-        aggregationSerializer.close();
+        valueSerializer.close();
     }
 
     @Override
     public void setIfUnset(final SerdeGetter getter) {
-        initNullableSerializer(aggregationSerializer, getter);
+        initNullableSerializer(valueSerializer, getter);
     }
 }

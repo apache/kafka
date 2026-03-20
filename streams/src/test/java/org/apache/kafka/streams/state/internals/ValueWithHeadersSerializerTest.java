@@ -29,10 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AggregationWithHeadersSerializerTest {
+public class ValueWithHeadersSerializerTest {
 
     private final Serializer<Long> longSerializer = Serdes.Long().serializer();
-    private final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(longSerializer);
+    private final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(longSerializer);
 
     @Test
     public void shouldSerializeNullAsNull() {
@@ -75,7 +75,7 @@ public class AggregationWithHeadersSerializerTest {
         final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
 
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
-        final AggregationWithHeadersDeserializer<Long> deserializer = new AggregationWithHeadersDeserializer<>(Serdes.Long().deserializer());
+        final ValueWithHeadersDeserializer<Long> deserializer = new ValueWithHeadersDeserializer<>(Serdes.Long().deserializer());
         final AggregationWithHeaders<Long> deserialized = deserializer.deserialize("topic", serialized);
 
         assertNotNull(deserialized);

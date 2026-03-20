@@ -49,7 +49,7 @@ public class SessionStoreBuilderWithHeaders<K, V>
         super(
             Objects.requireNonNull(storeSupplier, "storeSupplier cannot be null").name(),
             keySerde,
-            valueSerde == null ? null : new AggregationWithHeadersSerde<>(valueSerde),
+            valueSerde == null ? null : new ValueWithHeadersSerde<>(valueSerde),
             time
         );
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");

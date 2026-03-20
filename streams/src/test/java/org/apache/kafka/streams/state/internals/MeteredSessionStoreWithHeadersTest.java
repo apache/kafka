@@ -122,7 +122,7 @@ public class MeteredSessionStoreWithHeadersTest {
             innerStore,
             STORE_TYPE,
             Serdes.String(),
-            createAggregationWithHeadersSerde(Serdes.String()),
+            createValueWithHeadersSerde(Serdes.String()),
             mockTime
         );
         tags = mkMap(
@@ -158,16 +158,16 @@ public class MeteredSessionStoreWithHeadersTest {
             .collect(Collectors.toList());
     }
 
-    private <AGG> Serde<AggregationWithHeaders<AGG>> createAggregationWithHeadersSerde(final Serde<AGG> aggSerde) {
+    private <AGG> Serde<AggregationWithHeaders<AGG>> createValueWithHeadersSerde(final Serde<AGG> aggSerde) {
         return new Serde<>() {
             @Override
             public Serializer<AggregationWithHeaders<AGG>> serializer() {
-                return new AggregationWithHeadersSerializer<>(aggSerde.serializer());
+                return new ValueWithHeadersSerializer<>(aggSerde.serializer());
             }
 
             @Override
             public Deserializer<AggregationWithHeaders<AGG>> deserializer() {
-                return new AggregationWithHeadersDeserializer<>(aggSerde.deserializer());
+                return new ValueWithHeadersDeserializer<>(aggSerde.deserializer());
             }
         };
     }
@@ -179,7 +179,7 @@ public class MeteredSessionStoreWithHeadersTest {
             innerStore,
             STORE_TYPE,
             Serdes.String(),
-            createAggregationWithHeadersSerde(Serdes.String()),
+            createValueWithHeadersSerde(Serdes.String()),
             new MockTime()
         );
         doNothing().when(innerStore).init(context, outer);
@@ -222,8 +222,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final ArgumentCaptor<byte[]> byteCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(innerStore).put(any(Windowed.class), byteCaptor.capture());
 
-        final AggregationWithHeadersDeserializer<String> deserializer =
-            new AggregationWithHeadersDeserializer<>(Serdes.String().deserializer());
+        final ValueWithHeadersDeserializer<String> deserializer = new ValueWithHeadersDeserializer<>(Serdes.String().deserializer());
         final AggregationWithHeaders<String> deserialized = deserializer.deserialize(CHANGELOG_TOPIC, byteCaptor.getValue());
         assertEquals(VALUE, deserialized.aggregation());
         assertNotNull(deserialized.headers());
@@ -242,7 +241,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.fetchSession(KEY_BYTES, START_TIMESTAMP, END_TIMESTAMP))
@@ -268,7 +267,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.findSessions(KEY_BYTES, 0, 0))
@@ -298,7 +297,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.backwardFindSessions(KEY_BYTES, 0, 0))
@@ -328,7 +327,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.findSessions(KEY_BYTES, KEY_BYTES, 0, 0))
@@ -373,7 +372,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.fetch(KEY_BYTES))
@@ -403,7 +402,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.backwardFetch(KEY_BYTES))
@@ -433,7 +432,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.fetch(KEY_BYTES, KEY_BYTES))
@@ -505,7 +504,7 @@ public class MeteredSessionStoreWithHeadersTest {
             cachedSessionStore,
             STORE_TYPE,
             Serdes.String(),
-            createAggregationWithHeadersSerde(Serdes.String()),
+            createValueWithHeadersSerde(Serdes.String()),
             new MockTime()
         );
 
@@ -521,7 +520,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.backwardFetch(KEY_BYTES, KEY_BYTES))
@@ -551,7 +550,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, 0, 0))
@@ -581,7 +580,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.fetch(KEY_BYTES))
@@ -611,7 +610,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.fetch(KEY_BYTES))
@@ -644,7 +643,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         when(innerStore.fetch(KEY_BYTES))
@@ -756,7 +755,7 @@ public class MeteredSessionStoreWithHeadersTest {
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
 
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
@@ -817,7 +816,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
     private static final Headers HEADERS = new RecordHeaders().add("key1", "value1".getBytes());
     private static final AggregationWithHeaders<String> AGG_WITH_HEADERS = AggregationWithHeaders.make(VALUE, HEADERS);
-    private static final byte[] SERIALIZED_VALUE = new AggregationWithHeadersSerializer<>(Serdes.String().serializer())
+    private static final byte[] SERIALIZED_VALUE = new ValueWithHeadersSerializer<>(Serdes.String().serializer())
         .serialize(CHANGELOG_TOPIC, AGG_WITH_HEADERS);
 
     @SuppressWarnings("unchecked")

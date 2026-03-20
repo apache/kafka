@@ -31,79 +31,79 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 /**
- * Deserializer for AggregationWithHeaders.
+ * Deserializer for values with headers.
  * Deserialization format (per KIP-1271):
- * [headersSize(varint)][headersBytes][aggregation]
+ * [headersSize(varint)][headersBytes][value]
  * <p>
  * Where:
  * - headersSize: Size of the headersBytes section in bytes, encoded as varint
  * - headersBytes:
  *   - For null/empty headers: headersSize = 0, headersBytes is omitted (0 bytes)
  *   - For non-empty headers: headersSize > 0, serialized headers in the format [count(varint)][header1][header2]... to be processed by HeadersDeserializer.
- * - aggregation: Serialized aggregation to be deserialized with the provided aggregation deserializer
+ * - value: Serialized value to be deserialized with the provided value deserializer
  * <p>
- * This is used by KIP-1271 to deserialize aggregations with headers from session state stores.
+ * This is used by KIP-1271 to deserialize values with headers from session and window state stores.
  */
-class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeserializer<AggregationWithHeaders<AGG>, Void, AGG> {
+class ValueWithHeadersDeserializer<V> implements WrappingNullableDeserializer<AggregationWithHeaders<V>, Void, V> {
 
-    public final Deserializer<AGG> aggregationDeserializer;
+    public final Deserializer<V> valueDeserializer;
 
-    AggregationWithHeadersDeserializer(final Deserializer<AGG> aggregationDeserializer) {
-        Objects.requireNonNull(aggregationDeserializer);
-        this.aggregationDeserializer = aggregationDeserializer;
+    ValueWithHeadersDeserializer(final Deserializer<V> valueDeserializer) {
+        Objects.requireNonNull(valueDeserializer);
+        this.valueDeserializer = valueDeserializer;
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        aggregationDeserializer.configure(configs, isKey);
+        valueDeserializer.configure(configs, isKey);
     }
 
     @Override
-    public AggregationWithHeaders<AGG> deserialize(final String topic, final byte[] aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
+    public AggregationWithHeaders<V> deserialize(final String topic, final byte[] valueWithHeaders) {
+        if (valueWithHeaders == null) {
             return null;
         }
 
-        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
+        final ByteBuffer buffer = ByteBuffer.wrap(valueWithHeaders);
         final Headers headers = readHeaders(buffer);
-        final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
-        final AGG aggregation = aggregationDeserializer.deserialize(topic, headers, rawAggregation);
+        final byte[] rawValue = readBytes(buffer, buffer.remaining());
+        final V value = valueDeserializer.deserialize(topic, headers, rawValue);
 
-        return AggregationWithHeaders.makeAllowNullable(aggregation, headers);
+        return AggregationWithHeaders.makeAllowNullable(value, headers);
     }
 
     @Override
     public void close() {
-        aggregationDeserializer.close();
+        valueDeserializer.close();
     }
 
     @Override
     public void setIfUnset(final SerdeGetter getter) {
-        initNullableDeserializer(aggregationDeserializer, getter);
+        initNullableDeserializer(valueDeserializer, getter);
     }
 
     /**
-     * Extract headers from serialized AggregationWithHeaders.
+     * Extract headers from serialized value with headers.
      */
-    static Headers headers(final byte[] rawAggregationWithHeaders) {
-        if (rawAggregationWithHeaders == null) {
+    static Headers headers(final byte[] rawValueWithHeaders) {
+        if (rawValueWithHeaders == null) {
             return null;
         }
 
-        final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueWithHeaders);
         return readHeaders(buffer);
     }
 
     /**
-     * Extract the raw aggregation bytes from serialized AggregationWithHeaders,
+     * Extract the raw value bytes from serialized value with headers,
      * stripping the headers prefix.
      */
-    static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
+    static byte[] rawAggregation(final byte[] valueWithHeaders) {
+        if (valueWithHeaders == null) {
             return null;
         }
 
-        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
+        final ByteBuffer buffer = ByteBuffer.wrap(valueWithHeaders);
         readHeaders(buffer);
         return readBytes(buffer, buffer.remaining());
     }

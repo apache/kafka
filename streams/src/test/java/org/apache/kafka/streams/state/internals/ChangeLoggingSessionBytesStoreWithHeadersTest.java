@@ -60,8 +60,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
     private final Bytes bytesKey = Bytes.wrap(value1);
     private final Windowed<Bytes> key1 = new Windowed<>(bytesKey, new SessionWindow(0, 0));
 
-    private final AggregationWithHeadersSerializer<byte[]> serializer =
-        new AggregationWithHeadersSerializer<>(Serdes.ByteArray().serializer());
+    private final ValueWithHeadersSerializer<byte[]> serializer = new ValueWithHeadersSerializer<>(Serdes.ByteArray().serializer());
 
     @BeforeEach
     public void setUp() {

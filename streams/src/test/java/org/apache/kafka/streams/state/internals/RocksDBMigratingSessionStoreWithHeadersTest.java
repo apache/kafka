@@ -56,10 +56,8 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Serializer<Long> longSerializer = new LongSerializer();
     private final Deserializer<Long> longDeserializer = new LongDeserializer();
-    private final AggregationWithHeadersSerializer<String> aggSerializer =
-        new AggregationWithHeadersSerializer<>(new StringSerializer());
-    private final AggregationWithHeadersDeserializer<String> aggDeserializer =
-        new AggregationWithHeadersDeserializer<>(new StringDeserializer());
+    private final ValueWithHeadersSerializer<String> aggSerializer = new ValueWithHeadersSerializer<>(new StringSerializer());
+    private final ValueWithHeadersDeserializer<String> aggDeserializer = new ValueWithHeadersDeserializer<>(new StringDeserializer());
     private final byte[] sessionStoreHeaderColumnFamilyName = RocksDBMigratingSessionStoreWithHeaders.SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME;
 
     RocksDBStore getRocksDBStore() {
@@ -520,11 +518,11 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
     }
 
     private void assertMigratedValue(final byte[] value, final String expectedAggregation) {
-        final Headers headers = AggregationWithHeadersDeserializer.headers(value);
+        final Headers headers = ValueWithHeadersDeserializer.headers(value);
         assertFalse(headers.iterator().hasNext(), "Migrated value should have empty headers");
         assertArrayEquals(
             expectedAggregation.getBytes(StandardCharsets.UTF_8),
-            AggregationWithHeadersDeserializer.rawAggregation(value),
+            ValueWithHeadersDeserializer.rawAggregation(value),
             "Migrated value should preserve original aggregation: " + expectedAggregation);
     }
 

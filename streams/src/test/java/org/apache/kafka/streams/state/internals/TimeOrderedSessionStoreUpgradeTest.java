@@ -18,9 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.KeyValue;
@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslSessionParams;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -51,11 +52,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.File;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -106,26 +103,6 @@ public class TimeOrderedSessionStoreUpgradeTest {
         }
     }
 
-    private static byte[] serializeValueWithHeaders(final byte[] value, final Headers headers) {
-        if (value == null) {
-            return null;
-        }
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
-        final byte[] rawHeaders = HeadersSerializer
-            .serialize(preSerializedHeaders, ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders))
-            .array();
-
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
-            ByteUtils.writeVarint(rawHeaders.length, out);
-            out.write(rawHeaders);
-            out.write(value);
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new RuntimeException("Failed to serialize value with headers", e);
-        }
-    }
-
     @Test
     public void shouldMigrateFromWithoutHeadersToWithHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
@@ -161,18 +138,18 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data readable with empty headers via lazy migration
         byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
+        assertEquals("value1", new String(ValueWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals(0, ValueWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         fetch = newStore.fetchSession(key2, 150, 250);
         assertNotNull(fetch);
-        assertEquals("value2", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
+        assertEquals("value2", new String(ValueWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals(0, ValueWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         fetch = newStore.fetchSession(key3, 200, 300);
         assertNotNull(fetch);
-        assertEquals("value3", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
+        assertEquals("value3", new String(ValueWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals(0, ValueWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         newStore.close();
     }
@@ -201,7 +178,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data still accessible
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals("value1", new String(ValueWithHeadersDeserializer.rawAggregation(fetch)));
 
         newStore.close();
     }
@@ -230,7 +207,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data still accessible
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals("value1", new String(ValueWithHeadersDeserializer.rawAggregation(fetch)));
 
         newStore.close();
     }
@@ -247,28 +224,29 @@ public class TimeOrderedSessionStoreUpgradeTest {
 
         final Bytes key1 = Bytes.wrap("key1".getBytes());
         final Bytes key2 = Bytes.wrap("key2".getBytes());
+        final ValueWithHeadersSerializer<byte[]> serializer = new ValueWithHeadersSerializer<>(new ByteArraySerializer());
 
         // Write with empty headers
         store.put(new Windowed<>(key1, new SessionWindow(100, 200)),
-            serializeValueWithHeaders("value1".getBytes(), new RecordHeaders()));
+            serializer.serialize(null, AggregationWithHeaders.make("value1".getBytes(), new RecordHeaders())));
 
         // Write with actual headers
         final RecordHeaders headersWithData = new RecordHeaders();
         headersWithData.add("header-key-1", "header-value-1".getBytes());
         headersWithData.add("header-key-2", "header-value-2".getBytes());
         store.put(new Windowed<>(key2, new SessionWindow(150, 250)),
-            serializeValueWithHeaders("value2".getBytes(), headersWithData));
+            serializer.serialize(null, AggregationWithHeaders.make("value2".getBytes(), headersWithData)));
 
         // Verify values
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(store.fetchSession(key1, 100, 200))));
-        assertEquals("value2", new String(AggregationWithHeadersDeserializer.rawAggregation(store.fetchSession(key2, 150, 250))));
+        assertEquals("value1", new String(ValueWithHeadersDeserializer.rawAggregation(store.fetchSession(key1, 100, 200))));
+        assertEquals("value2", new String(ValueWithHeadersDeserializer.rawAggregation(store.fetchSession(key2, 150, 250))));
 
         // Verify headers for key1 (empty)
-        final Headers key1Headers = AggregationWithHeadersDeserializer.headers(store.fetchSession(key1, 100, 200));
+        final Headers key1Headers = ValueWithHeadersDeserializer.headers(store.fetchSession(key1, 100, 200));
         assertEquals(0, key1Headers.toArray().length);
 
         // Verify headers for key2 (with data)
-        final Headers key2Headers = AggregationWithHeadersDeserializer.headers(store.fetchSession(key2, 150, 250));
+        final Headers key2Headers = ValueWithHeadersDeserializer.headers(store.fetchSession(key2, 150, 250));
         assertEquals(2, key2Headers.toArray().length);
         assertEquals("header-value-1", new String(key2Headers.lastHeader("header-key-1").value()));
         assertEquals("header-value-2", new String(key2Headers.lastHeader("header-key-2").value()));
@@ -323,8 +301,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data readable with empty headers via lazy migration
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch, "Old data should be readable after upgrade via DSL supplier path");
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length,
+        assertEquals("value1", new String(ValueWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals(0, ValueWithHeadersDeserializer.headers(fetch).toArray().length,
             "Old data should have empty headers after migration");
 
         newStore.close();

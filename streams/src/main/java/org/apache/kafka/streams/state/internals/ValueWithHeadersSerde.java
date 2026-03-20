@@ -23,18 +23,18 @@ import org.apache.kafka.streams.state.AggregationWithHeaders;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Serde for AggregationWithHeaders.
+ * Serde for values with headers.
  *
  * This serde wraps a value serde and handles serialization/deserialization of
- * aggregated values along with their headers.
+ * values along with their headers.
  *
- * This is used by KIP-1271 to support headers in session state stores.
+ * This is used by KIP-1271 to support headers in session and window state stores.
  */
-public class AggregationWithHeadersSerde<AGG> extends WrappingNullableSerde<AggregationWithHeaders<AGG>, Void, AGG> {
-    public AggregationWithHeadersSerde(final Serde<AGG> aggSerde) {
+public class ValueWithHeadersSerde<V> extends WrappingNullableSerde<AggregationWithHeaders<V>, Void, V> {
+    public ValueWithHeadersSerde(final Serde<V> valueSerde) {
         super(
-            new AggregationWithHeadersSerializer<>(requireNonNull(aggSerde, "aggSerde was null").serializer()),
-            new AggregationWithHeadersDeserializer<>(requireNonNull(aggSerde, "aggSerde was null").deserializer())
+            new ValueWithHeadersSerializer<>(requireNonNull(valueSerde, "valueSerde was null").serializer()),
+            new ValueWithHeadersDeserializer<>(requireNonNull(valueSerde, "valueSerde was null").deserializer())
         );
     }
 }
