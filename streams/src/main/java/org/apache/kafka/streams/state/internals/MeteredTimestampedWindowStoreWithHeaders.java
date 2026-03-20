@@ -46,7 +46,6 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
 
 /**
  * A Metered {@link TimestampedWindowStoreWithHeaders} wrapper that is used for recording operation metrics,
