@@ -52,6 +52,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -1118,8 +1119,8 @@ public class DefaultStateUpdater implements StateUpdater {
         private final Sensor standbyRestoreRatioSensor;
         private final Sensor checkpointRatioSensor;
 
-        private final Deque<Sensor> allSensors = new LinkedList<>();
-        private final Deque<MetricName> allMetricNames = new LinkedList<>();
+        private final Deque<Sensor> allSensors = new ConcurrentLinkedDeque<>();
+        private final Deque<MetricName> allMetricNames = new ConcurrentLinkedDeque<>();
 
         private StateUpdaterMetrics(final StreamsMetricsImpl metrics, final String threadId) {
             final Map<String, String> threadLevelTags = new LinkedHashMap<>();
