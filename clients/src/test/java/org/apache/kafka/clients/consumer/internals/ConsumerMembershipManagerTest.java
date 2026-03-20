@@ -288,7 +288,7 @@ public class ConsumerMembershipManagerTest {
         // Verify markPendingRevocation is called before enqueueing the callback event
         InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
         inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
-        inOrder.verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
     }
 
     @Test
@@ -308,7 +308,7 @@ public class ConsumerMembershipManagerTest {
         // Verify markPendingRevocation is called before enqueueing the callback event
         InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
         inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
-        inOrder.verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
     }
 
     @Test
@@ -334,7 +334,7 @@ public class ConsumerMembershipManagerTest {
         // Verify markPendingRevocation is called before enqueueing the callback event
         InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
         inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
-        inOrder.verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
     }
 
     @Test
