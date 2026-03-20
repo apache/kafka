@@ -79,7 +79,7 @@ public class MeteredWindowStore<K, V>
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
-    private InternalProcessorContext<?, ?> internalContext;
+    protected InternalProcessorContext<?, ?> internalContext;
     private TaskId taskId;
     private Sensor restoreSensor;
 
@@ -158,6 +158,24 @@ public class MeteredWindowStore<K, V>
                 }
             }
         );
+        if (!persistent()) {
+            StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                    (config, now) -> {
+                        final InMemoryWindowStore inMemoryStore = findInMemoryWindowStore(wrapped());
+                        return inMemoryStore != null ? inMemoryStore.numEntries() : -1L;
+                    }
+            );
+        }
+    }
+
+    private static InMemoryWindowStore findInMemoryWindowStore(final StateStore store) {
+        if (store instanceof InMemoryWindowStore) {
+            return (InMemoryWindowStore) store;
+        } else if (store instanceof WrappedStateStore) {
+            return findInMemoryWindowStore(((WrappedStateStore<?, ?, ?>) store).wrapped());
+        } else {
+            return null;
+        }
     }
 
     @Override

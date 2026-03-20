@@ -29,6 +29,8 @@ public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore
 
     void deleteRange(Bytes keyFrom, Bytes keyTo);
 
+    void writePosition();
+
     @Override
     default int compareTo(final Segment segment) {
         return Long.compare(id(), segment.id());

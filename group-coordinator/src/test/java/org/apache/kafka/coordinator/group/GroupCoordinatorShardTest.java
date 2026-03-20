@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
@@ -1272,7 +1273,41 @@ public class GroupCoordinatorShardTest {
             any(), eq(image)
         );
 
+        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
+            any(), eq(image)
+        );
+
         verify(groupMetadataManager, times(1)).onLoaded();
+    }
+
+    @Test
+    public void testOnMetadataUpdate() {
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
+        CoordinatorMetadataDelta delta = CoordinatorMetadataDelta.EMPTY;
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        coordinator.onMetadataUpdate(delta, image);
+
+        verify(groupMetadataManager, times(1)).onMetadataUpdate(
+            eq(delta), eq(image)
+        );
+
+        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
+            eq(delta), eq(image)
+        );
     }
 
     @Test

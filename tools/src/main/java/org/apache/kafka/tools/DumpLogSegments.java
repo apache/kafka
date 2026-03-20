@@ -118,7 +118,12 @@ public class DumpLogSegments {
             System.out.println("Dumping " + file);
 
             String filename = file.getName();
-            String suffix = filename.substring(filename.lastIndexOf("."));
+            int dotIndex = filename.lastIndexOf(".");
+            if (dotIndex == -1) {
+                System.err.println("Ignoring unknown file " + file);
+                continue;
+            }
+            String suffix = filename.substring(dotIndex);
 
             switch (suffix) {
                 case UnifiedLog.LOG_FILE_SUFFIX, Snapshots.SUFFIX ->
@@ -529,47 +534,47 @@ public class DumpLogSegments {
     }
 
     static class TimeIndexDumpErrors {
-        final Map<String, List<Pair<Long, Long>>> misMatchesForTimeIndexFilesMap = new HashMap<>();
-        final Map<String, List<Pair<Long, Long>>> outOfOrderTimestamp = new HashMap<>();
-        final Map<String, List<Pair<Long, Long>>> shallowOffsetNotFound = new HashMap<>();
+        final Map<String, List<Map.Entry<Long, Long>>> misMatchesForTimeIndexFilesMap = new HashMap<>();
+        final Map<String, List<Map.Entry<Long, Long>>> outOfOrderTimestamp = new HashMap<>();
+        final Map<String, List<Map.Entry<Long, Long>>> shallowOffsetNotFound = new HashMap<>();
 
         void recordMismatchTimeIndex(File file, long indexTimestamp, long logTimestamp) {
-            List<Pair<Long, Long>> misMatchesSeq = misMatchesForTimeIndexFilesMap
+            List<Map.Entry<Long, Long>> misMatchesSeq = misMatchesForTimeIndexFilesMap
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            misMatchesSeq.add(new Pair<>(indexTimestamp, logTimestamp));
+            misMatchesSeq.add(Map.entry(indexTimestamp, logTimestamp));
         }
 
         void recordOutOfOrderIndexTimestamp(File file, long indexTimestamp, long prevIndexTimestamp) {
-            List<Pair<Long, Long>> outOfOrderSeq = outOfOrderTimestamp
+            List<Map.Entry<Long, Long>> outOfOrderSeq = outOfOrderTimestamp
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            outOfOrderSeq.add(new Pair<>(indexTimestamp, prevIndexTimestamp));
+            outOfOrderSeq.add(Map.entry(indexTimestamp, prevIndexTimestamp));
         }
 
         void recordShallowOffsetNotFound(File file, long indexOffset, long logOffset) {
-            List<Pair<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
+            List<Map.Entry<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            shallowOffsetNotFoundSeq.add(new Pair<>(indexOffset, logOffset));
+            shallowOffsetNotFoundSeq.add(Map.entry(indexOffset, logOffset));
         }
 
         void printErrors() {
             misMatchesForTimeIndexFilesMap.forEach((fileName, listOfMismatches) -> {
                 System.err.println("Found timestamp mismatch in :" + fileName);
                 listOfMismatches.forEach(m ->
-                    System.err.println("  Index timestamp: " + m.first + ", log timestamp: " + m.second)
+                    System.err.println("  Index timestamp: " + m.getKey() + ", log timestamp: " + m.getValue())
                 );
             });
 
             outOfOrderTimestamp.forEach((fileName, outOfOrderTimestamps) -> {
                 System.err.println("Found out of order timestamp in :" + fileName);
                 outOfOrderTimestamps.forEach(m ->
-                    System.err.println("  Index timestamp: " + m.first + ", Previously indexed timestamp: " + m.second)
+                    System.err.println("  Index timestamp: " + m.getKey() + ", Previously indexed timestamp: " + m.getValue())
                 );
             });
 
-            shallowOffsetNotFound.values().forEach(listOfShallowOffsetNotFound -> {
-                System.err.println("The following indexed offsets are not found in the log.");
+            shallowOffsetNotFound.forEach((fileName, listOfShallowOffsetNotFound) -> {
+                System.err.println("The following indexed offsets are not found in :" + fileName);
                 listOfShallowOffsetNotFound.forEach(pair ->
-                    System.err.println("Indexed offset: " + pair.first + ", found log offset: " + pair.second)
+                    System.err.println("Indexed offset: " + pair.getKey() + ", found log offset: " + pair.getValue())
                 );
             });
         }
@@ -785,8 +790,6 @@ public class DumpLogSegments {
                 .writeRecordValueAsJson(message, version);
         }
     }
-
-    record Pair<F, S>(F first, S second) { }
 
     private static class DumpLogSegmentsOptions extends CommandDefaultOptions {
         private final OptionSpec<Void> printOpt;

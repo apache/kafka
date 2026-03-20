@@ -34,7 +34,7 @@ import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDese
  * this class uses {@link ValueTimestampHeadersDeserializer} to extract
  * the timestamp from the correct position in the byte array.
  */
-class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingWindowBytesStore {
+public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingWindowBytesStore {
 
     ChangeLoggingTimestampedWindowBytesStoreWithHeaders(final WindowStore<Bytes, byte[]> bytesStore,
                                                         final boolean retainDuplicates) {

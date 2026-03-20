@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -24,9 +23,7 @@ import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -75,23 +72,27 @@ class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerialize
 
         final byte[] rawAggregation = aggregationSerializer.serialize(topic, headers, plainAggregation);
 
+        // Since we can't control the result of the internal serializer, we make sure that the result
+        // is not null as well.
+        // Serializing non-null values to null can be useful when working with Optional-like values
+        // where the Optional.empty case is serialized to null.
+        // See the discussion here: https://github.com/apache/kafka/pull/7679
         if (rawAggregation == null) {
             return null;
         }
 
-        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             final DataOutputStream out = new DataOutputStream(baos)) {
+        final int payloadSize = preSerializedHeaders.requiredBufferSizeForHeaders + rawAggregation.length;
 
-            ByteUtils.writeVarint(rawHeaders.length, out);
-            out.write(rawHeaders);
-            out.write(rawAggregation);
+        // Format: [headersSize(varint)][headersBytes][value]
+        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders) + payloadSize);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
 
-            return baos.toByteArray();
-        } catch (final IOException e) {
-            throw new SerializationException("Failed to serialize AggregationWithHeaders on topic: " + topic, e);
-        }
+        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
+            .put(rawAggregation)
+            .array();
     }
 
     @Override
