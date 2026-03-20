@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.nio.ByteBuffer;
@@ -49,9 +48,7 @@ import static org.apache.kafka.streams.state.internals.Utils.readBytes;
  *
  * This is used by KIP-1271 to deserialize values with timestamps and headers from state stores.
  */
-public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueTimestampHeaders<V>, Void, V> {
-    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-
+class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueTimestampHeaders<V>, Void, V> {
     public final Deserializer<V> valueDeserializer;
     private final LongDeserializer timestampDeserializer;
 
@@ -107,43 +104,5 @@ public class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDes
             return null;
         }
         return deserializer.deserialize("", Utils.rawPlainValue(rawValueTimestampHeaders));
-    }
-
-    /**
-     * Extract timestamp from serialized ValueTimestampHeaders.
-     */
-    public static long timestamp(final byte[] rawValueTimestampHeaders) {
-        // If the headers is empty, then do not need to skip the headers
-        if (Utils.hasEmptyHeaders(rawValueTimestampHeaders)) {
-            final byte[] rawTimestamp = new byte[StateSerdes.TIMESTAMP_SIZE];
-            System.arraycopy(rawValueTimestampHeaders, 1, rawTimestamp, 0, StateSerdes.TIMESTAMP_SIZE);
-            return LONG_DESERIALIZER.deserialize("", rawTimestamp);
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headersSize);
-
-        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
-        return LONG_DESERIALIZER.deserialize("", rawTimestamp);
-    }
-
-    /**
-     * Extract headers from serialized ValueTimestampHeaders.
-     */
-    public static Headers headers(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
-        }
-
-        // If the header is empty, simply return it
-        if (Utils.hasEmptyHeaders(rawValueTimestampHeaders)) {
-            return new RecordHeaders();
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HeadersDeserializer.deserialize(rawHeaders);
     }
 }

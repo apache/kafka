@@ -17,9 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
@@ -45,7 +43,7 @@ import static org.apache.kafka.streams.state.internals.Utils.readBytes;
  * <p>
  * This is used by KIP-1271 to deserialize aggregations with headers from session state stores.
  */
-public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeserializer<AggregationWithHeaders<AGG>, Void, AGG> {
+class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeserializer<AggregationWithHeaders<AGG>, Void, AGG> {
 
     public final Deserializer<AGG> aggregationDeserializer;
 
@@ -66,7 +64,7 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        final Headers headers = readHeaders(buffer);
+        final Headers headers = Utils.readHeaders(buffer);
         final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
         final AGG aggregation = aggregationDeserializer.deserialize(topic, headers, rawAggregation);
 
@@ -81,52 +79,5 @@ public class AggregationWithHeadersDeserializer<AGG> implements WrappingNullable
     @Override
     public void setIfUnset(final SerdeGetter getter) {
         initNullableDeserializer(aggregationDeserializer, getter);
-    }
-
-    /**
-     * Extract headers from serialized AggregationWithHeaders.
-     */
-    public static Headers headers(final byte[] rawAggregationWithHeaders) {
-        if (rawAggregationWithHeaders == null) {
-            return null;
-        }
-
-        // If the header is empty, simply return it
-        if (Utils.hasEmptyHeaders(rawAggregationWithHeaders)) {
-            return new RecordHeaders();
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
-        return readHeaders(buffer);
-    }
-
-    /**
-     * Extract the raw aggregation bytes from serialized AggregationWithHeaders,
-     * stripping the headers prefix.
-     */
-    public static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
-            return null;
-        }
-
-        // If the header is empty, then copy the value bytes directly
-        if (Utils.hasEmptyHeaders(aggregationWithHeaders)) {
-            // Strip header size's varint byte, and empty headers consume no bytes
-            final byte[] aggregation = new byte[aggregationWithHeaders.length - 1]; 
-            System.arraycopy(aggregationWithHeaders, 1, aggregation, 0, aggregation.length);
-            return aggregation;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        // Skip the headers bytes without deserializing or copying
-        final int headersSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headersSize); 
-        return readBytes(buffer, buffer.remaining());
-    }
-
-    public static Headers readHeaders(final ByteBuffer buffer) {
-        final int headersSize = ByteUtils.readVarint(buffer);
-        final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HeadersDeserializer.deserialize(rawHeaders);
     }
 }

@@ -213,7 +213,7 @@ public class ValueTimestampHeadersDeserializerTest {
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final long timestamp = ValueTimestampHeadersDeserializer.timestamp(serialized);
+        final long timestamp = Utils.timestamp(serialized);
 
         assertEquals(123456789L, timestamp);
     }
@@ -229,7 +229,7 @@ public class ValueTimestampHeadersDeserializerTest {
     public void shouldThrowExceptionWhenExtractingTimestampFromNull() {
         // ByteBuffer.wrap() throws NullPointerException for null input
         assertThrows(NullPointerException.class, () ->
-            ValueTimestampHeadersDeserializer.timestamp(null)
+            Utils.timestamp(null)
         );
     }
 
@@ -242,7 +242,7 @@ public class ValueTimestampHeadersDeserializerTest {
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final Headers extractedHeaders = ValueTimestampHeadersDeserializer.headers(serialized);
+        final Headers extractedHeaders = Utils.headers(serialized);
 
         assertNotNull(extractedHeaders);
         assertEquals(2, extractedHeaders.toArray().length);
@@ -257,7 +257,7 @@ public class ValueTimestampHeadersDeserializerTest {
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final Headers extractedHeaders = ValueTimestampHeadersDeserializer.headers(serialized);
+        final Headers extractedHeaders = Utils.headers(serialized);
 
         assertNotNull(extractedHeaders);
         assertEquals(0, extractedHeaders.toArray().length);
@@ -265,7 +265,7 @@ public class ValueTimestampHeadersDeserializerTest {
 
     @Test
     public void shouldReturnNullWhenExtractingHeadersFromNull() {
-        final Headers headers = ValueTimestampHeadersDeserializer.headers(null);
+        final Headers headers = Utils.headers(null);
         assertNull(headers);
     }
 

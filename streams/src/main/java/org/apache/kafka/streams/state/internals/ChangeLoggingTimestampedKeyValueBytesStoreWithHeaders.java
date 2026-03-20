@@ -23,8 +23,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.timestamp;
+import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
 /**
  * Change-logging wrapper for a timestamped key-value bytes store whose values also carry headers.

@@ -23,9 +23,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer;
 import org.apache.kafka.streams.state.internals.Utils;
-import org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
@@ -41,9 +39,6 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
-
-import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializer.readHeaders;
-import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 @OutputTimeUnit(TimeUnit.SECONDS)
 @Fork(3)
@@ -123,7 +118,7 @@ public class RawBytesExtractionBenchmark {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawAggregationWithoutHeadersOpt(IterationStateForEmptyHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.rawAggregation(randomValue));
+            bh.consume(Utils.rawAggregation(randomValue));
         }
     }
 
@@ -139,7 +134,7 @@ public class RawBytesExtractionBenchmark {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawAggregationWithHeadersOpt(IterationStateForHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.rawAggregation(randomValue));
+            bh.consume(Utils.rawAggregation(randomValue));
         }
     }
 
@@ -187,7 +182,7 @@ public class RawBytesExtractionBenchmark {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testHeadersWithoutHeadersOpt(IterationStateForEmptyHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(AggregationWithHeadersDeserializer.headers(randomValue));
+            bh.consume(Utils.headers(randomValue));
         }
     }
 
@@ -203,7 +198,7 @@ public class RawBytesExtractionBenchmark {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testTimestampWithoutHeadersOpt(IterationStateForEmptyHeadersTimestamp state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(ValueTimestampHeadersDeserializer.timestamp(randomValue));
+            bh.consume(Utils.timestamp(randomValue));
         }
     }
 
@@ -253,8 +248,8 @@ public class RawBytesExtractionBenchmark {
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        readHeaders(buffer); 
-        return readBytes(buffer, buffer.remaining());
+        Utils.readHeaders(buffer); 
+        return Utils.readBytes(buffer, buffer.remaining());
     }
 
     /**
@@ -269,7 +264,7 @@ public class RawBytesExtractionBenchmark {
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
         buffer.position(buffer.position() + headersSize + Long.BYTES);
-        return readBytes(buffer, buffer.remaining());
+        return Utils.readBytes(buffer, buffer.remaining());
     }
 
     /**
@@ -311,7 +306,7 @@ public class RawBytesExtractionBenchmark {
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
-        return readHeaders(buffer);
+        return Utils.readHeaders(buffer);
     }
 
     /**
@@ -322,7 +317,7 @@ public class RawBytesExtractionBenchmark {
         final int headersSize = ByteUtils.readVarint(buffer);
         buffer.position(buffer.position() + headersSize);
 
-        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
+        final byte[] rawTimestamp = Utils.readBytes(buffer, Long.BYTES);
         return LONG_DESERIALIZER.deserialize("", rawTimestamp);
     }
 }

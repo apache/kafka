@@ -109,7 +109,7 @@ public class AggregationWithHeadersDeserializerTest {
         try (final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer())) {
             final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-            final Headers extractedHeaders = AggregationWithHeadersDeserializer.headers(serialized);
+            final Headers extractedHeaders = Utils.headers(serialized);
             assertNotNull(extractedHeaders);
 
             final Header header = extractedHeaders.iterator().next();
@@ -127,6 +127,6 @@ public class AggregationWithHeadersDeserializerTest {
 
     @Test
     public void shouldReturnNullForNullInput() {
-        assertNull(AggregationWithHeadersDeserializer.headers(null));
+        assertNull(Utils.headers(null));
     }
 }
