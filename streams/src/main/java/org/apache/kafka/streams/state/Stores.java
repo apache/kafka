@@ -355,7 +355,7 @@ public final class Stores {
                                                                   final Duration retentionPeriod,
                                                                   final Duration windowSize,
                                                                   final boolean retainDuplicates,
-                                                                  final RocksDbWindowBytesStoreSupplier.WindowStoreTypes timestampedStoreType) {
+                                                                  final RocksDbWindowBytesStoreSupplier.WindowStoreTypes storeType) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -370,6 +370,11 @@ public final class Stores {
         if (windowSizeMs < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
+        if (windowSizeMs > retentionMs) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                + name + " must be no smaller than its window size. Got size=["
+                + windowSize + "], retention=[" + retentionPeriod + "]");
+        }
 
         return new RocksDbWindowBytesStoreSupplier(
             name,
@@ -377,7 +382,7 @@ public final class Stores {
             defaultSegmentInterval,
             windowSizeMs,
             retainDuplicates,
-            timestampedStoreType
+            storeType
         );
     }
 
