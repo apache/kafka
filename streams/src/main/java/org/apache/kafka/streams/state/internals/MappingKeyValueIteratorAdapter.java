@@ -21,6 +21,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
 import java.util.function.Function;
 
@@ -42,8 +47,8 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
     }
 
     /**
-     * Ensures backward compatibility between {@link org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders}
-     * and plain {@link org.apache.kafka.streams.state.KeyValueStore}: values are wrapped with empty headers
+     * Ensures backward compatibility between {@link TimestampedKeyValueStoreWithHeaders}
+     * and plain {@link KeyValueStore}: values are wrapped with empty headers
      * and timestamp {@code -1}.
      *
      * @see PlainToHeadersStoreAdapter
@@ -53,8 +58,8 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
     }
 
     /**
-     * Ensures backward compatibility between {@link org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders}
-     * and {@link org.apache.kafka.streams.state.TimestampedKeyValueStore}.
+     * Ensures backward compatibility between {@link TimestampedKeyValueStoreWithHeaders}
+     * and {@link TimestampedKeyValueStore}.
      *
      * @see TimestampedToHeadersStoreAdapter
      */
@@ -63,8 +68,8 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
     }
 
     /**
-     * Ensures backward compatibility between {@link org.apache.kafka.streams.state.SessionStoreWithHeaders}
-     * and {@link org.apache.kafka.streams.state.SessionStore}.
+     * Ensures backward compatibility between {@link SessionStoreWithHeaders}
+     * and {@link SessionStore}.
      *
      * @see SessionToHeadersStoreAdapter
      */
