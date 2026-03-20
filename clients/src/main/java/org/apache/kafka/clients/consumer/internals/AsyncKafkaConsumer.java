@@ -205,7 +205,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     process((PartitionsRemovedEvent) event);
                     break;
 
-                case STREAMS_PARTITIONS_ASSIGNED:
+                case STREAMS_TASKS_ASSIGNED:
                     process((StreamsTasksAssignedEvent) event);
                     break;
 

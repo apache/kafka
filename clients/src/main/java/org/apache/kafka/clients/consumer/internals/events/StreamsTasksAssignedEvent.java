@@ -44,7 +44,7 @@ public class StreamsTasksAssignedEvent extends CompletableBackgroundEvent<Void> 
     public StreamsTasksAssignedEvent(final SortedSet<TopicPartition> assignedPartitions,
                                      final SortedSet<TopicPartition> addedPartitions,
                                      final StreamsRebalanceData.Assignment assignment) {
-        super(Type.STREAMS_PARTITIONS_ASSIGNED, Long.MAX_VALUE);
+        super(Type.STREAMS_TASKS_ASSIGNED, Long.MAX_VALUE);
         this.assignedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(assignedPartitions));
         this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
         this.assignment = Objects.requireNonNull(assignment);

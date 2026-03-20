@@ -1317,7 +1317,7 @@ public class StreamsMembershipManager implements RequestManager {
             assignment
         );
         backgroundEventHandler.add(event);
-        log.debug("Enqueued StreamsPartitionsAssignedEvent to apply assignment and trigger onTasksAssigned callback");
+        log.debug("Enqueued StreamsTasksAssignedEvent to apply assignment and trigger onTasksAssigned callback");
         return event.future();
     }
 
