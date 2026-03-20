@@ -63,7 +63,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsColumnFamily = columnFamilies.get(2);
 
-        boolean success = false;
         try {
             try (final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily)) {
                 noTimestampsIter.seekToFirst();
@@ -82,13 +81,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                     noTimestampColumnFamily.close();
                 }
             }
-            success = true;
-        } finally {
-            if (!success) {
-                for (final ColumnFamilyHandle handle : columnFamilies) {
-                    handle.close();
-                }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
             }
+            throw e;
         }
     }
 

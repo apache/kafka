@@ -105,7 +105,6 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         final ColumnFamilyHandle headersCf = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
 
-        boolean success = false;
         try {
             // Check if default CF has data (plain store upgrade)
             try (final RocksIterator defaultIter = db.newIterator(defaultCf)) {
@@ -126,13 +125,11 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     defaultCf.close();
                 }
             }
-            success = true;
-        } finally {
-            if (!success) {
-                for (final ColumnFamilyHandle handle : columnFamilies) {
-                    handle.close();
-                }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
             }
+            throw e;
         }
     }
 
@@ -147,7 +144,6 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
 
-        boolean success = false;
         try {
             // verify and close empty Default ColumnFamily
             try (final RocksIterator defaultIter = db.newIterator(columnFamilies.get(0))) {
@@ -192,13 +188,11 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     }
                 }
             }
-            success = true;
-        } finally {
-            if (!success) {
-                for (final ColumnFamilyHandle handle : columnFamilies) {
-                    handle.close();
-                }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
             }
+            throw e;
         }
     }
 

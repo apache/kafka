@@ -370,25 +370,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     .collect(Collectors.toList());
             final List<ColumnFamilyHandle> existingColumnFamilies = new ArrayList<>(existingDescriptors.size());
             final List<ColumnFamilyHandle> createdColumnFamilies = new ArrayList<>();
-            db = RocksDB.open(dbOptions, absolutePath, existingDescriptors, existingColumnFamilies);
-            boolean openSuccess = false;
             try {
+                db = RocksDB.open(dbOptions, absolutePath, existingDescriptors, existingColumnFamilies);
                 createdColumnFamilies.addAll(db.createColumnFamilies(toCreate));
-                final List<ColumnFamilyHandle> result =
-                    mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
-                openSuccess = true;
-                return result;
-            } finally {
-                if (!openSuccess) {
-                    for (final ColumnFamilyHandle handle : existingColumnFamilies) {
-                        handle.close();
-                    }
-                    for (final ColumnFamilyHandle handle : createdColumnFamilies) {
-                        handle.close();
-                    }
-                    db.close();
-                    db = null;
+                return mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
+            } catch (final Exception e) {
+                for (final ColumnFamilyHandle handle : existingColumnFamilies) {
+                    handle.close();
                 }
+                for (final ColumnFamilyHandle handle : createdColumnFamilies) {
+                    handle.close();
+                }
+                throw e;
             }
 
         } catch (final RocksDBException e) {
