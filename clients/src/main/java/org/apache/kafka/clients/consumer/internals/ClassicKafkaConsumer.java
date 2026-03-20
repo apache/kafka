@@ -407,7 +407,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public Set<TopicPartition> assignment() {
         acquireAndEnsureOpen();
         try {
-            return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
+            return Set.copyOf(this.subscriptions.assignedPartitions());
         } finally {
             release();
         }
