@@ -1037,6 +1037,8 @@ org.apache.kafka.tools.streams.StreamsGroupCommandTest:
 - testExitCodeOnIllegalArguments
 - testExitCodeOnInterruptedException
 - testExitCodeOnInvalidOption
+- testGetCommittedOffsetsIncludesRepartitionTopics
+- testGetCommittedOffsetsWithMultipleSubtopologies
 - testGroupStatesFromString
 - testListStreamsGroups
 - testListStreamsGroupsWithStates
