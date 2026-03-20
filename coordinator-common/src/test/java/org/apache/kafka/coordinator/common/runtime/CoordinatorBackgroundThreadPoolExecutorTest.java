@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.verify;
 
 public class CoordinatorBackgroundThreadPoolExecutorTest {
 
+    @Flaky("KAFKA-20345")
     @Test
     public void testMetrics() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntimeMetrics metrics = mock(CoordinatorRuntimeMetrics.class);
