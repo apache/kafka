@@ -226,7 +226,7 @@ public final class KafkaRaftClientFetchTest {
     }
 
     @Test
-    public void testFetchMaxBytesFromRemoteFetchUsed() throws Exception {
+    public void testFetchMaxBytesOneOrMoreBatches() throws Exception {
         var epoch = 2;
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
