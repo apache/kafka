@@ -22,8 +22,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
 
-import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
 /**
