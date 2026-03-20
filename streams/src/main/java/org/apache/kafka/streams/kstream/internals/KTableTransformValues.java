@@ -195,7 +195,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             final ValueTimestampHeaders<VOut> result = ValueTimestampHeaders.make(
                 valueTransformer.transform(key, getValueOrNull(valueTimestampHeaders)),
                 valueTimestampHeaders == null ? UNKNOWN : valueTimestampHeaders.timestamp(),
-                valueTimestampHeaders == null ? null : valueTimestampHeaders.headers()
+                valueTimestampHeaders == null ? currentContext.headers() : valueTimestampHeaders.headers()
                 );
 
             internalProcessorContext.setRecordContext(currentContext);
