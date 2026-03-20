@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-
-import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
@@ -28,35 +26,9 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  *
  * @see TimestampedToHeadersStoreAdapter
  */
-
-class TimestampedToHeadersIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
-    private final KeyValueIterator<K, byte[]> innerIterator;
+class TimestampedToHeadersIteratorAdapter<K> extends MappingKeyValueIteratorAdapter<K> {
 
     public TimestampedToHeadersIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {
-        this.innerIterator = innerIterator;
-    }
-
-    @Override
-    public void close() {
-        innerIterator.close();
-    }
-
-    @Override
-    public K peekNextKey() {
-        return innerIterator.peekNextKey();
-    }
-
-    @Override
-    public boolean hasNext() {
-        return innerIterator.hasNext();
-    }
-
-    @Override
-    public KeyValue<K, byte[]> next() {
-        final KeyValue<K, byte[]> timestampedKeyValue = innerIterator.next();
-        if (timestampedKeyValue == null) {
-            return null;
-        }
-        return KeyValue.pair(timestampedKeyValue.key, convertToHeaderFormat(timestampedKeyValue.value));
+        super(innerIterator, HeadersBytesStore::convertToHeaderFormat);
     }
 }

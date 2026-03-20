@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-
-import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
@@ -28,35 +26,9 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainT
  *
  * @see PlainToHeadersStoreAdapter
  */
-
-class PlainToHeadersIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
-    private final KeyValueIterator<K, byte[]> innerIterator;
+class PlainToHeadersIteratorAdapter<K> extends MappingKeyValueIteratorAdapter<K> {
 
     public PlainToHeadersIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {
-        this.innerIterator = innerIterator;
-    }
-
-    @Override
-    public void close() {
-        innerIterator.close();
-    }
-
-    @Override
-    public K peekNextKey() {
-        return innerIterator.peekNextKey();
-    }
-
-    @Override
-    public boolean hasNext() {
-        return innerIterator.hasNext();
-    }
-
-    @Override
-    public KeyValue<K, byte[]> next() {
-        final KeyValue<K, byte[]> plainKeyValue = innerIterator.next();
-        if (plainKeyValue == null) {
-            return null;
-        }
-        return KeyValue.pair(plainKeyValue.key, convertFromPlainToHeaderFormat(plainKeyValue.value));
+        super(innerIterator, HeadersBytesStore::convertFromPlainToHeaderFormat);
     }
 }
