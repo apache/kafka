@@ -6514,9 +6514,13 @@ org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersSerial
 - shouldPropagateSerializerHeaderSideEffectToChangelog
 org.apache.kafka.streams.state.internals.UtilsTest:
 - shouldExtractRawPlainValue
+- shouldExtractRawValueWithEmptyHeaders
 - shouldReturnNullForNullRawPlainValue
 - shouldReturnNullForNullRawTimestampedValue
+- testEmptyHeadersAndTimestamp
+- testEmptyHeadersAndTimestampWithInvalidHeaderSizes
 - testRawTimestampedValue
+- testRawTimestampedValueWithEmptyHeaders
 - testRawTimestampedValueWithInvalidHeadersSize
 - testRawTimestampedValueWithSerdes
 - testRawTimestampedValueWithoutTimestamp
