@@ -250,7 +250,10 @@ public class ShareFetch<K, V> {
     public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, Optional<Integer> acquisitionLockTimeoutMs) {
         int recordsRenewed = 0;
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
-            recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
+            ShareInFlightBatch<K, V> batch = batches.get(entry.getKey());
+            if (batch != null) {
+                recordsRenewed += batch.renew(entry.getValue());
+            }
         }
         acquisitionLockTimeoutMsRenewed = acquisitionLockTimeoutMs;
         return recordsRenewed;
