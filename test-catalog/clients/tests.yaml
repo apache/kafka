@@ -1927,6 +1927,16 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testUpdatePositionWithLastRecordMissingFromBatch
 - testWhenFetchResponseReturnsALeaderShipChangeErrorAndNewLeaderInformation
 - testWhenFetchResponseReturnsALeaderShipChangeErrorButNoNewLeaderInformation
+org.apache.kafka.clients.consumer.internals.FetchTest:
+- testAddForPartitionFetchToEmptyFetch
+- testAddPropagatesPositionAdvanced
+- testAddToForPartitionFetch
+- testAddWithSamePartitionMergesRecords
+- testEmpty
+- testForPartitionWithEmptyRecords
+- testForPartitionWithoutPositionAdvanced
+- testNextOffsetsReturnsUnmodifiableMap
+- testRecordsReturnsUnmodifiableMap
 org.apache.kafka.clients.consumer.internals.FetcherTest:
 - testClearBufferedDataForTopicPartitions
 - testCloseShouldBeIdempotent
