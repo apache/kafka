@@ -105,25 +105,23 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         final ColumnFamilyHandle headersCf = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
 
-        try {
-            // Check if default CF has data (plain store upgrade)
-            try (final RocksIterator defaultIter = db.newIterator(defaultCf)) {
-                defaultIter.seekToFirst();
-                if (defaultIter.isValid()) {
-                    log.info("Opening store {} in upgrade mode from plain key value store", name);
-                    cfAccessor = new DualColumnFamilyAccessor(
-                        offsetsCf,
-                        defaultCf,
-                        headersCf,
-                        HeadersBytesStore::convertFromPlainToHeaderFormat,
-                        this,
-                            open
-                    );
-                } else {
-                    log.info("Opening store {} in regular headers-aware mode", name);
-                    cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
-                    defaultCf.close();
-                }
+        // Check if default CF has data (plain store upgrade)
+        try (final RocksIterator defaultIter = db.newIterator(defaultCf)) {
+            defaultIter.seekToFirst();
+            if (defaultIter.isValid()) {
+                log.info("Opening store {} in upgrade mode from plain key value store", name);
+                cfAccessor = new DualColumnFamilyAccessor(
+                    offsetsCf,
+                    defaultCf,
+                    headersCf,
+                    HeadersBytesStore::convertFromPlainToHeaderFormat,
+                    this,
+                    open
+                );
+            } else {
+                log.info("Opening store {} in regular headers-aware mode", name);
+                cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
+                defaultCf.close();
             }
         } catch (final RuntimeException e) {
             for (final ColumnFamilyHandle handle : columnFamilies) {

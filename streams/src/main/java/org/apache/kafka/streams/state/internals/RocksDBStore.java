@@ -245,7 +245,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
         setupStatistics(configs, dbOptions);
-        boolean success = false;
         try {
             openRocksDB(dbOptions, columnFamilyOptions);
             dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
@@ -263,11 +262,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error opening store " + name, e);
             }
-            success = true;
-        } finally {
-            if (!success) {
-                closeNativeResources();
-            }
+        } catch (final RuntimeException e) {
+            closeNativeResources();
+            throw e;
         }
 
         addValueProvidersToMetricsRecorder();

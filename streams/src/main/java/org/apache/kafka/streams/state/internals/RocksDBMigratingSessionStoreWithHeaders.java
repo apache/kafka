@@ -67,24 +67,22 @@ public class RocksDBMigratingSessionStoreWithHeaders extends RocksDBStore implem
         final ColumnFamilyHandle withHeadersColumnFamily = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
 
-        try {
-            try (final RocksIterator noHeadersIter = db.newIterator(noHeadersColumnFamily)) {
-                noHeadersIter.seekToFirst();
-                if (noHeadersIter.isValid()) {
-                    log.info("Opening store {} in upgrade mode", name);
-                    cfAccessor = new DualColumnFamilyAccessor(
-                        offsetsCf,
-                        noHeadersColumnFamily,
-                        withHeadersColumnFamily,
-                        HeadersBytesStore::convertToHeaderFormat,
-                        this,
-                            open
-                    );
-                } else {
-                    log.info("Opening store {} in regular mode", name);
-                    cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, withHeadersColumnFamily);
-                    noHeadersColumnFamily.close();
-                }
+        try (final RocksIterator noHeadersIter = db.newIterator(noHeadersColumnFamily)) {
+            noHeadersIter.seekToFirst();
+            if (noHeadersIter.isValid()) {
+                log.info("Opening store {} in upgrade mode", name);
+                cfAccessor = new DualColumnFamilyAccessor(
+                    offsetsCf,
+                    noHeadersColumnFamily,
+                    withHeadersColumnFamily,
+                    HeadersBytesStore::convertToHeaderFormat,
+                    this,
+                    open
+                );
+            } else {
+                log.info("Opening store {} in regular mode", name);
+                cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, withHeadersColumnFamily);
+                noHeadersColumnFamily.close();
             }
         } catch (final RuntimeException e) {
             for (final ColumnFamilyHandle handle : columnFamilies) {
