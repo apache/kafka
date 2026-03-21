@@ -5007,12 +5007,4 @@ public class UnifiedLogTest {
         }
         builder.close();
     }
-
-    private void assertCachedFirstUnstableOffset(UnifiedLog log, long expectedOffset) throws IOException {
-        assertTrue(log.producerStateManager().firstUnstableOffset().isPresent());
-        LogOffsetMetadata firstUnstableOffset = log.producerStateManager().firstUnstableOffset().get();
-        assertEquals(expectedOffset, firstUnstableOffset.messageOffset);
-        assertFalse(firstUnstableOffset.messageOffsetOnly());
-        assertValidLogOffsetMetadata(log, firstUnstableOffset);
-    }
 }

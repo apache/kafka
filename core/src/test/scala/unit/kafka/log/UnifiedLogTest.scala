@@ -24,21 +24,18 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.internal._
-import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetResultHolder, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetResultHolder, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, _}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
@@ -46,7 +43,6 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doThrow, spy}
 
 import java.io._
-import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -82,37 +78,6 @@ class UnifiedLogTest {
       Files.createFile(LogFileUtils.logFile(dir, offset).toPath)
       Files.createFile(LogFileUtils.offsetIndexFile(dir, offset).toPath)
     }
-  }
-
-
-  private def assertCachedFirstUnstableOffset(log: UnifiedLog, expectedOffset: Long): Unit = {
-    assertTrue(log.producerStateManager.firstUnstableOffset.isPresent)
-    val firstUnstableOffset = log.producerStateManager.firstUnstableOffset.get
-    assertEquals(expectedOffset, firstUnstableOffset.messageOffset)
-    assertFalse(firstUnstableOffset.messageOffsetOnly)
-    assertValidLogOffsetMetadata(log, firstUnstableOffset)
-  }
-
-  private def assertValidLogOffsetMetadata(log: UnifiedLog, offsetMetadata: LogOffsetMetadata): Unit = {
-    assertFalse(offsetMetadata.messageOffsetOnly)
-
-    val segmentBaseOffset = offsetMetadata.segmentBaseOffset
-    val segments = log.logSegments(segmentBaseOffset, segmentBaseOffset + 1)
-    assertFalse(segments.isEmpty)
-
-    val segment = segments.iterator().next()
-    assertEquals(segmentBaseOffset, segment.baseOffset)
-    assertTrue(offsetMetadata.relativePositionInSegment <= segment.size)
-
-    val readInfo = segment.read(offsetMetadata.messageOffset,
-      2048,
-      Optional.of(segment.size),
-      false)
-
-    if (offsetMetadata.relativePositionInSegment < segment.size)
-      assertEquals(offsetMetadata, readInfo.fetchOffsetMetadata)
-    else
-      assertNull(readInfo)
   }
 
   /**
@@ -1011,47 +976,6 @@ class UnifiedLogTest {
     assertEquals(new OffsetResultHolder(Optional.empty(), Optional.empty()), result)
   }
 
-  private def appendTransactionalToBuffer(buffer: ByteBuffer,
-                                          producerId: Long,
-                                          producerEpoch: Short,
-                                          leaderEpoch: Int = 0): (Long, Int) => Unit = {
-    var sequence = 0
-    (offset: Long, numRecords: Int) => {
-      val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME,
-        offset, mockTime.milliseconds(), producerId, producerEpoch, sequence, true, leaderEpoch)
-      for (seq <- sequence until sequence + numRecords) {
-        val record = new SimpleRecord(s"$seq".getBytes)
-        builder.append(record)
-      }
-
-      sequence += numRecords
-      builder.close()
-    }
-  }
-
-  private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer,
-                                         producerId: Long,
-                                         producerEpoch: Short,
-                                         offset: Long,
-                                         controlType: ControlRecordType,
-                                         coordinatorEpoch: Int = 0,
-                                         leaderEpoch: Int = 0): Unit = {
-    val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), leaderEpoch, producerId, producerEpoch, marker)
-  }
-
-  private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {
-    val builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, offset)
-    (0 until numRecords).foreach { seq =>
-      builder.append(new SimpleRecord(s"$seq".getBytes))
-    }
-    builder.close()
-  }
-
-  private def appendAsFollower(log: UnifiedLog, records: MemoryRecords, leaderEpoch: Int): Unit = {
-    records.batches.forEach(_.setPartitionLeaderEpoch(leaderEpoch))
-    log.appendAsFollower(records, leaderEpoch)
-  }
 
   private def createLog(dir: File,
                         config: LogConfig,
