@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -26,9 +27,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
@@ -54,25 +53,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    private static EmbeddedKafkaCluster cluster = null;
+    private EmbeddedKafkaCluster cluster;
     public TestInfo testInfo;
     private ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        cluster = new EmbeddedKafkaCluster(3);
-        cluster.start();
+    protected Properties brokerConfig() {
+        return new Properties();
     }
 
-    @AfterAll
-    public static void closeCluster() {
-        cluster.stop();
-        cluster = null;
+    public static class WithAssignmentBatchingDisabledTest extends SmokeTestDriverIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
+            return props;
+        }
     }
 
     @BeforeEach
-    public void setUp(final TestInfo testInfo) {
+    public void setUp(final TestInfo testInfo) throws IOException {
         this.testInfo = testInfo;
+        this.cluster = new EmbeddedKafkaCluster(3, brokerConfig());
+        this.cluster.start();
     }
 
     @AfterEach
@@ -83,6 +86,8 @@ public class SmokeTestDriverIntegrationTest {
                 client.close();
             }
         }
+        cluster.stop();
+        cluster = null;
     }
 
     private static class Driver extends Thread {

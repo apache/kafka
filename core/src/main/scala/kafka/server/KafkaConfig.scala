@@ -569,9 +569,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         "There must be at least one broker advertised listener." + (
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
-    def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String): Unit = {
+    def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String, extraMessage: String = ""): Unit = {
       if (originals.containsKey(configName)) {
-        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role.")
+        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
       }
     }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
@@ -604,14 +604,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG)
-      if (originals.containsKey(ServerLogConfigs.NUM_PARTITIONS_CONFIG)) {
-        warn(s"${ServerLogConfigs.NUM_PARTITIONS_CONFIG} is defined in the broker role. This configuration will be ignored in 5.0. " +
-          s"Please set ${ServerLogConfigs.NUM_PARTITIONS_CONFIG} in the controller role instead.")
-      }
-      if (originals.containsKey(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)) {
-        warn(s"${ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG} is defined in the broker role. This configuration will be ignored in 5.0. " +
-          s"Please set ${ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG} in the controller role instead.")
-      }
+      // warn if num.partitions or default.replication.factor is defined in the broker role
+      val ignoredIn5 = "This configuration will be ignored in the broker role in 5.0."
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.NUM_PARTITIONS_CONFIG, ignoredIn5)
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, ignoredIn5)
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()

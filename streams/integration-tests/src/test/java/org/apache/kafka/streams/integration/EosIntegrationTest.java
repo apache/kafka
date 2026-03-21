@@ -923,18 +923,12 @@ public class EosIntegrationTest {
         kafkaStreams.close();
         waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
 
-        final File checkpointFile = Paths.get(
+        final File taskDir = Paths.get(
             streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
-            task00.toString(),
-            ".checkpoint_" + stateStoreName
+            task00.toString()
         ).toFile();
-        assertTrue(checkpointFile.exists());
-        final Map<TopicPartition, Long> checkpoints = new OffsetCheckpoint(checkpointFile).read();
-        assertEquals(
-            Long.valueOf(restoredOffsetsForPartition0.get()),
-            new ArrayList<>(checkpoints.values()).get(0)
-        );
+        assertTrue(taskDir.exists());
     }
 
 

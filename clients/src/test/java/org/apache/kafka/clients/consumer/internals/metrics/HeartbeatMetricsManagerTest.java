@@ -28,9 +28,14 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-public class HeartbeatMetricsManagerTest {
+public class HeartbeatMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
     private final Time time = new MockTime();
     private final Metrics metrics = new Metrics(time);
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        return new HeartbeatMetricsManager(metrics, groupDescription);
+    }
 
     @Test
     public void testHeartbeatMetrics() {
