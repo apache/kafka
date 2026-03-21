@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.api.Flaky;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +35,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1428,6 +1428,11 @@ public abstract class AbstractStickyAssignorTest {
         return "0".repeat(Math.max(0, digits - iDigits)) + num;
     }
 
+    private static Map<String, List<Integer>> groupPartitionsByTopic(Collection<TopicPartition> partitions) {
+        return partitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.mapping(TopicPartition::partition, Collectors.toList())));
+    }
+
     protected static List<String> topics(String... topics) {
         return Arrays.asList(topics);
     }
@@ -1522,8 +1527,8 @@ public abstract class AbstractStickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
-                Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
+                Map<String, List<Integer>> map = groupPartitionsByTopic(partitions);
+                Map<String, List<Integer>> otherMap = groupPartitionsByTopic(otherPartitions);
 
                 int moreLoaded = len > otherLen ? i : j;
                 int lessLoaded = len > otherLen ? j : i;
