@@ -22,10 +22,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import javax.security.auth.callback.Callback;
-
-import static org.apache.kafka.common.utils.CollectionUtils.subtractMap;
 
 /**
  * A {@code Callback} for use by the {@code SaslServer} implementation when it
@@ -88,6 +87,12 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
      */
     public Map<String, String> ignoredExtensions() {
         return Collections.unmodifiableMap(subtractMap(subtractMap(inputExtensions.map(), invalidExtensions), validatedExtensions));
+    }
+
+    private static Map<String, String> subtractMap(Map<String, String> minuend, Map<String, String> subtrahend) {
+        return minuend.entrySet().stream()
+                .filter(entry -> !subtrahend.containsKey(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
