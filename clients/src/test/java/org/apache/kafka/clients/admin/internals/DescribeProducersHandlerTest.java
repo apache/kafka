@@ -33,7 +33,6 @@ import org.apache.kafka.common.message.DescribeProducersResponseData.TopicRespon
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
@@ -120,7 +119,7 @@ public class DescribeProducersHandlerTest {
         int brokerId = 3;
         DescribeProducersRequest.Builder request = handler.buildBatchedRequest(brokerId, topicPartitions);
 
-        List<DescribeProducersRequestData.TopicRequest> topics = request.data.topics();
+        DescribeProducersRequestData.TopicRequestCollection topics = request.data.topics();
 
         assertEquals(Set.of("foo", "bar"), topics.stream()
             .map(DescribeProducersRequestData.TopicRequest::name)
@@ -308,7 +307,10 @@ public class DescribeProducersHandlerTest {
     ) {
         DescribeProducersResponseData response = new DescribeProducersResponseData();
         Map<String, Map<Integer, PartitionResponse>> partitionResponsesByTopic =
-            CollectionUtils.groupPartitionDataByTopic(partitionResponses);
+            partitionResponses.entrySet().stream()
+                .collect(Collectors.groupingBy(
+                    e -> e.getKey().topic(),
+                    Collectors.toMap(e -> e.getKey().partition(), Map.Entry::getValue)));
 
         for (Map.Entry<String, Map<Integer, PartitionResponse>> topicEntry : partitionResponsesByTopic.entrySet()) {
             String topic = topicEntry.getKey();
