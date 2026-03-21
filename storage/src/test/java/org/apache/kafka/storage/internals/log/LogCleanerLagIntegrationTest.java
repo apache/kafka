@@ -104,10 +104,11 @@ public class LogCleanerLagIntegrationTest {
     @EnumSource(CompressionType.class)
     public void cleanerTest(CompressionType compressionType) throws IOException, InterruptedException {
         Compression codec = Compression.of(compressionType).build();
-        cleaner = makeCleaner(TOPIC_PARTITIONS,
-            CLEANER_BACKOFF_MS,
-            MIN_COMPACTION_LAG,
-            SEGMENT_SIZE);
+        cleaner = logCleanerBuilder(TOPIC_PARTITIONS)
+            .backoffMs(CLEANER_BACKOFF_MS)
+            .minCompactionLagMs(MIN_COMPACTION_LAG)
+            .segmentSize(SEGMENT_SIZE)
+            .build();
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
 
         // t = T0
@@ -162,7 +163,10 @@ public class LogCleanerLagIntegrationTest {
         int largeMessageKey = 20;
         ValueAndRecords largeMessage = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec);
         int maxMessageSize = largeMessage.records().sizeInBytes();
-        cleaner = makeCleaner(TOPIC_PARTITIONS, maxMessageSize, 100L);
+        cleaner = logCleanerBuilder(TOPIC_PARTITIONS)
+            .maxMessageSize(maxMessageSize)
+            .backoffMs(100L)
+            .build();
 
         breakPartitionLog(TOPIC_PARTITIONS.get(0));
         breakPartitionLog(TOPIC_PARTITIONS.get(1));
@@ -216,8 +220,13 @@ public class LogCleanerLagIntegrationTest {
 
     @Test
     public void testMaxLogCompactionLag() throws Exception {
-        cleaner = makeCleaner(TOPIC_PARTITIONS, CLEANER_BACKOFF_MS, MIN_COMPACTION_LAG, SEGMENT_SIZE,
-            MAX_COMPACTION_LAG, MIN_CLEANABLE_DIRTY_RATIO);
+        cleaner = logCleanerBuilder(TOPIC_PARTITIONS)
+            .backoffMs(CLEANER_BACKOFF_MS)
+            .minCompactionLagMs(MIN_COMPACTION_LAG)
+            .segmentSize(SEGMENT_SIZE)
+            .maxCompactionLagMs(MAX_COMPACTION_LAG)
+            .minCleanableDirtyRatio(MIN_CLEANABLE_DIRTY_RATIO)
+            .build();
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
 
         long t0 = time.milliseconds();
@@ -277,7 +286,10 @@ public class LogCleanerLagIntegrationTest {
 
     @Test
     public void testIsThreadFailed() throws Exception {
-        cleaner = makeCleaner(TOPIC_PARTITIONS, 100000, 100L);
+        cleaner = logCleanerBuilder(TOPIC_PARTITIONS)
+            .maxMessageSize(100000)
+            .backoffMs(100L)
+            .build();
         cleaner.startup();
         assertEquals(0, cleaner.deadThreadCount());
         // we simulate the unexpected error with an interrupt
@@ -423,124 +435,108 @@ public class LogCleanerLagIntegrationTest {
         return props;
     }
 
-    private Properties logConfigProperties(int maxMessageSize) {
-        return logConfigProperties(new Properties(), maxMessageSize,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY, DEFAULT_SEGMENT_SIZE, DEFAULT_MAX_COMPACTION_LAG_MS);
+    private LogCleanerTestFixtureBuilder logCleanerBuilder(Iterable<TopicPartition> partitions) {
+        return new LogCleanerTestFixtureBuilder(partitions);
     }
 
-    private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   float minCleanableDirtyRatio,
-                                   int numThreads,
-                                   long backoffMs,
-                                   int maxMessageSize,
-                                   long minCompactionLagMs,
-                                   int deleteDelay,
-                                   int segmentSize,
-                                   long maxCompactionLagMs,
-                                   Integer cleanerIoBufferSize,
-                                   Properties propertyOverrides) throws IOException {
+    /** Builds a {@link LogCleaner} for this test instance; {@code partitions} is required. */
+    private final class LogCleanerTestFixtureBuilder {
+        private final Iterable<TopicPartition> partitions;
+        private float minCleanableDirtyRatio = DEFAULT_MIN_CLEANABLE_DIRTY_RATIO;
+        private int numThreads = 1;
+        private long backoffMs = 15000L;
+        private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
+        private long minCompactionLagMs = DEFAULT_MIN_COMPACTION_LAG_MS;
+        private int deleteDelay = DEFAULT_DELETE_DELAY;
+        private int segmentSize = DEFAULT_SEGMENT_SIZE;
+        private long maxCompactionLagMs = DEFAULT_MAX_COMPACTION_LAG_MS;
+        private Integer cleanerIoBufferSize = null;
+        private Properties propertyOverrides = new Properties();
 
-        ConcurrentMap<TopicPartition, UnifiedLog> logMap = new ConcurrentHashMap<>();
-        for (TopicPartition partition : partitions) {
-            File dir = new File(logDir, partition.topic() + "-" + partition.partition());
-            Files.createDirectories(dir.toPath());
-
-            Properties props = logConfigProperties(propertyOverrides,
-                maxMessageSize,
-                minCleanableDirtyRatio,
-                minCompactionLagMs,
-                deleteDelay,
-                segmentSize,
-                maxCompactionLagMs);
-            LogConfig logConfig = new LogConfig(props);
-
-            UnifiedLog log = UnifiedLog.create(
-                dir,
-                logConfig,
-                0L,
-                0L,
-                time.scheduler,
-                new BrokerTopicStats(),
-                time,
-                5 * 60 * 1000,
-                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-                new LogDirFailureChannel(10),
-                true,
-                Optional.empty());
-            logMap.put(partition, log);
-            logs.add(log);
+        private LogCleanerTestFixtureBuilder(Iterable<TopicPartition> partitions) {
+            this.partitions = partitions;
         }
 
-        int ioBufferSize = cleanerIoBufferSize != null ? cleanerIoBufferSize : maxMessageSize / 2;
-        CleanerConfig cleanerConfig = new CleanerConfig(
-            numThreads,
-            4 * 1024 * 1024L,
-            0.9,
-            ioBufferSize,
-            maxMessageSize,
-            Double.MAX_VALUE,
-            backoffMs,
-            true);
+        private LogCleanerTestFixtureBuilder minCleanableDirtyRatio(float minCleanableDirtyRatio) {
+            this.minCleanableDirtyRatio = minCleanableDirtyRatio;
+            return this;
+        }
 
-        return new LogCleaner(cleanerConfig,
-            List.of(logDir),
-            logMap,
-            new LogDirFailureChannel(1),
-            time);
-    }
+        private LogCleanerTestFixtureBuilder backoffMs(long backoffMs) {
+            this.backoffMs = backoffMs;
+            return this;
+        }
 
-    private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   long backoffMs,
-                                   long minCompactionLagMs,
-                                   int segmentSize) throws IOException {
-        return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            DEFAULT_MAX_MESSAGE_SIZE,
-            minCompactionLagMs,
-            DEFAULT_DELETE_DELAY,
-            segmentSize,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            null,
-            new Properties());
-    }
+        private LogCleanerTestFixtureBuilder maxMessageSize(int maxMessageSize) {
+            this.maxMessageSize = maxMessageSize;
+            return this;
+        }
 
-    private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   int maxMessageSize,
-                                   long backoffMs) throws IOException {
-        return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            maxMessageSize,
-            DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY,
-            DEFAULT_SEGMENT_SIZE,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            null,
-            new Properties());
-    }
+        private LogCleanerTestFixtureBuilder minCompactionLagMs(long minCompactionLagMs) {
+            this.minCompactionLagMs = minCompactionLagMs;
+            return this;
+        }
 
-    private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   long backoffMs,
-                                   long minCompactionLagMs,
-                                   int segmentSize,
-                                   long maxCompactionLagMs,
-                                   float minCleanableDirtyRatio) throws IOException {
-        return makeCleaner(partitions,
-            minCleanableDirtyRatio,
-            1,
-            backoffMs,
-            DEFAULT_MAX_MESSAGE_SIZE,
-            minCompactionLagMs,
-            DEFAULT_DELETE_DELAY,
-            segmentSize,
-            maxCompactionLagMs,
-            null,
-            new Properties());
+        private LogCleanerTestFixtureBuilder segmentSize(int segmentSize) {
+            this.segmentSize = segmentSize;
+            return this;
+        }
+
+        private LogCleanerTestFixtureBuilder maxCompactionLagMs(long maxCompactionLagMs) {
+            this.maxCompactionLagMs = maxCompactionLagMs;
+            return this;
+        }
+
+        private LogCleaner build() throws IOException {
+            ConcurrentMap<TopicPartition, UnifiedLog> logMap = new ConcurrentHashMap<>();
+            for (TopicPartition partition : partitions) {
+                File dir = new File(logDir, partition.topic() + "-" + partition.partition());
+                Files.createDirectories(dir.toPath());
+
+                Properties props = logConfigProperties(propertyOverrides,
+                    maxMessageSize,
+                    minCleanableDirtyRatio,
+                    minCompactionLagMs,
+                    deleteDelay,
+                    segmentSize,
+                    maxCompactionLagMs);
+                LogConfig logConfig = new LogConfig(props);
+
+                UnifiedLog log = UnifiedLog.create(
+                    dir,
+                    logConfig,
+                    0L,
+                    0L,
+                    time.scheduler,
+                    new BrokerTopicStats(),
+                    time,
+                    5 * 60 * 1000,
+                    new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                    TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                    new LogDirFailureChannel(10),
+                    true,
+                    Optional.empty());
+                logMap.put(partition, log);
+                logs.add(log);
+            }
+
+            int ioBufferSize = cleanerIoBufferSize != null ? cleanerIoBufferSize : maxMessageSize / 2;
+            CleanerConfig cleanerConfig = new CleanerConfig(
+                numThreads,
+                4 * 1024 * 1024L,
+                0.9,
+                ioBufferSize,
+                maxMessageSize,
+                Double.MAX_VALUE,
+                backoffMs,
+                true);
+
+            return new LogCleaner(cleanerConfig,
+                List.of(logDir),
+                logMap,
+                new LogDirFailureChannel(1),
+                time);
+        }
     }
 
     private int counter() {
