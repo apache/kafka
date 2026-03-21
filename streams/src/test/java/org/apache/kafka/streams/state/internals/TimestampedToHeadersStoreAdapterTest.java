@@ -62,7 +62,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     private TimestampedToHeadersStoreAdapter createAdapter() {
         when(mockStore.persistent()).thenReturn(true);
-        return createAdapter();
+        return new TimestampedToHeadersStoreAdapter(mockStore);
     }
 
     private static byte[] headerFormatValue(final byte[] timestampedValue) {
