@@ -196,6 +196,14 @@ public class LogTestUtils {
         return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, partitionLeaderEpoch);
     }
 
+    public static List<AbortedTxn> allAbortedTransactions(UnifiedLog log) {
+        List<AbortedTxn> result = new ArrayList<>();
+        for (LogSegment segment : log.logSegments()) {
+            result.addAll(segment.txnIndex().allAbortedTxns());
+        }
+        return result;
+    }
+
     public static void deleteProducerSnapshotFiles(File logDir) {
         Stream.of(logDir.listFiles())
                 .filter(f -> f.isFile() && f.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX))
