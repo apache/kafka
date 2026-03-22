@@ -122,7 +122,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
         }
 
         @Override
-        public SubscriptionResponseWrapper<V> deserialize(final String topic, final  Headers headers, final  byte[] data) {
+        public SubscriptionResponseWrapper<V> deserialize(final String topic, final Headers headers, final byte[] data) {
             //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
 
             final ByteBuffer buf = ByteBuffer.wrap(data);
@@ -146,7 +146,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
                 final byte[] serializedValue;
                 serializedValue = new byte[data.length - lengthSum];
                 buf.get(serializedValue, 0, serializedValue.length);
-                value = deserializer.deserialize(topic, serializedValue);
+                value = deserializer.deserialize(topic, headers, serializedValue);
             } else {
                 value = null;
             }

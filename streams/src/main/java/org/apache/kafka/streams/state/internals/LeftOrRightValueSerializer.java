@@ -73,8 +73,8 @@ public class LeftOrRightValueSerializer<V1, V2> implements WrappingNullableSeria
         }
 
         final byte[] rawValue = (data.leftValue() != null)
-            ? leftSerializer.serialize(topic, data.leftValue())
-            : rightSerializer.serialize(topic, data.rightValue());
+            ? leftSerializer.serialize(topic, headers, data.leftValue())
+            : rightSerializer.serialize(topic, headers, data.rightValue());
 
         if (rawValue == null) {
             return null;
