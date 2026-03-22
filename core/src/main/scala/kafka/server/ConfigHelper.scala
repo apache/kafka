@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, Descr
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.{DynamicBrokerConfig, ServerTopicConfigSynonyms}
@@ -133,7 +133,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
+              val groupConfig = GroupConfig.fromProps(currentGroupConfigDefaults, groupProps)
               createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation)(_, _))
             }
 
@@ -161,15 +161,22 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   private def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val allNames = brokerSynonyms(name)
     val configEntryType = GroupConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
-      val list = configSynonyms(name, allNames, isSensitive)
+      val brokerConfigName = GroupCoordinatorConfig.GROUP_PREFIX + name
+      val list = if (KafkaConfig.configDef.configKeys().containsKey(brokerConfigName))
+        configSynonyms(brokerConfigName, brokerSynonyms(brokerConfigName), isSensitive)
+      else
+        // No broker synonym, fall back to GroupConfig defaults
+        Option(GroupConfig.configDef().defaultValues().get(name))
+          .map(v => List(new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name)
+            .setValue(if (isSensitive) null else ConfigDef.convertToString(v, configEntryType.orNull))
+            .setSource(ConfigSource.DEFAULT_CONFIG.id)))
+          .getOrElse(List.empty)
       if (!groupProps.containsKey(name))
-        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
-          .setSource(ConfigSource.DEFAULT_CONFIG.id) +: list
+        list
       else
         new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
           .setSource(ConfigSource.GROUP_CONFIG.id) +: list
@@ -303,5 +310,18 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
       case _: NumberFormatException =>
         throw new InvalidRequestException(s"Broker id must be an integer, but it is: $resourceName")
     }
+  }
+
+  /**
+   * Build the current effective group config defaults by reading from KafkaConfig.
+   */
+  private def currentGroupConfigDefaults: java.util.Map[String, Object] = {
+    val defaults = new java.util.HashMap[String, Object]()
+    GroupConfig.configDef().configKeys().forEach { (name, _) =>
+      val brokerConfigName = GroupCoordinatorConfig.GROUP_PREFIX + name
+      if (KafkaConfig.configDef.configKeys().containsKey(brokerConfigName))
+        defaults.put(name, config.get(brokerConfigName))
+    }
+    defaults
   }
 }
