@@ -104,7 +104,7 @@ public class TimeOrderedWindowStoreTest {
 
     private InternalMockProcessorContext<?, ?> context;
     private RocksDBTimeOrderedWindowSegmentedBytesStore<KeyValueSegment> bytesStore;
-    private RocksDBTimeOrderedWindowStore underlyingStore;
+    private RocksDBTimeOrderedWindowStore<?> underlyingStore;
     private TimeOrderedCachingWindowStore cachingStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
@@ -114,7 +114,7 @@ public class TimeOrderedWindowStoreTest {
         baseKeySchema = new TimeFirstWindowKeySchema();
         bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore<>("test", 100, hasIndex,
             new KeyValueSegments("test", "metrics-scope", 100, SEGMENT_INTERVAL));
-        underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
+        underlyingStore = new RocksDBTimeOrderedWindowStore<>(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
         cacheListener = new CacheFlushListenerStub<>(keyDeserializer, new StringDeserializer());
@@ -135,7 +135,7 @@ public class TimeOrderedWindowStoreTest {
     @ValueSource(booleans = {true, false})
     public void shouldDelegateInit(final boolean hasIndex) {
         setUp(hasIndex);
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
+        final RocksDBTimeOrderedWindowStore<?> inner = mock(RocksDBTimeOrderedWindowStore.class);
         when(inner.hasIndex()).thenReturn(hasIndex);
         final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
 
@@ -156,7 +156,7 @@ public class TimeOrderedWindowStoreTest {
         assertThat(e.getMessage(),
             containsString("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store"));
 
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
+        final RocksDBTimeOrderedWindowStore<?> inner = mock(RocksDBTimeOrderedWindowStore.class);
         // Nothing happens
         new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
     }

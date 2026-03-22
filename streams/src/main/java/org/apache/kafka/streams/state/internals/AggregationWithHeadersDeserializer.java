@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
@@ -65,7 +64,7 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        final Headers headers = readHeaders(buffer);
+        final Headers headers = Utils.readHeaders(buffer);
         final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
         final AGG aggregation = aggregationDeserializer.deserialize(topic, headers, rawAggregation);
 
@@ -80,37 +79,5 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
     @Override
     public void setIfUnset(final SerdeGetter getter) {
         initNullableDeserializer(aggregationDeserializer, getter);
-    }
-
-    /**
-     * Extract headers from serialized AggregationWithHeaders.
-     */
-    static Headers headers(final byte[] rawAggregationWithHeaders) {
-        if (rawAggregationWithHeaders == null) {
-            return null;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
-        return readHeaders(buffer);
-    }
-
-    /**
-     * Extract the raw aggregation bytes from serialized AggregationWithHeaders,
-     * stripping the headers prefix.
-     */
-    static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
-            return null;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        readHeaders(buffer);
-        return readBytes(buffer, buffer.remaining());
-    }
-
-    private static Headers readHeaders(final ByteBuffer buffer) {
-        final int headersSize = ByteUtils.readVarint(buffer);
-        final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HeadersDeserializer.deserialize(rawHeaders);
     }
 }

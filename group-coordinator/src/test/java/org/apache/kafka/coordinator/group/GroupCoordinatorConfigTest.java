@@ -627,6 +627,20 @@ public class GroupCoordinatorConfigTest {
         long offsetsRetentionCheckIntervalMs,
         int offsetsRetentionMinutes
     ) {
+        return createGroupCoordinatorConfig(
+            offsetMetadataMaxSize,
+            offsetsRetentionCheckIntervalMs,
+            offsetsRetentionMinutes,
+            Map.of()
+        );
+    }
+
+    public static GroupCoordinatorConfig createGroupCoordinatorConfig(
+        int offsetMetadataMaxSize,
+        long offsetsRetentionCheckIntervalMs,
+        int offsetsRetentionMinutes,
+        Map<String, Object> additionalConfigs
+    ) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 1);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
@@ -653,6 +667,8 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 1000);
         configs.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, 1024 * 1024);
+
+        configs.putAll(additionalConfigs);
 
         return createConfig(configs);
     }

@@ -64,7 +64,7 @@ public class RocksDBTimeOrderedSessionStoreWithHeadersTest {
         );
 
         sessionStore = new RocksDBTimeOrderedSessionStoreWithHeaders(
-            new RocksDBTimeOrderedSessionSegmentedBytesStore(
+            new RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders(
                 STORE_NAME,
                 "test-metrics-scope",
                 RETENTION_PERIOD,

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
+import org.apache.kafka.clients.consumer.internals.metrics.SensorBuilder;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
@@ -38,9 +41,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
  * <p>Note: metric tag maps use {@code Utils.mkMap} to preserve insertion order; do not replace
  * with {@code Map.of} as tag order affects JMX MBean names.
  */
-public class FetchMetricsManager {
+public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
-    private final Metrics metrics;
     private final FetchMetricsRegistry metricsRegistry;
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
@@ -52,8 +54,14 @@ public class FetchMetricsManager {
     private int assignmentId = 0;
     private Set<TopicPartition> assignedPartitions = Collections.emptySet();
 
+    @SuppressWarnings("this-escape")
     public FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
-        this.metrics = metrics;
+        this(new MetricsLedger(metrics), metricsRegistry);
+    }
+
+    @SuppressWarnings("this-escape")
+    private FetchMetricsManager(MetricsLedger metrics, FetchMetricsRegistry metricsRegistry) {
+        super(metrics);
         this.metricsRegistry = metricsRegistry;
 
         this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")

@@ -16,43 +16,61 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.state.HeadersBytesStore;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 /**
- * RocksDB-backed time-ordered window store with support for record headers.
+ * A RocksDB-backed time-ordered segmented bytes store with headers support for session key schema.
  * <p>
- * This store extends {@link RocksDBTimeOrderedWindowStore} and implements both
- * {@link TimestampedBytesStore} (for timestamp support) and {@link HeadersBytesStore}
- * (for header support) marker interfaces.
+ * This store extends {@link AbstractRocksDBTimeOrderedSegmentedBytesStore} and uses
+ * {@link SessionSegmentsWithHeaders} to manage segments with full header support,
+ * including Column Family management and lazy migration from legacy formats.
  * <p>
- * This store returns {@link QueryResult#forUnknownQueryType(Query, StateStore)} for all queries,
- * as IQv2 query handling is done at the metered layer.
+ * The store maintains a dual-schema architecture:
+ * <ul>
+ *   <li>Base store: Time-first session key schema for efficient time-range queries</li>
+ *   <li>Index store (optional): Key-first session key schema for efficient key-based queries</li>
+ * </ul>
  * <p>
- * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
+ * Headers are managed at the segment level by {@link SessionSegmentWithHeaders}.
+ * <p>
+ * Value format (timestamps are in the key, not in the value):
+ * <ul>
+ *   <li>Old format: {@code [aggregationBytes]}</li>
+ *   <li>New format: {@code [headersSize(varint)][headersBytes][aggregationBytes]}</li>
+ * </ul>
  *
- * @see RocksDBTimeOrderedWindowStore
- * @see HeadersBytesStore
- * @see TimestampedBytesStore
+ * @see RocksDBTimeOrderedSessionStore
+ * @see SessionSegmentsWithHeaders
+ * @see SessionSegmentWithHeaders
  */
-class RocksDBTimeOrderedWindowStoreWithHeaders extends RocksDBTimeOrderedWindowStore<WindowSegmentWithHeaders> implements TimestampedBytesStore, HeadersBytesStore {
+class RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders
+    extends RocksDBTimeOrderedSessionSegmentedBytesStore<SessionSegmentWithHeaders> {
 
-    RocksDBTimeOrderedWindowStoreWithHeaders(final RocksDBTimeOrderedWindowSegmentedBytesStore<WindowSegmentWithHeaders> store,
-                                             final boolean retainDuplicates,
-                                             final long windowSize) {
-        super(store, retainDuplicates, windowSize);
+    RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders(
+        final String name,
+        final String metricsScope,
+        final long retention,
+        final long segmentInterval,
+        final boolean withIndex
+    ) {
+        super(
+            name,
+            retention,
+            withIndex,
+            new SessionSegmentsWithHeaders(name, metricsScope, retention, segmentInterval)
+        );
     }
 
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
         final Position position = getPosition();

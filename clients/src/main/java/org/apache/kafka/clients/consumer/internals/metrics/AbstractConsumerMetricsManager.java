@@ -14,11 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.clients.consumer.internals.metrics;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueIterator;
+import java.util.Objects;
 
-public interface HasNextCondition {
-    boolean hasNext(final KeyValueIterator<Bytes, ?> iterator);
+/**
+ * Utility class that serves as a common abstraction point for consumers to create and register their
+ * metrics, and to ensure they're removed on {@link #close()} via the {@link MetricsLedger} instance.
+ */
+public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
+
+    protected final MetricsLedger metrics;
+
+    protected AbstractConsumerMetricsManager(MetricsLedger metrics) {
+        this.metrics = Objects.requireNonNull(metrics);
+    }
+
+    @Override
+    public void close() {
+        metrics.close();
+    }
 }
