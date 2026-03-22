@@ -465,8 +465,10 @@ public class Cleaner {
                 // recompression during cleaning can cause the cleaned segment to exceed that size.
                 // Similarly, combining multiple source segments into one cleaned segment can cause
                 // the offset range to exceed Integer.MAX_VALUE.
-                boolean sizeOverflow = retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
-                boolean offsetOverflow = result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
+                // Always allow the first write to an empty segment to avoid an infinite loop where
+                // a single oversized batch can never make progress.
+                boolean sizeOverflow = dest.size() > 0 && retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
+                boolean offsetOverflow = dest.size() > 0 && result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
                 if (sizeOverflow || offsetOverflow) {
                     return Optional.of(position - result.bytesRead());
                 }
