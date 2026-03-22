@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 import org.junit.jupiter.api.Test;
@@ -46,14 +47,16 @@ public class TimestampedKeyAndJoinSideDeserializerTest {
             final String key = "some-key";
             final long timestamp = 10;
             final Headers headers = new RecordHeaders().add("key", "value".getBytes());
+            final TimestampedKeyAndJoinSide<String> data = TimestampedKeyAndJoinSide.makeLeft(key, timestamp);
+            final byte[] serializedValue = new TimestampedKeyAndJoinSideSerializer<>(Serdes.String().serializer()).serialize(topic, headers, data);
 
-            when(mockDeserializer.deserialize(eq(topic), eq(headers), any(byte[].class))).thenReturn(key);
+            when(mockDeserializer.deserialize(topic, headers, key.getBytes())).thenReturn(key);
             when(innerTimestampDeserializer.deserialize(eq(topic), eq(headers), any(byte[].class))).thenReturn(timestamp);
 
-            testDeserializer.deserialize(topic, headers, new byte[]{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+            testDeserializer.deserialize(topic, headers, serializedValue);
 
-            verify(mockDeserializer).deserialize(eq(topic), eq(headers), any(byte[].class));
-            verify(mockDeserializer, never()).deserialize(eq(topic), any(byte[].class));
+            verify(mockDeserializer).deserialize(topic, headers, key.getBytes());
+            verify(mockDeserializer, never()).deserialize(topic, key.getBytes());
 
             verify(innerTimestampDeserializer).deserialize(eq(topic), eq(headers), any(byte[].class));
             verify(innerTimestampDeserializer, never()).deserialize(eq(topic), any(byte[].class));

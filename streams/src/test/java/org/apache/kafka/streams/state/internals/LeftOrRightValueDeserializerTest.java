@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 import org.junit.jupiter.api.Test;
@@ -35,17 +36,18 @@ public class LeftOrRightValueDeserializerTest {
         final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
 
         final String topic = "dummy";
-        final byte[] value = new byte[]{1, 1};
-        final byte[] rawValue = new byte[]{1}; // first byte is used to indicate side
+        final String value = "some-string";
         final Headers headers = new RecordHeaders().add("key", "value".getBytes());
+        final LeftOrRightValue<String, Object> data = LeftOrRightValue.makeLeftValue(value);
+        final byte[] serializedBytes = new LeftOrRightValueSerializer<>(Serdes.String().serializer(), null).serialize(topic, headers, data);
 
-        when(mockDeserializer.deserialize(topic, headers, rawValue)).thenReturn("dummy-value");
+        when(mockDeserializer.deserialize(topic, headers, value.getBytes())).thenReturn("dummy-value");
 
         final LeftOrRightValueDeserializer<String, String> testDeserializer = new LeftOrRightValueDeserializer<>(mockDeserializer, null);
 
-        testDeserializer.deserialize(topic, headers, value);
+        testDeserializer.deserialize(topic, headers, serializedBytes);
 
-        verify(mockDeserializer).deserialize(topic, headers, rawValue);
-        verify(mockDeserializer, never()).deserialize(topic, rawValue);
+        verify(mockDeserializer).deserialize(topic, headers, value.getBytes());
+        verify(mockDeserializer, never()).deserialize(topic, value.getBytes());
     }
 }
