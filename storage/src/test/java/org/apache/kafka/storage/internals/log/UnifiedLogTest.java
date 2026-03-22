@@ -4424,8 +4424,10 @@ public class UnifiedLogTest {
     public void testRemoteLogStorageIsDisabledOnInternalAndRemoteLogMetadataTopic() throws IOException {
         List<TopicPartition> partitions = List.of(
                 new TopicPartition(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME, 0),
+                new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0),
                 new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0),
-                new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, 0)
+                new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0),
+                new TopicPartition(Topic.CLUSTER_METADATA_TOPIC_NAME, 0)
         );
         for (TopicPartition partition : partitions) {
             LogConfig logConfig = new LogTestUtils.LogConfigBuilder().remoteLogStorageEnable(true).build();
@@ -4518,10 +4520,6 @@ public class UnifiedLogTest {
             highWatermark = offset;
         }
 
-        private void clear() {
-            highWatermark = -1L;
-        }
-
         /**
          * Verifies the callbacks that have been triggered since the last
          * verification. Values different from {@code -1} are the ones that have
@@ -4529,7 +4527,7 @@ public class UnifiedLogTest {
          */
         public void verify(long expectedHighWatermark) {
             assertEquals(expectedHighWatermark, highWatermark, "Unexpected high watermark");
-            clear();
+            highWatermark = -1L;
         }
 
         public void verify() {
@@ -4814,16 +4812,16 @@ public class UnifiedLogTest {
                 Compression.NONE, producerId, producerEpoch, sequence,
                 new SimpleRecord("1".getBytes()), new SimpleRecord("2".getBytes()));
 
+        VerificationGuard verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, 
+                producerEpoch, transactionVerificationEnabled);
         if (transactionVerificationEnabled) {
             // TV2 behavior: Create verification state that supports epoch bumps
-            VerificationGuard verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true);
             // Should reject non-zero sequences when there's no existing producer state
             assertThrows(OutOfOrderSequenceException.class, () ->
                     log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(),
                             verificationGuard, TransactionVersion.TV_0.featureLevel()));
         } else {
             // TV1 behavior: Create verification state with supportsEpochBump=false
-            VerificationGuard verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false);
             // Should allow non-zero sequences with non-zero epoch
             log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(),
                     verificationGuard, TransactionVersion.TV_0.featureLevel());
