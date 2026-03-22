@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.junit.jupiter.api.Test;
 
@@ -24,12 +28,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class LeftOrRightValueSerializerTest {
     private static final String TOPIC = "some-topic";
 
-    private static final LeftOrRightValueSerde<String, Integer> STRING_OR_INTEGER_SERDE =
-        new LeftOrRightValueSerde<>(Serdes.String(), Serdes.Integer());
+    private static final LeftOrRightValueSerde<String, Integer> STRING_OR_INTEGER_SERDE = new LeftOrRightValueSerde<>(Serdes.String(), Serdes.Integer());
 
     @Test
     public void shouldSerializeStringValue() {
@@ -37,13 +43,11 @@ public class LeftOrRightValueSerializerTest {
 
         final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeLeftValue(value);
 
-        final byte[] serialized =
-            STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
+        final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
 
         assertThat(serialized, is(notNullValue()));
 
-        final LeftOrRightValue<String, Integer> deserialized =
-            STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
+        final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
 
         assertThat(deserialized, is(leftOrRightValue));
     }
@@ -54,13 +58,11 @@ public class LeftOrRightValueSerializerTest {
 
         final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeRightValue(value);
 
-        final byte[] serialized =
-            STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
+        final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
 
         assertThat(serialized, is(notNullValue()));
 
-        final LeftOrRightValue<String, Integer> deserialized =
-            STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
+        final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
 
         assertThat(deserialized, is(leftOrRightValue));
     }
@@ -75,5 +77,22 @@ public class LeftOrRightValueSerializerTest {
     public void shouldThrowIfSerializeOtherValueAsNull() {
         assertThrows(NullPointerException.class,
             () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeRightValue(null)));
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingSerializer() {
+        final Serializer<String> mockSerializer = mock(StringSerializer.class);
+
+        final String topic = "dummy";
+        final String value = "some-string";
+        final Headers headers = new RecordHeaders().add("key", "value".getBytes());
+        final LeftOrRightValue<String, String> data = LeftOrRightValue.makeLeftValue(value);
+
+        final LeftOrRightValueSerializer<String, String> testSerializer = new LeftOrRightValueSerializer<>(mockSerializer, null);
+
+        testSerializer.serialize(topic, headers, data);
+
+        verify(mockSerializer).serialize(topic, headers, value);
+        verify(mockSerializer, never()).serialize(topic, value);
     }
 }
