@@ -104,6 +104,9 @@ public class TimeOrderedCachingWindowStore
         if (wrapped instanceof RocksDBTimeOrderedWindowStore) {
             return (RocksDBTimeOrderedWindowStore<?>) wrapped;
         }
+        if (wrapped instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return getWrappedStore(((TimestampedToHeadersWindowStoreAdapter) wrapped).store);
+        }
         if (wrapped instanceof WrappedStateStore) {
             return getWrappedStore(((WrappedStateStore<?, Bytes, byte[]>) wrapped).wrapped());
         }

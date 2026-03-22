@@ -301,6 +301,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     protected CompletableFuture<Void> signalPartitionsLost(Set<TopicPartition> partitionsLost) {
+        // Mark partitions as pending revocation to stop fetching from the partitions (no new
+        // fetches sent out, and no in-flight fetches responses processed).
+        markPendingRevocationToPauseFetching(partitionsLost);
         return invokeOnPartitionsLostCallback(partitionsLost);
     }
 
