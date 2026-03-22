@@ -192,8 +192,8 @@ public class SubscriptionResponseWrapperSerdeTest {
 
         testSerde.deserializer().deserialize(topic, headers, serializedData);
 
-        verify(mockDeserializer).deserialize(topic, headers, "foreignValue".getBytes());
-        verify(mockDeserializer, never()).deserialize(topic, "foreignValue".getBytes());
+        verify(mockDeserializer).deserialize(topic, headers, foreignValue.getBytes());
+        verify(mockDeserializer, never()).deserialize(topic, foreignValue.getBytes());
     }
 
     public static class InvalidSubscriptionResponseWrapper extends SubscriptionResponseWrapper<String> {
