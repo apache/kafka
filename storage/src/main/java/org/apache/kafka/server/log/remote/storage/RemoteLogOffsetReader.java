@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
@@ -62,7 +63,13 @@ public class RemoteLogOffsetReader implements Callable<Void> {
             // If it is not found in remote storage, then search in the local storage starting with local log start offset.
             Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt =
                     rlm.findOffsetByTimestamp(tp, timestamp, startingOffset, leaderEpochCache);
-            if (timestampAndOffsetOpt.isEmpty()) {
+            if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
+                // For MAX_TIMESTAMP both remote and local results must be compared; the one with
+                // the higher timestamp wins (ties broken by higher offset).
+                Optional<FileRecords.TimestampAndOffset> localResult = searchInLocalLog.get();
+                timestampAndOffsetOpt = merge(timestampAndOffsetOpt, localResult);
+            } else if (timestampAndOffsetOpt.isEmpty()) {
+                // For regular timestamp searches, fall back to local only when remote found nothing.
                 timestampAndOffsetOpt = searchInLocalLog.get();
             }
             result = new OffsetResultHolder.FileRecordsOrError(Optional.empty(), timestampAndOffsetOpt);
@@ -73,5 +80,22 @@ public class RemoteLogOffsetReader implements Callable<Void> {
         }
         callback.accept(result);
         return null;
+    }
+
+    /**
+     * Merge two MAX_TIMESTAMP candidates. Return one with the higher timestamp.
+     * If timestamps are equal, return the one with the higher offset.
+     */
+    private static Optional<FileRecords.TimestampAndOffset> merge(
+            Optional<FileRecords.TimestampAndOffset> a,
+            Optional<FileRecords.TimestampAndOffset> b) {
+        if (a.isEmpty()) return b;
+        if (b.isEmpty()) return a;
+        FileRecords.TimestampAndOffset ta = a.get();
+        FileRecords.TimestampAndOffset tb = b.get();
+        if (ta.timestamp > tb.timestamp || (ta.timestamp == tb.timestamp && ta.offset > tb.offset)) {
+            return a;
+        }
+        return b;
     }
 }

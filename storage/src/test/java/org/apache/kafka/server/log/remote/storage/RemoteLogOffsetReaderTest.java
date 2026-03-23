@@ -19,6 +19,7 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -135,6 +136,169 @@ class RemoteLogOffsetReaderTest {
             assertTrue(futureHolder.taskFuture().isDone());
             assertTrue(futureHolder.taskFuture().get().hasException());
             assertEquals(exception, futureHolder.taskFuture().get().exception().get());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampInRemote() throws Exception {
+        TimestampAndOffset remoteResult = new TimestampAndOffset(200L, 5L, Optional.of(1));
+        TimestampAndOffset localResult  = new TimestampAndOffset(100L, 9L, Optional.of(1));
+
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) {
+                return Optional.of(remoteResult);
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            () -> Optional.of(localResult));
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertFalse(holder.taskFuture().get().hasException());
+            assertEquals(Optional.of(remoteResult), holder.taskFuture().get().timestampAndOffset());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampInLocal() throws Exception {
+        TimestampAndOffset remoteResult = new TimestampAndOffset(200L, 5L, Optional.of(1));
+        TimestampAndOffset localResult  = new TimestampAndOffset(300L, 10L, Optional.of(2));
+
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) {
+                return Optional.of(remoteResult);
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            () -> Optional.of(localResult));
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertFalse(holder.taskFuture().get().hasException());
+            assertEquals(Optional.of(localResult), holder.taskFuture().get().timestampAndOffset());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampWithHigherOffset() throws Exception {
+        long sameTs = 500L;
+        TimestampAndOffset lowerOffset  = new TimestampAndOffset(sameTs, 3L, Optional.of(1));
+        TimestampAndOffset higherOffset = new TimestampAndOffset(sameTs, 7L, Optional.of(1));
+
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) {
+                return Optional.of(lowerOffset);
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            () -> Optional.of(higherOffset));
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertFalse(holder.taskFuture().get().hasException());
+            assertEquals(Optional.of(higherOffset), holder.taskFuture().get().timestampAndOffset());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampWithoutRemoteData() throws Exception {
+        TimestampAndOffset localResult = new TimestampAndOffset(400L, 8L, Optional.of(2));
+
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) {
+                return Optional.empty();
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            () -> Optional.of(localResult));
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertFalse(holder.taskFuture().get().hasException());
+            assertEquals(Optional.of(localResult), holder.taskFuture().get().timestampAndOffset());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampWithoutLocalData() throws Exception {
+        TimestampAndOffset remoteResult = new TimestampAndOffset(250L, 4L, Optional.of(1));
+
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) {
+                return Optional.of(remoteResult);
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            Optional::empty);
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertFalse(holder.taskFuture().get().hasException());
+            assertEquals(Optional.of(remoteResult), holder.taskFuture().get().timestampAndOffset());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampWithoutData() throws Exception {
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) {
+                return Optional.empty();
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            Optional::empty);
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertFalse(holder.taskFuture().get().hasException());
+            assertEquals(Optional.empty(), holder.taskFuture().get().timestampAndOffset());
+        }
+    }
+
+    @Test
+    public void testMaxTimestampRemoteExceptionIsReportedInResult() throws Exception {
+        RemoteStorageException exception = new RemoteStorageException("remote error");
+
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
+                throw exception;
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder =
+                    rlm.asyncOffsetRead(topicPartition, ListOffsetsRequest.MAX_TIMESTAMP, 0L, cache,
+                            Optional::empty);
+            holder.taskFuture().get(1, TimeUnit.SECONDS);
+
+            assertTrue(holder.taskFuture().get().hasException());
+            assertEquals(exception, holder.taskFuture().get().exception().get());
         }
     }
 
