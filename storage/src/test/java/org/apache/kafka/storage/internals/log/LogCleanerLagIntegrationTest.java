@@ -165,6 +165,7 @@ public class LogCleanerLagIntegrationTest {
         int maxMessageSize = largeMessage.records().sizeInBytes();
         cleaner = logCleanerBuilder(TOPIC_PARTITIONS)
             .maxMessageSize(maxMessageSize)
+            .segmentSize(DEFAULT_SEGMENT_SIZE)
             .backoffMs(100L)
             .build();
 
@@ -288,6 +289,7 @@ public class LogCleanerLagIntegrationTest {
     public void testIsThreadFailed() throws Exception {
         cleaner = logCleanerBuilder(TOPIC_PARTITIONS)
             .maxMessageSize(100000)
+            .segmentSize(DEFAULT_SEGMENT_SIZE)
             .backoffMs(100L)
             .build();
         cleaner.startup();
@@ -444,7 +446,7 @@ public class LogCleanerLagIntegrationTest {
         private final Iterable<TopicPartition> partitions;
         private float minCleanableDirtyRatio = DEFAULT_MIN_CLEANABLE_DIRTY_RATIO;
         private int numThreads = 1;
-        private long backoffMs = 15000L;
+        private long backoffMs = CleanerConfig.LOG_CLEANER_BACKOFF_MS;
         private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
         private long minCompactionLagMs = DEFAULT_MIN_COMPACTION_LAG_MS;
         private int deleteDelay = DEFAULT_DELETE_DELAY;
