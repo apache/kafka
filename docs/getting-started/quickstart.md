@@ -203,7 +203,7 @@ The [Kafka Streams demo](/documentation/streams/quickstart) and the [app develop
 
 ## Step 8: Terminate the Kafka environment
 
-Now that you reached the end of the quickstart, feel free to tear down the Kafka environment-or continue playing around. 
+Now that you reached the end of the quickstart, feel free to tear down the Kafka environment or continue playing around. 
 
   1. Stop the producer and consumer clients with `Ctrl-C`, if you haven't done so already. 
   2. Stop the Kafka broker with `Ctrl-C`. 
