@@ -224,7 +224,7 @@ public class ControllerRegistrationManager implements MetadataPublisher {
                             logger.info("Found registration for {} instead of our incarnation.", curRegistration.incarnationId());
                             registeredInLog = false;
                         } else {
-                            logger.info("Our registration has been persisted to the metadata logger.");
+                            logger.info("Our registration has been persisted to the metadata log.");
                             registeredInLog = true;
                         }
                     }
