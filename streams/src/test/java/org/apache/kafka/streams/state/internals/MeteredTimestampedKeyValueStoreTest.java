@@ -351,8 +351,8 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         metered.commit(Map.of());
 
-        final KafkaMetric metric = metric("flush-rate");
-        assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric flushMetric = metric("flush-rate");
+        assertTrue((Double) flushMetric.metricValue() > 0);
         final KafkaMetric commitMetric = metric("commit-rate");
         assertTrue((Double) commitMetric.metricValue() > 0);
     }

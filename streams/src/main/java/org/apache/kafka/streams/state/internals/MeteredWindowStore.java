@@ -146,7 +146,10 @@ public class MeteredWindowStore<K, V>
     private void registerMetrics() {
         putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        // flushSensor is deprecated per KIP-1035 and will be removed in the next major release.
+        // Recording a dummy value to avoid a SpotBugs URF_UNREAD_FIELD warning.
         flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        flushSensor.record(0.0);
         commitSensor = StateStoreMetrics.commitSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
@@ -387,7 +390,7 @@ public class MeteredWindowStore<K, V>
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, commitSensor, flushSensor);
+        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, commitSensor);
     }
 
     @Override
