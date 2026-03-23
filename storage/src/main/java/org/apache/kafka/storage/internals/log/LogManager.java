@@ -1255,8 +1255,8 @@ public class LogManager {
      * relevant log was being loaded.
      */
     public void finishedInitializingLog(TopicPartition topicPartition, Optional<UnifiedLog> maybeLog) {
-        boolean removedValue = partitionsInitializing.remove(topicPartition);
-        if (removedValue)
+        Boolean removedValue = partitionsInitializing.remove(topicPartition);
+        if (removedValue != null && removedValue)
             maybeLog.ifPresent(l -> l.updateConfig(fetchLogConfig(topicPartition.topic())));
     }
 
@@ -1455,7 +1455,7 @@ public class LogManager {
                         LOG.error("Exception while deleting {} in dir {}.", removedLog, removedLog.parentDir(), kse);
                     }
                 }
-                nextDelayMs = nextDeleteDelayMs(nextDelayMs);
+                nextDelayMs = nextDeleteDelayMs(fileDeleteDelayMs);
             }
         } catch (Throwable e) {
             LOG.error("Exception in kafka-delete-logs thread.", e);
