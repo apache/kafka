@@ -378,30 +378,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * @return the type if found, or empty
      */
     public static Optional<ConfigDef.Type> configDefTypeOf(String name) {
-        ConfigDef.ConfigKey key = CONFIG_DEF.configKeys().get(name);
-        return key != null
-                ? Optional.of(key.type)
-                : Optional.empty();
-    }
-
-    /**
-     * Looks up the type for a config key by exact name, checking both
-     * the static config definition and the dynamic broker config keys.
-     *
-     * @param exactName the exact config key name
-     * @return the type if found, or empty
-     */
-    public static Optional<ConfigDef.Type> configTypeExact(String exactName) {
-        Optional<ConfigDef.Type> t = configDefTypeOf(exactName);
-        if (t.isPresent()) {
-            return t;
-        }
-        ConfigDef.ConfigKey configKey =
-                DynamicConfig.Broker.configKeys().get(exactName);
-        if (configKey != null) {
-            return Optional.of(configKey.type);
-        }
-        return Optional.empty();
+        return Optional.ofNullable(CONFIG_DEF.configKeys().get(name))
+                .map(key -> key.type);
     }
 
     /**
@@ -413,21 +391,14 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * @return the type if found, or empty
      */
     public static Optional<ConfigDef.Type> configType(String configName) {
-        Optional<ConfigDef.Type> exact = configTypeExact(configName);
-        if (exact.isPresent()) {
-            return exact;
-        }
-        Optional<ConfigDef.Type> t = configDefTypeOf(configName);
-        if (t.isPresent()) {
-            return t;
-        }
-        return DynamicBrokerConfig
-                .brokerConfigSynonyms(configName, true)
-                .stream()
-                .map(AbstractKafkaConfig::configDefTypeOf)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .findFirst();
+        return configDefTypeOf(configName)
+                .or(() -> Optional.ofNullable(DynamicConfig.Broker.configKeys().get(configName))
+                        .map(key -> key.type))
+                .or(() -> DynamicBrokerConfig.brokerConfigSynonyms(configName, true)
+                        .stream()
+                        .map(AbstractKafkaConfig::configDefTypeOf)
+                        .flatMap(Optional::stream)
+                        .findFirst());
     }
 
     /**
@@ -475,12 +446,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public Map<String, Integer> maxConnectionsPerIpOverrides() {
-        Map<String, String> raw = getMap(
-                SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
-                getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG));
-        Map<String, Integer> result = new HashMap<>();
-        raw.forEach((k, v) -> result.put(k, Integer.parseInt(v)));
-        return result;
+        return getMap(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
+                getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG))
+                .entrySet()
+                .stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Integer.parseInt(e.getValue())));
     }
 
     public int maxConnections() {
