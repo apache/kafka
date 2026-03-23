@@ -360,6 +360,8 @@ public class MeteredWindowStoreTest {
         // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("flush-rate");
         assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric commitMetric = metric("commit-rate");
+        assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
     @Test
