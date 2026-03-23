@@ -1056,31 +1056,7 @@ public class MockLogTest {
         ).records;
         // MockLog#read returns data in batches and will return an additional batch if one of them
         // exceeds maxTotalBytes.
-        // The sum of the size of both batches is expected to be greater than
-        // magicMaxTotalBytes but less than 2 x magicMaxTotalBytes
-        assertTrue(
-            records.sizeInBytes() > magicMaxTotalBytes,
-            String.format(
-                "Expected records.sizeInBytes() %d > %d",
-                records.sizeInBytes(),
-                magicMaxTotalBytes
-            )
-        );
-        assertTrue(
-            records.sizeInBytes() < magicMaxTotalBytes * 2,
-            String.format(
-                "Expected records.sizeInBytes() %d < %d",
-                records.sizeInBytes(),
-                2 * magicMaxTotalBytes
-            )
-        );
-        int recordCount = 0;
-        var iterator = records.records().iterator();
-        while (iterator.hasNext()) {
-            recordCount++;
-            iterator.next();
-        }
-        assertEquals(2 * numberOfRecordsPerBatch, recordCount);
+        assertEquals(magicMaxTotalBytes, records.sizeInBytes());
     }
 
     @Test
@@ -1096,6 +1072,14 @@ public class MockLogTest {
             Isolation.UNCOMMITTED,
             magicMaxTotalBytes
         ).records;
+        assertTrue(
+            records.sizeInBytes() > magicMaxTotalBytes,
+            String.format(
+                "Expected records size (%d) > maxTotalBytes (%d) since one whole batch must be returned",
+                records.sizeInBytes(),
+                magicMaxTotalBytes
+            )
+        );
         int recordCount = 0;
         var iterator = records.records().iterator();
         while (iterator.hasNext()) {

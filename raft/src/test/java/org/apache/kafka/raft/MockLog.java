@@ -468,6 +468,9 @@ public class MockLog implements RaftLog {
 
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
+        if (batchCount > 1) {
+            records = records.slice(0, maxTotalBatchBytes);
+        }
 
         if (batchStartOffset == null) {
             throw new RuntimeException("Expected to find at least one entry starting from offset " +

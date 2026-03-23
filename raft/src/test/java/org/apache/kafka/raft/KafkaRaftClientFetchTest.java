@@ -215,6 +215,13 @@ public final class KafkaRaftClientFetchTest {
         FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE.code(), partitionData.errorCode());
         MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
+        assertTrue(
+            records.sizeInBytes() > 1,
+            String.format(
+                "Expected records.sizeInBytes() (%d) > 1 since we always return at least one batch",
+                records.sizeInBytes()
+            )
+        );
         var iterator = records.batchIterator();
         var firstBatch = iterator.next();
         assertEquals(0, firstBatch.baseOffset());
@@ -231,7 +238,8 @@ public final class KafkaRaftClientFetchTest {
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
         var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
-        var remoteMaxSizeBytes = 115;
+        var batchSizeBytes = 115;
+        var remoteMaxSizeBytes = batchSizeBytes * 2;
         var localMaxSizeBytes = 1024;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
@@ -261,23 +269,22 @@ public final class KafkaRaftClientFetchTest {
         FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE.code(), partitionData.errorCode());
         MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
-        // Invariant is that we will always return records in batches and will include batches which "go over"
-        // the controller.quorum.fetch.max.bytes configuration.
+        // If we return 2 or more batches, invariant is to always return less than remoteMaxSizeBytes
         assertTrue(
-            records.sizeInBytes() < remoteMaxSizeBytes * 2,
+            records.sizeInBytes() < remoteMaxSizeBytes,
             String.format(
-                "Expected records size (%d) < remoteMaxSizeBytes*2 (%d)",
+                "Expected records size (%d) < remoteMaxBatchSizeBytes (%d)",
                 records.sizeInBytes(),
-                remoteMaxSizeBytes * 2
+                remoteMaxSizeBytes
             )
         );
         var iterator = records.batchIterator();
         var firstBatch = iterator.next();
-        // First batch should be less than the maxSizeBytes.
+        // First batch should be less than the batchSizeBytes.
         assertTrue(
-            firstBatch.sizeInBytes() < remoteMaxSizeBytes,
+            firstBatch.sizeInBytes() < batchSizeBytes,
             String.format(
-                "Expected firstBatch.sizeInBytes() (%d) < remoteMaxSizeBytes (%d)",
+                "Expected secondBatch.sizeInBytes() (%d) < batchSizeBytes (%d)",
                 firstBatch.sizeInBytes(),
                 remoteMaxSizeBytes
             )
@@ -285,9 +292,9 @@ public final class KafkaRaftClientFetchTest {
         assertTrue(iterator.hasNext(), "Expected more than one batch to be fetched");
         var secondBatch = iterator.next();
         assertTrue(
-            firstBatch.sizeInBytes() < remoteMaxSizeBytes,
+            secondBatch.sizeInBytes() < batchSizeBytes,
             String.format(
-                "Expected secondBatch.sizeInBytes() (%d) < remoteMaxSizeBytes (%d)",
+                "Expected secondBatch.sizeInBytes() (%d) < batchSizeBytes (%d)",
                 secondBatch.sizeInBytes(),
                 remoteMaxSizeBytes
             )
