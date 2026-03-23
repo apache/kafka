@@ -567,12 +567,14 @@ org.apache.kafka.storage.internals.log.TimeIndexTest:
 - testTruncate
 org.apache.kafka.storage.internals.log.TransactionIndexTest:
 - testAbortedTxnSerde
+- testBinaryCompatibilityWithHandWrittenClass
 - testCollectAbortedTransactions
 - testDeleteIfExists
 - testFlush
 - testIsEmptyWhenFileDoesNotExist
 - testIsEmptyWhenFileIsEmpty
 - testIsEmptyWhenFileIsNotEmpty
+- testIterableReturnsIndependentIterators
 - testLastOffsetCannotDecrease
 - testLastOffsetMustIncrease
 - testPositionSetCorrectlyWhenOpened
