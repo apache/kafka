@@ -18,6 +18,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.SessionWindowedSerializer;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -27,9 +30,9 @@ import java.util.Set;
 
 public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Windowed<K>, V> {
 
-    private final WindowedSerializer<K> serializer;
+    private final Serializer<Windowed<K>> serializer;
 
-    public WindowedStreamPartitioner(final WindowedSerializer<K> serializer) {
+    public WindowedStreamPartitioner(final Serializer<Windowed<K>> serializer) {
         this.serializer = serializer;
     }
 
@@ -46,8 +49,17 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
      */
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
+
+        final byte[] keyBytes;
         // for windowed key, the key bytes should never be null
-        final byte[] keyBytes = serializer.serializeBaseKey(topic, new RecordHeaders(), windowedKey);
+        if (serializer instanceof SessionWindowedSerializer) {
+            keyBytes = ((SessionWindowedSerializer<K>) serializer).serializeBaseKey(topic, new RecordHeaders(), windowedKey);
+        } else if (serializer instanceof TimeWindowedSerializer) {
+            keyBytes = ((TimeWindowedSerializer<K>) serializer).serializeBaseKey(topic, new RecordHeaders(), windowedKey);
+        } else {
+            throw new IllegalStateException("WindowedStreamPartitioner requires SessionWindowedSerializer or TimeWindowedSerializer, " +
+                    "but got: " + serializer.getClass().getName());
+        }
 
         // stick with the same built-in partitioner util functions that producer used
         // to make sure its behavior is consistent with the producer

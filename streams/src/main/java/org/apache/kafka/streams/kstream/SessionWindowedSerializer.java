@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
 import org.slf4j.Logger;
@@ -31,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
+public class SessionWindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     /**
      * Default serializer for the inner serializer class of a windowed record. Must implement the {@link Serde} interface.
@@ -110,12 +109,10 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
         }
     }
 
-    @Override
     public byte[] serializeBaseKey(final String topic, final Windowed<T> data) {
         return serializeBaseKey(topic, new RecordHeaders(), data);
     }
 
-    @Override
     public byte[] serializeBaseKey(final String topic, final Headers headers, final Windowed<T> data) {
         WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
 
