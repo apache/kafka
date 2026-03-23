@@ -773,8 +773,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * expired poll timer. This will trigger the onPartitionsLost callback. Once the callback
      * completes, the member will remain stale until the poll timer is reset by an application
      * poll event. See {@link #maybeRejoinStaleMember()}.
+     * Visible for testing.
      */
-    private void transitionToStale() {
+    void transitionToStale() {
         transitionTo(MemberState.STALE);
 
         // Release assignment
@@ -1246,7 +1247,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *     <li>Previous in-flight fetch requests that may complete while the partitions are being revoked won't be processed.</li>
      * </ul>
      */
-    private void markPendingRevocationToPauseFetching(Set<TopicPartition> partitionsToRevoke) {
+    protected void markPendingRevocationToPauseFetching(Set<TopicPartition> partitionsToRevoke) {
         // When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
         // window of time between when the offset commit is sent and when it returns and revocation completes. It is
         // possible for pending fetches for these partitions to return during this time, which means the application's

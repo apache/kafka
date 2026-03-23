@@ -42,11 +42,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -70,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -1768,6 +1771,53 @@ public class StreamsMembershipManagerTest {
         verify(memberStateListener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId());
         verify(backgroundEventHandler, never()).add(any(StreamsOnAllTasksLostCallbackNeededEvent.class));
         verify(subscriptionState, never()).assignFromSubscribed(Set.of());
+    }
+
+    @Test
+    public void testOnFencedMarksPendingRevocationBeforeCallback() {
+        TopicPartition ownedPartition = new TopicPartition(TOPIC_0, PARTITION_0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        joining();
+
+        membershipManager.onFenced();
+
+        // Verify markPendingRevocation is called before the callback event is enqueued
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(StreamsOnAllTasksLostCallbackNeededEvent.class));
+    }
+
+    @Test
+    public void testTransitionToFatalMarksPendingRevocationBeforeCallback() {
+        TopicPartition ownedPartition = new TopicPartition(TOPIC_0, PARTITION_0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        joining();
+
+        membershipManager.transitionToFatal();
+
+        // Verify markPendingRevocation is called before the callback event is enqueued
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(StreamsOnAllTasksLostCallbackNeededEvent.class));
+    }
+
+    @Test
+    public void testTransitionToStaleMarksPendingRevocationBeforeCallback() {
+        TopicPartition ownedPartition = new TopicPartition(TOPIC_0, PARTITION_0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        joining();
+
+        // Trigger poll timer expiry to transition to LEAVING, then STALE on heartbeat generated
+        membershipManager.onPollTimerExpired();
+        membershipManager.onHeartbeatRequestGenerated();
+
+        // Verify markPendingRevocation is called before the callback event is enqueued
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(StreamsOnAllTasksLostCallbackNeededEvent.class));
     }
 
     @Test
