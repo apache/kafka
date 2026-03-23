@@ -1817,7 +1817,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public Set<TopicPartition> assignment() {
         acquireAndEnsureOpen();
         try {
-            return Set.copyOf(subscriptions.assignedPartitions());
+            return Collections.unmodifiableSet(subscriptions.assignedPartitions());
         } finally {
             release();
         }

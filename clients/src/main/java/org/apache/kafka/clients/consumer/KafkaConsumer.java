@@ -1406,7 +1406,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return delegate.clientInstanceId(timeout);
     }
 
-  /**
+    /**
      * Get the metrics kept by the consumer
      *
      * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
