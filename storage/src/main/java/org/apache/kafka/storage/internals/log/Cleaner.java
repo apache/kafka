@@ -210,8 +210,9 @@ public class Cleaner {
     /**
      * Clean a group of segments into one or more replacement segments.
      *
-     * <p>If cleaning would cause the destination segment's size or offset range to exceed the configured limit
-     * (e.g. due to recompression or combining multiple source segments), the current cleaned segment is
+     * <p>
+     * If cleaning causes the destination segment's size or offset range to exceed the configured limit
+     * (e.g., due to recompression or combining multiple source segments), the current cleaned segment is
      * finalized and a new one is started.
      *
      * @param log The log being cleaned
