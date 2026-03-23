@@ -2555,10 +2555,6 @@ kafka.server.ReplicaManagerTest:
 - testVerificationErrorConversionsTV1
 - testVerificationErrorConversionsTV2
 - testVerificationForTransactionalPartitionsOnly
-kafka.server.ReplicationQuotaManagerTest:
-- shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses
-- shouldSupportWildcardThrottledReplicas
-- shouldThrottleOnlyDefinedReplicas
 kafka.server.ReplicationQuotasTest:
 - shouldBootstrapTwoBrokersWithFollowerThrottle
 - shouldBootstrapTwoBrokersWithLeaderThrottle
