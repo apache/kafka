@@ -156,9 +156,6 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
             try (Admin adminClient = Admin.create(properties)) {
-                if (!options.hasForce()) {
-                    validateApplicationIdExists(groupId, adminClient);
-                }
                 maybeDeleteActiveConsumers(groupId, adminClient, options.hasForce());
 
                 allTopics.clear();
@@ -551,7 +548,11 @@ public class StreamsResetter {
         return validatedTopicPartitionsOffsets;
     }
 
-    private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) {
+    private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) throws ExecutionException, InterruptedException, TimeoutException {
+        if (!options.hasForce()) {
+            validateApplicationIdExists(options.applicationId(), adminClient);
+        }
+
         final List<String> inferredInternalTopics = allTopics.stream()
                 .filter(options::isInferredInternalTopic)
                 .collect(Collectors.toList());
