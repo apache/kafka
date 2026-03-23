@@ -29,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 
 import java.nio.ByteBuffer;
@@ -39,8 +40,10 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -69,7 +72,7 @@ abstract class AbstractColumnFamilyAccessorTest {
 
     @Test
     public void shouldOpenClean() throws RocksDBException {
-        dbAccessor = new InMemoryRocksDBAccessor();
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         // Open the ColumnFamily
         accessor.open(dbAccessor, false);
         assertArrayEquals(openValue, dbAccessor.get(offsetsCF, toBytes("status")));
@@ -85,7 +88,7 @@ abstract class AbstractColumnFamilyAccessorTest {
 
     @Test
     public void shouldThrowOnOpenAfterAUncleanClose() throws RocksDBException {
-        dbAccessor = new InMemoryRocksDBAccessor();
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         // First, open clean
         accessor.open(dbAccessor, false);
 
@@ -96,7 +99,7 @@ abstract class AbstractColumnFamilyAccessorTest {
 
     @Test
     public void shouldIgnoreExceptionAfterUncleanClose() throws RocksDBException {
-        dbAccessor = new InMemoryRocksDBAccessor();
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         // First, open clean
         accessor.open(dbAccessor, false);
         // Now reopen in an invalid state
@@ -107,24 +110,37 @@ abstract class AbstractColumnFamilyAccessorTest {
 
     @Test
     public void shouldCommitOffsets() throws RocksDBException {
-        dbAccessor = new InMemoryRocksDBAccessor();
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
         accessor.commit(dbAccessor, changelogOffsets);
-        assertArrayEquals(toBytes(10L), dbAccessor.get(offsetsCF, toBytes(tp0.toString())));
-        assertArrayEquals(toBytes(20L), dbAccessor.get(offsetsCF, toBytes(tp1.toString())));
+        assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
+        assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
     }
 
     @Test
     public void shouldCommitPosition() throws RocksDBException {
-        dbAccessor = new InMemoryRocksDBAccessor();
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final String topic = "testTopic";
-        final TopicPartition tp0 = new TopicPartition("testTopic", 0);
-        final TopicPartition tp1 = new TopicPartition("testTopic", 1);
+        final TopicPartition tp0 = new TopicPartition(topic, 0);
+        final TopicPartition tp1 = new TopicPartition(topic, 1);
         final Position positionToStore = Position.fromMap(mkMap(mkEntry(topic, mkMap(mkEntry(tp0.partition(), 10L), mkEntry(tp1.partition(), 20L)))));
         accessor.commit(dbAccessor, positionToStore);
         assertEquals(positionToStore, PositionSerde.deserialize(ByteBuffer.wrap(dbAccessor.get(offsetsCF, toBytes("position")))));
+    }
+
+    @Test
+    public void shouldWipeCommitedOffsetsOnEmptyCommit() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final TopicPartition tp0 = new TopicPartition("testTopic", 0);
+        final TopicPartition tp1 = new TopicPartition("testTopic", 1);
+        accessor.commit(dbAccessor, Map.of(tp0, 10L, tp1, 20L));
+        assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
+        assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
+        accessor.commit(dbAccessor, Map.of());
+        assertNull(accessor.getCommittedOffset(dbAccessor, tp0));
+        assertNull(accessor.getCommittedOffset(dbAccessor, tp1));
     }
 
     private byte[] toBytes(final String s) {
