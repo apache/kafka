@@ -97,15 +97,9 @@ public class SocketServerMemoryPoolTest {
     }
 
 
-// Using KafkaYammerMetrics.defaultRegistry() didn't get the right value
-//        Map<com.yammer.metrics.core.MetricName, Metric> metricNameMetricMap = KafkaYammerMetrics.defaultRegistry().allMetrics();
-//        for (com.yammer.metrics.core.MetricName name : metricNameMetricMap.keySet()) {
-//            if (name.toString().contains("MemoryPoolAvailable")) {
-//                return ((Gauge<Long>) metricNameMetricMap.get(name)).value();
-//            }
-//        }
-//        return -1;
-//    }
+    // This test uses reflection to read the SocketServer memoryPool availableMemory.
+    // The metric "MemoryPoolAvailable" from Yammer Metrics default registry
+    // can be overwritten in a @ClusterTest as the registry is a singleton.
     long getMemoryPoolAvailable(ClusterInstance clusterInstance) throws Exception {
         KafkaBroker broker = clusterInstance.aliveBrokers().values().iterator().next();
         SocketServer socketServer = broker.socketServer();
