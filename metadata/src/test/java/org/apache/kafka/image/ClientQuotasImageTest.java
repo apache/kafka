@@ -155,6 +155,15 @@ public class ClientQuotasImageTest {
             .findFirst();
         assertTrue(entity.isPresent());
         assertEquals("foo", entity.get().entityName());
+
+        request = new DescribeClientQuotasRequestData()
+            .setComponents(List.of(
+                new DescribeClientQuotasRequestData.ComponentData()
+                    .setEntityType(entityType)
+                    .setMatchType(MATCH_TYPE_EXACT)
+                    .setMatch("nonexistent")));
+        response = image.describe(request);
+        assertEquals(0, response.entries().size());
     }
 
     @Test

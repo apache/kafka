@@ -57,7 +57,7 @@ public final class ClientQuotasImage {
     // {
     //   "user": { "user1": {entity1: image1}, "user2": {entity2: image2} },
     //   "client-id": { "client-id1": {entity3: image3}, "client-id2": {entity4: image4} },
-    //   "ip": { "ip1": {entyty5: image5}, "ip2": {entyty6: image6} }
+    //   "ip": { "ip1": {entity5: image5}, "ip2": {entity6: image6} }
     // }
     private final Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByTypeAndName;
 
@@ -65,7 +65,7 @@ public final class ClientQuotasImage {
     // {
     //   "user": { entity1: image1, entity2: image2 },
     //   "client-id": { entity3: image3, entity4: image4 },
-    //   "ip": { entyty5: image5, entyty6: image6 }
+    //   "ip": { entity5: image5, entity6: image6 }
     // }
     private final Map<String, Map<ClientQuotaEntity, ClientQuotaImage>> entitiesByType;
 
@@ -202,14 +202,8 @@ public final class ClientQuotasImage {
         }
 
         if (candidates != null) {
-            if (strict) {
-                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : candidates.entrySet()) {
-                    if (entry.getKey().entries().size() == exactMatch.size() + typeMatch.size()) {
-                        response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
-                    }
-                }
-            } else {
-                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : candidates.entrySet()) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : candidates.entrySet()) {
+                if (!strict || entry.getKey().entries().size() == exactMatch.size() + typeMatch.size()) {
                     response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
                 }
             }
