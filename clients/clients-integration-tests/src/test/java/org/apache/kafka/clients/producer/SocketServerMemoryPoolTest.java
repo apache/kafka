@@ -96,7 +96,6 @@ public class SocketServerMemoryPoolTest {
         assertEquals(initialMemoryPoolAvailable, finalMemoryPoolAvailable);
     }
 
-
     // This test uses reflection to read the SocketServer memoryPool availableMemory.
     // The metric "MemoryPoolAvailable" from Yammer Metrics default registry
     // can be overwritten in a @ClusterTest as the registry is a singleton.

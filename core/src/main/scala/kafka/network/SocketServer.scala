@@ -1050,7 +1050,7 @@ private[kafka] class Processor(
         // note that even though we got an exception, we can assume that receive.source is valid.
         // Issues with constructing a valid receive object were handled earlier
         case e: Throwable =>
-          if (header == null || req == null || header.apiKey.requiresDelayedAllocation) {
+          if (header == null || req == null) {
              receive.close() // return buffer to memory pool
           }
           processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
