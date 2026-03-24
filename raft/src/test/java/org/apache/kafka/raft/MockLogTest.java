@@ -46,8 +46,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -1042,7 +1045,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testMockLogLimitsReturnsLessThanMaxBytes() {
+    public void testLogLimitsReturnsLessThanMaxBytes() {
         int numberOfRecordsPerBatch = 10;
         appendBatch(numberOfRecordsPerBatch, 5);
         appendBatch(numberOfRecordsPerBatch, 5);
@@ -1060,7 +1063,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testMockLogLimitsReturnsAtLeastOne() {
+    public void testLogLimitsReturnsAtLeastOne() {
         int numberOfRecordsPerBatch = 10;
         appendBatch(numberOfRecordsPerBatch, 5);
         appendBatch(numberOfRecordsPerBatch, 5);
@@ -1127,6 +1130,38 @@ public class MockLogTest {
             iterator.next();
         }
         assertEquals(recordsPerBatch, recordCount);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    public void testReadRespectsMaxSizeInBytes(int expectedBatches) throws IOException {
+        int recordsPerBatch = 5;
+        appendBatch(recordsPerBatch, 1);
+        appendBatch(recordsPerBatch, 1);
+        appendBatch(recordsPerBatch, 1);
+        appendBatch(recordsPerBatch, 1);
+
+        int magicMaxBatchSizeBytes = 101;
+        LogFetchInfo info = log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            magicMaxBatchSizeBytes * expectedBatches
+        );
+
+        assertEquals(expectedBatches * magicMaxBatchSizeBytes, info.records.sizeInBytes());
+        var batchIterator = info.records.batchIterator();
+        while (batchIterator.hasNext()) {
+            assertEquals(magicMaxBatchSizeBytes, batchIterator.next().sizeInBytes());
+        }
+        // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
+        // [0..R-1] converted to an utf-8 string with empty keys and headers.
+        int count = 0;
+        for (Record record : info.records.records()) {
+            byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
+            assertEquals(ByteBuffer.wrap(expectedValue), record.value());
+            count += 1;
+        }
+        assertEquals(recordsPerBatch * expectedBatches, count);
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
