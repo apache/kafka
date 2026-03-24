@@ -162,7 +162,7 @@ versions += [
   snappy: "1.1.10.5",
   spotbugs: "4.8.6",
   zinc: "1.9.2",
-  zookeeper: "3.8.4",
+  zookeeper: "3.8.6",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.6-4",
