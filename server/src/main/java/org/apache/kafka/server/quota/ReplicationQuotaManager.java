@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -27,8 +27,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
-import org.apache.kafka.server.quota.QuotaType;
-import org.apache.kafka.server.quota.SensorAccess;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

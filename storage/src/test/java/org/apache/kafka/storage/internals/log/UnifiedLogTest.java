@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -4151,8 +4152,8 @@ public class UnifiedLogTest {
             abortedTransactions.addAll(segment.txnIndex().allAbortedTxns());
         }
         List<AbortedTxn> expectedTransactions = List.of(
-            new AbortedTxn(pid1, 0L, 29L, 8L),
-            new AbortedTxn(pid2, 8L, 74L, 36L)
+            new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+            new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
         );
         assertEquals(expectedTransactions, abortedTransactions);
 
