@@ -36,7 +36,6 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.storage.internals.log.LogManager.DirectoryForBrokerPartition
 import org.apache.kafka.storage.internals.log.{UnifiedLog, LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
@@ -335,11 +334,9 @@ class BrokerMetadataPublisher(
       // updated in the controller but before the future replica could be
       // promoted.
       // See KAFKA-16082 for details.
-      logManager.recoverAbandonedFutureLogs(brokerId, new DirectoryForBrokerPartition() {
-        override def get(topicId: Uuid, partition: Int, brokerId: Int): Uuid = {
-          newImage.topics().getPartition(topicId, partition).directory(brokerId)
-        }
-      })
+      logManager.recoverAbandonedFutureLogs(brokerId, (topicId: Uuid, partition: Int, brokerId: Int) =>
+        newImage.topics().getPartition(topicId, partition).directory(brokerId)
+      )
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if

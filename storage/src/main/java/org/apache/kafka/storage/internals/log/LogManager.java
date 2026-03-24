@@ -76,7 +76,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 
 public class LogManager {
@@ -117,9 +116,6 @@ public class LogManager {
     // Each element in the queue contains the log object to be deleted and the time it is scheduled for deletion.
     private final LinkedBlockingQueue<Map.Entry<UnifiedLog, Long>> logsToBeDeleted = new LinkedBlockingQueue<>();
 
-    // Map of stray partition to stray log. This holds all stray logs detected on the broker.
-    private final ConcurrentHashMap<TopicPartition, UnifiedLog> strayLogs = new ConcurrentHashMap<>();
-
     // A map that stores the preferred log dir for each partition
     private final ConcurrentHashMap<TopicPartition, String> preferredLogDirs = new ConcurrentHashMap<>();
 
@@ -136,7 +132,7 @@ public class LogManager {
     private final ConcurrentHashMap<TopicPartition, Boolean> partitionsInitializing = new ConcurrentHashMap<>();
 
     private final ConcurrentLinkedQueue<File> liveLogDirs;
-    private final Map<String, Uuid> directoryIds;
+    private final ConcurrentHashMap<String, Uuid> directoryIds;
     private final List<FileLock> dirLocks;
 
     private volatile Set<String> cordonedLogDirs = new HashSet<>();
@@ -395,8 +391,8 @@ public class LogManager {
         numRecoveryThreadsPerDataDir = newSize;
     }
 
-    private Iterable<TopicPartition> removeOfflineLogs(String dir, ConcurrentMap<TopicPartition, UnifiedLog> logs) {
-        Iterable<TopicPartition> offlineTopicPartitions = logs.entrySet().stream()
+    private Set<TopicPartition> removeOfflineLogs(String dir, ConcurrentMap<TopicPartition, UnifiedLog> logs) {
+        Set<TopicPartition> offlineTopicPartitions = logs.entrySet().stream()
                 .filter(entry -> entry.getValue().parentDir().equals(dir))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toUnmodifiableSet());
@@ -437,12 +433,12 @@ public class LogManager {
                 cleaner.handleLogDirFailure(dir);
             }
 
-            Iterable<TopicPartition> offlineCurrentTopicPartitions = removeOfflineLogs(dir, currentLogs);
-            Iterable<TopicPartition> offlineFutureTopicPartitions = removeOfflineLogs(dir, futureLogs);
+            Set<TopicPartition> offlineCurrentTopicPartitions = removeOfflineLogs(dir, currentLogs);
+            Set<TopicPartition> offlineFutureTopicPartitions = removeOfflineLogs(dir, futureLogs);
 
             LOG.warn("Logs for partitions {} are offline and logs for future partitions {} are offline due to failure on log directory {}",
-                    StreamSupport.stream(offlineCurrentTopicPartitions.spliterator(), false).map(Object::toString).collect(Collectors.joining(",")),
-                    StreamSupport.stream(offlineFutureTopicPartitions.spliterator(), false).map(Object::toString).collect(Collectors.joining(",")),
+                    offlineCurrentTopicPartitions.stream().map(Object::toString).collect(Collectors.joining(",")),
+                    offlineFutureTopicPartitions.stream().map(Object::toString).collect(Collectors.joining(",")),
                     dir);
             for (FileLock lock : dirLocks) {
                 if (lock.file().getParent().equals(dir)) {
@@ -495,8 +491,8 @@ public class LogManager {
      * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
      * Directories without a meta.properties don't get a directory ID assigned.
      */
-    private Map<String, Uuid> loadDirectoryIds(Collection<File> logDirs) {
-        Map<String, Uuid> result = new HashMap<>();
+    private ConcurrentHashMap<String, Uuid> loadDirectoryIds(Collection<File> logDirs) {
+        ConcurrentHashMap<String, Uuid> result = new ConcurrentHashMap<>();
         logDirs.forEach(logDir -> {
             try {
                 Properties props = PropertiesUtils.readPropertiesFile(
@@ -514,10 +510,6 @@ public class LogManager {
 
     private void addLogToBeDeleted(UnifiedLog log) {
         this.logsToBeDeleted.add(Map.entry(log, time.milliseconds()));
-    }
-
-    private void addStrayLog(TopicPartition strayPartition, UnifiedLog strayLog) {
-        this.strayLogs.put(strayPartition, strayLog);
     }
 
     // Visible for testing
@@ -555,7 +547,6 @@ public class LogManager {
         if (logDir.getName().endsWith(UnifiedLog.DELETE_DIR_SUFFIX)) {
             addLogToBeDeleted(log);
         } else if (logDir.getName().endsWith(UnifiedLog.STRAY_DIR_SUFFIX)) {
-            addStrayLog(topicPartition, log);
             LOG.warn("Loaded stray log: {}", logDir);
         } else if (isStray.apply(log)) {
             // We are unable to prevent a topic from being recreated before every replica has been deleted.
@@ -563,7 +554,6 @@ public class LogManager {
             // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
             // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
             log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition()), false);
-            addStrayLog(log.topicPartition(), log);
             LOG.warn("Log in {} marked stray and renamed to {}", logDir.getAbsolutePath(), log.dir().getAbsolutePath());
         } else {
             UnifiedLog previous = log.isFuture()
@@ -773,8 +763,10 @@ public class LogManager {
                     Map.of("dir", dir.getAbsolutePath()));
             for (int i = 0; i < numRecoveryThreadsPerDataDir; i++) {
                 String threadName = logRecoveryThreadName(dir.getAbsolutePath(), i);
-                metricsGroup.newGauge("remainingSegmentsToRecover", () -> numRemainingSegments.get(threadName),
-                        Map.of("dir", dir.getAbsolutePath(), "threadNum", String.valueOf(i)));
+                LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+                tags.put("dir", dir.getAbsolutePath());
+                tags.put("threadNum", String.valueOf(i));
+                metricsGroup.newGauge("remainingSegmentsToRecover", () -> numRemainingSegments.get(threadName), tags);
             }
         }
     }
@@ -785,7 +777,10 @@ public class LogManager {
         for (File dir : logDirs) {
             metricsGroup.removeMetric("remainingLogsToRecover", Map.of("dir", dir.getAbsolutePath()));
             for (int i = 0; i < numRecoveryThreadsPerDataDir; i++) {
-                metricsGroup.removeMetric("remainingSegmentsToRecover", Map.of("dir", dir.getAbsolutePath(), "threadNum", String.valueOf(i)));
+                LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+                tags.put("dir", dir.getAbsolutePath());
+                tags.put("threadNum", String.valueOf(i));
+                metricsGroup.removeMetric("remainingSegmentsToRecover", tags);
             }
         }
     }
@@ -1297,13 +1292,13 @@ public class LogManager {
                     : createLog(topicPartition, isNew, isFuture, topicId, targetLogDirectoryId);
 
             // Ensure topic IDs are consistent
-            topicId.ifPresent(id -> {
+            topicId.ifPresent(id ->
                 log.topicId().ifPresent(logTopicId -> {
                     if (!id.equals(logTopicId))
                         throw new InconsistentTopicIdException("Tried to assign topic ID " + id + " to log for topic partition " + topicPartition + "," +
                                 "but log already contained topic ID " + logTopicId);
-                });
-            });
+                })
+            );
             return log;
         }
     }
@@ -1651,7 +1646,7 @@ public class LogManager {
      * @param errorHandler The error handler that will be called when an exception for a particular
      *                     topic-partition is raised
      */
-    public void asyncDelete(Iterable<TopicPartition> topicPartitions,
+    public void asyncDelete(Set<TopicPartition> topicPartitions,
                             boolean isStray,
                             BiConsumer<TopicPartition, Throwable> errorHandler) {
         Set<File> logDirs = new HashSet<>();
