@@ -4391,8 +4391,8 @@ public class UnifiedLogTest {
 
         List<AbortedTxn> abortedTransactions = LogTestUtils.allAbortedTransactions(log);
         List<AbortedTxn> expectedTransactions = List.of(
-            new AbortedTxn(pid1, 0L, 29L, 8L),
-            new AbortedTxn(pid2, 8L, 74L, 36L)
+            new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+            new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
         );
 
         assertEquals(expectedTransactions, abortedTransactions);
