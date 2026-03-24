@@ -248,7 +248,9 @@ public final class ClientUtils {
                     hostResolver,
                     clientTelemetrySender,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
-                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
+                    false,
+                    null
             );
         } catch (Throwable t) {
             closeQuietly(selector, "Selector");

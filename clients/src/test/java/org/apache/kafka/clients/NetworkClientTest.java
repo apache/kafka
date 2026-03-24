@@ -1152,7 +1152,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false, null);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1213,7 +1213,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false, null);
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
@@ -1266,7 +1266,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false, null);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1375,7 +1375,7 @@ public class NetworkClientTest {
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender,
-            Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+            Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false, null);
 
         // Send the ApiVersionsRequest
         client.ready(node, time.milliseconds());
