@@ -40,8 +40,16 @@ public class ReplicationConfigs {
 
     public static final String DEFAULT_REPLICATION_FACTOR_CONFIG = "default.replication.factor";
     public static final int REPLICATION_FACTOR_DEFAULT = 1;
-    public static final String DEFAULT_REPLICATION_FACTOR_DOC = "The replication factor for automatically created topics," +
-            " and for topics created with -1 as the replication factor";
+    public static final String DEFAULT_REPLICATION_FACTOR_DOC =
+        "The default replication factor per topic. This configuration affects the following paths:"
+        + "<ul>"
+        + "  <li>1. Auto topic creation</li>"
+        + "  <li>2. Internal streams topic creation</li>"
+        + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the replication factor is set to -1</li>"
+        + "</ul>"
+        + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
+        + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
+        + "For (2) and (3), the value from the controller configuration is always used.</p>";
 
     public static final String REPLICA_LAG_TIME_MAX_MS_CONFIG = "replica.lag.time.max.ms";
     public static final long REPLICA_LAG_TIME_MAX_MS_DEFAULT = 30000L;

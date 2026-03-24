@@ -78,8 +78,12 @@ public class WakeupTrigger {
             if (task == null) {
                 return new ActiveFuture(currentTask);
             } else if (task instanceof WakeupFuture) {
-                currentTask.completeExceptionally(new WakeupException());
-                return null;
+                boolean wasTriggered = currentTask.completeExceptionally(new WakeupException());
+
+                // If the Future was *already* completed when we invoke completeExceptionally, the WakeupException
+                // will be ignored. If it was already completed, we then need to return a new WakeupFuture so that the
+                // next call to setActiveTask will throw the WakeupException.
+                return wasTriggered ? null : new WakeupFuture();
             } else if (task instanceof DisabledWakeups) {
                 return task;
             }

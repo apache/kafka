@@ -65,6 +65,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
+import java.util.stream.Collectors
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -218,11 +219,13 @@ class BrokerServer(
         brokerTopicStats,
         logDirFailureChannel)
 
-      lifecycleManager = new BrokerLifecycleManager(config,
+      lifecycleManager = new BrokerLifecycleManager(
+        config,
         time,
         s"broker-${config.nodeId}-",
         logManager.directoryIdsSet.asJava,
-        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
+        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start(),
+        () => metadataCache.metadataVersion().isCordonedLogDirsSupported)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -332,7 +335,13 @@ class BrokerServer(
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
-      }
+
+        override def handleCordoned(directoryIds: util.Set[Uuid]): Unit =
+          lifecycleManager.propagateDirectoryCordoned(directoryIds)
+
+        override def handleUncordoned(directoryIds: util.Set[Uuid]): Unit =
+          lifecycleManager.propagateDirectoryUncordoned(directoryIds)
+}
 
       /**
        * TODO: move this action queue to handle thread so we can simplify concurrency handling
@@ -365,7 +374,7 @@ class BrokerServer(
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.BrokerRole.toString)
 
       /* initializing the groupConfigManager */
-      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), config.groupCoordinatorConfig, config.shareGroupConfig)
 
       /* create share coordinator */
       shareCoordinator = createShareCoordinator()
@@ -411,13 +420,17 @@ class BrokerServer(
         s"broker-${config.nodeId}-",
         config.brokerHeartbeatIntervalMs
       )
+      val initialCordonedLogDirs: util.Set[Uuid] = config.cordonedLogDirs().stream()
+        .map(dir => logManager.directoryId(dir).get)
+        .collect(Collectors.toSet())
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         clusterId,
         listenerInfo.toBrokerRegistrationRequest,
         featuresRemapped,
-        logManager.readBrokerEpochFromCleanShutdownFiles()
+        logManager.readBrokerEpochFromCleanShutdownFiles(),
+        initialCordonedLogDirs
       )
 
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
@@ -704,7 +717,6 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 

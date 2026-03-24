@@ -513,15 +513,16 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         final StreamTask task1 = mock(StreamTask.class);
+        final Headers headers = new RecordHeaders();
 
         context.transitionToActive(task1, recordCollector, null);
-        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, Position.emptyPosition());
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, headers, Position.emptyPosition());
 
         verify(recordCollector).send(
             CHANGELOG_PARTITION.topic(),
             KEY_BYTES,
             VALUE_BYTES,
-            null,
+            headers,
             CHANGELOG_PARTITION.partition(),
             TIMESTAMP,
             BYTES_KEY_SERIALIZER,
@@ -546,7 +547,7 @@ public class ProcessorContextImplTest {
         context = buildProcessorContextImpl(streamsConfigWithConsistencyMock(), stateManager);
 
         context.transitionToActive(task1, recordCollector, null);
-        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, position);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, headers, position);
 
         verify(recordCollector).send(
             CHANGELOG_PARTITION.topic(),
@@ -566,7 +567,7 @@ public class ProcessorContextImplTest {
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
-            () -> context.logChange("Store", Bytes.wrap("k".getBytes()), null, 0L, Position.emptyPosition())
+            () -> context.logChange("Store", Bytes.wrap("k".getBytes()), null, 0L, new RecordHeaders(), Position.emptyPosition())
         );
     }
 

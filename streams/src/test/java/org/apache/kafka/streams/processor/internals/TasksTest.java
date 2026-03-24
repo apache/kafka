@@ -157,10 +157,9 @@ public class TasksTest {
         final StandbyTask standbyTask2 = standbyTask(TASK_1_1, Set.of(TOPIC_PARTITION_A_1)).build();
         tasks.addPendingTasksToInit(Set.of(activeTask1, activeTask2, standbyTask1, standbyTask2));
 
-        final Set<Task> activeTasksToInit = tasks.drainPendingActiveTasksToInit();
+        final Set<StreamTask> activeTasksToInit = tasks.drainPendingActiveTasksToInit();
         assertEquals(2, activeTasksToInit.size());
         assertTrue(activeTasksToInit.containsAll(Set.of(activeTask1, activeTask2)));
-        assertFalse(activeTasksToInit.containsAll(Set.of(standbyTask1, standbyTask2)));
         assertEquals(2, tasks.pendingTasksToInit().size());
         assertTrue(tasks.hasPendingTasksToInit());
         assertTrue(tasks.pendingTasksToInit().containsAll(Set.of(standbyTask1, standbyTask2)));
@@ -174,11 +173,10 @@ public class TasksTest {
         final StandbyTask standbyTask2 = standbyTask(TASK_1_1, Set.of(TOPIC_PARTITION_A_1)).build();
         tasks.addPendingTasksToInit(Set.of(activeTask1, activeTask2, standbyTask1, standbyTask2));
 
-        final Set<Task> standbyTasksToInit = tasks.drainPendingStandbyTasksToInit();
+        final Set<StandbyTask> standbyTasksToInit = tasks.drainPendingStandbyTasksToInit();
 
         assertEquals(2, standbyTasksToInit.size());
         assertTrue(standbyTasksToInit.containsAll(Set.of(standbyTask1, standbyTask2)));
-        assertFalse(standbyTasksToInit.containsAll(Set.of(activeTask1, activeTask2)));
         assertEquals(2, tasks.pendingTasksToInit().size());
         assertTrue(tasks.hasPendingTasksToInit());
         assertTrue(tasks.pendingTasksToInit().containsAll(Set.of(activeTask1, activeTask2)));
@@ -188,7 +186,7 @@ public class TasksTest {
     public void shouldAddFailedTask() {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0)).build();
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_1)).build();
-        tasks.addTask(activeTask2);
+        tasks.addActiveTask(activeTask2);
 
         tasks.addFailedTask(activeTask1);
 
@@ -210,7 +208,7 @@ public class TasksTest {
         assertFalse(tasks.allNonFailedInitializedTasks().contains(activeTask1));
         assertFalse(tasks.allInitializedTasks().contains(activeTask1));
 
-        tasks.addTask(activeTask1);
+        tasks.addActiveTask(activeTask1);
         assertTrue(tasks.allNonFailedInitializedTasks().contains(activeTask1));
     }
 
@@ -224,7 +222,7 @@ public class TasksTest {
         assertFalse(tasks.allNonFailedInitializedTasks().contains(activeTask1));
         assertFalse(tasks.allInitializedTasks().contains(activeTask1));
 
-        tasks.addTask(activeTask1);
+        tasks.addActiveTask(activeTask1);
         assertTrue(tasks.allNonFailedInitializedTasks().contains(activeTask1));
     }
 

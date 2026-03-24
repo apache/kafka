@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
@@ -558,6 +559,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     processId,
                     config,
                     parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
+                    parseRackId((String) config.originals().get(CommonClientConfigs.CLIENT_RACK_CONFIG)),
                     topologyMetadata
                 )
             );
@@ -671,9 +673,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
+    private static Optional<String> parseRackId(final String rackId) {
+        if (rackId == null || rackId.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(rackId);
+    }
+
     private static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
+                                                                 final Optional<String> rackId,
                                                                  final TopologyMetadata topologyMetadata) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
@@ -682,6 +692,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return new StreamsRebalanceData(
             processId,
             endpoint,
+            rackId,
             subtopologies,
             config.getClientTags()
         );
@@ -1926,7 +1937,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
-                                      final Map<TaskId, Task> standbyTasks) {
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadataImpl(
@@ -1938,7 +1949,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadataImpl(
                 task.getValue().id(),
                 task.getValue().inputPartitions(),

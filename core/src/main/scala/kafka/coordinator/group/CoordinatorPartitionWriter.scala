@@ -163,7 +163,7 @@ class CoordinatorPartitionWriter(
     }
 
     // Required offset.
-    partitionResult.info.lastOffset + 1
+    partitionResult.logAppendSummary.lastOffset + 1
   }
 
   override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {

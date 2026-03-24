@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -665,6 +666,11 @@ public class Plugins {
             plugin = newPlugin(klass);
             if (plugin instanceof Versioned versionedPlugin) {
                 if (Utils.isBlank(versionedPlugin.version())) {
+                    throw new ConnectException("Version not defined for '" + klassName + "'");
+                }
+            }
+            if (plugin instanceof ConnectPlugin connectPlugin) {
+                if (Utils.isBlank(connectPlugin.version())) {
                     throw new ConnectException("Version not defined for '" + klassName + "'");
                 }
             }

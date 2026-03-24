@@ -285,14 +285,8 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         if (!useNewProtocol) {
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+            setCheckpointedOffset(props, inputStream, offsetCheckpointed);
         }
-
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
-        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
-        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
-        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition(inputStream, 1), (long) offsetCheckpointed - 1));
 
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
@@ -320,7 +314,8 @@ public class RestoreIntegrationTest {
             // For new protocol, we need to stop the streams instance before altering offsets
             kafkaStreams.close(Duration.ofSeconds(60));
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
-            
+            setCheckpointedOffset(props, inputStream, offsetCheckpointed);
+
             // Restart the streams instance with a new startup latch
             
             kafkaStreams = new KafkaStreams(topology, props);
@@ -352,14 +347,8 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         if (!useNewProtocol) {
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+            setCheckpointedOffset(props, inputStream, offsetCheckpointed);
         }
-
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
-        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
-        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
-        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition(inputStream, 1), (long) offsetCheckpointed - 1));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -389,6 +378,7 @@ public class RestoreIntegrationTest {
             // For new protocol, we need to stop the streams instance before altering offsets
             kafkaStreams.close();
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+            setCheckpointedOffset(props, inputStream, offsetCheckpointed);
 
             // Restart the streams instance with a new startup latch
             kafkaStreams = new KafkaStreams(builder.build(props), props);
@@ -424,12 +414,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
-        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
-        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
-        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition(changelog, 1), (long) offsetCheckpointed - 1));
+        setCheckpointedOffset(props, changelog, offsetCheckpointed);
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -986,6 +971,15 @@ public class RestoreIntegrationTest {
                 fail("Failed to set committed offsets", e);
             }
         }
+    }
+
+    private void setCheckpointedOffset(final Properties props, final String inputStream, final long offsetCheckpointed) throws IOException {
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
+        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
+        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
+                .write(Collections.singletonMap(new TopicPartition(inputStream, 0), offsetCheckpointed - 1));
+        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
+                .write(Collections.singletonMap(new TopicPartition(inputStream, 1), offsetCheckpointed - 1));
     }
 
     private void waitForTransitionTo(final Set<KafkaStreams.State> observed, final KafkaStreams.State state, final Duration timeout) throws Exception {

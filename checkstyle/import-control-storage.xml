@@ -82,6 +82,7 @@
         </subpackage>
 
         <subpackage name="purgatory">
+            <allow pkg="kafka.utils" />
             <allow pkg="org.apache.kafka.server.storage.log" />
         </subpackage>
     </subpackage>

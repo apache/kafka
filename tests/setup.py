@@ -49,7 +49,7 @@ setup(name="kafkatest",
       license="apache2.0",
       packages=find_packages(),
       include_package_data=True,
-      install_requires=["ducktape==0.12.0", "requests>=2.31.0", "psutil==5.7.2", "pytest==8.3.3", "mock==5.1.0"],
+      install_requires=["ducktape==0.13.0", "requests>=2.32.2", "psutil==5.7.2", "pytest==8.3.3", "mock==5.1.0"],
       cmdclass={'test': PyTest},
       zip_safe=False
       )

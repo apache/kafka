@@ -42,12 +42,13 @@ import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -56,6 +57,7 @@ import org.apache.kafka.clients.consumer.internals.events.TopicRe2JPatternSubscr
 import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
@@ -135,8 +137,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -259,6 +259,8 @@ public class AsyncKafkaConsumerTest {
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
             fetchCollector,
+            mock(FetchMetricsManager.class),
+            mock(RebalanceCallbackMetricsManager.class),
             interceptors,
             time,
             applicationEventHandler,
@@ -480,7 +482,7 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.add(tp);
-        CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
+        CompletableBackgroundEvent<Void> e = new PartitionsRemovedEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
         backgroundEventQueue.add(e);
         completeCommitSyncApplicationEventSuccessfully();
         final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
@@ -488,7 +490,7 @@ public class AsyncKafkaConsumerTest {
         ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-                assertDoesNotThrow(() -> consumer.commitSync(mkMap(mkEntry(tp, new OffsetAndMetadata(0)))));
+                assertDoesNotThrow(() -> consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0))));
                 callbackExecuted.set(true);
             }
 
@@ -1411,7 +1413,7 @@ public class AsyncKafkaConsumerTest {
     public void testStreamRebalanceData() {
         final String groupId = "consumerGroupA";
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
-            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             final Optional<StreamsRebalanceData> groupMetadataUpdateListener = captureStreamRebalanceData(requestManagers);
             assertTrue(groupMetadataUpdateListener.isPresent());
@@ -1452,7 +1454,12 @@ public class AsyncKafkaConsumerTest {
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
-            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
+            CompletableBackgroundEvent<Void> e;
+            if (methodName == ON_PARTITIONS_ASSIGNED) {
+                e = new PartitionsAssignedEvent(Set.of(), partitions);
+            } else {
+                e = new PartitionsRemovedEvent(methodName, partitions);
+            }
             backgroundEventQueue.add(e);
         }
 
@@ -1991,7 +1998,7 @@ public class AsyncKafkaConsumerTest {
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
 
-        ConsumerRebalanceListenerCallbackNeededEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, Collections.emptySortedSet());
+        PartitionsRemovedEvent event = new PartitionsRemovedEvent(ON_PARTITIONS_REVOKED, Collections.emptySortedSet());
         event.setEnqueuedMs(time.milliseconds());
         backgroundEventQueue.add(event);
         asyncConsumerMetrics.recordBackgroundEventQueueSize(1);
@@ -2186,7 +2193,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnTasksRevokedWhenMemberEpochPositive() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2206,7 +2213,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2226,7 +2233,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseWrapsStreamsRebalanceListenerException() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);

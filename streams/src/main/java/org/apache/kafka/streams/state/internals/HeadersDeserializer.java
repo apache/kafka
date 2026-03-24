@@ -18,11 +18,12 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 /**
  * Deserializer for Kafka Headers.
@@ -41,18 +42,17 @@ import java.nio.charset.StandardCharsets;
  *
  * This is used by KIP-1271 to deserialize headers from state stores.
  */
-public class HeadersDeserializer implements Deserializer<Headers> {
+class HeadersDeserializer {
 
     /**
      * Deserializes headers from a byte array using varint encoding per KIP-1271.
      * <p>
      * The input format is [count][header1][header2]... without a size prefix.
      *
-     * @param topic topic associated with the data
      * @param data the serialized byte array (can be null)
      * @return the deserialized headers
      */
-    public Headers deserialize(final String topic, final byte[] data) {
+    public static Headers deserialize(final byte[] data) {
         if (data == null || data.length == 0) {
             return new RecordHeaders();
         }
@@ -68,8 +68,8 @@ public class HeadersDeserializer implements Deserializer<Headers> {
 
         for (int i = 0; i < headersCount; i++) {
             final int keyLength = ByteUtils.readVarint(buffer);
-            final byte[] keyBytes = new byte[keyLength];
-            buffer.get(keyBytes);
+            final byte[] keyBytes = readBytes(buffer, keyLength);
+            
             final String key = new String(keyBytes, StandardCharsets.UTF_8);
 
             final int valueLength = ByteUtils.readVarint(buffer);
@@ -77,19 +77,12 @@ public class HeadersDeserializer implements Deserializer<Headers> {
             if (valueLength == -1) {
                 value = null;
             } else {
-                value = new byte[valueLength];
-                buffer.get(value);
+                value = readBytes(buffer, valueLength);
             }
 
             headers.add(key, value);
         }
 
         return headers;
-    }
-
-    public static Headers deserialize(final byte[] data) {
-        try (HeadersDeserializer deserializer = new HeadersDeserializer()) {
-            return deserializer.deserialize("", data);
-        }
     }
 }

@@ -64,4 +64,69 @@ public class HeadersBytesStoreTest {
         assertEquals(0, headersSize, "Empty headers should have headersSize = 0");
         assertEquals(0, buffer.remaining(), "No payload bytes for empty value");
     }
+
+    @Test
+    public void shouldReturnNullWhenConvertingNullPlainValue() {
+        final byte[] result = HeadersBytesStore.convertFromPlainToHeaderFormat(null);
+        assertNull(result);
+    }
+
+    @Test
+    public void shouldConvertPlainValueToHeaderFormatWithTimestamp() {
+        final byte[] plainValue = "test-value".getBytes();
+
+        final byte[] converted = HeadersBytesStore.convertFromPlainToHeaderFormat(plainValue);
+
+        assertNotNull(converted);
+        // Expected format: [0x00 (1 byte)][timestamp=-1 (8 bytes)][value]
+        assertEquals(1 + 8 + plainValue.length, converted.length);
+
+        // Verify empty headers marker
+        assertEquals(0x00, converted[0], "First byte for empty header should be 0x00");
+
+        // Verify timestamp = -1 (all 0xFF bytes)
+        for (int i = 1; i <= 8; i++) {
+            assertEquals((byte) 0xFF, converted[i], "Timestamp byte " + (i - 1) + " should be 0xFF for -1");
+        }
+
+        // Verify payload
+        final byte[] actualPayload = Arrays.copyOfRange(converted, 9, converted.length);
+        assertArrayEquals(plainValue, actualPayload);
+    }
+
+    @Test
+    public void shouldConvertEmptyPlainValueToHeaderFormat() {
+        final byte[] emptyValue = new byte[0];
+
+        final byte[] converted = HeadersBytesStore.convertFromPlainToHeaderFormat(emptyValue);
+
+        assertNotNull(converted);
+        // Expected format: [0x00 (1 byte)][timestamp=-1 (8 bytes)]
+        assertEquals(9, converted.length, "Converted empty value should have headers + timestamp");
+
+        final ByteBuffer buffer = ByteBuffer.wrap(converted);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        assertEquals(0, headersSize, "Empty headers should have headersSize = 0");
+
+        // Verify timestamp = -1
+        final long timestamp = buffer.getLong();
+        assertEquals(-1L, timestamp, "Timestamp should be -1 for plain value upgrade");
+    }
+
+    @Test
+    public void shouldConvertPlainValueWithCorrectByteOrder() {
+        final byte[] plainValue = new byte[]{0x01, 0x02, 0x03};
+
+        final byte[] converted = HeadersBytesStore.convertFromPlainToHeaderFormat(plainValue);
+
+        // Expected: [0x00][0xFF x 8][0x01, 0x02, 0x03]
+        final byte[] expected = new byte[]{
+            0x00,                                           // empty headers
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,  // timestamp -1 (high 4 bytes)
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,  // timestamp -1 (low 4 bytes)
+            0x01, 0x02, 0x03                                // payload
+        };
+
+        assertArrayEquals(expected, converted);
+    }
 }

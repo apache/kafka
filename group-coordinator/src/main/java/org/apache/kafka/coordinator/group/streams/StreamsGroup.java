@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -32,9 +33,11 @@ import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -43,6 +46,7 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -52,6 +56,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -158,10 +163,9 @@ public class StreamsGroup implements Group {
     protected final TimelineLong metadataHash;
 
     /**
-     * The target assignment epoch. An assignment epoch smaller than the group epoch means that a new assignment is required. The assignment
-     * epoch is updated when a new assignment is installed.
+     * The target assignment metadata.
      */
-    private final TimelineInteger targetAssignmentEpoch;
+    private final TimelineObject<TargetAssignmentMetadata> targetAssignmentMetadata;
 
     /**
      * The target assignment per member ID.
@@ -217,6 +221,13 @@ public class StreamsGroup implements Group {
      */
     private int endpointInformationEpoch = 0;
 
+    /**
+     * Cache for endpoint-to-partitions mappings, keyed by member ID.
+     * Entries are explicitly invalidated when a member's tasks change, the member is removed,
+     * or the topology changes.
+     */
+    private final Map<String, StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsCache = new HashMap<>();
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -227,11 +238,12 @@ public class StreamsGroup implements Group {
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
+        this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.metadataHash = new TimelineLong(snapshotRegistry);
-        this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
+        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -290,6 +302,8 @@ public class StreamsGroup implements Group {
 
     public void setConfiguredTopology(ConfiguredTopology configuredTopology) {
         this.configuredTopology.set(Optional.ofNullable(configuredTopology));
+        // Clear endpoint cache since subtopology source topics may have changed
+        endpointToPartitionsCache.clear();
     }
 
     /**
@@ -328,16 +342,24 @@ public class StreamsGroup implements Group {
      * @return The target assignment epoch.
      */
     public int assignmentEpoch() {
-        return targetAssignmentEpoch.get();
+        return targetAssignmentMetadata.get().assignmentEpoch();
     }
 
     /**
-     * Sets the assignment epoch.
+     * @return The time at which the target assignment calculation finished.
+     */
+    public long assignmentTimestamp() {
+        return targetAssignmentMetadata.get().assignmentTimestamp();
+    }
+
+    /**
+     * Sets the assignment metadata.
      *
      * @param targetAssignmentEpoch The new assignment epoch.
+     * @param targetAssignmentTimestamp The time at which the assignment calculation finished.
      */
-    public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
-        this.targetAssignmentEpoch.set(targetAssignmentEpoch);
+    public void setTargetAssignmentMetadata(int targetAssignmentEpoch, long targetAssignmentTimestamp) {
+        this.targetAssignmentMetadata.set(new TargetAssignmentMetadata(targetAssignmentEpoch, targetAssignmentTimestamp));
         maybeUpdateGroupState();
     }
 
@@ -433,6 +455,7 @@ public class StreamsGroup implements Group {
         maybeUpdateTaskProcessId(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
+        endpointToPartitionsCache.remove(newMember.memberId());
     }
 
     /**
@@ -456,6 +479,7 @@ public class StreamsGroup implements Group {
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
+        endpointToPartitionsCache.remove(memberId);
     }
 
     /**
@@ -814,7 +838,7 @@ public class StreamsGroup implements Group {
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
@@ -882,11 +906,11 @@ public class StreamsGroup implements Group {
             clearShutdownRequestMemberId();
         } else if (topology().filter(t -> t.topologyEpoch() == validatedTopologyEpoch.get()).isEmpty()) {
             newState = NOT_READY;
-        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
+        } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
             for (StreamsGroupMember member : members.values()) {
-                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
+                if (!member.isReconciledTo(assignmentEpoch())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -1080,7 +1104,7 @@ public class StreamsGroup implements Group {
             .setGroupId(groupId)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
             .setTopology(
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)
@@ -1127,11 +1151,88 @@ public class StreamsGroup implements Group {
         this.endpointInformationEpoch = endpointInformationEpoch;
     }
 
+    // Visible for testing
+    Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> cachedEndpointToPartitions(
+        String memberId
+    ) {
+        return Optional.ofNullable(endpointToPartitionsCache.get(memberId));
+    }
+
+    // Visible for testing
+    void cacheEndpointToPartitions(
+        String memberId,
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions
+    ) {
+        endpointToPartitionsCache.put(memberId, endpointToPartitions);
+    }
+
+    /**
+     * Invalidates the cached endpoint-to-partitions entry for the given member.
+     * This should be called when a member's assigned tasks change during reconciliation,
+     * before record replay has had a chance to call updateMember().
+     *
+     * @param memberId The member ID whose cache entry should be invalidated.
+     */
+    public void invalidateCachedEndpointToPartitions(String memberId) {
+        endpointToPartitionsCache.remove(memberId);
+    }
+
+    /**
+     * Builds the endpoint-to-partitions list for all members, using the cache where possible.
+     *
+     * @param updatedMember The member that was just updated (may have a stale entry in the members map).
+     * @param metadataImage The current metadata image for resolving topic partitions.
+     * @return The list of endpoint-to-partitions mappings for all members with endpoints.
+     */
+    public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
+        StreamsGroupMember updatedMember,
+        CoordinatorMetadataImage metadataImage
+    ) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        if (updatedMember == null) {
+            log.error("[GroupId {}] updatedMember is unexpectedly null in buildEndpointToPartitions. " +
+                "This is a bug, please file a JIRA ticket.", groupId);
+            return endpointToPartitionsList;
+        }
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            if (entry.getKey().equals(updatedMember.memberId())) {
+                continue;
+            }
+            getOrComputeEndpointToPartitions(entry.getValue(), metadataImage)
+                .ifPresent(endpointToPartitionsList::add);
+        }
+        getOrComputeEndpointToPartitions(updatedMember, metadataImage)
+            .ifPresent(endpointToPartitionsList::add);
+        return endpointToPartitionsList;
+    }
+
+    private Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> getOrComputeEndpointToPartitions(
+        StreamsGroupMember member,
+        CoordinatorMetadataImage metadataImage
+    ) {
+        if (member.userEndpoint().isEmpty()) {
+            return Optional.empty();
+        }
+
+        String memberId = member.memberId();
+
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions cached = endpointToPartitionsCache.get(memberId);
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+
+        Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> computed =
+            EndpointToPartitionsManager.maybeEndpointToPartitions(member, this, metadataImage);
+        computed.ifPresent(endpointToPartitions ->
+            endpointToPartitionsCache.put(memberId, endpointToPartitions));
+        return computed;
+    }
+
     /**
      * @return The assignment configurations for this streams group.
      */
     public Map<String, String> lastAssignmentConfigs() {
-        return Collections.unmodifiableMap(lastAssignmentConfigs);
+        return Collections.unmodifiableMap(new TreeMap<>(lastAssignmentConfigs));
     }
 
     /**
