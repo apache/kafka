@@ -1090,8 +1090,29 @@ public class MockLogTest {
     }
 
     @Test
-    public void testMockLogReadExtremelyLargeInitialBatch() {
+    public void testMockLogReadExtremelyLargeMultiBatch() {
         int numberOfRecords = 1000;
+        appendBatch(numberOfRecords, 5);
+        appendBatch(numberOfRecords, 5);
+        // The MockLog is able to read a large internal batch
+        Records records = log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
+        int recordCount = 0;
+        var iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            recordCount++;
+            iterator.next();
+        }
+        assertEquals(numberOfRecords * 2, recordCount);
+    }
+
+    @Test
+    public void testMockLogReadExtremelyLargeSingleBatch() {
+        int numberOfRecords = 1000;
+        appendBatch(numberOfRecords, 5);
         appendBatch(numberOfRecords, 5);
         // The MockLog is able to read a large internal batch
         Records records = log.read(
@@ -1105,7 +1126,7 @@ public class MockLogTest {
             recordCount++;
             iterator.next();
         }
-        assertEquals(numberOfRecords, recordCount);
+        assertEquals(numberOfRecords, recordCount * 2);
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
