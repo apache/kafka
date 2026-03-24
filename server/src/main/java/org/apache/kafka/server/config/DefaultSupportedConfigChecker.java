@@ -23,18 +23,16 @@ import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
-import java.util.AbstractSet;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Default implementation of SupportedConfigChecker that checks if a configuration name
  * is supported for a given resource type based on the actual config definitions.
  *
- * This class maintains a set of valid configuration names per resource type:
+ * This class maintains a predicate per resource type:
  * - TOPIC: Configurations defined in LogConfig
  * - BROKER: All config names are accepted. Broker configs include listener-specific
  *   prefixed configs (e.g., listener.name.&lt;name&gt;.ssl.keystore.location) whose names
@@ -47,38 +45,33 @@ import java.util.Set;
  * Config names for resource types not in this map are considered unsupported.
  */
 public final class DefaultSupportedConfigChecker implements SupportedConfigChecker {
-    // Sentinel value meaning all config names are supported for this resource type.
-    private static final Set<String> ALLOW_ALL = new AbstractSet<String>() {
-        @Override
-        public boolean contains(Object o) {
-            return true;
+    static final class SetContainsPredicate implements Predicate<String> {
+        private final Set<String> keys;
+
+        SetContainsPredicate(Set<String> keys) {
+            this.keys = keys;
         }
 
         @Override
-        public Iterator<String> iterator() {
-            return Collections.emptyIterator();
+        public boolean test(String key) {
+            return keys.contains(key);
         }
+    }
 
-        @Override
-        public int size() {
-            return Integer.MAX_VALUE;
-        }
-    };
-
-    private final Map<ConfigResource.Type, Set<String>> validConfigsByType;
+    private final Map<ConfigResource.Type, Predicate<String>> validConfigsByType;
 
     public DefaultSupportedConfigChecker() {
         this.validConfigsByType = Map.of(
-            ConfigResource.Type.TOPIC, new HashSet<>(LogConfig.configNames()),
-            ConfigResource.Type.BROKER, ALLOW_ALL,
-            ConfigResource.Type.CLIENT_METRICS, ClientMetricsConfigs.configDef().names(),
-            ConfigResource.Type.GROUP, GroupConfig.configDef().names()
+            ConfigResource.Type.TOPIC, new SetContainsPredicate(new HashSet<>(LogConfig.configNames())),
+            ConfigResource.Type.BROKER, ignore -> true,
+            ConfigResource.Type.CLIENT_METRICS, new SetContainsPredicate(ClientMetricsConfigs.configDef().names()),
+            ConfigResource.Type.GROUP, new SetContainsPredicate(GroupConfig.configDef().names())
         );
     }
 
     @Override
     public boolean isSupported(ConfigResource.Type resourceType, String configName) {
-        Set<String> configs = validConfigsByType.get(resourceType);
-        return configs != null && configs.contains(configName);
+        Predicate<String> predicate = validConfigsByType.get(resourceType);
+        return predicate != null && predicate.test(configName);
     }
 }
