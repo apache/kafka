@@ -1255,7 +1255,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldLoadPositionFromFile() {
+    public void shouldMigrateExistingPositionFromFile() {
         final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
         final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), rocksDBStore.name + ".position"));
         StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
