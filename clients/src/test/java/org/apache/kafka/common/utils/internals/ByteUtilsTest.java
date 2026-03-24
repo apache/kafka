@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -426,7 +425,7 @@ public class ByteUtilsTest {
         ByteBuffer buf = ByteBuffer.allocate(MAX_LENGTH_VARINT);
         ByteUtils.writeUnsignedVarint(value, buf);
         buf.flip();
-        Assertions.assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
         assertEquals(value, ByteUtils.readUnsignedVarint(buf.duplicate()));
 
         buf.rewind();
