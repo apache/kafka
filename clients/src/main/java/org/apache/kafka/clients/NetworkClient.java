@@ -20,10 +20,15 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.GetConfigSubscriptionRequestData;
+import org.apache.kafka.common.message.GetConfigSubscriptionResponseData;
+import org.apache.kafka.common.message.PushConfigRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -38,9 +43,13 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CorrelationIdMismatchException;
+import org.apache.kafka.common.requests.GetConfigSubscriptionRequest;
+import org.apache.kafka.common.requests.GetConfigSubscriptionResponse;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.PushConfigRequest;
+import org.apache.kafka.common.requests.PushConfigResponse;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
@@ -80,6 +89,17 @@ public class NetworkClient implements KafkaClient {
         ACTIVE,
         CLOSING,
         CLOSED
+    }
+
+    /**
+     * Config push handshake state tracking
+     */
+    private enum ConfigPushState {
+        NOT_STARTED,               // Haven't started handshake
+        SUBSCRIPTION_IN_PROGRESS,  // Waiting for GetConfigSubscription response
+        PUSH_IN_PROGRESS,          // Waiting for PushConfig response
+        COMPLETED,                 // Successfully pushed config
+        FAILED                     // Failed (but client continues)
     }
 
     private final Logger log;
@@ -139,6 +159,15 @@ public class NetworkClient implements KafkaClient {
 
     private final TelemetrySender telemetrySender;
 
+    // Config push state
+    private final boolean enableConfigPush;
+    private final AbstractConfig clientConfig;
+    private volatile Uuid clientInstanceId = Uuid.ZERO_UUID;
+    private volatile ConfigPushState configPushState = ConfigPushState.NOT_STARTED;
+    private volatile int configSubscriptionId = -1;
+    private volatile int configMaxBytes = 0;
+    private volatile List<String> requestedConfigKeys = new ArrayList<>();
+
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
@@ -155,8 +184,9 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          LogContext logContext,
                          MetadataRecoveryStrategy metadataRecoveryStrategy) {
-        this(selector,
+        this(null,
              metadata,
+             selector,
              clientId,
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
@@ -169,9 +199,14 @@ public class NetworkClient implements KafkaClient {
              time,
              discoverBrokerVersions,
              apiVersions,
+             null,
              logContext,
+             new DefaultHostResolver(),
+             null,
              Long.MAX_VALUE,
-             metadataRecoveryStrategy);
+             metadataRecoveryStrategy,
+             false,
+             null);
     }
 
     public NetworkClient(Selectable selector,
@@ -211,7 +246,9 @@ public class NetworkClient implements KafkaClient {
                 new DefaultHostResolver(),
                 null,
                 rebootstrapTriggerMs,
-                metadataRecoveryStrategy);
+                metadataRecoveryStrategy,
+                false,
+                null);
     }
 
     public NetworkClient(Selectable selector,
@@ -251,7 +288,9 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              Long.MAX_VALUE,
-             metadataRecoveryStrategy);
+             metadataRecoveryStrategy,
+             false,
+             null);
     }
 
     public NetworkClient(Selectable selector,
@@ -290,7 +329,9 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              Long.MAX_VALUE,
-             metadataRecoveryStrategy);
+             metadataRecoveryStrategy,
+             false,
+             null);
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -313,7 +354,9 @@ public class NetworkClient implements KafkaClient {
                          HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender,
                          long rebootstrapTriggerMs,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy,
+                         boolean enableConfigPush,
+                         AbstractConfig clientConfig) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -346,6 +389,8 @@ public class NetworkClient implements KafkaClient {
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+        this.enableConfigPush = enableConfigPush;
+        this.clientConfig = clientConfig;
     }
 
     /**
@@ -430,6 +475,13 @@ public class NetworkClient implements KafkaClient {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
             } else if (isTelemetryApi(request.header.apiKey()) && telemetrySender != null) {
                 telemetrySender.handleFailedRequest(request.header.apiKey(), null);
+            } else if (isConfigPushApi(request.header.apiKey()) && enableConfigPush) {
+                // Config push failed due to disconnect
+                if (configPushState == ConfigPushState.SUBSCRIPTION_IN_PROGRESS ||
+                    configPushState == ConfigPushState.PUSH_IN_PROGRESS) {
+                    log.debug("Config push request failed due to disconnect");
+                    configPushState = ConfigPushState.FAILED;
+                }
             }
         }
     }
@@ -595,6 +647,14 @@ public class NetworkClient implements KafkaClient {
                 metadataUpdater.handleFailedRequest(now, Optional.of(unsupportedVersionException));
             else if (isTelemetryApi(clientRequest.apiKey()) && telemetrySender != null)
                 telemetrySender.handleFailedRequest(clientRequest.apiKey(), unsupportedVersionException);
+            else if (isConfigPushApi(clientRequest.apiKey()) && enableConfigPush) {
+                // Config push request failed due to unsupported version
+                if (configPushState == ConfigPushState.SUBSCRIPTION_IN_PROGRESS ||
+                    configPushState == ConfigPushState.PUSH_IN_PROGRESS) {
+                    log.debug("Config push request failed: unsupported version");
+                    configPushState = ConfigPushState.FAILED;
+                }
+            }
         }
     }
 
@@ -655,6 +715,7 @@ public class NetworkClient implements KafkaClient {
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
+        handleConfigPushHandshake(updatedNow);
         handleTimedOutConnections(responses, updatedNow);
         handleTimedOutRequests(responses, updatedNow);
         handleRebootstrap(responses, updatedNow);
@@ -1015,6 +1076,10 @@ public class NetworkClient implements KafkaClient {
                 telemetrySender.handleResponse((GetTelemetrySubscriptionsResponse) response);
             else if (req.isInternalRequest && response instanceof PushTelemetryResponse)
                 telemetrySender.handleResponse((PushTelemetryResponse) response);
+            else if (req.isInternalRequest && response instanceof GetConfigSubscriptionResponse)
+                handleGetConfigSubscriptionResponse(req.destination, (GetConfigSubscriptionResponse) response, now);
+            else if (req.isInternalRequest && response instanceof PushConfigResponse)
+                handlePushConfigResponse(req.destination, (PushConfigResponse) response, now);
             else
                 responses.add(req.completed(response, now));
         }
@@ -1050,6 +1115,20 @@ public class NetworkClient implements KafkaClient {
             apiVersionsResponse.data().finalizedFeatures(),
             apiVersionsResponse.data().finalizedFeaturesEpoch());
         apiVersions.update(node, nodeVersionInfo);
+
+        // Check if we should initiate config push handshake
+        if (enableConfigPush && configPushState == ConfigPushState.NOT_STARTED) {
+            ApiVersion configSubVersion = nodeVersionInfo.apiVersion(ApiKeys.GET_CONFIG_SUBSCRIPTION);
+            if (configSubVersion != null) {
+                log.debug("Node {} supports config push (version {}), will initiate handshake",
+                    node, configSubVersion);
+                // Don't send immediately - will be triggered in poll()
+            } else {
+                log.debug("Node {} does not support config push, skipping", node);
+                configPushState = ConfigPushState.FAILED;  // Skip, not an error
+            }
+        }
+
         this.connectionStates.ready(node);
         log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
                 node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
@@ -1169,6 +1248,10 @@ public class NetworkClient implements KafkaClient {
      */
     private boolean isTelemetryApi(ApiKeys apiKey) {
         return apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY;
+    }
+
+    private boolean isConfigPushApi(ApiKeys apiKey) {
+        return apiKey == ApiKeys.GET_CONFIG_SUBSCRIPTION || apiKey == ApiKeys.PUSH_CONFIG;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
@@ -1377,6 +1460,176 @@ public class NetworkClient implements KafkaClient {
             }
         }
 
+    }
+
+    /**
+     * Handle config push handshake state machine.
+     * Called from poll() to progress through subscription → push → done.
+     */
+    private void handleConfigPushHandshake(long now) {
+        // Only proceed if enabled and not in a terminal state
+        if (!enableConfigPush ||
+            configPushState == ConfigPushState.COMPLETED ||
+            configPushState == ConfigPushState.FAILED) {
+            return;
+        }
+
+        // Find a ready node to send to
+        Node node = leastLoadedNode(now).node();
+        if (node == null) {
+            log.trace("No node available for config push handshake");
+            return;
+        }
+
+        String nodeId = node.idString();
+
+        // Can't send if channel not ready or in-flight limit reached
+        if (!selector.isChannelReady(nodeId) || !inFlightRequests.canSendMore(nodeId)) {
+            return;
+        }
+
+        // State machine progression
+        switch (configPushState) {
+            case NOT_STARTED:
+                initiateGetConfigSubscription(nodeId, now);
+                configPushState = ConfigPushState.SUBSCRIPTION_IN_PROGRESS;
+                break;
+
+            case SUBSCRIPTION_IN_PROGRESS:
+                // Waiting for response, nothing to do
+                break;
+
+            case PUSH_IN_PROGRESS:
+                // Waiting for response, nothing to do
+                break;
+
+            default:
+                // Terminal states, shouldn't reach here
+                break;
+        }
+    }
+
+    /**
+     * Send GetConfigSubscription request to broker.
+     */
+    private void initiateGetConfigSubscription(String nodeId, long now) {
+        log.debug("Sending GetConfigSubscription to node {}", nodeId);
+
+        GetConfigSubscriptionRequestData requestData = new GetConfigSubscriptionRequestData()
+            .setClientInstanceId(clientInstanceId);  // ZERO_UUID on first call
+
+        GetConfigSubscriptionRequest.Builder builder =
+            new GetConfigSubscriptionRequest.Builder(requestData);
+
+        ClientRequest request = newClientRequest(nodeId, builder, now, true);
+        doSend(request, true, now);
+    }
+
+    /**
+     * Process GetConfigSubscription response.
+     * Stores subscription details and transitions to push phase if successful.
+     */
+    private void handleGetConfigSubscriptionResponse(
+            String nodeId,
+            GetConfigSubscriptionResponse response,
+            long now) {
+
+        Errors error = response.error();
+        if (error != Errors.NONE) {
+            log.warn("GetConfigSubscription request to {} failed with error: {}", nodeId, error);
+            configPushState = ConfigPushState.FAILED;
+            return;
+        }
+
+        GetConfigSubscriptionResponseData data = response.data();
+
+        // Store client instance ID if this was the first request
+        Uuid receivedInstanceId = data.clientInstanceId();
+        if (!receivedInstanceId.equals(Uuid.ZERO_UUID)) {
+            clientInstanceId = receivedInstanceId;
+            log.debug("Received client instance ID: {}", clientInstanceId);
+        }
+
+        // Store subscription details
+        configSubscriptionId = data.subscriptionId();
+        configMaxBytes = data.configMaxBytes();
+
+        // Extract requested keys
+        requestedConfigKeys = data.requestedKeys()
+            .stream()
+            .map(key -> key.name())
+            .collect(Collectors.toList());
+
+        log.debug("Config subscription received: subscriptionId={}, maxBytes={}, keys={}",
+            configSubscriptionId, configMaxBytes, requestedConfigKeys.size());
+
+        // Immediately initiate push
+        initiatePushConfig(nodeId, now);
+        configPushState = ConfigPushState.PUSH_IN_PROGRESS;
+    }
+
+    /**
+     * Collect client configuration and send PushConfig request.
+     */
+    private void initiatePushConfig(String nodeId, long now) {
+        log.debug("Collecting and pushing config to node {}", nodeId);
+
+        // Collect configs using ConfigCollector
+        List<PushConfigRequestData.ClientConfig> configs;
+        try {
+            configs = ConfigCollector.collectConfigs(
+                clientConfig,
+                requestedConfigKeys,
+                configMaxBytes
+            );
+        } catch (Exception e) {
+            log.error("Failed to collect configs for push", e);
+            configPushState = ConfigPushState.FAILED;
+            return;
+        }
+
+        // Build request
+        PushConfigRequestData requestData = new PushConfigRequestData()
+            .setClientInstanceId(clientInstanceId)
+            .setSubscriptionId(configSubscriptionId)
+            .setConfigs(configs);
+
+        PushConfigRequest.Builder builder = new PushConfigRequest.Builder(requestData);
+
+        ClientRequest request = newClientRequest(nodeId, builder, now, true);
+        doSend(request, true, now);
+    }
+
+    /**
+     * Process PushConfig response.
+     * Marks handshake as complete or handles retry scenarios.
+     */
+    private void handlePushConfigResponse(
+            String nodeId,
+            PushConfigResponse response,
+            long now) {
+
+        Errors error = response.error();
+
+        if (error == Errors.NONE) {
+            log.info("Configuration push to {} completed successfully", nodeId);
+            configPushState = ConfigPushState.COMPLETED;
+
+        } else if (error == Errors.UNKNOWN_CONFIG_SUBSCRIPTION_ID) {
+            log.warn("Subscription changed on {}, retrying GetConfigSubscription", nodeId);
+            // Reset to retry once
+            configPushState = ConfigPushState.NOT_STARTED;
+            configSubscriptionId = -1;
+            requestedConfigKeys.clear();
+
+        } else if (error == Errors.CONFIG_TOO_LARGE) {
+            log.error("Config payload too large for {}, cannot retry", nodeId);
+            configPushState = ConfigPushState.FAILED;
+
+        } else {
+            log.warn("PushConfig to {} failed with error: {}", nodeId, error);
+            configPushState = ConfigPushState.FAILED;
+        }
     }
 
     class TelemetrySender {

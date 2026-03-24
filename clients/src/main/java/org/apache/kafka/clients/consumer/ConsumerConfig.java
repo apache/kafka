@@ -390,6 +390,15 @@ public class ConsumerConfig extends AbstractConfig {
             " to align with batch boundaries for optimization.";
     public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
 
+    /**
+     * <code>enable.config.push</code>
+     */
+    public static final String ENABLE_CONFIG_PUSH_CONFIG = "enable.config.push";
+    private static final String ENABLE_CONFIG_PUSH_DOC =
+        "When set to 'true', the consumer will push its configuration to the broker " +
+        "for observability and troubleshooting. This is a best-effort operation and " +
+        "failures will not prevent the consumer from functioning normally.";
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -701,6 +710,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ShareAcquireMode.Validator(),
                                         Importance.MEDIUM,
                                         ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
+                                .define(ENABLE_CONFIG_PUSH_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        ENABLE_CONFIG_PUSH_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
