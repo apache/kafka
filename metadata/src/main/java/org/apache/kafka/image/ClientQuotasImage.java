@@ -186,11 +186,11 @@ public final class ClientQuotasImage {
         } else if (!typeMatch.isEmpty()) {
             // Case 2: no exact match, only type match exists
             for (String type : typeMatch) {
-                Map<ClientQuotaEntity, ClientQuotaImage> typeMatchesEntry = new HashMap<>(entitiesByType.getOrDefault(type, Map.of()));
+                Map<ClientQuotaEntity, ClientQuotaImage> matches = entitiesByType.getOrDefault(type, Map.of());
                 if (candidates == null) {
-                    candidates = typeMatchesEntry;
+                    candidates = new HashMap<>(matches);
                 } else {
-                    candidates.keySet().retainAll(typeMatchesEntry.keySet());
+                    candidates.keySet().retainAll(matches.keySet());
                 }
             }
         } else if (!strict) {
