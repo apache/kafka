@@ -269,7 +269,9 @@ public final class KafkaRaftClientFetchTest {
         FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE.code(), partitionData.errorCode());
         MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
-        // If we return 2 or more batches, invariant is to always return less than remoteMaxSizeBytes
+        // Return 2 or more batches, invariant is to return <= remoteBatchSizeBytes.
+        // If exact batch alignment with remoteBatchSizeBytes then two batches are returned.
+        // Alternatively return < remoteBatchSizeBytes
         assertTrue(
             records.sizeInBytes() < remoteMaxSizeBytes,
             String.format(
@@ -300,6 +302,80 @@ public final class KafkaRaftClientFetchTest {
             )
         );
         assertFalse(iterator.hasNext(), "Expected two batches to be fetched");
+    }
+
+    @Test
+    public void testFetchMaxBytesBatchesInvariants() throws Exception {
+        var epoch = 2;
+        var id = KafkaRaftClientTest.randomReplicaId();
+        var localKey = KafkaRaftClientTest.replicaKey(id, true);
+        var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
+        var localMaxSizeBytes = 1024;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            localKey.id(),
+            localKey.directoryId().get()
+        )
+            .appendToLog(epoch, List.of("a", "a", "a"))
+            .appendToLog(epoch, List.of("b", "b", "b"))
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
+                KRaftVersion.KRAFT_VERSION_1
+            )
+            .withUnknownLeader(epoch)
+            .withFetchMaxBytes(localMaxSizeBytes)
+            .build();
+
+        context.unattachedToLeader();
+        epoch = context.currentEpoch();
+
+        // Send initial request to get all available data.
+        FetchRequestData allRecordsRequest =
+            context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
+        allRecordsRequest.setMaxBytes(Integer.MAX_VALUE);
+        context.deliverRequest(allRecordsRequest);
+        context.pollUntilResponse();
+        MemoryRecords allRecords =
+            (MemoryRecords) FetchResponse.recordsOrFail(context.assertSentFetchPartitionResponse());
+
+        // Send another request to retrieve all data by setting exactSizeBytes
+        FetchRequestData exactSizeBytesRequest =
+            context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
+        exactSizeBytesRequest.setMaxBytes(allRecords.sizeInBytes());
+        context.deliverRequest(allRecordsRequest);
+        context.pollUntilResponse();
+
+        // All the records should be returned
+        FetchResponseData.PartitionData exactSizeBytesResponseData = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE.code(), exactSizeBytesResponseData.errorCode());
+        MemoryRecords exactSizeBytesRecords = (MemoryRecords) FetchResponse.recordsOrFail(exactSizeBytesResponseData);
+
+        // We expect to return the same number of total bytes in both requests.
+        assertEquals(allRecords.sizeInBytes(), exactSizeBytesRecords.sizeInBytes());
+
+        var allIterator = allRecords.records().iterator();
+        var exactIterator = exactSizeBytesRecords.records().iterator();
+        while (exactIterator.hasNext() && allIterator.hasNext()) {
+            var r1 = exactIterator.next();
+            var r2 = allIterator.next();
+            assertEquals(r1, r2);
+        }
+        assertFalse(exactIterator.hasNext());
+        assertFalse(allIterator.hasNext());
+
+        // Here we sent a fetch with sizeInBytes-1, this will end up returning a single batch
+        // The other batch is omitted.
+        FetchRequestData oneBatchRequest =
+            context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
+        oneBatchRequest.setMaxBytes(exactSizeBytesRecords.sizeInBytes() - 1);
+        context.deliverRequest(oneBatchRequest);
+        context.pollUntilResponse();
+        MemoryRecords oneBatchRecords =
+            (MemoryRecords) FetchResponse.recordsOrFail(context.assertSentFetchPartitionResponse());
+        assertTrue(oneBatchRecords.sizeInBytes() < exactSizeBytesRecords.sizeInBytes());
+        var oneBatchBatches = oneBatchRecords.batchIterator();
+        oneBatchBatches.next();
+        assertFalse(oneBatchBatches.hasNext(), "Expected 1 batch to be fetched");
     }
 
     @Test
