@@ -156,9 +156,9 @@ class TransactionLogTest {
 
     @Test
     void shouldNotPersistProducerIdsAtVersion0() {
-        // At version 0, tagged fields are not supported. The version guard in
-        // valueToBytes skips setting previousProducerId/nextProducerId, so they
-        // default to NO_PRODUCER_ID on deserialization.
+        // At version 0, tagged fields are omitted during serialization by
+        // MessageUtil, so previousProducerId/nextProducerId default to
+        // NO_PRODUCER_ID on deserialization.
         var txnTransitMetadata = new TxnTransitMetadata(
             200L,       // producerId
             100L,       // prevProducerId — will NOT be persisted at v0

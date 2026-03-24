@@ -93,12 +93,9 @@ public class TransactionLog {
                         .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
                         .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
                         .setTransactionPartitions(transactionPartitions)
-                        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
-
-        if (logValueVersion >= 1) {
-            value.setPreviousProducerId(txnMetadata.prevProducerId());
-            value.setNextProducerId(txnMetadata.nextProducerId());
-        }
+                        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel())
+                        .setPreviousProducerId(txnMetadata.prevProducerId())
+                        .setNextProducerId(txnMetadata.nextProducerId());
 
         return MessageUtil.toVersionPrefixedBytes(logValueVersion, value);
     }
