@@ -124,7 +124,7 @@ public class ConsumerMembershipManagerTest {
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
         time = new MockTime(0);
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class)));
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
@@ -269,6 +269,72 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+    }
+
+    @Test
+    public void testTransitionToFencedMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToFenced();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
+    public void testTransitionToFatalMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToFatal();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
+    public void testTransitionToStaleMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        // First transition to LEAVING (required before transitioning to STALE)
+        membershipManager.transitionToSendingLeaveGroup(true);
+        clearInvocations(subscriptionState, backgroundEventHandler);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToStale();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
     }
 
     @Test
@@ -2841,7 +2907,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
-        clearInvocations(subscriptionState, membershipManager, commitRequestManager);
+        clearInvocations(subscriptionState, membershipManager, commitRequestManager, backgroundEventHandler);
         return membershipManager;
     }
 

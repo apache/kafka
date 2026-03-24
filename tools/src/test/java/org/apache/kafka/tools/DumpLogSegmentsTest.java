@@ -28,6 +28,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
@@ -85,7 +86,6 @@ import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
-import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -1486,8 +1486,8 @@ public class DumpLogSegmentsTest {
     public void testDumpTxnIndex() throws Exception {
         File txnIndexFile = new File(logDir, segmentName + ".txnindex");
         try (TransactionIndex index = new TransactionIndex(0L, txnIndexFile)) {
-            index.append(new AbortedTxn(1L, 0, 10, 11));
-            index.append(new AbortedTxn(2L, 15, 25, 26));
+            index.append(new AbortedTxn().setProducerId(1L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11));
+            index.append(new AbortedTxn().setProducerId(2L).setFirstOffset(15).setLastOffset(25).setLastStableOffset(26));
             index.flush();
         }
 

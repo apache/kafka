@@ -22,9 +22,9 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
 
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.rawValue;
-import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.timestamp;
+import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
+import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
 /**
  * Change-logging wrapper for a timestamped key-value bytes store whose values also carry headers.
@@ -50,7 +50,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
         wrapped().put(key, valueTimestampHeaders);
         log(
             key,
-            rawValue(valueTimestampHeaders),
+            rawPlainValue(valueTimestampHeaders),
             valueTimestampHeaders == null
                 ? internalContext.recordContext().timestamp()
                 : timestamp(valueTimestampHeaders),
@@ -68,7 +68,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
             // then it was absent
             log(
                 key,
-                rawValue(valueTimestampHeaders),
+                rawPlainValue(valueTimestampHeaders),
                 valueTimestampHeaders == null
                     ? internalContext.recordContext().timestamp()
                     : timestamp(valueTimestampHeaders),
@@ -87,7 +87,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
             final byte[] valueTimestampHeaders = entry.value;
             log(
                 entry.key,
-                rawValue(valueTimestampHeaders),
+                rawPlainValue(valueTimestampHeaders),
                 valueTimestampHeaders == null
                     ? internalContext.recordContext().timestamp()
                     : timestamp(valueTimestampHeaders),

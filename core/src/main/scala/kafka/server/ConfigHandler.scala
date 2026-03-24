@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.server.log.remote.TopicPartitionLog
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
