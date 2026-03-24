@@ -350,8 +350,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return segments.allSegments(false);
     }
 
-
-
     // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
         synchronized (position) {
