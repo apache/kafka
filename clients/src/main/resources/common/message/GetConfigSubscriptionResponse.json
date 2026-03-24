@@ -5,13 +5,35 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The top-level error code."},
-    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+", "ignorable": true,
-      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota."},
-    { "name": "SubscriptionId", "type": "int32", "versions": "0+",
-      "about": "Unique identifier for the current subscription set for this client instance."},
-    { "name": "ConfigNames", "type": "[]string", "versions": "0+",
-      "about": "The client configuration names the server wants the client to send."}
+    {
+      "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled."
+    },
+    {
+      "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The error code, or 0 if there was no error."
+    },
+    {
+      "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
+      "about": "Assigned client instance id if request ClientInstanceId was all zeros, else echoes request value."
+    },
+    {
+      "name": "SubscriptionId", "type": "int32", "versions": "0+",
+      "about": "Unique identifier for the current config subscription."
+    },
+    {
+      "name": "ConfigMaxBytes", "type": "int32", "versions": "0+",
+      "about": "The maximum bytes of config data the broker accepts in PushConfigRequest."
+    },
+    {
+      "name": "RequestedKeys", "type": "[]ConfigKey", "versions": "0+",
+      "about": "The config keys the broker wants to receive.",
+      "fields": [
+        {
+          "name": "Name", "type": "string", "versions": "0+",
+          "about": "The config key name. May be '*' for all keys."
+        }
+      ]
+    }
   ]
 }

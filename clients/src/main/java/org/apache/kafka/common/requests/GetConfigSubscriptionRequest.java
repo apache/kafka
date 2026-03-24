@@ -16,27 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.GetConfigSubscriptionRequestData;
 import org.apache.kafka.common.message.GetConfigSubscriptionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.utils.AppInfoParser;
 
 public class GetConfigSubscriptionRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<GetConfigSubscriptionRequest> {
-        private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
-        private static final String DEFAULT_CLIENT_SOFTWARE_ROLE_CONSUMER = "consumer";
-
-        public static GetConfigSubscriptionRequest.Builder forConsumer(short maxVersion) {
-            GetConfigSubscriptionRequestData requestData = new GetConfigSubscriptionRequestData()
-                .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
-                .setClientSoftwareVersion(AppInfoParser.getVersion())
-                .setClientSoftwareRole(DEFAULT_CLIENT_SOFTWARE_ROLE_CONSUMER);
-            return new GetConfigSubscriptionRequest.Builder(requestData);
-        }
-
         private final GetConfigSubscriptionRequestData data;
 
         public Builder(GetConfigSubscriptionRequestData data) {
@@ -70,7 +59,10 @@ public class GetConfigSubscriptionRequest extends AbstractRequest {
     public GetConfigSubscriptionResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         GetConfigSubscriptionResponseData responseData = new GetConfigSubscriptionResponseData()
             .setErrorCode(Errors.forException(e).code())
-            .setThrottleTimeMs(throttleTimeMs);
+            .setThrottleTimeMs(throttleTimeMs)
+            .setClientInstanceId(Uuid.ZERO_UUID)
+            .setSubscriptionId(-1)
+            .setConfigMaxBytes(0);
         return new GetConfigSubscriptionResponse(responseData);
     }
 

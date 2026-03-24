@@ -6,37 +6,12 @@
   "flexibleVersions": "0+",
   "fields": [
     {
-      "name": "ThrottleTimeMs",
-      "type": "int32",
-      "versions": "0+",
-      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota."
+      "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled."
     },
     {
-      "name": "ErrorCode",
-      "type": "int16",
-      "versions": "0+",
+      "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error."
-    },
-    {
-      "name": "ConfigErrors",
-      "type": "[]ConfigError",
-      "versions": "0+",
-      "ignorable": false,
-      "about": "The client configuration enforcement errors.",
-      "fields": [
-        {
-          "name": "ConfigKey",
-          "type": "string",
-          "versions": "0+",
-          "about": "The configuration key."
-        },
-        {
-          "name": "ConfigErrorDescription",
-          "type": "string",
-          "versions": "0+",
-          "about": "Human-readable description of the validation/enforcement error."
-        }
-      ]
     }
   ]
 }

@@ -418,7 +418,9 @@ public enum Errors {
     STREAMS_INVALID_TOPOLOGY(130, "The supplied topology is invalid.", StreamsInvalidTopologyException::new),
     STREAMS_INVALID_TOPOLOGY_EPOCH(131, "The supplied topology epoch is invalid.", StreamsInvalidTopologyEpochException::new),
     STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new),
-    SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new);
+    SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new),
+    CONFIG_TOO_LARGE(134, "Configuration payload exceeds broker's ConfigMaxBytes limit.", ConfigTooLargeException::new),
+    UNKNOWN_CONFIG_SUBSCRIPTION_ID(135, "Unknown or expired config subscription ID.", UnknownConfigSubscriptionIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
