@@ -330,4 +330,12 @@ public class CommonClientConfigs {
         telemetryReporter.configure(config.originals(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
         return Optional.of(telemetryReporter);
     }
+
+    public static Optional<ClientConfigsSender> configsSender(AbstractConfig config) {
+        if (!config.getBoolean(CommonClientConfigs.ENABLE_CONFIGS_PUSH_CONFIG)) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new DefaultClientConfigsSender(config));
+    }
 }

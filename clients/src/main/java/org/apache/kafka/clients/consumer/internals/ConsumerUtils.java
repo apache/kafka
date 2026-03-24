@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientConfigsSender;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -87,7 +88,8 @@ public final class ConsumerUtils {
                                                                     Metadata metadata,
                                                                     Sensor throttleTimeSensor,
                                                                     long retryBackoffMs,
-                                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                                    ClientTelemetrySender clientTelemetrySender,
+                                                                    ClientConfigsSender clientConfigsSender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
@@ -98,7 +100,7 @@ public final class ConsumerUtils {
                 metadata,
                 throttleTimeSensor,
                 clientTelemetrySender,
-                null);
+                clientConfigsSender);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);

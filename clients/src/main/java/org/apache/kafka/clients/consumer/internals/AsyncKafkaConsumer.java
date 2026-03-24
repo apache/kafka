@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientConfigsSender;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -324,6 +325,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
+    private Optional<ClientConfigsSender> clientConfigsSender = Optional.empty();
 
     private final PositionsValidator positionsValidator;
     private AsyncPollEvent inflightPoll;
@@ -399,6 +401,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
+            this.clientConfigsSender = CommonClientConfigs.configsSender(config);
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_METRIC_GROUP);
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics);
@@ -439,6 +442,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metrics,
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
+                    clientConfigsSender.orElse(null),
                     backgroundEventHandler,
                     false,
                     asyncConsumerMetrics
