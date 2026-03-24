@@ -1091,9 +1091,9 @@ public class MockLogTest {
 
     @Test
     public void testMockLogReadExtremelyLargeMultiBatch() {
-        int numberOfRecords = 1000;
-        appendBatch(numberOfRecords, 5);
-        appendBatch(numberOfRecords, 5);
+        int recordsPerBatch = 1000;
+        appendBatch(recordsPerBatch, 5);
+        appendBatch(recordsPerBatch, 5);
         // The MockLog is able to read a large internal batch
         Records records = log.read(
             0,
@@ -1106,14 +1106,14 @@ public class MockLogTest {
             recordCount++;
             iterator.next();
         }
-        assertEquals(numberOfRecords * 2, recordCount);
+        assertEquals(recordsPerBatch * 2, recordCount);
     }
 
     @Test
     public void testMockLogReadExtremelyLargeSingleBatch() {
-        int numberOfRecords = 1000;
-        appendBatch(numberOfRecords, 5);
-        appendBatch(numberOfRecords, 5);
+        int recordsPerBatch = 1000;
+        appendBatch(recordsPerBatch, 5);
+        appendBatch(recordsPerBatch, 5);
         // The MockLog is able to read a large internal batch
         Records records = log.read(
             0,
@@ -1126,7 +1126,7 @@ public class MockLogTest {
             recordCount++;
             iterator.next();
         }
-        assertEquals(numberOfRecords, recordCount * 2);
+        assertEquals(recordsPerBatch, recordCount);
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
