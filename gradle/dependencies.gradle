@@ -118,7 +118,7 @@ versions += [
   lz4: "1.10.2",
   mavenArtifact: "3.9.11",
   metrics: "2.2.0",
-  mockito: "5.20.0",
+  mockito: "5.23.0",
   opentelemetryProto: "1.3.2-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.2",
