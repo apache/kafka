@@ -484,7 +484,8 @@ public class NetworkClientDelegate implements AutoCloseable {
                         CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                         metadata,
                         throttleTimeSensor,
-                        clientTelemetrySender);
+                        clientTelemetrySender,
+                        null);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };

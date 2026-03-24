@@ -263,6 +263,12 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ENABLE_METRICS_PUSH_DOC = CommonClientConfigs.ENABLE_METRICS_PUSH_DOC;
 
     /**
+     * <code>enable.configs.push</code>
+     */
+    public static final String ENABLE_CONFIGS_PUSH_CONFIG = CommonClientConfigs.ENABLE_CONFIGS_PUSH_CONFIG;
+    public static final String ENABLE_CONFIGS_PUSH_DOC = CommonClientConfigs.ENABLE_CONFIGS_PUSH_DOC;
+
+    /**
      * <code>retry.backoff.max.ms</code>
      */
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
@@ -389,15 +395,6 @@ public class ConsumerConfig extends AbstractConfig {
             " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
             " to align with batch boundaries for optimization.";
     public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
-
-    /**
-     * <code>enable.config.push</code>
-     */
-    public static final String ENABLE_CONFIG_PUSH_CONFIG = "enable.config.push";
-    private static final String ENABLE_CONFIG_PUSH_DOC =
-        "When set to 'true', the consumer will push its configuration to the broker " +
-        "for observability and troubleshooting. This is a best-effort operation and " +
-        "failures will not prevent the consumer from functioning normally.";
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
@@ -710,11 +707,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ShareAcquireMode.Validator(),
                                         Importance.MEDIUM,
                                         ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
-                                .define(ENABLE_CONFIG_PUSH_CONFIG,
+                                .define(ENABLE_CONFIGS_PUSH_CONFIG,
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW,
-                                        ENABLE_CONFIG_PUSH_DOC)
+                                        ENABLE_CONFIGS_PUSH_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),

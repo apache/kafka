@@ -97,7 +97,8 @@ public final class ConsumerUtils {
                 CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                 metadata,
                 throttleTimeSensor,
-                clientTelemetrySender);
+                clientTelemetrySender,
+                null);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);

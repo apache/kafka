@@ -111,6 +111,9 @@ public class CommonClientConfigs {
     public static final String ENABLE_METRICS_PUSH_CONFIG = "enable.metrics.push";
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of client metrics to the cluster, if the cluster has a client metrics subscription which matches this client.";
 
+    public static final String ENABLE_CONFIGS_PUSH_CONFIG = "enable.configs.push";
+    public static final String ENABLE_CONFIGS_PUSH_DOC = "When set to 'true', the consumer will push its configuration to the broker for observability and troubleshooting.";
+
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
 

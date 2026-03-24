@@ -159,7 +159,8 @@ public final class ClientUtils {
                                                     int maxInFlightRequestsPerConnection,
                                                     Metadata metadata,
                                                     Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                    ClientTelemetrySender clientTelemetrySender,
+                                                    ClientConfigsSender clientConfigsSender) {
         return createNetworkClient(config,
                 config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
                 metrics,
@@ -173,7 +174,8 @@ public final class ClientUtils {
                 null,
                 new DefaultHostResolver(),
                 throttleTimeSensor,
-                clientTelemetrySender);
+                clientTelemetrySender,
+                clientConfigsSender);
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
@@ -200,6 +202,7 @@ public final class ClientUtils {
                 metadataUpdater,
                 hostResolver,
                 null,
+                null,
                 null);
     }
 
@@ -216,7 +219,8 @@ public final class ClientUtils {
                                                     MetadataUpdater metadataUpdater,
                                                     HostResolver hostResolver,
                                                     Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                    ClientTelemetrySender clientTelemetrySender,
+                                                    ClientConfigsSender clientConfigsSender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
 
@@ -247,10 +251,9 @@ public final class ClientUtils {
                     logContext,
                     hostResolver,
                     clientTelemetrySender,
+                    clientConfigsSender,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
-                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                    false,
-                    null
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
         } catch (Throwable t) {
             closeQuietly(selector, "Selector");
