@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
@@ -540,7 +541,9 @@ public class LocalLog {
         List<FetchResponseData.AbortedTransaction> abortedTransactions = new ArrayList<>();
         Consumer<List<AbortedTxn>> accumulator = abortedTxns -> {
             for (AbortedTxn abortedTxn : abortedTxns)
-                abortedTransactions.add(abortedTxn.asAbortedTransaction());
+                abortedTransactions.add(new FetchResponseData.AbortedTransaction()
+                    .setProducerId(abortedTxn.producerId())
+                    .setFirstOffset(abortedTxn.firstOffset()));
         };
         collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator);
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
