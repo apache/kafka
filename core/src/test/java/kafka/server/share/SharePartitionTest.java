@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -228,7 +229,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -279,7 +280,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -340,7 +341,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
@@ -395,7 +396,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -442,7 +443,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -488,7 +489,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -542,7 +543,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -7153,7 +7154,7 @@ public class SharePartitionTest {
         Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(expectedDurationMs);
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager).build();
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager)).build();
 
         AcquisitionLockTimerTask timerTask = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
@@ -7175,7 +7176,7 @@ public class SharePartitionTest {
             .thenReturn(expectedDurationMs2);
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager).build();
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager)).build();
 
         AcquisitionLockTimerTask timerTask1 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
@@ -10389,7 +10390,7 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewDisabled())
+            .withConfigProvider(configProviderWithRenewDisabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
@@ -10423,7 +10424,7 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewDisabled())
+            .withConfigProvider(configProviderWithRenewDisabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
@@ -12328,7 +12329,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(5)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12343,7 +12344,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(5)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12359,7 +12360,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(10)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12398,7 +12399,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(2)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12436,7 +12437,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxInflightRecords(2000)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12451,7 +12452,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxInflightRecords(2000)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12465,7 +12466,7 @@ public class SharePartitionTest {
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12495,7 +12496,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxInflightRecords(10)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12525,7 +12526,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxInflightRecords(50)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12560,7 +12561,7 @@ public class SharePartitionTest {
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12579,7 +12580,7 @@ public class SharePartitionTest {
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12601,15 +12602,13 @@ public class SharePartitionTest {
         assertFalse(sharePartition.cachedState().isEmpty());
     }
 
-    private static GroupConfigManager groupConfigManagerWithRenewDisabled() {
-        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
-        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
-        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
-        Mockito.when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(DEFAULT_MAX_IN_FLIGHT_RECORDS);
-        Mockito.when(groupConfig.shareDeliveryCountLimit()).thenReturn(DEFAULT_MAX_DELIVERY_COUNT);
-        return groupConfigManager;
+    private static ShareGroupConfigProvider configProviderWithRenewDisabled() {
+        ShareGroupConfigProvider configProvider = Mockito.mock(ShareGroupConfigProvider.class);
+        Mockito.when(configProvider.isRenewAcknowledgeEnabled(GROUP_ID)).thenReturn(false);
+        Mockito.when(configProvider.recordLockDurationMsOrDefault(GROUP_ID, ACQUISITION_LOCK_TIMEOUT_MS)).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
+        Mockito.when(configProvider.partitionMaxRecordLocksOrDefault(GROUP_ID, DEFAULT_MAX_IN_FLIGHT_RECORDS)).thenReturn(DEFAULT_MAX_IN_FLIGHT_RECORDS);
+        Mockito.when(configProvider.deliveryCountLimitOrDefault(GROUP_ID, DEFAULT_MAX_DELIVERY_COUNT)).thenReturn(DEFAULT_MAX_DELIVERY_COUNT);
+        return configProvider;
     }
 
     private static class SharePartitionBuilder {
@@ -12620,7 +12619,7 @@ public class SharePartitionTest {
 
         private Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
-        private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        private ShareGroupConfigProvider configProvider = new ShareGroupConfigProvider(Mockito.mock(GroupConfigManager.class));
         private SharePartitionState state = SharePartitionState.EMPTY;
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
@@ -12650,8 +12649,8 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withGroupConfigManager(GroupConfigManager groupConfigManager) {
-            this.groupConfigManager = groupConfigManager;
+        private SharePartitionBuilder withConfigProvider(ShareGroupConfigProvider configProvider) {
+            this.configProvider = configProvider;
             return this;
         }
 
@@ -12676,7 +12675,7 @@ public class SharePartitionTest {
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, defaultMaxInflightRecords, defaultMaxDeliveryCount,
-                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, groupConfigManager,
+                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, configProvider,
                     state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics);
         }
     }
