@@ -21,9 +21,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.metadata.SupportedConfigChecker;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -34,7 +31,6 @@ import java.util.Optional;
  * Represents changes to the configurations in the metadata image.
  */
 public final class ConfigurationDelta {
-    private static final Logger log = LoggerFactory.getLogger(ConfigurationDelta.class);
 
     private final ConfigurationImage image;
     private final Map<String, Optional<String>> changes = new HashMap<>();
@@ -58,7 +54,6 @@ public final class ConfigurationDelta {
         if (!supportedConfigChecker.isSupported(type, record.name())) {
             // We skip unsupported configs during replay. This can happen when the config was
             // deprecated and removed, but old records still exist in the log.
-            log.info("Skipping unsupported config {} for resource {} during replay", record.name(), type);
             return;
         }
         changes.put(record.name(), Optional.ofNullable(record.value()));
