@@ -301,10 +301,9 @@ public class MetadataQuorumCommand {
     }
 
     private record Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
-        private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
-            this.id = id;
-            this.directoryId = Objects.requireNonNull(directoryId);
-            this.endpoints = Objects.requireNonNull(endpoints);
+        private Node {
+            Objects.requireNonNull(directoryId);
+            Objects.requireNonNull(endpoints);
         }
 
         @Override
