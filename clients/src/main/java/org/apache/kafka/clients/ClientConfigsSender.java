@@ -1,0 +1,108 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.clients;
+
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.GetConfigSubscriptionResponse;
+import org.apache.kafka.common.requests.PushConfigResponse;
+
+import java.util.Optional;
+
+/**
+ * Interface for managing the client configuration push handshake with brokers.
+ * <p>
+ * This is a one-time, best-effort operation performed during client initialization
+ * to push non-sensitive configuration to the broker for observability purposes.
+ * <p>
+ * The handshake consists of two steps:
+ * <ol>
+ *   <li>GetConfigSubscription - Broker tells client what configs it wants</li>
+ *   <li>PushConfig - Client sends the requested configs</li>
+ * </ol>
+ */
+public interface ClientConfigsSender extends AutoCloseable {
+
+    /**
+     * Returns true if the config push handshake needs to proceed.
+     * <p>
+     * Once the handshake is completed or fails, this should return false.
+     *
+     * @return true if handshake should continue, false if terminal state reached
+     */
+    boolean shouldAttemptHandshake();
+
+    /**
+     * Creates the next request in the handshake flow based on current state.
+     * <p>
+     * Returns GetConfigSubscriptionRequest if subscription is needed, or
+     * PushConfigRequest if ready to push configs.
+     *
+     * @return Optional containing the next request builder, or empty if no request needed
+     */
+    Optional<AbstractRequest.Builder<?>> createRequest();
+
+    /**
+     * Handle successful GetConfigSubscription response.
+     * <p>
+     * This extracts the subscription details (client instance ID, requested keys, max bytes)
+     * and prepares for the PushConfig step.
+     *
+     * @param response the subscription response from broker
+     */
+    void handleResponse(GetConfigSubscriptionResponse response);
+
+    /**
+     * Handle successful PushConfig response.
+     * <p>
+     * This completes the handshake or handles errors like UNKNOWN_CONFIG_SUBSCRIPTION_ID.
+     *
+     * @param response the push config response from broker
+     */
+    void handleResponse(PushConfigResponse response);
+
+    /**
+     * Handle get configs subscription request failure.
+     *
+     * @param kafkaException the fatal exception.
+     */
+    void handleFailedGetConfigsSubscriptionRequest(KafkaException kafkaException);
+
+    /**
+     * Handle push configs request failure.
+     *
+     * @param kafkaException the fatal exception.
+     */
+    void handleFailedPushConfigsRequest(KafkaException kafkaException);
+
+    /**
+     * Handle disconnection during the handshake.
+     * <p>
+     * If a connection is lost during the handshake, mark it as failed.
+     */
+    void handleDisconnect();
+
+    /**
+     * Returns the client instance ID assigned by the broker.
+     * <p>
+     * This is initially ZERO_UUID and gets assigned during the GetConfigSubscription response.
+     *
+     * @return the client instance ID, or ZERO_UUID if not yet assigned
+     */
+    Uuid clientInstanceId();
+}
