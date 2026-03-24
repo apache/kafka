@@ -14,9 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.utils.internals;
 
-import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Utils;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -422,7 +425,7 @@ public class ByteUtilsTest {
         ByteBuffer buf = ByteBuffer.allocate(MAX_LENGTH_VARINT);
         ByteUtils.writeUnsignedVarint(value, buf);
         buf.flip();
-        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        Assertions.assertArrayEquals(expectedEncoding, Utils.toArray(buf));
         assertEquals(value, ByteUtils.readUnsignedVarint(buf.duplicate()));
 
         buf.rewind();
