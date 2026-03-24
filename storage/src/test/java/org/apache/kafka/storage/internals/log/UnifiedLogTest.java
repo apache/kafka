@@ -4445,6 +4445,8 @@ public class UnifiedLogTest {
         log.appendAsFollower(MemoryRecords.readableRecords(buffer), epoch);
 
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                2, 1, TransactionVersion.TV_0.featureLevel());
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
             2, 1, TransactionVersion.TV_0.featureLevel());
         assertThrows(TransactionCoordinatorFencedException.class,
             () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
