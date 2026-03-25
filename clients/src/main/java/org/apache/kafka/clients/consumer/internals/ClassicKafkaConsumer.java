@@ -124,6 +124,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final Optional<String> groupId;
     private final ConsumerCoordinator coordinator;
     private final Deserializers<K, V> deserializers;
+    private final FetchMetricsManager fetchMetricsManager;
     private final Fetcher<K, V> fetcher;
     private final OffsetFetcher offsetFetcher;
     private final TopicMetadataFetcher topicMetadataFetcher;
@@ -188,7 +189,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     Arrays.asList(this.deserializers.keyDeserializer(), this.deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
 
-            FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
+            this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
             this.isolationLevel = fetchConfig.isolationLevel;
 
@@ -358,7 +359,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         boolean checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics();
-        FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        this.fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
         ApiVersions apiVersions = new ApiVersions();
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
@@ -377,7 +378,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             subscriptions,
             fetchConfig,
             deserializers,
-            metricsManager,
+            fetchMetricsManager,
             time,
             apiVersions
         );
@@ -1157,6 +1158,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
+        closeQuietly(fetchMetricsManager, "kafka fetch metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(client, "consumer network client", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);

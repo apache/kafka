@@ -43,6 +43,7 @@ import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.HostedPartition
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}

@@ -16,18 +16,26 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
-import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * RocksDB store backed by two SegmentedBytesStores which can optimize scan by time as well as window
@@ -59,9 +67,11 @@ import java.util.Optional;
  * @see RocksDBTimeOrderedWindowSegmentedBytesStore
  */
 public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Segment> extends AbstractDualSchemaRocksDBSegmentedBytesStore<S> {
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractDualSchemaRocksDBSegmentedBytesStore.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBTimeOrderedSegmentedBytesStore.class);
 
-    abstract class IndexToBaseStoreIterator implements KeyValueIterator<Bytes, byte[]> {
+    private long minTimestamp;
+
+    public abstract class IndexToBaseStoreIterator implements KeyValueIterator<Bytes, byte[]> {
         private final KeyValueIterator<Bytes, byte[]> indexIterator;
         private byte[] cachedValue;
 
@@ -115,32 +125,64 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
         protected abstract Bytes getBaseKey(final Bytes indexKey);
     }
 
-    /**
-     * Concrete implementation of IndexToBaseStoreIterator for window key schema.
-     * Converts index keys (key-first schema) to base store keys (time-first schema).
-     * <p>
-     * This can be reused by both window store implementations (with and without headers).
-     */
-    class WindowKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
-        WindowKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
-            super(indexIterator);
-        }
-
-        @Override
-        protected Bytes getBaseKey(final Bytes indexKey) {
-            final byte[] keyBytes = KeyFirstWindowKeySchema.extractStoreKeyBytes(indexKey.get());
-            final long timestamp = KeyFirstWindowKeySchema.extractStoreTimestamp(indexKey.get());
-            final int seqnum = KeyFirstWindowKeySchema.extractStoreSequence(indexKey.get());
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(keyBytes, timestamp, seqnum);
-        }
-    }
-
     AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,
                                                   final long retention,
                                                   final KeySchema baseKeySchema,
                                                   final Optional<KeySchema> indexKeySchema,
                                                   final AbstractSegments<S> segments) {
         super(name, baseKeySchema, indexKeySchema, segments, retention);
+
+        minTimestamp = Long.MAX_VALUE;
+    }
+
+    Map<S, WriteBatch> getWriteBatches(
+        final Collection<ConsumerRecord<byte[], byte[]>> records,
+        final Function<byte[], Long> timestampExtractor,
+        final Function<byte[], byte[]> indexedKeyExtractor,
+        final Function<byte[], byte[]> baseKeyExtractor
+    ) {
+        // advance stream time to the max timestamp in the batch
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long timestamp = timestampExtractor.apply(record.key());
+            minTimestamp = Math.min(minTimestamp, timestamp);
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+        }
+
+        final Map<S, WriteBatch> writeBatchMap = new HashMap<>();
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long timestamp = timestampExtractor.apply(record.key());
+            final long segmentId = segments.segmentId(timestamp);
+            final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
+            if (segment != null) {
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                    record,
+                    consistencyEnabled,
+                    position
+                );
+                try {
+                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
+
+                    // Assuming changelog record is serialized using SessionKeySchema
+                    // from ChangeLoggingSessionBytesStore. Reconstruct key/value to restore
+                    if (hasIndex()) {
+                        final byte[] indexKey = indexedKeyExtractor.apply(record.key());
+                        // Take care of tombstone
+                        final byte[] value = record.value() == null ? null : new byte[0];
+                        segment.addToBatch(new KeyValue<>(indexKey, value), batch);
+                    }
+
+                    final byte[] baseKey = baseKeyExtractor.apply(record.key());
+                    segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
+                } catch (final RocksDBException e) {
+                    throw new ProcessorStateException("Error restoring batch to store " + name(), e);
+                }
+            }
+        }
+        return writeBatchMap;
+    }
+
+    protected long minTimestamp() {
+        return minTimestamp;
     }
 
     @Override
@@ -165,6 +207,22 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
 
     public byte[] fetch(final Bytes key, final long timestamp, final int seqnum) {
         throw new UnsupportedOperationException("This store does not support fetch with timestamp and seqnum");
+    }
+
+    public byte[] fetchSession(final Bytes key, final long sessionStartTime, final long sessionEndTime) {
+        throw new UnsupportedOperationException("This store does not support fetchSession");
+    }
+
+    public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime, final long latestSessionEndTime) {
+        throw new UnsupportedOperationException("This store does not support fetchSessions");
+    }
+
+    public void remove(final Windowed<Bytes> key) {
+        throw new UnsupportedOperationException("This store does not support remove with Windowed key");
+    }
+
+    public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+        throw new UnsupportedOperationException("This store does not support put with Windowed key");
     }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,

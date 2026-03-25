@@ -332,6 +332,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
     private final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata = new AtomicReference<>(Optional.empty());
+    private final FetchMetricsManager fetchMetricsManager;
+    private final RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
@@ -459,7 +461,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
 
-            FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
+            this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
             this.isolationLevel = fetchConfig.isolationLevel;
 
@@ -522,11 +524,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     requestManagersSupplier,
                     asyncConsumerMetrics
             );
+            this.rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics);
             this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
                     subscriptions,
                     time,
-                    new RebalanceCallbackMetricsManager(metrics)
+                    rebalanceCallbackMetricsManager
             );
             this.streamsRebalanceListenerInvoker = streamsRebalanceData.map(s ->
                 new StreamsRebalanceListenerInvoker(logContext, s));
@@ -566,6 +569,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        Deserializers<K, V> deserializers,
                        FetchBuffer fetchBuffer,
                        FetchCollector<K, V> fetchCollector,
+                       FetchMetricsManager fetchMetricsManager,
+                       RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager,
                        ConsumerInterceptors<K, V> interceptors,
                        Time time,
                        ApplicationEventHandler applicationEventHandler,
@@ -586,6 +591,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.clientId = clientId;
         this.fetchBuffer = fetchBuffer;
         this.fetchCollector = fetchCollector;
+        this.fetchMetricsManager = fetchMetricsManager;
+        this.rebalanceCallbackMetricsManager = rebalanceCallbackMetricsManager;
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
@@ -640,7 +647,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.clientTelemetryReporter = Optional.empty();
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics();
-        FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        this.fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
         this.fetchCollector = new FetchCollector<>(logContext,
                 metadata,
                 subscriptions,
@@ -665,11 +672,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             asyncConsumerMetrics
         );
+        this.rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics);
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics)
+            rebalanceCallbackMetricsManager
         );
         ApiVersions apiVersions = new ApiVersions();
         this.positionsValidator = new PositionsValidator(logContext, time, subscriptions, metadata);
@@ -1615,6 +1623,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(asyncConsumerMetrics, "async consumer metrics", firstException);
+        closeQuietly(fetchMetricsManager, "consumer fetch metrics", firstException);
+        closeQuietly(rebalanceCallbackMetricsManager, "consumer rebalance callback metrics");
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
         clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "async consumer telemetry reporter", firstException));
@@ -1811,7 +1821,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * Get the current subscription.  or an empty set if no such call has
+     * Get the current subscription, or an empty set if no such call has
      * been made.
      * @return The set of topics currently subscribed to
      */
@@ -1819,7 +1829,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public Set<String> subscription() {
         acquireAndEnsureOpen();
         try {
-            return Collections.unmodifiableSet(subscriptions.subscription());
+            return Set.copyOf(subscriptions.subscription());
         } finally {
             release();
         }

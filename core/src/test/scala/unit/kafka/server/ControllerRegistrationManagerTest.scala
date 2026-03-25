@@ -30,6 +30,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, LeaderAndEpoch, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.controller.ControllerRegistrationManager
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -71,7 +72,6 @@ class ControllerRegistrationManagerTest {
     context: RegistrationTestContext,
   ): ControllerRegistrationManager = {
     new ControllerRegistrationManager(context.config.nodeId,
-      context.clusterId,
       context.time,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),

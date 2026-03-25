@@ -71,11 +71,13 @@ public class MeteredVersionedKeyValueStore<K, V>
 
     private final MeteredVersionedKeyValueStoreInternal internal;
 
-    MeteredVersionedKeyValueStore(final VersionedBytesStore inner,
-                                  final String metricScope,
-                                  final Time time,
-                                  final Serde<K> keySerde,
-                                  final Serde<V> valueSerde) {
+    MeteredVersionedKeyValueStore(
+        final VersionedBytesStore inner,
+        final String metricScope,
+        final Time time,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde
+    ) {
         super(inner);
         internal = new MeteredVersionedKeyValueStoreInternal(inner, metricScope, time, keySerde, valueSerde);
     }
@@ -95,14 +97,13 @@ public class MeteredVersionedKeyValueStore<K, V>
      * Note that the addition of {@link #get(Object, long)} and {@link #delete(Object, long)} in
      * this class are to match the interface of {@link VersionedKeyValueStore}.
      */
-    private class MeteredVersionedKeyValueStoreInternal
-        extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
+    private class MeteredVersionedKeyValueStoreInternal extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
         private final Serde<V> plainValueSerde;
         private StateSerdes<K, V> plainValueSerdes;
 
-        private final Map<Class<?>, QueryHandler> queryHandlers =
+        private final Map<Class<?>, QueryHandler<?>> queryHandlers =
             mkMap(
                 mkEntry(
                     RangeQuery.class,
@@ -122,11 +123,13 @@ public class MeteredVersionedKeyValueStore<K, V>
                 )
             );
 
-        MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
-                                              final String metricScope,
-                                              final Time time,
-                                              final Serde<K> keySerde,
-                                              final Serde<V> valueSerde) {
+        MeteredVersionedKeyValueStoreInternal(
+            final VersionedBytesStore inner,
+            final String metricScope,
+            final Time time,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde
+        ) {
             super(
                 inner,
                 metricScope,
@@ -182,56 +185,62 @@ public class MeteredVersionedKeyValueStore<K, V>
 
         @SuppressWarnings("unchecked")
         @Override
-        public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
-
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             final long start = time.nanoseconds();
             final QueryResult<R> result;
 
-            final QueryHandler handler = queryHandlers.get(query.getClass());
+            final QueryHandler<?> handler = queryHandlers.get(query.getClass());
             if (handler == null) {
                 result = wrapped().query(query, positionBound, config);
                 if (config.isCollectExecutionInfo()) {
-                    result.addExecutionInfo(
-                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                    result.addExecutionInfo("Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
                 }
             } else {
-                result = (QueryResult<R>) handler.apply(
+                result = ((QueryHandler<R>) handler).apply(
                     query,
                     positionBound,
                     config,
                     this
                 );
                 if (config.isCollectExecutionInfo()) {
-                    result.addExecutionInfo(
-                        "Handled in " + getClass() + " with serdes "
-                            + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                    result.addExecutionInfo("Handled in " + getClass() + " with serdes " + serdes + " in " + (time.nanoseconds() - start) + "ns");
                 }
             }
             return result;
         }
 
         @SuppressWarnings("unused")
-        private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                                 final PositionBound positionBound,
-                                                 final QueryConfig config) {
+        private <R> QueryResult<R> runRangeQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
         @SuppressWarnings("unused")
-        private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                               final PositionBound positionBound,
-                                               final QueryConfig config) {
+        private <R> QueryResult<R> runKeyQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
         }
 
         @SuppressWarnings("unchecked")
-        private <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
-                                                          final PositionBound positionBound,
-                                                          final QueryConfig config) {
+        private <R> QueryResult<R> runVersionedKeyQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             final QueryResult<R> result;
             final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
             VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(serializeKey(typedKeyQuery.key()));
@@ -253,7 +262,11 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @SuppressWarnings("unchecked")
-        private <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+        private <R> QueryResult<R> runMultiVersionedKeyQuery(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
             final QueryResult<R> result;
             final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
 
@@ -273,16 +286,16 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
-                        new MeteredMultiVersionedKeyQueryIterator<>(
-                            rawResult.getResult(),
-                            iteratorDurationSensor,
-                            time,
-                            StoreQueryUtils.deserializeValue(plainValueSerdes),
-                            numOpenIterators,
-                            openIterators
-                        );
+                    new MeteredMultiVersionedKeyQueryIterator<>(
+                        rawResult.getResult(),
+                        iteratorDurationSensor,
+                        time,
+                        StoreQueryUtils.deserializeValue(plainValueSerdes),
+                        numOpenIterators,
+                        openIterators
+                    );
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
-                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
@@ -312,7 +325,13 @@ public class MeteredVersionedKeyValueStore<K, V>
             final String storeName = super.name();
             final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
             plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
-                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
+                context,
+                storeName,
+                changelogTopic,
+                keySerde,
+                plainValueSerde,
+                WrappingNullableUtils::prepareValueSerde
+            );
         }
     }
 

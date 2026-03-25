@@ -228,7 +228,6 @@ public class WindowStoreMaterializerTest {
 
     @Test
     public void shouldCreateHeadersStoreWithOnWindowCloseAndCachingEnabled() {
-        doReturn("headers").when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
         emitStrategy = EmitStrategy.onWindowClose();
 
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =

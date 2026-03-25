@@ -30,7 +30,8 @@ import org.apache.kafka.metadata.MockConfigRepository
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, UnifiedLog}
+import org.apache.kafka.common.message.AbortedTxn
+import org.apache.kafka.storage.internals.log.{CleanerConfig, EpochEntry, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
@@ -1281,7 +1282,7 @@ class LogLoaderTest {
     val reloadedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
-    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+    assertEquals(List(new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L), new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)), abortedTransactions)
   }
 
   @Test
@@ -1332,7 +1333,7 @@ class LogLoaderTest {
     val reloadedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
-    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+    assertEquals(List(new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L), new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)), abortedTransactions)
   }
 
   @Test
@@ -1386,7 +1387,7 @@ class LogLoaderTest {
     val reloadedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
-    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+    assertEquals(List(new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L), new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)), abortedTransactions)
   }
 
   @Test

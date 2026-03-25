@@ -57,6 +57,7 @@ import org.apache.kafka.clients.consumer.internals.events.TopicRe2JPatternSubscr
 import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
@@ -258,6 +259,8 @@ public class AsyncKafkaConsumerTest {
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
             fetchCollector,
+            mock(FetchMetricsManager.class),
+            mock(RebalanceCallbackMetricsManager.class),
             interceptors,
             time,
             applicationEventHandler,

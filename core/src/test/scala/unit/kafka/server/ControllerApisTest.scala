@@ -59,7 +59,7 @@ import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.ServerConfigs
-import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
