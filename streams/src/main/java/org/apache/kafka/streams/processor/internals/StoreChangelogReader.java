@@ -1050,14 +1050,14 @@ public class StoreChangelogReader implements ChangelogReader {
         if (!partitionsWithTimestampSeek.isEmpty()) {
             final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
                 restoreConsumer.offsetsForTimes(partitionsWithTimestampSeek);
-            for (final Map.Entry<TopicPartition, OffsetAndTimestamp> entry : offsetsByTimestamp.entrySet()) {
-                if (entry.getValue() != null) {
-                    restoreConsumer.seek(entry.getKey(), entry.getValue().offset());
+            offsetsByTimestamp.forEach((key, value) -> {
+                if (value != null) {
+                    restoreConsumer.seek(key, value.offset());
                 } else {
                     // no offset found for the timestamp, fall back to seeking to the beginning
-                    partitionsWithoutStartOffset.add(entry.getKey());
+                    partitionsWithoutStartOffset.add(key);
                 }
-            }
+            });
         }
 
         // optimization: batch all seek-to-beginning offsets in a single request

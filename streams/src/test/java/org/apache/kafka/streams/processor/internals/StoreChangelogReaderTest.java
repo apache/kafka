@@ -60,6 +60,7 @@ import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -1440,10 +1441,8 @@ public class StoreChangelogReaderTest {
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
-                final Map<TopicPartition, OffsetAndTimestamp> result = new java.util.HashMap<>();
-                for (final Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
-                    result.put(entry.getKey(), new OffsetAndTimestamp(offsetForTimestamp, entry.getValue()));
-                }
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
                 return result;
             }
         };
@@ -1472,8 +1471,7 @@ public class StoreChangelogReaderTest {
         reader.register(tp, windowStateManager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        // The consumer should be seeked to the offset returned by offsetsForTimes, not to the beginning
-        assertEquals(offsetForTimestamp, timestampConsumer.position(tp));
+        assertEquals(offsetForTimestamp, timestampConsumer.position(tp),"The consumer should be seeked to the offset returned by offsetsForTimes, not to the beginning");
     }
 
     @Test
@@ -1484,10 +1482,8 @@ public class StoreChangelogReaderTest {
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
-                final Map<TopicPartition, OffsetAndTimestamp> result = new java.util.HashMap<>();
-                for (final Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
-                    result.put(entry.getKey(), null);
-                }
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, null));
                 return result;
             }
         };
@@ -1515,8 +1511,7 @@ public class StoreChangelogReaderTest {
         reader.register(tp, windowStateManager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        // When broker returns null, should fall back to seeking to the beginning
-        assertEquals(0L, timestampConsumer.position(tp));
+        assertEquals(0L, timestampConsumer.position(tp),"When broker returns null, should fall back to seeking to the beginning");
     }
 
     @Test
@@ -1544,8 +1539,7 @@ public class StoreChangelogReaderTest {
         reader.register(tp, kvStateManager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        // Non-windowed store should seek to beginning, not by timestamp
-        assertEquals(0L, consumer.position(tp));
+        assertEquals(0L, consumer.position(tp),"Non-windowed store should seek to beginning, not by timestamp");
     }
 
     private void assignPartition(final long messages,
