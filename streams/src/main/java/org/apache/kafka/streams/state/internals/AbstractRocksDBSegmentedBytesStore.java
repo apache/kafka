@@ -75,6 +75,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.segments = segments;
     }
 
+    @Override
     public long retentionPeriod() {
         return retentionPeriod;
     }

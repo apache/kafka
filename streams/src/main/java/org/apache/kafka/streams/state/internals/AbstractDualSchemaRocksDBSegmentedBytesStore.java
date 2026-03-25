@@ -76,6 +76,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         this.retentionPeriod = retentionPeriod;
     }
 
+    @Override
     public long retentionPeriod() {
         return retentionPeriod;
     }

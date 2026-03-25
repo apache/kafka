@@ -91,7 +91,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private static Properties getStreamsProperties(final String optimization) {
         return mkProperties(mkMap(
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
+                mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization),
+                mkEntry(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY)
         ));
     }
 

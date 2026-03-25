@@ -95,6 +95,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         this.position = Position.emptyPosition();
     }
 
+    @Override
     public long retentionPeriod() {
         return retentionPeriod;
     }
