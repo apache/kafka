@@ -22,8 +22,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
-
 import javax.security.auth.callback.Callback;
 
 /**
@@ -86,13 +84,14 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
      * @return An immutable {@link Map} consisting of the extensions that have neither been validated nor invalidated
      */
     public Map<String, String> ignoredExtensions() {
-        return Collections.unmodifiableMap(subtractMap(subtractMap(inputExtensions.map(), invalidExtensions), validatedExtensions));
-    }
-
-    private static Map<String, String> subtractMap(Map<String, String> minuend, Map<String, String> subtrahend) {
-        return minuend.entrySet().stream()
-                .filter(entry -> !subtrahend.containsKey(entry.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, String> ignored = new HashMap<>();
+        for (Map.Entry<String, String> entry : inputExtensions.map().entrySet()) {
+            String key = entry.getKey();
+            if (!invalidExtensions.containsKey(key) && !validatedExtensions.containsKey(key)) {
+                ignored.put(key, entry.getValue());
+            }
+        }
+        return Collections.unmodifiableMap(ignored);
     }
 
     /**
