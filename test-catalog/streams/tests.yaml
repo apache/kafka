@@ -6724,6 +6724,7 @@ org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsTest:
 org.apache.kafka.streams.state.internals.metrics.StateStoreMetricsTest:
 - shouldAddNumKeysGauge
 - shouldGetAllSensor
+- shouldGetCommitSensor
 - shouldGetDeleteSensor
 - shouldGetFetchSensor
 - shouldGetFlushSensor
