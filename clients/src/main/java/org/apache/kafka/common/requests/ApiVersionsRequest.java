@@ -33,7 +33,8 @@ public class ApiVersionsRequest extends AbstractRequest {
 
         private static final ApiVersionsRequestData DEFAULT_DATA = new ApiVersionsRequestData()
             .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
-            .setClientSoftwareVersion(AppInfoParser.getVersion());
+            .setClientSoftwareVersion(AppInfoParser.getVersion())
+            .setClientSoftwareRole(null);
 
         private final ApiVersionsRequestData data;
 
@@ -54,6 +55,11 @@ public class ApiVersionsRequest extends AbstractRequest {
         ) {
             super(ApiKeys.API_VERSIONS, oldestAllowedVersion, latestAllowedVersion);
             this.data = data.duplicate();
+        }
+
+        public Builder withRole(String role) {
+            this.data.setClientSoftwareRole(role);
+            return this;
         }
 
         @Override
@@ -95,8 +101,17 @@ public class ApiVersionsRequest extends AbstractRequest {
 
     public boolean isValid() {
         if (version() >= 3) {
-            return SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareName()).matches() &&
-                SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareVersion()).matches();
+            boolean nameValid = SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareName()).matches();
+            boolean versionValid = SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareVersion()).matches();
+
+            if (version() >= 5) {
+                // For v5+, also validate role if present
+                String role = data.clientSoftwareRole();
+                boolean roleValid = role == null || role.isEmpty() ||
+                                  SOFTWARE_NAME_VERSION_PATTERN.matcher(role).matches();
+                return nameValid && versionValid && roleValid;
+            }
+            return nameValid && versionValid;
         } else {
             return true;
         }

@@ -100,7 +100,8 @@ public final class ConsumerUtils {
                 metadata,
                 throttleTimeSensor,
                 clientTelemetrySender,
-                clientConfigsSender);
+                clientConfigsSender,
+                "consumer");
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);

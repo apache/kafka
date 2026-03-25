@@ -68,7 +68,7 @@ public class ClientMetricsTestUtils {
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
-            new ClientInformation("apache-kafka-java", "3.5.2"),
+            new ClientInformation("apache-kafka-java", "3.5.2", null),
             false);
     }
 
@@ -94,7 +94,7 @@ public class ClientMetricsTestUtils {
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
-            new ClientInformation("apache-kafka-java", "3.5.2"),
+            new ClientInformation("apache-kafka-java", "3.5.2", null),
             false);
     }
 

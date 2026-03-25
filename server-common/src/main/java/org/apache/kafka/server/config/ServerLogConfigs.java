@@ -164,6 +164,15 @@ public class ServerLogConfigs {
             "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface. " +
             "<p>Note: This policy runs on the controller instead of the broker.</p>";
 
+    public static final String CLIENT_CONFIG_POLICY_CLASS_NAME_CONFIG = "client.config.policy.class.name";
+    public static final String CLIENT_CONFIG_POLICY_CLASS_NAME_DOC = "The client configuration policy class that should be used for validating client configurations. " +
+            "The class should implement the <code>org.apache.kafka.server.policy.ClientConfigPolicy</code> interface.";
+
+    public static final String CLIENT_CONFIG_MAX_BYTES_CONFIG = "client.config.max.bytes";
+    public static final int CLIENT_CONFIG_MAX_BYTES_DEFAULT = 10240; // 10KB
+    public static final String CLIENT_CONFIG_MAX_BYTES_DOC = "Maximum size in bytes for client configuration data in PushConfig requests. " +
+            "Requests exceeding this limit will be rejected with CONFIG_TOO_LARGE error.";
+
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;
     public static final String LOG_INITIAL_TASK_DELAY_MS_DOC = "The initial task delay in millisecond when initializing " +

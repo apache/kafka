@@ -128,7 +128,7 @@ class RequestConvertToJsonTest {
       new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user"),
       ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT,
-      new ClientInformation("name", "version"),
+      new ClientInformation("name", "version", null),
       false)
   }
 }

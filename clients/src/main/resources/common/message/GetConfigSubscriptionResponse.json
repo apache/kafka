@@ -41,7 +41,7 @@
       "about": "The maximum bytes of config data the broker accepts in PushConfigRequest."
     },
     {
-      "name": "RequestedKeys", "type": "[]ConfigKey", "versions": "0+",
+      "name": "ConfigNames", "type": "[]ConfigKey", "versions": "0+",
       "about": "The config keys the broker wants to receive.",
       "fields": [
         {

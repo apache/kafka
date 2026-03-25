@@ -108,6 +108,9 @@ public class NetworkClient implements KafkaClient {
     /* the client id used to identify this client in requests to the server */
     private final String clientId;
 
+    /* the client software role used in ApiVersionsRequest */
+    private final String clientSoftwareRole;
+
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
 
@@ -178,6 +181,7 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              null,
+             null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
@@ -217,6 +221,7 @@ public class NetworkClient implements KafkaClient {
                 null,
                 logContext,
                 new DefaultHostResolver(),
+                null,
                 null,
                 null,
                 rebootstrapTriggerMs,
@@ -260,6 +265,7 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              null,
+             null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
@@ -300,6 +306,7 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              null,
+             null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
@@ -324,6 +331,7 @@ public class NetworkClient implements KafkaClient {
                          HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender,
                          ClientConfigsSender clientConfigsSender,
+                         String clientSoftwareRole,
                          long rebootstrapTriggerMs,
                          MetadataRecoveryStrategy metadataRecoveryStrategy) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
@@ -339,6 +347,7 @@ public class NetworkClient implements KafkaClient {
         }
         this.selector = selector;
         this.clientId = clientId;
+        this.clientSoftwareRole = clientSoftwareRole;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
@@ -1061,7 +1070,7 @@ public class NetworkClient implements KafkaClient {
                         maxApiVersion = apiVersion.maxVersion();
                     }
                 }
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion));
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion).withRole(this.clientSoftwareRole));
             }
             return;
         }
@@ -1107,7 +1116,7 @@ public class NetworkClient implements KafkaClient {
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
             if (discoverBrokerVersions) {
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder().withRole(this.clientSoftwareRole));
                 log.debug("Completed connection to node {}. Fetching API versions.", node);
             } else {
                 this.connectionStates.ready(node);

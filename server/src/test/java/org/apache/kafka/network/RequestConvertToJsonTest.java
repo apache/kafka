@@ -120,7 +120,7 @@ public class RequestConvertToJsonTest {
 
     @Test
     public void testClientInfoNode() {
-        ClientInformation clientInfo = new ClientInformation("name", "1");
+        ClientInformation clientInfo = new ClientInformation("name", "1", null);
         ObjectNode expectedNode = JsonNodeFactory.instance.objectNode();
         expectedNode.set("softwareName", new TextNode(clientInfo.softwareName()));
         expectedNode.set("softwareVersion", new TextNode(clientInfo.softwareVersion()));

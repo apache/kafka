@@ -1031,7 +1031,8 @@ private[kafka] class Processor(
                   if (apiVersionsRequest.isValid) {
                     channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
                       apiVersionsRequest.data.clientSoftwareName,
-                      apiVersionsRequest.data.clientSoftwareVersion))
+                      apiVersionsRequest.data.clientSoftwareVersion,
+                      apiVersionsRequest.data.clientSoftwareRole))
                   }
                 }
                 requestChannel.sendRequest(req)

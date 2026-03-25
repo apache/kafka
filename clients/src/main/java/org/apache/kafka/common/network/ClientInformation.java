@@ -21,14 +21,16 @@ import java.util.Objects;
 
 public class ClientInformation {
     public static final String UNKNOWN_NAME_OR_VERSION = "unknown";
-    public static final ClientInformation EMPTY = new ClientInformation(UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION);
+    public static final ClientInformation EMPTY = new ClientInformation(UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION);
 
     private final String softwareName;
     private final String softwareVersion;
+    private final String softwareRole;
 
-    public ClientInformation(String softwareName, String softwareVersion) {
+    public ClientInformation(String softwareName, String softwareVersion, String softwareRole) {
         this.softwareName = softwareName.isEmpty() ? UNKNOWN_NAME_OR_VERSION : softwareName;
         this.softwareVersion = softwareVersion.isEmpty() ? UNKNOWN_NAME_OR_VERSION : softwareVersion;
+        this.softwareRole = (softwareRole == null || softwareRole.isEmpty()) ? UNKNOWN_NAME_OR_VERSION : softwareRole;
     }
 
     public String softwareName() {
@@ -39,15 +41,20 @@ public class ClientInformation {
         return this.softwareVersion;
     }
 
+    public String softwareRole() {
+        return this.softwareRole;
+    }
+
     @Override
     public String toString() {
         return "ClientInformation(softwareName=" + softwareName +
-            ", softwareVersion=" + softwareVersion + ")";
+            ", softwareVersion=" + softwareVersion +
+            ", softwareRole=" + softwareRole + ")";
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(softwareName, softwareVersion);
+        return Objects.hash(softwareName, softwareVersion, softwareRole);
     }
 
     @Override
@@ -60,6 +67,7 @@ public class ClientInformation {
         }
         ClientInformation other = (ClientInformation) o;
         return other.softwareName.equals(softwareName) &&
-            other.softwareVersion.equals(softwareVersion);
+            other.softwareVersion.equals(softwareVersion) &&
+            other.softwareRole.equals(softwareRole);
     }
 }

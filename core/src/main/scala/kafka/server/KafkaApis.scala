@@ -64,6 +64,9 @@ import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, FetchManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.policy.ClientConfigPolicy
+import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -72,11 +75,12 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, RecordValidationStats}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
+import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, UUID}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -120,6 +124,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
   val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(
     metadataCache, authHelper, config)
+  val clientConfigPolicy: Option[ClientConfigPolicy] =
+    Option(config.getConfiguredInstance(
+      ServerLogConfigs.CLIENT_CONFIG_POLICY_CLASS_NAME_CONFIG,
+      classOf[ClientConfigPolicy]))
+  val clientConfigMaxBytes: Int =
+    config.getInt(ServerLogConfigs.CLIENT_CONFIG_MAX_BYTES_CONFIG)
 
   def close(): Unit = {
     aclApis.close()
@@ -225,7 +235,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS => handleDescribeTopicPartitionsRequest(request)
+        case ApiKeys.GET_CONFIG_SUBSCRIPTION => handleGetConfigSubscriptionRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
+        case ApiKeys.PUSH_CONFIG => handlePushConfigRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CONFIG_RESOURCES => handleListConfigResources(request)
         case ApiKeys.ADD_RAFT_VOTER => forwardToController(request)
@@ -2975,6 +2987,80 @@ class KafkaApis(val requestChannel: RequestChannel,
       case _: Exception =>
         requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
     }
+  }
+
+  def handleGetConfigSubscriptionRequest(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    val clientInfo = request.context.clientInformation
+    val configKeys: Set[String] = clientConfigPolicy match {
+      case Some(policy) =>
+        val metadata = new ClientConfigPolicy.GetConfigSubscriptionRequestMetadata(clientInfo)
+        val keys = policy.configKeysToRequest(metadata)
+        if (keys == null) Set.empty else keys.asScala.toSet
+      case None =>
+        Set.empty
+    }
+
+    val subscriptionId = math.abs(UUID.randomUUID().hashCode())
+    val configNamesList = configKeys.map { name =>
+      new GetConfigSubscriptionResponseData.ConfigKey().setName(name)
+    }.toList.asJava
+
+    val responseData = new GetConfigSubscriptionResponseData()
+      .setSubscriptionId(subscriptionId)
+      .setConfigMaxBytes(clientConfigMaxBytes)
+      .setConfigNames(configNamesList)
+
+    requestHelper.sendResponseMaybeThrottle(request,
+      requestThrottleMs => new GetConfigSubscriptionResponse(responseData))
+  }
+
+  def handlePushConfigRequest(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    val clientInfo = request.context.clientInformation
+    val configsData = request.body[PushConfigRequest].data.configs.asScala
+    val configs = configsData.map(c => c.name -> c.value).toMap
+
+    // Calculate size
+    val configsSize = configs.foldLeft(0)((acc, kv) =>
+      acc + kv._1.getBytes(StandardCharsets.UTF_8).length +
+            kv._2.getBytes(StandardCharsets.UTF_8).length)
+
+    val responseData = if (configsSize > clientConfigMaxBytes) {
+      new PushConfigResponseData()
+        .setErrorCode(Errors.CONFIG_TOO_LARGE.code)
+    } else {
+      clientConfigPolicy match {
+        case Some(policy) =>
+          try {
+            val metadata = new ClientConfigPolicy.PushConfigRequestMetadata(clientInfo, configs.asJava)
+            policy.validate(metadata)
+            new PushConfigResponseData()
+              .setErrorCode(Errors.NONE.code)
+          } catch {
+            case e: PolicyViolationException =>
+              // Parse validation errors into per-config errors
+              val configErrors = new util.ArrayList[PushConfigResponseData.ConfigError]()
+              // For now, single error - future: parse e.getMessage() for per-config details
+              configErrors.add(new PushConfigResponseData.ConfigError()
+                .setConfigKey("")
+                .setConfigErrorDescription(e.getMessage))
+
+              new PushConfigResponseData()
+                .setErrorCode(Errors.INVALID_CONFIG.code)
+                .setConfigErrors(configErrors)
+          }
+        case None =>
+          // No policy configured, accept all
+          new PushConfigResponseData()
+            .setErrorCode(Errors.NONE.code)
+      }
+    }
+
+    requestHelper.sendResponseMaybeThrottle(request,
+      requestThrottleMs => new PushConfigResponse(responseData))
   }
 
   /**

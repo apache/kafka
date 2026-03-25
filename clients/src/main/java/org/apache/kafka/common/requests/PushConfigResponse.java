@@ -27,7 +27,7 @@ import java.util.Map;
 /**
  * Possible error codes:
  * - {@link Errors#CONFIG_TOO_LARGE}
- * - {@link Errors#INVALID_CONFIG}
+ * - {@link Errors#INVALID_CONFIG} - Check configErrors() for per-config details
  * - {@link Errors#UNKNOWN_CONFIG_SUBSCRIPTION_ID}
  * - {@link Errors#UNSUPPORTED_VERSION}
  * - {@link Errors#INVALID_REQUEST}
@@ -68,6 +68,20 @@ public class PushConfigResponse extends AbstractResponse {
 
     public Errors error() {
         return Errors.forCode(data.errorCode());
+    }
+
+    /**
+     * Returns true if there are per-config validation errors.
+     */
+    public boolean hasConfigErrors() {
+        return !data.configErrors().isEmpty();
+    }
+
+    /**
+     * Returns the list of per-config errors, populated when ErrorCode is INVALID_CONFIG.
+     */
+    public java.util.List<PushConfigResponseData.ConfigError> configErrors() {
+        return data.configErrors();
     }
 
     public static PushConfigResponse parse(Readable readable, short version) {

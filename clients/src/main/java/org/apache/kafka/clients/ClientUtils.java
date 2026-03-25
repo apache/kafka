@@ -160,7 +160,8 @@ public final class ClientUtils {
                                                     Metadata metadata,
                                                     Sensor throttleTimeSensor,
                                                     ClientTelemetrySender clientTelemetrySender,
-                                                    ClientConfigsSender clientConfigsSender) {
+                                                    ClientConfigsSender clientConfigsSender,
+                                                    String clientSoftwareRole) {
         return createNetworkClient(config,
                 config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
                 metrics,
@@ -175,7 +176,8 @@ public final class ClientUtils {
                 new DefaultHostResolver(),
                 throttleTimeSensor,
                 clientTelemetrySender,
-                clientConfigsSender);
+                clientConfigsSender,
+                clientSoftwareRole);
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
@@ -203,6 +205,7 @@ public final class ClientUtils {
                 hostResolver,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -220,7 +223,8 @@ public final class ClientUtils {
                                                     HostResolver hostResolver,
                                                     Sensor throttleTimeSensor,
                                                     ClientTelemetrySender clientTelemetrySender,
-                                                    ClientConfigsSender clientConfigsSender) {
+                                                    ClientConfigsSender clientConfigsSender,
+                                                    String clientSoftwareRole) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
 
@@ -252,6 +256,7 @@ public final class ClientUtils {
                     hostResolver,
                     clientTelemetrySender,
                     clientConfigsSender,
+                    clientSoftwareRole,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.message.GetConfigSubscriptionRequestData;
 import org.apache.kafka.common.message.GetConfigSubscriptionResponseData;
 import org.apache.kafka.common.message.PushConfigRequestData;
+import org.apache.kafka.common.message.PushConfigResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.GetConfigSubscriptionRequest;
@@ -136,7 +137,7 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
         configMaxBytes = data.configMaxBytes();
 
         // Extract requested keys
-        requestedConfigKeys = data.requestedKeys()
+        requestedConfigKeys = data.configNames()
             .stream()
             .map(key -> key.name())
             .collect(Collectors.toList());
@@ -160,6 +161,21 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
         if (error == Errors.NONE) {
             log.info("Configuration push completed successfully");
             state = State.COMPLETED;
+
+        } else if (error == Errors.INVALID_CONFIG) {
+            // Log per-config errors from the new ConfigErrors array
+            if (response.hasConfigErrors()) {
+                log.error("Configuration push failed with {} invalid config(s):",
+                    response.configErrors().size());
+                for (PushConfigResponseData.ConfigError configError : response.configErrors()) {
+                    log.error("  Config '{}': {}",
+                        configError.configKey(),
+                        configError.configErrorDescription());
+                }
+            } else {
+                log.error("Configuration push failed: INVALID_CONFIG (no details provided)");
+            }
+            state = State.FAILED;
 
         } else if (error == Errors.UNKNOWN_CONFIG_SUBSCRIPTION_ID) {
             log.warn("Subscription changed, retrying GetConfigSubscription");

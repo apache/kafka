@@ -865,7 +865,7 @@ public class SelectorTest {
                 selector.channel(node).channelMetadataRegistry().clientInformation());
 
             // Metric with unknown / unknown should not be there, metric with A / B should be there
-            ClientInformation clientInformation = new ClientInformation("A", "B");
+            ClientInformation clientInformation = new ClientInformation("A", "B", null);
             selector.channel(node).channelMetadataRegistry()
                 .registerClientInformation(clientInformation);
             assertEquals(clientInformation,
