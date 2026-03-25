@@ -743,13 +743,19 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
+    @Deprecated(since = "4.2", forRemoval = true)
     public Options setFailIfOptionsFileError(final boolean failIfOptionsFileError) {
+        log.warn("fail_if_options_file_error no longer changes behavior in RocksDB v10.2.0 and later." +
+                " See https://github.com/facebook/rocksdb/releases/tag/v10.2.0");
         dbOptions.setFailIfOptionsFileError(failIfOptionsFileError);
         return this;
     }
 
     @Override
+    @Deprecated(since = "4.2", forRemoval = true)
     public boolean failIfOptionsFileError() {
+        log.warn("fail_if_options_file_error no longer changes behavior in RocksDB v10.2.0 and later." +
+                " See https://github.com/facebook/rocksdb/releases/tag/v10.2.0");
         return dbOptions.failIfOptionsFileError();
     }
 
@@ -1236,15 +1242,18 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return columnFamilyOptions.paranoidFileChecks();
     }
 
-    @Override
-    public Options setMaxWriteBufferNumberToMaintain(final int maxWriteBufferNumberToMaintain) {
-        columnFamilyOptions.setMaxWriteBufferNumberToMaintain(maxWriteBufferNumberToMaintain);
+    @Deprecated(since = "4.2", forRemoval = true)
+    public Options setMaxWriteBufferNumberToMaintain(final int ignored) {
+        log.warn("max_write_buffer_number_to_maintain has been removed in RocksDB v10.2.0." +
+                " See https://github.com/facebook/rocksdb/releases/tag/v10.2.0");
         return this;
     }
 
-    @Override
+    @Deprecated(since = "4.2", forRemoval = true)
     public int maxWriteBufferNumberToMaintain() {
-        return columnFamilyOptions.maxWriteBufferNumberToMaintain();
+        log.warn("max_write_buffer_number_to_maintain has been removed in RocksDB v10.2.0." +
+                " See https://github.com/facebook/rocksdb/releases/tag/v10.2.0");
+        return 0;
     }
 
     @Override
@@ -1412,13 +1421,19 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
+    @Deprecated(since = "4.2", forRemoval = true)
     public Options setSkipCheckingSstFileSizesOnDbOpen(final boolean skipCheckingSstFileSizesOnDbOpen) {
+        log.warn("skip_checking_sst_file_sizes_on_db_open has been deprecated in RocksDB v10.5.0." +
+                " See https://github.com/facebook/rocksdb/releases/tag/v10.5.0");
         dbOptions.setSkipCheckingSstFileSizesOnDbOpen(skipCheckingSstFileSizesOnDbOpen);
         return this;
     }
 
     @Override
+    @Deprecated(since = "4.2", forRemoval = true)
     public boolean skipCheckingSstFileSizesOnDbOpen() {
+        log.warn("skip_checking_sst_file_sizes_on_db_open has been deprecated in RocksDB v10.5.0." +
+                " See https://github.com/facebook/rocksdb/releases/tag/v10.5.0");
         return dbOptions.skipCheckingSstFileSizesOnDbOpen();
     }
 
