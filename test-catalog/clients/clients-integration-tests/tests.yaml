@@ -456,6 +456,9 @@ org.apache.kafka.clients.producer.ProducerSendWhileDeletionTest:
 - testSendWithRecreatedTopic
 - testSendWithTopicDeletionMidWay
 - testSendWithTopicReassignmentIsMidWay
+org.apache.kafka.clients.producer.SocketServerMemoryPoolTest:
+- testProduceRequestWithCorruptBody
+- testProduceRequestWithUnsupportedVersion
 org.apache.kafka.clients.security.GroupAuthorizerIntegrationTest:
 - testAsyncConsumeCloseWithGroupPermission
 - testAsyncConsumeUnsubscribeWithGroupPermission
