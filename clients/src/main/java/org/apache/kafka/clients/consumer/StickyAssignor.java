@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.types.Type;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -231,7 +230,8 @@ public class StickyAssignor extends AbstractStickyAssignor {
     static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();
-        Map<String, List<Integer>> partitionsByTopic = groupPartitionsByTopic(memberData.partitions);
+        Map<String, List<Integer>> partitionsByTopic = memberData.partitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.mapping(TopicPartition::partition, Collectors.toList())));
         for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
@@ -275,8 +275,4 @@ public class StickyAssignor extends AbstractStickyAssignor {
         return new MemberData(partitions, generation);
     }
 
-    private static Map<String, List<Integer>> groupPartitionsByTopic(Collection<TopicPartition> partitions) {
-        return partitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.mapping(TopicPartition::partition, Collectors.toList())));
-    }
 }
