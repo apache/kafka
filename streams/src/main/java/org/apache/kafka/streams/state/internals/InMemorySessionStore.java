@@ -89,6 +89,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         this.position = Position.emptyPosition();
     }
 
+
     @Override
     public long retentionPeriod() {
         return retentionPeriod;
