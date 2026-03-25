@@ -269,9 +269,8 @@ public final class KafkaRaftClientFetchTest {
         FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE.code(), partitionData.errorCode());
         MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
-        // Return 2 or more batches, invariant is to return <= remoteBatchSizeBytes.
-        // If exact batch alignment with remoteBatchSizeBytes then two batches are returned.
-        // Alternatively return < remoteBatchSizeBytes
+        // There is less data than remoteMaxSizeBytes so we expect the size of records.sizeInBytes to be less than
+        // remoteMaxSizeBytes.
         assertTrue(
             records.sizeInBytes() < remoteMaxSizeBytes,
             String.format(
