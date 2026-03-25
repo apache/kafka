@@ -244,6 +244,8 @@
               files="(ProduceBenchSpec|ConsumeBenchSpec|SustainedConnectionSpec).java"/>
     <suppress id="dontUseSystemExit"
               files="(VerifiableConsumer|VerifiableProducer|VerifiableShareConsumer).java"/>
+    <suppress checks="MethodLength"
+              files="ProducerPerformance\.java"/>
 
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"

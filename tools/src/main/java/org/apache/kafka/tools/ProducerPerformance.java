@@ -40,6 +40,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Scanner;
@@ -52,6 +53,14 @@ public class ProducerPerformance {
 
     public static final String DEFAULT_TRANSACTION_ID_PREFIX = "performance-producer-";
     public static final long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
+
+    public enum KeyDistribution {
+        NONE, RANGE, RANDOM;
+
+        public static KeyDistribution fromString(String value) {
+            return KeyDistribution.valueOf(value.toUpperCase(Locale.ROOT));
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         ProducerPerformance perf = new ProducerPerformance();
@@ -97,7 +106,8 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                record = new ProducerRecord<>(config.topicName, payload);
+                byte[] key = generateKey(config.keyDistribution, config.messageKeyRange, i, random);
+                record = new ProducerRecord<>(config.topicName, null, key, payload);
 
                 long sendStartMs = System.currentTimeMillis();
                 if ((isSteadyState = config.warmupRecords > 0) && i == config.warmupRecords) {
@@ -166,6 +176,17 @@ public class ProducerPerformance {
     Callback cb;
     Stats stats;
     Stats steadyStateStats;
+
+    static byte[] generateKey(KeyDistribution keyDistribution, Integer keyRange, long recordIndex, SplittableRandom random) {
+        switch (keyDistribution) {
+            case RANGE:
+                return Integer.toString((int) (recordIndex % keyRange)).getBytes(StandardCharsets.UTF_8);
+            case RANDOM:
+                return Integer.toString(random.nextInt(keyRange)).getBytes(StandardCharsets.UTF_8);
+            default:
+                return null;
+        }
+    }
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
             SplittableRandom random, boolean payloadMonotonic, long recordValue) {
@@ -395,6 +416,26 @@ public class ProducerPerformance {
                 .setDefault(5_000L)
                 .help("Interval in milliseconds at which to print progress info.");
 
+        parser.addArgument("--message-key-range")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .metavar("KEY-RANGE")
+                .dest("messageKeyRange")
+                .help("The range of keys to use when --key-distribution is 'range' or 'random'. " +
+                        "Keys will be integers in [0, KEY-RANGE). Required for range and random distributions.");
+
+        parser.addArgument("--key-distribution")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("KEY-DISTRIBUTION")
+                .dest("keyDistribution")
+                .choices("none", "range", "random")
+                .setDefault("none")
+                .help("The key distribution to use: 'none' for null keys, 'range' for round-robin keys in " +
+                        "[0, KEY-RANGE), or 'random' for random keys in [0, KEY-RANGE). " +
+                        "Requires --message-key-range when set to 'range' or 'random'.");
         return parser;
     }
 
@@ -579,6 +620,8 @@ public class ProducerPerformance {
         final boolean transactionsEnabled;
         final List<byte[]> payloadByteList;
         final long reportingInterval;
+        final Integer messageKeyRange;
+        final KeyDistribution keyDistribution;
 
         public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
             Namespace namespace = parser.parseArgs(args);
@@ -622,6 +665,19 @@ public class ProducerPerformance {
             }
             if (reportingInterval <= 0) {
                 throw new ArgumentParserException("--reporting-interval should be greater than zero.", parser);
+            }
+            this.messageKeyRange = namespace.getInt("messageKeyRange");
+            if (messageKeyRange != null && messageKeyRange <= 0) {
+                throw new ArgumentParserException("--message-key-range should be greater than zero.", parser);
+            }
+            this.keyDistribution = KeyDistribution.fromString(namespace.getString("keyDistribution"));
+            if (this.keyDistribution != KeyDistribution.NONE && messageKeyRange == null) {
+                throw new ArgumentParserException(
+                        "--message-key-range is required when --key-distribution is 'range' or 'random'.", parser);
+            }
+            if (this.keyDistribution == KeyDistribution.NONE && messageKeyRange != null) {
+                throw new ArgumentParserException(
+                        "--key-distribution must be 'range' or 'random' when --message-key-range is specified.", parser);
             }
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
