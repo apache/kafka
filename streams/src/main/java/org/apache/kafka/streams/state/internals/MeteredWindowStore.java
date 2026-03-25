@@ -76,7 +76,6 @@ public class MeteredWindowStore<K, V>
     protected StreamsMetricsImpl streamsMetrics;
     protected Sensor putSensor;
     protected Sensor fetchSensor;
-    private Sensor flushSensor;
     private Sensor commitSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
@@ -147,9 +146,8 @@ public class MeteredWindowStore<K, V>
         putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         // flushSensor is deprecated per KIP-1035 and will be removed in the next major release.
-        // Recording a dummy value to avoid a SpotBugs URF_UNREAD_FIELD warning.
-        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-        flushSensor.record(0.0);
+        // Here we just register the sensor without recording
+        StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         commitSensor = StateStoreMetrics.commitSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
