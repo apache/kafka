@@ -155,14 +155,13 @@ class TransactionLogTest {
     }
 
     @Test
-    void shouldNotPersistProducerIdsAtVersion0() {
-        // At version 0, tagged fields are omitted during serialization by
-        // MessageUtil, so previousProducerId/nextProducerId default to
-        // NO_PRODUCER_ID on deserialization.
+    void shouldPersistProducerIdsAtVersion0AsTaggedFields() {
+        // Tagged fields are written even at version 0. Older brokers ignore
+        // unknown tags, so this is safe. Matches clientTransactionVersion behavior.
         var txnTransitMetadata = new TxnTransitMetadata(
             200L,       // producerId
-            100L,       // prevProducerId — will NOT be persisted at v0
-            201L,       // nextProducerId — will NOT be persisted at v0
+            100L,       // prevProducerId — persisted as tagged field
+            201L,       // nextProducerId — persisted as tagged field
             (short) 5,  // producerEpoch
             (short) 4,  // lastProducerEpoch
             1000,       // txnTimeoutMs
@@ -181,9 +180,7 @@ class TransactionLogTest {
         var deserialized = readResult.metadata();
 
         assertEquals(200L, deserialized.producerId());
-        assertEquals(RecordBatch.NO_PRODUCER_ID, deserialized.prevProducerId());
-        // nextProducerId has no public accessor on TransactionMetadata;
-        // its v0 behavior is covered by the round-trip test via TransactionLogValue directly.
+        assertEquals(100L, deserialized.prevProducerId());
     }
 
     @Test
