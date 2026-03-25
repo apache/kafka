@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -79,6 +80,7 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
             mockTime.sleep(100);
             task1Unblocked.countDown();
             task1.get(5, TimeUnit.SECONDS);
+            verify(metrics, timeout(5000)).recordBackgroundProcessingTime(100);
 
             // Task 3 starts.
             task3Started.await();
@@ -87,16 +89,16 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
             mockTime.sleep(400);
             task2Unblocked.countDown();
             task2.get(5, TimeUnit.SECONDS);
+            verify(metrics, timeout(5000)).recordBackgroundProcessingTime(500);
 
             // Task 3 takes 500 ms.
             mockTime.sleep(100);
             task3Unblocked.countDown();
             task3.get(5, TimeUnit.SECONDS);
+            verify(metrics, timeout(5000).times(2)).recordBackgroundProcessingTime(500);
 
             verify(metrics, times(2)).recordBackgroundQueueTime(0);
             verify(metrics, times(1)).recordBackgroundQueueTime(100);
-            verify(metrics, times(1)).recordBackgroundProcessingTime(100);
-            verify(metrics, times(2)).recordBackgroundProcessingTime(500);
             verify(metrics, times(1)).recordBackgroundThreadBusyTime(50.0);
             verify(metrics, times(2)).recordBackgroundThreadBusyTime(250.0);
         } finally {
