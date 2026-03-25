@@ -49,7 +49,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
-public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
+public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore, WithRetentionPeriod {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
 
     private final String name;
@@ -75,6 +75,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.segments = segments;
     }
 
+    @Override
     public long retentionPeriod() {
         return retentionPeriod;
     }

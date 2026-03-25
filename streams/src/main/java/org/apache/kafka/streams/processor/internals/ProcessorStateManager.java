@@ -31,14 +31,11 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
-import org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore;
-import org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
-import org.apache.kafka.streams.state.internals.InMemorySessionStore;
-import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
@@ -144,25 +141,13 @@ public class ProcessorStateManager implements StateManager {
         }
 
         private static long extractRetentionPeriod(final StateStore stateStore) {
-            // Peel off the wrapping layers one by one
             StateStore current = stateStore;
             while (current instanceof WrappedStateStore) {
                 current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
             }
-            // Now 'current' is the innermost store. Check what type it is.
-            if (current instanceof AbstractRocksDBSegmentedBytesStore) {
-                return ((AbstractRocksDBSegmentedBytesStore<?>) current).retentionPeriod();
+            if (current instanceof WithRetentionPeriod) {
+                return ((WithRetentionPeriod) current).retentionPeriod();
             }
-            if (current instanceof AbstractDualSchemaRocksDBSegmentedBytesStore) {
-                return ((AbstractDualSchemaRocksDBSegmentedBytesStore<?>) current).retentionPeriod();
-            }
-            if (current instanceof InMemoryWindowStore) {
-                return ((InMemoryWindowStore) current).retentionPeriod();
-            }
-            if (current instanceof InMemorySessionStore) {
-                return ((InMemorySessionStore) current).retentionPeriod();
-            }
-            // Not a windowed/session store 
             return -1L;
         }
 
