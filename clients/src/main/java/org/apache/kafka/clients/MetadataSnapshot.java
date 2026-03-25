@@ -54,7 +54,6 @@ public class MetadataSnapshot {
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
-    private final boolean isBootstrapConfigured;
     private Cluster clusterInstance;
 
     public MetadataSnapshot(String clusterId,
@@ -65,7 +64,7 @@ public class MetadataSnapshot {
                   Set<String> internalTopics,
                   Node controller,
                   Map<String, Uuid> topicIds) {
-        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, false, null);
+        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
     // Visible for testing
@@ -77,7 +76,6 @@ public class MetadataSnapshot {
         Set<String> internalTopics,
         Node controller,
         Map<String, Uuid> topicIds,
-        boolean isBootstrapConfigured,
         Cluster clusterInstance) {
         this.clusterId = clusterId;
         this.nodes = Collections.unmodifiableMap(nodes);
@@ -89,7 +87,6 @@ public class MetadataSnapshot {
         this.topicNames = Collections.unmodifiableMap(
             topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
         );
-        this.isBootstrapConfigured = isBootstrapConfigured;
 
         Map<TopicPartition, PartitionMetadata> tmpMetadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
@@ -202,9 +199,8 @@ public class MetadataSnapshot {
         Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
-        // Preserve the bootstrap flag from the current snapshot during merge
         return new MetadataSnapshot(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
-                newInvalidTopics, newInternalTopics, newController, newTopicIds, this.isBootstrapConfigured, null);
+                newInvalidTopics, newInternalTopics, newController, newTopicIds);
     }
 
     /**
@@ -231,9 +227,8 @@ public class MetadataSnapshot {
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        // Use the factory method that preserves the bootstrap state
-        this.clusterInstance = Cluster.withBootstrapFlag(clusterId, nodes.values(), partitionInfos,
-                unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, isBootstrapConfigured);
+        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos,
+                unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds);
     }
 
     static MetadataSnapshot bootstrap(List<InetSocketAddress> addresses) {
@@ -245,12 +240,12 @@ public class MetadataSnapshot {
         }
         return new MetadataSnapshot(null, nodes, Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
-                null, Collections.emptyMap(), true, Cluster.bootstrap(addresses));
+                null, Collections.emptyMap(), Cluster.bootstrap(addresses));
     }
 
     static MetadataSnapshot empty() {
         return new MetadataSnapshot(null, Collections.emptyMap(), Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), false, Cluster.empty());
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
     }
 
     @Override
