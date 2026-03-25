@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.partition.PartitionListener;
@@ -105,9 +104,9 @@ public class SharePartitionManager implements AutoCloseable {
     private final ShareSessionCache cache;
 
     /**
-     * The group config manager is used to retrieve the values for dynamic group configurations
+     * The provider used to retrieve share group dynamic configuration values.
      */
-    private final GroupConfigManager groupConfigManager;
+    private final ShareGroupConfigProvider configProvider;
 
     /**
      * The default record lock duration is the time in milliseconds that a record lock is held for.
@@ -158,7 +157,7 @@ public class SharePartitionManager implements AutoCloseable {
         int maxInFlightRecords,
         long remoteFetchMaxWaitMs,
         Persister persister,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         BrokerTopicStats brokerTopicStats
     ) {
         this(replicaManager,
@@ -170,7 +169,7 @@ public class SharePartitionManager implements AutoCloseable {
             maxInFlightRecords,
             remoteFetchMaxWaitMs,
             persister,
-            groupConfigManager,
+            configProvider,
             new ShareGroupMetrics(time),
             brokerTopicStats
         );
@@ -186,7 +185,7 @@ public class SharePartitionManager implements AutoCloseable {
         int maxInFlightRecords,
         long remoteFetchMaxWaitMs,
         Persister persister,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         ShareGroupMetrics shareGroupMetrics,
         BrokerTopicStats brokerTopicStats
     ) {
@@ -201,7 +200,7 @@ public class SharePartitionManager implements AutoCloseable {
             maxInFlightRecords,
             remoteFetchMaxWaitMs,
             persister,
-            groupConfigManager,
+            configProvider,
             shareGroupMetrics,
             brokerTopicStats
         );
@@ -219,7 +218,7 @@ public class SharePartitionManager implements AutoCloseable {
             int maxInFlightRecords,
             long remoteFetchMaxWaitMs,
             Persister persister,
-            GroupConfigManager groupConfigManager,
+            ShareGroupConfigProvider configProvider,
             ShareGroupMetrics shareGroupMetrics,
             BrokerTopicStats brokerTopicStats
     ) {
@@ -233,7 +232,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxInFlightRecords = maxInFlightRecords;
         this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         this.persister = persister;
-        this.groupConfigManager = groupConfigManager;
+        this.configProvider = configProvider;
         this.shareGroupMetrics = shareGroupMetrics;
         this.brokerTopicStats = brokerTopicStats;
         this.cache.registerShareGroupListener(new ShareGroupListenerImpl());
@@ -719,7 +718,7 @@ public class SharePartitionManager implements AutoCloseable {
                             time,
                             persister,
                             replicaManager,
-                            new ShareGroupConfigProvider(groupConfigManager),
+                            configProvider,
                             listener
                     );
                 });
