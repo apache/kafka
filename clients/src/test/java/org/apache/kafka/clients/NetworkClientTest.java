@@ -1585,9 +1585,9 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, config);
 
-        // Directly call ensureBootstrapped with short poll timeout (100ms)
-        // Should return without error even though bootstrap hasn't succeeded
-        client.ensureBootstrapped(100, time.milliseconds());
+        // Directly call ensureBootstrapped
+        // Should return without error even though bootstrap hasn't succeeded (will retry on next poll)
+        client.ensureBootstrapped(time.milliseconds());
 
         // Verify bootstrap has not succeeded yet
         MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");

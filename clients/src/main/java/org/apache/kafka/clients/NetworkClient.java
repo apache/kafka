@@ -143,8 +143,6 @@ public class NetworkClient implements KafkaClient {
 
     private final Timer bootstrapTimer;
 
-    private boolean bootstrapTimerStarted;
-
     private final TelemetrySender telemetrySender;
 
     public NetworkClient(Selectable selector,
@@ -365,7 +363,6 @@ public class NetworkClient implements KafkaClient {
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
         this.bootstrapConfiguration = bootstrapConfiguration;
         this.bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-        this.bootstrapTimerStarted = false;
     }
 
     /**
@@ -645,16 +642,11 @@ public class NetworkClient implements KafkaClient {
      *                metadata timeout
      * @param now The current time in milliseconds
      * @return The list of responses received
-     *
-     * @implNote During bootstrap, this method may perform blocking DNS lookups to resolve bootstrap server addresses.
-     *           If DNS resolution is slow or fails, this method may block for longer than the specified timeout.
-     *           The blocking behavior will continue until either: (1) DNS resolution succeeds, (2) the bootstrap
-     *           timeout expires (throwing BootstrapResolutionException), or (3) the poll timeout is reached.
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         ensureActive();
-        ensureBootstrapped(timeout, now);
+        ensureBootstrapped(now);
 
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
@@ -1229,84 +1221,42 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Ensures that the client has successfully resolved and bootstrapped with the configured bootstrap servers.
-     * This method will retry DNS resolution until one of the following conditions is met:
-     * <ul>
-     *   <li>DNS resolution succeeds and bootstrap is complete (method returns normally)</li>
-     *   <li>Bootstrap timeout expires (throws BootstrapResolutionException)</li>
-     *   <li>Poll timeout is reached but bootstrap timeout hasn't expired (method returns to retry later)</li>
-     * </ul>
+     * Attempts to resolve bootstrap server addresses via DNS and create an initial bootstrap cluster.
+     * This method is called from {@link #poll(long, long)} and uses a non-blocking approach.
      *
-     * @param pollTimeoutMs The poll timeout in milliseconds, controlling how long this method should block
-     *                      during a single poll invocation
+     * <p>On each invocation, this method will attempt DNS resolution once. If resolution fails,
+     * it returns immediately and will be retried on the next poll invocation. This ensures the
+     * event loop remains responsive and doesn't block on DNS lookups.
+     *
      * @param currentTimeMs The current time in milliseconds
-     * @throws BootstrapResolutionException if the bootstrap timeout expires
-     *         before DNS resolution succeeds
-     *
-     * @implNote This method performs blocking DNS lookups via {@link InetAddress#getAllByName(String)}.
-     *           Each DNS lookup may block for an indefinite amount of time depending on network conditions
-     *           and DNS server responsiveness. As a result, this method may block for longer than pollTimeoutMs
-     *           if DNS resolution is slow. The method will retry DNS resolution in a loop with brief sleeps
-     *           (up to 100ms) between attempts until one of the exit conditions above is met.
+     * @throws BootstrapResolutionException if the bootstrap timeout expires before DNS resolution succeeds
      */
-    void ensureBootstrapped(final long pollTimeoutMs, final long currentTimeMs) {
+    void ensureBootstrapped(final long currentTimeMs) {
         if (bootstrapConfiguration.isBootstrapDisabled || metadataUpdater.isBootstrapped())
             return;
 
-        // Start the bootstrap timer on first call to ensure it starts counting from the first poll
-        if (!bootstrapTimerStarted) {
-            bootstrapTimer.update(currentTimeMs);
-            bootstrapTimer.reset(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-            bootstrapTimerStarted = true;
+        // Timer is already initialized in constructor, just update it with current time
+        bootstrapTimer.update(currentTimeMs);
+
+        // Attempt DNS resolution (single attempt per poll, typically fast)
+        List<InetSocketAddress> servers = ClientUtils.parseAddresses(bootstrapConfiguration.bootstrapServers, bootstrapConfiguration.clientDnsLookup);
+
+        if (!servers.isEmpty()) {
+            log.debug("Bootstrap DNS resolution succeeded, {} servers resolved", servers.size());
+            metadataUpdater.bootstrap(servers);
+            return;
         }
 
-        // Handle potential overflow when adding timeout to current time
-        long pollDeadlineMs;
-        if (currentTimeMs > Long.MAX_VALUE - pollTimeoutMs)
-            pollDeadlineMs = Long.MAX_VALUE;
-        else
-            pollDeadlineMs = currentTimeMs + pollTimeoutMs;
-
-        while (true) {
-            // Check if thread has been interrupted
-            if (Thread.interrupted()) {
-                log.debug("ensureBootstrapped interrupted, returning early");
-                return;
-            }
-
-            long now = time.milliseconds();
-            bootstrapTimer.update(now);
-
-            List<InetSocketAddress> servers = ClientUtils.parseAddresses(
-                bootstrapConfiguration.bootstrapServers, bootstrapConfiguration.clientDnsLookup);
-
-            if (!servers.isEmpty()) {
-                // Resolution succeeded
-                bootstrapTimer.reset(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-                metadataUpdater.bootstrap(servers);
-                return;
-            }
-
-            if (bootstrapTimer.isExpired()) {
-                // Bootstrap timeout expired before poll timeout
-                throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap servers.");
-            }
-
-            if (now >= pollDeadlineMs) {
-                // Poll timeout reached but bootstrap timeout hasn't expired yet
-                return;
-            }
-
-            // Sleep before retrying to avoid tight loop and reduce load on DNS server
-            // Use the standard retry backoff to prevent overloading DNS with requests
-            long remainingPollTimeMs = pollDeadlineMs - now;
-            long remainingBootstrapTimeMs = bootstrapTimer.remainingMs();
-            long sleepTimeMs = Math.min(Math.min(remainingPollTimeMs, remainingBootstrapTimeMs), bootstrapConfiguration.retryBackoffMs);
-
-            if (sleepTimeMs > 0) {
-                time.sleep(sleepTimeMs);
-            }
+        // DNS resolution failed
+        if (bootstrapTimer.isExpired()) {
+            throw new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
+                bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
+                "Please check your bootstrap.servers configuration and DNS settings.");
         }
+
+        // DNS failed but timeout not reached, log and will retry on next poll
+        log.warn("Failed to resolve bootstrap servers, will retry on next poll. Remaining time: {}ms",
+            bootstrapTimer.remainingMs());
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
@@ -1333,7 +1283,7 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public List<Node> fetchNodes() {
-            ensureBootstrapped(Long.MAX_VALUE, time.milliseconds());
+            ensureBootstrapped(time.milliseconds());
             return metadata.fetch().nodes();
         }
 

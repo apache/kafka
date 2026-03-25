@@ -40,7 +40,6 @@ import org.apache.kafka.clients.admin.internals.AdminApiDriver;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler;
-import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
 import org.apache.kafka.clients.admin.internals.AdminFetchMetricsManager;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
@@ -513,6 +512,43 @@ public class KafkaAdminClient extends AdminClient {
         return throwable.getClass().getSimpleName();
     }
 
+    /**
+     * Determines which bootstrap configuration to use based on the provided config.
+     * Validates that exactly one of bootstrap.servers or bootstrap.controllers is configured.
+     *
+     * @param config The admin client configuration
+     * @return true if using bootstrap.controllers, false if using bootstrap.servers
+     * @throws ConfigException if both or neither bootstrap configurations are set
+     */
+    static boolean determineBootstrapType(AdminClientConfig config) {
+        List<String> bootstrapServers = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        if (bootstrapServers == null) {
+            bootstrapServers = Collections.emptyList();
+        }
+        List<String> controllerServers = config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+        if (controllerServers == null) {
+            controllerServers = Collections.emptyList();
+        }
+
+        if (bootstrapServers.isEmpty()) {
+            if (controllerServers.isEmpty()) {
+                throw new ConfigException("You must set either " +
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " or " +
+                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+            } else {
+                return true; // Using bootstrap.controllers
+            }
+        } else {
+            if (controllerServers.isEmpty()) {
+                return false; // Using bootstrap.servers
+            } else {
+                throw new ConfigException("You cannot set both " +
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " and " +
+                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+            }
+        }
+    }
+
     static KafkaAdminClient createInternal(AdminClientConfig config, TimeoutProcessorFactory timeoutProcessorFactory) {
         return createInternal(config, timeoutProcessorFactory, null);
     }
@@ -533,14 +569,14 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
+            boolean usingBootstrapControllers = determineBootstrapType(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
-                adminAddresses.usingBootstrapControllers());
+                usingBootstrapControllers);
 
             // Get the appropriate bootstrap configuration
-            List<String> bootstrapAddressesToUse = adminAddresses.usingBootstrapControllers()
+            List<String> bootstrapAddressesToUse = usingBootstrapControllers
                 ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
                 : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
 
