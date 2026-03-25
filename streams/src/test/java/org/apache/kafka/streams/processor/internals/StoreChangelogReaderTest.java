@@ -1471,7 +1471,7 @@ public class StoreChangelogReaderTest {
         reader.register(tp, windowStateManager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(offsetForTimestamp, timestampConsumer.position(tp),"The consumer should be seeked to the offset returned by offsetsForTimes, not to the beginning");
+        assertEquals(offsetForTimestamp, timestampConsumer.position(tp), "The consumer should be seeked to the offset returned by offsetsForTimes, not to the beginning");
     }
 
     @Test
@@ -1511,7 +1511,7 @@ public class StoreChangelogReaderTest {
         reader.register(tp, windowStateManager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(0L, timestampConsumer.position(tp),"When broker returns null, should fall back to seeking to the beginning");
+        assertEquals(0L, timestampConsumer.position(tp), "When broker returns null, should fall back to seeking to the beginning");
     }
 
     @Test
@@ -1539,7 +1539,7 @@ public class StoreChangelogReaderTest {
         reader.register(tp, kvStateManager);
         reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
 
-        assertEquals(0L, consumer.position(tp),"Non-windowed store should seek to beginning, not by timestamp");
+        assertEquals(0L, consumer.position(tp), "Non-windowed store should seek to beginning, not by timestamp");
     }
 
     private void assignPartition(final long messages,
