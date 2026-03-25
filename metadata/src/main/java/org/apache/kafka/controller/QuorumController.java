@@ -1475,11 +1475,11 @@ public final class QuorumController implements Controller {
     private volatile int curClaimEpoch;
 
     /**
-     * The bootstrap metadata to use for initialization if needed.
-     * This value may be written by the controller thread but read by other threads, so it must be
-     * safely published and have up-to-date visibility.
+     * The bootstrap mtryinetadata to use for initialization if needed.
+     * Written by handleLoadBootstrap and read during CompleteActivationEvent,
+     * both on the controller event thread.
      */
-    private volatile BootstrapMetadata bootstrapMetadata;
+    private BootstrapMetadata bootstrapMetadata;
 
     /**
      * The maximum number of records per batch to allow.

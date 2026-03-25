@@ -34,6 +34,6 @@ public class BootstrapTestUtils {
         Path metadataPartitionDir = Path.of(directoryPath,
             CLUSTER_METADATA_TOPIC_PARTITION.topic() + "-" + CLUSTER_METADATA_TOPIC_PARTITION.partition());
         Path checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID);
-        return new BootstrapDirectory(checkpointPath, true).read();
+        return BootstrapMetadata.fromCheckpointFile(checkpointPath);
     }
 }

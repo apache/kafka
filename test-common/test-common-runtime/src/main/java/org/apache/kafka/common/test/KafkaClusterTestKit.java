@@ -483,6 +483,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
             for (Feature feature : Feature.PRODUCTION_FEATURES) {
                 String featureName = feature.featureName();
+                // MetadataVersion is already set via setReleaseVersion above.
+                // KRaftVersion is derived internally by the Formatter based on quorum configuration.
                 if (featureName.equals(MetadataVersion.FEATURE_NAME) ||
                     featureName.equals(KRaftVersion.FEATURE_NAME)) {
                     continue;

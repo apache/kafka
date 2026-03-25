@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,7 +57,7 @@ public class BootstrapDirectoryTest {
         }
 
         synchronized String binaryBootstrapPath() {
-            return new File(directory, BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
+            return new File(directory, BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
         }
 
         @Override
@@ -73,7 +74,7 @@ public class BootstrapDirectoryTest {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
                     "the default bootstrap"),
-                new BootstrapDirectory(testDirectory.path()).read());
+                BootstrapMetadata.fromDirectory(Path.of(testDirectory.path())));
         }
     }
 
@@ -81,6 +82,6 @@ public class BootstrapDirectoryTest {
     public void testMissingDirectory() {
         assertEquals("No such directory as ./non/existent/directory",
             assertThrows(RuntimeException.class, () ->
-                new BootstrapDirectory("./non/existent/directory").read()).getMessage());
+                BootstrapMetadata.fromDirectory(Path.of("./non/existent/directory"))).getMessage());
     }
 }
