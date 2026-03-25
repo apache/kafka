@@ -33,7 +33,8 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
@@ -99,7 +100,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
     }
 
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
-        private WindowStore<K, VOther> otherWindowStore;
+        private TimestampedWindowStoreWithHeaders<K, VOther> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>>> outerJoinStore = Optional.empty();
         private InternalProcessorContext<K, VOut> internalProcessorContext;
@@ -149,9 +150,13 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
-            try (final WindowStoreIterator<VOther> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
+            try (final WindowStoreIterator<ValueTimestampHeaders<VOther>> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 final boolean needOuterJoin = outer && !iter.hasNext();
-                iter.forEachRemaining(otherRecord -> emitInnerJoin(record, otherRecord, inputRecordTimestamp));
+                iter.forEachRemaining(otherRecord -> {
+                    // Extract value from ValueTimestampHeaders wrapper
+                    final VOther otherValue = otherRecord.value == null ? null : otherRecord.value.value();
+                    emitInnerJoin(record, new KeyValue<>(otherRecord.key, otherValue), inputRecordTimestamp);
+                });
 
                 if (needOuterJoin) {
                     // The maxStreamTime contains the max time observed in both sides of the join.

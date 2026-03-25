@@ -507,7 +507,7 @@ public class LeaderState<T> implements EpochState {
      * This methods upgrades the kraft version to {@code newVersion}. If the version is already
      * {@code newVersion}, this is a noop operation.
      *
-     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to curent
+     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to current
      * kraft version {@code persistedVersion}.
      *
      * For the upgrade to succeed all of the voters in the voter set must support the new kraft

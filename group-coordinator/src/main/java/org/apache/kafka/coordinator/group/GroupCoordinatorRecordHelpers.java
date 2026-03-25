@@ -235,20 +235,23 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ConsumerGroupTargetAssignmentMetadata record.
      *
-     * @param groupId           The consumer group id.
-     * @param assignmentEpoch   The consumer group epoch.
+     * @param groupId             The consumer group id.
+     * @param assignmentEpoch     The consumer group epoch.
+     * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentMetadataRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long assignmentTimestamp
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(assignmentEpoch),
+                    .setAssignmentEpoch(assignmentEpoch)
+                    .setAssignmentTimestamp(assignmentTimestamp),
                 (short) 0
             )
         );
@@ -260,7 +263,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The consumer group id.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         return CoordinatorRecord.tombstone(
@@ -663,20 +666,23 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupTargetAssignmentMetadata record.
      *
-     * @param groupId           The group id.
-     * @param assignmentEpoch   The group epoch.
+     * @param groupId             The group id.
+     * @param assignmentEpoch     The group epoch.
+     * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newShareGroupTargetAssignmentMetadataRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long assignmentTimestamp
     ) {
         return CoordinatorRecord.record(
             new ShareGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(assignmentEpoch),
+                    .setAssignmentEpoch(assignmentEpoch)
+                    .setAssignmentTimestamp(assignmentTimestamp),
                 (short) 0
             )
         );
@@ -688,7 +694,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The group id.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newShareGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         return CoordinatorRecord.tombstone(
@@ -804,13 +810,19 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     private static List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> toTopicPartitions(
-        Map<Uuid, Set<Integer>> topicPartitions
+        Map<Uuid, Map<Integer, Integer>> assignment
     ) {
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(topicPartitions.size());
-        topicPartitions.forEach((topicId, partitions) ->
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(assignment.size());
+        assignment.forEach((topicId, partitionEpochs) -> {
+            List<Integer> partitionList = new ArrayList<>(partitionEpochs.keySet());
+            List<Integer> epochList = partitionList.stream()
+                .map(partitionEpochs::get)
+                .toList();
             topics.add(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId)
-                .setPartitions(new ArrayList<>(partitions)))
+                .setPartitions(partitionList)
+                .setAssignmentEpochs(epochList));
+            }
         );
         return topics;
     }

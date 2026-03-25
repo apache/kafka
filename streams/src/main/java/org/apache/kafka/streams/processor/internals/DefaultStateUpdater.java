@@ -364,7 +364,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 task.markChangelogAsCorrupted(task.changelogPartitions());
 
                 // we need to enforce a checkpoint that removes the corrupted partitions
-                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                measureCheckpointLatency(() -> task.maybeCheckpoint());
             } catch (final StreamsException swallow) {
                 log.warn("Checkpoint failed for corrupted task {}", task.id(), swallow);
             }
@@ -562,7 +562,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void prepareUpdatingTaskForRemoval(final Task task,
                                                    final StandbyUpdateListener.SuspendReason suspendReason) {
-            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+            measureCheckpointLatency(() -> task.maybeCheckpoint());
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             changelogReader.unregister(changelogPartitions, suspendReason);
         }
@@ -633,7 +633,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final TaskId taskId = task.id();
             // do not need to unregister changelog partitions for paused tasks
             try {
-                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                measureCheckpointLatency(() -> task.maybeCheckpoint());
                 pausedTasks.put(taskId, task);
                 updatingTasks.remove(taskId);
                 if (task.isActive()) {
@@ -672,7 +672,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(changelogPartitions)) {
                 try {
-                    measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                    measureCheckpointLatency(() -> task.maybeCheckpoint());
                     changelogReader.unregister(changelogPartitions);
                     addToRestoredTasks(task);
                     log.info("Stateful active task " + task.id() + " completed restoration");
@@ -713,7 +713,7 @@ public class DefaultStateUpdater implements StateUpdater {
                     for (final Task task : updatingTasks.values()) {
                         try {
                             // do not enforce checkpointing during restoration if its position has not advanced much
-                            task.maybeCheckpoint(false);
+                            task.maybeCheckpoint();
                         } catch (final StreamsException streamsException) {
                             handleStreamsExceptionWithTask(streamsException, task.id());
                         }

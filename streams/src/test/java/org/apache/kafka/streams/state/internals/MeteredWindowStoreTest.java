@@ -442,6 +442,16 @@ public class MeteredWindowStoreTest {
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
     }
 
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        store.init(context, store);
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        // inner store is a mock (not InMemoryWindowStore), so returns -1
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
+    }
+
     @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {

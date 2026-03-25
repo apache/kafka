@@ -43,6 +43,7 @@ public abstract class ApplicationEvent {
         STREAMS_ON_TASKS_ASSIGNED_CALLBACK_COMPLETED,
         STREAMS_ON_TASKS_REVOKED_CALLBACK_COMPLETED,
         STREAMS_ON_ALL_TASKS_LOST_CALLBACK_COMPLETED,
+        APPLY_ASSIGNMENT,
     }
 
     private final Type type;

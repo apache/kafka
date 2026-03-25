@@ -655,6 +655,17 @@ public class MeteredSessionStoreTest {
         assertThat(storeMetrics(), empty());
     }
 
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        setUp();
+        init();
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        // inner store is a mock (not InMemorySessionStore), so returns -1
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
+    }
+
     @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {

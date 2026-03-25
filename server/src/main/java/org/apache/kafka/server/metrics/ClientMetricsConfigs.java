@@ -140,27 +140,27 @@ public class ClientMetricsConfigs extends AbstractConfig {
         return CONFIG.names();
     }
 
-    public static void validate(String subscriptionName, Properties properties) {
+    public static void validate(String subscriptionName, Map<?, ?> props) {
         if (subscriptionName == null || subscriptionName.isEmpty()) {
             throw new InvalidRequestException("Subscription name can't be empty");
         }
 
-        validateProperties(properties);
+        validateConfigs(props);
     }
 
     @SuppressWarnings("unchecked")
-    private static void validateProperties(Properties properties) {
-        // Make sure that all the properties are valid
-        properties.forEach((key, value) -> {
+    private static void validateConfigs(Map<?, ?> configs) {
+        // Make sure that all the configs are valid
+        configs.forEach((key, value) -> {
             if (!names().contains(key)) {
                 throw new InvalidRequestException("Unknown client metrics configuration: " + key);
             }
         });
 
-        Map<String, Object> parsed = CONFIG.parse(properties);
+        Map<String, Object> parsed = CONFIG.parse(configs);
 
         // Make sure that push interval is between 100ms and 1 hour.
-        if (properties.containsKey(INTERVAL_MS_CONFIG)) {
+        if (configs.containsKey(INTERVAL_MS_CONFIG)) {
             int pushIntervalMs = (Integer) parsed.get(INTERVAL_MS_CONFIG);
             if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
                 String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
@@ -170,7 +170,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         }
 
         // Make sure that client match patterns are valid by parsing them.
-        if (properties.containsKey(MATCH_CONFIG)) {
+        if (configs.containsKey(MATCH_CONFIG)) {
             List<String> patterns = (List<String>) parsed.get(MATCH_CONFIG);
             // Parse the client matching patterns to validate if the patterns are valid.
             parseMatchingPatterns(patterns);

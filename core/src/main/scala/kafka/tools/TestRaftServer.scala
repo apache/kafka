@@ -198,6 +198,11 @@ class TestRaftServer(
       eventQueue.offer(HandleSnapshot(reader))
     }
 
+    override def handleLoadBootstrap(reader: SnapshotReader[Array[Byte]]): Unit = {
+      // TestRaftServer does not process bootstrap snapshots.
+      reader.close()
+    }
+
     override def initiateShutdown(): Boolean = {
       val initiated = super.initiateShutdown()
       eventQueue.offer(Shutdown)

@@ -17,16 +17,16 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Metrics;
 
-public abstract class RebalanceMetricsManager {
+public abstract class RebalanceMetricsManager extends AbstractConsumerMetricsManager {
     protected final String metricGroupName;
 
-    RebalanceMetricsManager(String metricGroupName) {
+    RebalanceMetricsManager(MetricsLedger metrics, String metricGroupName) {
+        super(metrics);
         this.metricGroupName = metricGroupName;
     }
 
-    protected MetricName createMetric(Metrics metrics, String name, String description) {
+    protected MetricName createMetric(String name, String description) {
         return metrics.metricName(name, metricGroupName, description);
     }
 

@@ -51,12 +51,12 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
         super(null);
         this.name = name;
 
-        this.map = new TreeMap<>();
+        map = new TreeMap<>();
     }
 
     @Override
     public String name() {
-        return this.name;
+        return name;
     }
 
     @Override
@@ -65,7 +65,7 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
             stateStoreContext.register(root, null);
         }
 
-        this.open = true;
+        open = true;
     }
 
     @Override
@@ -81,21 +81,21 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
 
     @Override
     public boolean isOpen() {
-        return this.open;
+        return open;
     }
 
     @Override
     public synchronized V get(final K key) {
-        return this.map.get(key);
+        return map.get(key);
     }
 
     @Override
     public synchronized void put(final K key,
         final V value) {
         if (value == null) {
-            this.map.remove(key);
+            map.remove(key);
         } else {
-            this.map.put(key, value);
+            map.put(key, value);
         }
     }
 
@@ -118,26 +118,25 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
 
     @Override
     public synchronized V delete(final K key) {
-        return this.map.remove(key);
+        return map.remove(key);
     }
 
     @Override
     public synchronized KeyValueIterator<K, V> range(final K from,
         final K to) {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new GenericInMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+        final TreeMap<K, V> copy = new TreeMap<>(map.subMap(from, true, to, true));
+        return new DelegatingPeekingKeyValueIterator<>(name, new GenericInMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 
     @Override
     public synchronized KeyValueIterator<K, V> all() {
-        final TreeMap<K, V> copy = new TreeMap<>(this.map);
+        final TreeMap<K, V> copy = new TreeMap<>(map);
         return new DelegatingPeekingKeyValueIterator<>(name, new GenericInMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 
     @Override
     public long approximateNumEntries() {
-        return this.map.size();
+        return map.size();
     }
 
     @Override
@@ -147,8 +146,8 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
 
     @Override
     public void close() {
-        this.map.clear();
-        this.open = false;
+        map.clear();
+        open = false;
     }
 
     private static class GenericInMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {

@@ -110,7 +110,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             "maxBackgroundFlushes",
             "setMaxBackgroundFlushes",
             "tablePropertiesCollectorFactory",
-            "setTablePropertiesCollectorFactory"
+            "setTablePropertiesCollectorFactory",
+            "setAtomicFlush"
         ),
         walRelatedMethods.stream()
     ).collect(Collectors.toList());
@@ -354,6 +355,23 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     .collect(Collectors.toSet());
 
                 walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
+            }
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenSettingAtomicFlushOption() {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
+
+            try (RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                         new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+                adapter.setAtomicFlush(false);
+                final Set<String> logMessages = appender.getEvents().stream()
+                        .filter(e -> e.getLevel().equals("WARN"))
+                        .map(LogCaptureAppender.Event::getMessage)
+                        .collect(Collectors.toSet());
+                assertThat(logMessages, hasItem("AtomicFlush is explicitly set to True by Streams in RocksDB. Setting this option to 'false' will be ignored"));
             }
         }
     }

@@ -2237,7 +2237,7 @@ class KafkaRaftClientTest {
     @ValueSource(booleans = { true, false })
     public void testObserverHandleRetryFetchToBootstrapServer(boolean withKip853Rpc) throws Exception {
         // This test tries to check that KRaft is able to handle a retrying Fetch request to
-        // a boostrap server after a Fetch request to the leader.
+        // a bootstrap server after a Fetch request to the leader.
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;

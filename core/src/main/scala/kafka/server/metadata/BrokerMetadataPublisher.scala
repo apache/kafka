@@ -233,7 +233,7 @@ class BrokerMetadataPublisher(
             finalizedShareVersion = newFinalizedShareVersion
             val shareVersion: ShareVersion = ShareVersion.fromFeatureLevel(finalizedShareVersion)
             info(s"Feature share.version has been updated to version $finalizedShareVersion")
-            sharePartitionManager.onShareVersionToggle(shareVersion, config.shareGroupConfig.isShareGroupEnabled)
+            sharePartitionManager.onShareVersionToggle(shareVersion)
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
