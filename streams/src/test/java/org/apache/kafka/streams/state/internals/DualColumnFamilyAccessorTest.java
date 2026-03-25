@@ -348,7 +348,6 @@ public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTe
 
         accessor.commit(dbAccessor, offsets);
 
-        verify(dbAccessor).flush(oldCF, newCF, offsetsCF);
     }
 
     @Test

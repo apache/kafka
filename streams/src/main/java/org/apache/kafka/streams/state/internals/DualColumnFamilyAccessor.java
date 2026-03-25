@@ -240,11 +240,6 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     @Override
-    public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
-        accessor.flush(oldColumnFamily, newColumnFamily, offsetColumnFamilyHandle);
-    }
-
-    @Override
     public void addToBatch(final byte[] key,
                            final byte[] value,
                            final WriteBatchInterface batch) throws RocksDBException {

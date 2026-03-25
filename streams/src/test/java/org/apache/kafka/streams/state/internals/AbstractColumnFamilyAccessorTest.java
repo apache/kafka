@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -99,7 +98,6 @@ abstract class AbstractColumnFamilyAccessorTest {
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
         accessor.commit(dbAccessor, changelogOffsets);
-        verify(dbAccessor).flush(any(ColumnFamilyHandle[].class));
         verify(dbAccessor).put(eq(offsetsCF), eq(toBytes(tp0.toString())), eq(toBytes(10L)));
         verify(dbAccessor).put(eq(offsetsCF), eq(toBytes(tp1.toString())), eq(toBytes(20L)));
     }

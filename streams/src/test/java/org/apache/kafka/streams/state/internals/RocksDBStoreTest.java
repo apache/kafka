@@ -86,7 +86,6 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -918,15 +917,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
-    @Test
-    public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
-        rocksDBStore.init(context, rocksDBStore);
-        Utils.delete(dir);
-        rocksDBStore.put(
-            new Bytes(stringSerializer.serialize(null, "anyKey")),
-            stringSerializer.serialize(null, "anyValue"));
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.commit(Map.of()));
-    }
 
     @Test
     public void shouldHandleToggleOfEnablingBloomFilters() {
