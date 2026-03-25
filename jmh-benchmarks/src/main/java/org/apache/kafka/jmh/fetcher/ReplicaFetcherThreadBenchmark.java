@@ -29,7 +29,6 @@ import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
 
@@ -59,6 +58,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.network.BrokerEndPoint;
+import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;

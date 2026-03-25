@@ -5316,25 +5316,51 @@ kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[s
 <tr>  
 <td>
 
-flush-latency-avg
-</td>  
+flush-latency-avg (deprecated)
+</td>
 <td>
 
-The average flush execution time in ns.
-</td>  
+The average flush execution time in ns. Deprecated: use commit-latency-avg instead.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
-</td> </tr>  
-<tr>  
+</td> </tr>
+<tr>
 <td>
 
-flush-latency-max
-</td>  
+flush-latency-max (deprecated)
+</td>
 <td>
 
-The maximum flush execution time in ns.
-</td>  
+The maximum flush execution time in ns. Deprecated: use commit-latency-max instead.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+commit-latency-avg
+</td>
+<td>
+
+The average commit execution time in ns.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+commit-latency-max
+</td>
+<td>
+
+The maximum commit execution time in ns.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
@@ -5472,17 +5498,30 @@ kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[s
 <tr>  
 <td>
 
-flush-rate
-</td>  
+flush-rate (deprecated)
+</td>
 <td>
 
-The average flush rate for this store.
-</td>  
+The average flush rate for this store. Deprecated: use commit-rate instead.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
-</td> </tr>  
-<tr>  
+</td> </tr>
+<tr>
+<td>
+
+commit-rate
+</td>
+<td>
+
+The average commit rate for this store.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
 <td>
 
 restore-rate

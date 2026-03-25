@@ -25,8 +25,12 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -94,7 +98,8 @@ public class ValueWithHeadersDeserializerTest {
         assertThrows(SerializationException.class, () -> deserializer.deserialize("topic", invalidData));
     }
 
-    @Test
+    @ParameterizedTest
+    @MethodSource("headers")
     public void shouldExtractHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
@@ -104,16 +109,23 @@ public class ValueWithHeadersDeserializerTest {
         final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-        final Headers extractedHeaders = ValueWithHeadersDeserializer.headers(serialized);
-        assertNotNull(extractedHeaders);
+            final Headers extractedHeaders = Utils.headers(serialized);
+            assertNotNull(extractedHeaders);
 
-        final Header header = extractedHeaders.iterator().next();
-        assertEquals("key1", header.key());
-        assertArrayEquals("value1".getBytes(), header.value());
+            final Header header = extractedHeaders.iterator().next();
+            assertEquals("key1", header.key());
+            assertArrayEquals("value1".getBytes(), header.value());
     }
 
     @Test
     public void shouldReturnNullForNullInput() {
-        assertNull(ValueWithHeadersDeserializer.headers(null));
+        assertNull(Utils.headers(null));
+    }
+
+    private static Stream<Arguments> headers() {
+        return Stream.of(
+                new RecordHeaders().add("key1", "value1".getBytes()),
+                new RecordHeaders()
+            ).map(Arguments::of);
     }
 }

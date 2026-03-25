@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
@@ -65,9 +64,9 @@ class ValueWithHeadersDeserializer<V> implements WrappingNullableDeserializer<Ag
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(valueWithHeaders);
-        final Headers headers = readHeaders(buffer);
-        final byte[] rawValue = readBytes(buffer, buffer.remaining());
-        final V value = valueDeserializer.deserialize(topic, headers, rawValue);
+        final Headers headers = Utils.readHeaders(buffer);
+        final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
+        final V aggregation = valueDeserializer.deserialize(topic, headers, rawAggregation);
 
         return AggregationWithHeaders.makeAllowNullable(value, headers);
     }

@@ -22,7 +22,6 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -54,7 +53,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTest {
 
     private final Serializer<String> stringSerializer = new StringSerializer();
-    private final Serializer<Long> longSerializer = new LongSerializer();
     private final Deserializer<Long> longDeserializer = new LongDeserializer();
     private final ValueWithHeadersSerializer<String> aggSerializer = new ValueWithHeadersSerializer<>(new StringSerializer());
     private final ValueWithHeadersDeserializer<String> aggDeserializer = new ValueWithHeadersDeserializer<>(new StringDeserializer());
@@ -518,11 +516,11 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
     }
 
     private void assertMigratedValue(final byte[] value, final String expectedAggregation) {
-        final Headers headers = ValueWithHeadersDeserializer.headers(value);
+        final Headers headers = Utils.headers(value);
         assertFalse(headers.iterator().hasNext(), "Migrated value should have empty headers");
         assertArrayEquals(
             expectedAggregation.getBytes(StandardCharsets.UTF_8),
-            ValueWithHeadersDeserializer.rawAggregation(value),
+            Utils.rawAggregation(value),
             "Migrated value should preserve original aggregation: " + expectedAggregation);
     }
 
