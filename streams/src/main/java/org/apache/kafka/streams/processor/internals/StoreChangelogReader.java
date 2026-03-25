@@ -1045,7 +1045,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void seekToTimestampOrBeginning(final Map<TopicPartition, Long> partitionsWithTimestampSeek,
-                                               final Set<TopicPartition> partitionsWithoutStartOffset) {
+                                            final Set<TopicPartition> partitionsWithoutStartOffset) {
         // optimization: seek windowed stores by timestamp to skip expired data
         if (!partitionsWithTimestampSeek.isEmpty()) {
             final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
