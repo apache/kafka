@@ -30,6 +30,8 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
@@ -492,6 +494,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 short level = nodes.bootstrapMetadata().featureLevel(featureName);
                 formatter.setFeatureLevel(featureName, level);
             }
+
+            // Filter out records already handled by the Formatter (feature levels and SCRAM).
+            List<ApiMessageAndVersion> additionalRecords = nodes.bootstrapMetadata().records().stream()
+                .filter(r -> !(r.message() instanceof FeatureLevelRecord)
+                    && !(r.message() instanceof UserScramCredentialRecord))
+                .toList();
+            formatter.setAdditionalBootstrapRecords(additionalRecords);
 
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";

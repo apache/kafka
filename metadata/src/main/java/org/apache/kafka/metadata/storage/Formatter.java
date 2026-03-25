@@ -102,6 +102,11 @@ public class Formatter {
     private BootstrapMetadata bootstrapMetadata;
 
     /**
+     * Additional bootstrap records to include beyond feature levels and SCRAM.
+     */
+    private List<ApiMessageAndVersion> additionalBootstrapRecords = List.of();
+
+    /**
      * True if we should enable unstable feature versions.
      */
     private boolean unstableFeatureVersionsEnabled = false;
@@ -179,6 +184,11 @@ public class Formatter {
 
     public Formatter setFeatureLevel(String featureName, Short level) {
         this.featureLevels.put(featureName, level);
+        return this;
+    }
+
+    public Formatter setAdditionalBootstrapRecords(List<ApiMessageAndVersion> additionalBootstrapRecords) {
+        this.additionalBootstrapRecords = additionalBootstrapRecords;
         return this;
     }
 
@@ -387,6 +397,9 @@ public class Formatter {
                         " " + MetadataVersion.IBP_3_5_IV2 + " or later.");
             }
             bootstrapRecords.addAll(ScramParser.parse(scramArguments));
+        }
+        if (!additionalBootstrapRecords.isEmpty()) {
+            bootstrapRecords.addAll(additionalBootstrapRecords);
         }
         return BootstrapMetadata.fromRecords(bootstrapRecords, "format command");
     }
