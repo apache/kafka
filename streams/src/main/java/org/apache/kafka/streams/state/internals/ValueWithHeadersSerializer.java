@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -44,7 +44,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  * <p>
  * This is used by KIP-1271 to serialize values with headers for session and window state stores.
  */
-class ValueWithHeadersSerializer<V> implements WrappingNullableSerializer<AggregationWithHeaders<V>, Void, V> {
+class ValueWithHeadersSerializer<V> implements WrappingNullableSerializer<ValueWithHeaders<V>, Void, V> {
     public final Serializer<V> valueSerializer;
 
     ValueWithHeadersSerializer(final Serializer<V> valueSerializer) {
@@ -58,7 +58,7 @@ class ValueWithHeadersSerializer<V> implements WrappingNullableSerializer<Aggreg
     }
 
     @Override
-    public byte[] serialize(final String topic, final AggregationWithHeaders<V> valueWithHeaders) {
+    public byte[] serialize(final String topic, final ValueWithHeaders<V> valueWithHeaders) {
         if (valueWithHeaders == null) {
             return null;
         }

@@ -117,12 +117,12 @@ public final class RecordConverters {
     }
 
     /**
-     * Reconstructs the AggregationWithHeaders format from raw value bytes and headers (no timestamp).
+     * Reconstructs the ValueWithHeaders format from raw value bytes and headers (no timestamp).
      * Used during state restoration from changelog topics for session stores.
      *
      * @param rawValue the raw aggregation bytes
      * @param headers the headers
-     * @return the serialized AggregationWithHeaders format
+     * @return the serialized ValueWithHeaders format
      */
     static byte[] reconstructSessionFromRaw(final byte[] rawValue, final Headers headers) {
         if (rawValue == null) {

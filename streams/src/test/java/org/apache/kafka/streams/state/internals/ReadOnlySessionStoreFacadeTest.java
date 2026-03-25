@@ -20,9 +20,9 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ public class ReadOnlySessionStoreFacadeTest {
     @Mock
     private SessionStoreWithHeaders<String, String> mockedSessionStoreWithHeaders;
     @Mock
-    private KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> mockedIterator;
+    private KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> mockedIterator;
 
     private ReadOnlySessionStoreFacade<String, String> readOnlySessionStoreFacade;
 
@@ -55,7 +55,7 @@ public class ReadOnlySessionStoreFacadeTest {
     @Test
     public void shouldReturnPlainValueOnFetchSession() {
         when(mockedSessionStoreWithHeaders.fetchSession("key", 10L, 20L))
-            .thenReturn(AggregationWithHeaders.make("value", new RecordHeaders()));
+            .thenReturn(ValueWithHeaders.make("value", new RecordHeaders()));
 
         assertThat(readOnlySessionStoreFacade.fetchSession("key", 10L, 20L), is("value"));
     }
@@ -73,10 +73,10 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(10L, 20L)),
-                AggregationWithHeaders.make("value1", new RecordHeaders())))
+                ValueWithHeaders.make("value1", new RecordHeaders())))
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new SessionWindow(30L, 40L)),
-                AggregationWithHeaders.make("value2", new RecordHeaders())));
+                ValueWithHeaders.make("value2", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.findSessions("key1", 10L, 40L))
             .thenReturn(mockedIterator);
 
@@ -92,7 +92,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(30L, 40L)),
-                AggregationWithHeaders.make("value1", new RecordHeaders())));
+                ValueWithHeaders.make("value1", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.backwardFindSessions("key1", 10L, 40L))
             .thenReturn(mockedIterator);
 
@@ -107,7 +107,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(10L, 20L)),
-                AggregationWithHeaders.make("value1", new RecordHeaders())));
+                ValueWithHeaders.make("value1", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.findSessions("key1", "key2", 10L, 40L))
             .thenReturn(mockedIterator);
 
@@ -122,7 +122,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new SessionWindow(30L, 40L)),
-                AggregationWithHeaders.make("value2", new RecordHeaders())));
+                ValueWithHeaders.make("value2", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.backwardFindSessions("key1", "key2", 10L, 40L))
             .thenReturn(mockedIterator);
 
@@ -137,10 +137,10 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(10L, 20L)),
-                AggregationWithHeaders.make("value1", new RecordHeaders())))
+                ValueWithHeaders.make("value1", new RecordHeaders())))
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(30L, 40L)),
-                AggregationWithHeaders.make("value2", new RecordHeaders())));
+                ValueWithHeaders.make("value2", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.fetch("key1")).thenReturn(mockedIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
@@ -155,7 +155,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(30L, 40L)),
-                AggregationWithHeaders.make("value1", new RecordHeaders())));
+                ValueWithHeaders.make("value1", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.backwardFetch("key1")).thenReturn(mockedIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
@@ -169,7 +169,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new SessionWindow(10L, 20L)),
-                AggregationWithHeaders.make("value1", new RecordHeaders())));
+                ValueWithHeaders.make("value1", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.fetch("key1", "key2")).thenReturn(mockedIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
@@ -183,7 +183,7 @@ public class ReadOnlySessionStoreFacadeTest {
         when(mockedIterator.next())
             .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new SessionWindow(30L, 40L)),
-                AggregationWithHeaders.make("value2", new RecordHeaders())));
+                ValueWithHeaders.make("value2", new RecordHeaders())));
         when(mockedSessionStoreWithHeaders.backwardFetch("key1", "key2")).thenReturn(mockedIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =

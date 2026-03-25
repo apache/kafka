@@ -28,8 +28,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.Test;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -156,7 +156,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         final byte[] key1Result = rocksDBStore.get(new Bytes("key1".getBytes()));
         assertMigratedValue(key1Result, "1");
 
-        // put() - tests migration on write using properly serialized AggregationWithHeaders
+        // put() - tests migration on write using properly serialized ValueWithHeaders
         final byte[] key2Value = serializeAggWithHeaders("22", testHeaders());
         rocksDBStore.put(new Bytes("key2".getBytes()), key2Value);
 
@@ -512,7 +512,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
     }
 
     private byte[] serializeAggWithHeaders(final String aggregation, final Headers headers) {
-        return aggSerializer.serialize(null, AggregationWithHeaders.make(aggregation, headers));
+        return aggSerializer.serialize(null, ValueWithHeaders.make(aggregation, headers));
     }
 
     private void assertMigratedValue(final byte[] value, final String expectedAggregation) {
@@ -520,12 +520,12 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         assertFalse(headers.iterator().hasNext(), "Migrated value should have empty headers");
         assertArrayEquals(
             expectedAggregation.getBytes(StandardCharsets.UTF_8),
-            Utils.rawAggregation(value),
+            Utils.rawValue(value),
             "Migrated value should preserve original aggregation: " + expectedAggregation);
     }
 
     private void assertValueWithHeaders(final byte[] value, final String expectedAggregation, final Headers expectedHeaders) {
-        final AggregationWithHeaders<String> deserialized = aggDeserializer.deserialize(null, value);
+        final ValueWithHeaders<String> deserialized = aggDeserializer.deserialize(null, value);
         assertEquals(expectedAggregation, deserialized.aggregation());
         for (final Header header : expectedHeaders) {
             assertArrayEquals(

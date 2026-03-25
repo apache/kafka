@@ -18,9 +18,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -43,7 +44,7 @@ import static org.apache.kafka.streams.state.internals.Utils.readBytes;
  * <p>
  * This is used by KIP-1271 to deserialize values with headers from session and window state stores.
  */
-class ValueWithHeadersDeserializer<V> implements WrappingNullableDeserializer<AggregationWithHeaders<V>, Void, V> {
+class ValueWithHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueWithHeaders<V>, Void, V> {
 
     public final Deserializer<V> valueDeserializer;
 
@@ -58,17 +59,17 @@ class ValueWithHeadersDeserializer<V> implements WrappingNullableDeserializer<Ag
     }
 
     @Override
-    public AggregationWithHeaders<V> deserialize(final String topic, final byte[] valueWithHeaders) {
+    public ValueWithHeaders<V> deserialize(final String topic, final byte[] valueWithHeaders) {
         if (valueWithHeaders == null) {
             return null;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(valueWithHeaders);
         final Headers headers = Utils.readHeaders(buffer);
-        final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
-        final V aggregation = valueDeserializer.deserialize(topic, headers, rawAggregation);
+        final byte[] rawValue = readBytes(buffer, buffer.remaining());
+        final V value = valueDeserializer.deserialize(topic, headers, rawValue);
 
-        return AggregationWithHeaders.makeAllowNullable(value, headers);
+        return ValueWithHeaders.makeAllowNullable(value, headers);
     }
 
     @Override
@@ -97,7 +98,7 @@ class ValueWithHeadersDeserializer<V> implements WrappingNullableDeserializer<Ag
      * Extract the raw value bytes from serialized value with headers,
      * stripping the headers prefix.
      */
-    static byte[] rawAggregation(final byte[] valueWithHeaders) {
+    static byte[] rawValue(final byte[] valueWithHeaders) {
         if (valueWithHeaders == null) {
             return null;
         }

@@ -22,7 +22,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,7 +45,7 @@ public class ValueWithHeadersDeserializerTest {
 
     @Test
     public void shouldDeserializeNullAsNull() {
-        final AggregationWithHeaders<Long> result = deserializer.deserialize("topic", null);
+        final ValueWithHeaders<Long> result = deserializer.deserialize("topic", null);
         assertNull(result);
     }
 
@@ -53,12 +53,12 @@ public class ValueWithHeadersDeserializerTest {
     public void shouldDeserializeAggregationWithEmptyHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-        final AggregationWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
+        final ValueWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
 
         assertNotNull(result);
         assertEquals(aggregation, result.aggregation());
@@ -66,17 +66,17 @@ public class ValueWithHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldDeserializeAggregationWithHeaders() {
+    public void shouldDeserializeValueWithHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
         headers.add("key2", "value2".getBytes());
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-        final AggregationWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
+        final ValueWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
 
         assertNotNull(result);
         assertEquals(aggregation, result.aggregation());
@@ -104,17 +104,17 @@ public class ValueWithHeadersDeserializerTest {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         final ValueWithHeadersSerializer<Long> serializer = new ValueWithHeadersSerializer<>(Serdes.Long().serializer());
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-            final Headers extractedHeaders = Utils.headers(serialized);
-            assertNotNull(extractedHeaders);
+        final Headers extractedHeaders = Utils.headers(serialized);
+        assertNotNull(extractedHeaders);
 
-            final Header header = extractedHeaders.iterator().next();
-            assertEquals("key1", header.key());
-            assertArrayEquals("value1".getBytes(), header.value());
+        final Header header = extractedHeaders.iterator().next();
+        assertEquals("key1", header.key());
+        assertArrayEquals("value1".getBytes(), header.value());
     }
 
     @Test

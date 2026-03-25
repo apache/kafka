@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import static java.util.Objects.requireNonNull;
 
@@ -30,7 +30,7 @@ import static java.util.Objects.requireNonNull;
  *
  * This is used by KIP-1271 to support headers in session and window state stores.
  */
-public class ValueWithHeadersSerde<V> extends WrappingNullableSerde<AggregationWithHeaders<V>, Void, V> {
+public class ValueWithHeadersSerde<V> extends WrappingNullableSerde<ValueWithHeaders<V>, Void, V> {
     public ValueWithHeadersSerde(final Serde<V> valueSerde) {
         super(
             new ValueWithHeadersSerializer<>(requireNonNull(valueSerde, "valueSerde was null").serializer()),

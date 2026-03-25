@@ -45,9 +45,9 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.Test;
@@ -158,15 +158,15 @@ public class MeteredSessionStoreWithHeadersTest {
             .collect(Collectors.toList());
     }
 
-    private <AGG> Serde<AggregationWithHeaders<AGG>> createValueWithHeadersSerde(final Serde<AGG> aggSerde) {
+    private <V> Serde<ValueWithHeaders<V>> createValueWithHeadersSerde(final Serde<V> aggSerde) {
         return new Serde<>() {
             @Override
-            public Serializer<AggregationWithHeaders<AGG>> serializer() {
+            public Serializer<ValueWithHeaders<V>> serializer() {
                 return new ValueWithHeadersSerializer<>(aggSerde.serializer());
             }
 
             @Override
-            public Deserializer<AggregationWithHeaders<AGG>> deserializer() {
+            public Deserializer<ValueWithHeaders<V>> deserializer() {
                 return new ValueWithHeadersDeserializer<>(aggSerde.deserializer());
             }
         };
@@ -213,7 +213,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         doNothing().when(innerStore).put(any(Windowed.class), any(byte[].class));
 
@@ -223,7 +223,7 @@ public class MeteredSessionStoreWithHeadersTest {
         verify(innerStore).put(any(Windowed.class), byteCaptor.capture());
 
         final ValueWithHeadersDeserializer<String> deserializer = new ValueWithHeadersDeserializer<>(Serdes.String().deserializer());
-        final AggregationWithHeaders<String> deserialized = deserializer.deserialize(CHANGELOG_TOPIC, byteCaptor.getValue());
+        final ValueWithHeaders<String> deserialized = deserializer.deserialize(CHANGELOG_TOPIC, byteCaptor.getValue());
         assertEquals(VALUE, deserialized.aggregation());
         assertNotNull(deserialized.headers());
         assertEquals("value1", new String(deserialized.headers().lastHeader("key1").value()));
@@ -239,7 +239,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -247,7 +247,7 @@ public class MeteredSessionStoreWithHeadersTest {
         when(innerStore.fetchSession(KEY_BYTES, START_TIMESTAMP, END_TIMESTAMP))
             .thenReturn(serializedValue);
 
-        final AggregationWithHeaders<String> result = store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
+        final ValueWithHeaders<String> result = store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
 
         assertNotNull(result);
         assertEquals(VALUE, result.aggregation());
@@ -265,7 +265,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -274,10 +274,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.findSessions(KEY, 0, 0);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.findSessions(KEY, 0, 0);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -295,7 +295,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -304,10 +304,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFindSessions(KEY, 0, 0);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.backwardFindSessions(KEY, 0, 0);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -325,7 +325,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -334,10 +334,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.findSessions(KEY, KEY, 0, 0);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.findSessions(KEY, KEY, 0, 0);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -370,7 +370,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -379,10 +379,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -400,7 +400,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -409,10 +409,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.backwardFetch(KEY);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -430,7 +430,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -439,10 +439,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY, KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY, KEY);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -461,7 +461,7 @@ public class MeteredSessionStoreWithHeadersTest {
         when(innerStore.fetchSession(KEY_BYTES, START_TIMESTAMP, END_TIMESTAMP))
             .thenReturn(null);
 
-        final AggregationWithHeaders<String> result = store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
+        final ValueWithHeaders<String> result = store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
 
         assertNull(result);
     }
@@ -518,7 +518,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -527,10 +527,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY, KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.backwardFetch(KEY, KEY);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -548,7 +548,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -557,10 +557,10 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFindSessions(KEY, KEY, 0, 0);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.backwardFindSessions(KEY, KEY, 0, 0);
 
         assertTrue(iterator.hasNext());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
@@ -578,7 +578,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -592,7 +592,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY);
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
 
@@ -608,7 +608,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -623,7 +623,7 @@ public class MeteredSessionStoreWithHeadersTest {
         assertThat(oldestIteratorMetric.metricValue(), equalTo(0L));
 
         final long beforeOpen = mockTime.milliseconds();
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY);
         final long afterOpen = mockTime.milliseconds();
 
         final long oldestTimestamp = (Long) oldestIteratorMetric.metricValue();
@@ -641,7 +641,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -650,7 +650,7 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY);
 
         mockTime.sleep(100L);
 
@@ -693,7 +693,7 @@ public class MeteredSessionStoreWithHeadersTest {
         init();
 
         final Headers headers = new RecordHeaders();
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         try {
             store.put(null, valueAndHeaders);
@@ -709,7 +709,7 @@ public class MeteredSessionStoreWithHeadersTest {
         init();
 
         final Headers headers = new RecordHeaders();
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         try {
             store.put(null, valueAndHeaders);
@@ -753,7 +753,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final ValueWithHeaders<String> valueAndHeaders = ValueWithHeaders.make(VALUE, headers);
 
         final ValueWithHeadersSerializer<String> serializer = new ValueWithHeadersSerializer<>(Serdes.String().serializer());
         final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
@@ -815,9 +815,9 @@ public class MeteredSessionStoreWithHeadersTest {
     // --- Tests verifying headers from value are used to deserialize keys ---
 
     private static final Headers HEADERS = new RecordHeaders().add("key1", "value1".getBytes());
-    private static final AggregationWithHeaders<String> AGG_WITH_HEADERS = AggregationWithHeaders.make(VALUE, HEADERS);
+    private static final ValueWithHeaders<String> VALUE_WITH_HEADERS = ValueWithHeaders.make(VALUE, HEADERS);
     private static final byte[] SERIALIZED_VALUE = new ValueWithHeadersSerializer<>(Serdes.String().serializer())
-        .serialize(CHANGELOG_TOPIC, AGG_WITH_HEADERS);
+        .serialize(CHANGELOG_TOPIC, VALUE_WITH_HEADERS);
 
     @SuppressWarnings("unchecked")
     private MeteredSessionStoreWithHeaders<String, String> createStoreWithMockSerdes(
@@ -825,8 +825,8 @@ public class MeteredSessionStoreWithHeadersTest {
     ) {
         final Deserializer<String> keyDeserializer = mock(Deserializer.class);
         final Serializer<String> keySerializer = mock(Serializer.class);
-        final Deserializer<AggregationWithHeaders<String>> valueDeserializer = mock(Deserializer.class);
-        final Serde<AggregationWithHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueWithHeaders<String>> valueDeserializer = mock(Deserializer.class);
+        final Serde<ValueWithHeaders<String>> valueSerde = mock(Serde.class);
 
         lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
         lenient().when(keySerde.serializer()).thenReturn(keySerializer);
@@ -835,7 +835,7 @@ public class MeteredSessionStoreWithHeadersTest {
         lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
 
         lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(SERIALIZED_VALUE)))
-            .thenReturn(AGG_WITH_HEADERS);
+            .thenReturn(VALUE_WITH_HEADERS);
 
         lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
             .thenReturn(KEY);
@@ -862,13 +862,13 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -886,13 +886,13 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.backwardFetch(KEY);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -910,13 +910,13 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY, KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(KEY, KEY);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -934,13 +934,13 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY, KEY);
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.backwardFetch(KEY, KEY);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -958,14 +958,14 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator =
             store.findSessions(KEY, 0, 100);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -983,14 +983,14 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator =
             store.backwardFindSessions(KEY, 0, 100);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -1008,14 +1008,14 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator =
             store.findSessions(KEY, KEY, 0, 100);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -1033,14 +1033,14 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator =
             store.backwardFindSessions(KEY, KEY, 0, 100);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -1058,14 +1058,14 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(
                 List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+        final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator =
             store.findSessions(0, 100);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());
-        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        final KeyValue<Windowed<String>, ValueWithHeaders<String>> result = iterator.next();
         assertEquals(KEY, result.key.key());
-        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertEquals(VALUE_WITH_HEADERS, result.value);
         assertFalse(iterator.hasNext());
         iterator.close();
 

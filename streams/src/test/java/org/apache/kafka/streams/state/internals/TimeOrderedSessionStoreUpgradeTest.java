@@ -35,12 +35,12 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslSessionParams;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -138,17 +138,17 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data readable with empty headers via lazy migration
         byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
+        assertEquals("value1", new String(Utils.rawValue(fetch)));
         assertEquals(0, Utils.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         fetch = newStore.fetchSession(key2, 150, 250);
         assertNotNull(fetch);
-        assertEquals("value2", new String(Utils.rawAggregation(fetch)));
+        assertEquals("value2", new String(Utils.rawValue(fetch)));
         assertEquals(0, Utils.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         fetch = newStore.fetchSession(key3, 200, 300);
         assertNotNull(fetch);
-        assertEquals("value3", new String(Utils.rawAggregation(fetch)));
+        assertEquals("value3", new String(Utils.rawValue(fetch)));
         assertEquals(0, Utils.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         newStore.close();
@@ -178,7 +178,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data still accessible
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
+        assertEquals("value1", new String(Utils.rawValue(fetch)));
 
         newStore.close();
     }
@@ -207,7 +207,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data still accessible
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
+        assertEquals("value1", new String(Utils.rawValue(fetch)));
 
         newStore.close();
     }
@@ -228,18 +228,18 @@ public class TimeOrderedSessionStoreUpgradeTest {
 
         // Write with empty headers
         store.put(new Windowed<>(key1, new SessionWindow(100, 200)),
-            serializer.serialize(null, AggregationWithHeaders.make("value1".getBytes(), new RecordHeaders())));
+            serializer.serialize(null, ValueWithHeaders.make("value1".getBytes(), new RecordHeaders())));
 
         // Write with actual headers
         final RecordHeaders headersWithData = new RecordHeaders();
         headersWithData.add("header-key-1", "header-value-1".getBytes());
         headersWithData.add("header-key-2", "header-value-2".getBytes());
         store.put(new Windowed<>(key2, new SessionWindow(150, 250)),
-            serializer.serialize(null, AggregationWithHeaders.make("value2".getBytes(), headersWithData)));
+            serializer.serialize(null, ValueWithHeaders.make("value2".getBytes(), headersWithData)));
 
         // Verify values
-        assertEquals("value1", new String(Utils.rawAggregation(store.fetchSession(key1, 100, 200))));
-        assertEquals("value2", new String(Utils.rawAggregation(store.fetchSession(key2, 150, 250))));
+        assertEquals("value1", new String(Utils.rawValue(store.fetchSession(key1, 100, 200))));
+        assertEquals("value2", new String(Utils.rawValue(store.fetchSession(key2, 150, 250))));
 
         // Verify headers for key1 (empty)
         final Headers key1Headers = Utils.headers(store.fetchSession(key1, 100, 200));
@@ -301,7 +301,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data readable with empty headers via lazy migration
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch, "Old data should be readable after upgrade via DSL supplier path");
-        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
+        assertEquals("value1", new String(Utils.rawValue(fetch)));
         assertEquals(0, Utils.headers(fetch).toArray().length,
             "Old data should have empty headers after migration");
 

@@ -34,7 +34,6 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -51,6 +50,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
@@ -1830,19 +1830,19 @@ public class HeadersStoreUpgradeIntegrationTest {
                 if (processorRef.get() == null) {
                     return false;
                 }
-                final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store = processorRef.get().store();
+                final ReadOnlySessionStore<String, ValueWithHeaders<String>> store = processorRef.get().store();
                 if (store == null) {
                     return false;
                 }
 
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
+                try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(key)) {
                     while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
+                        final KeyValue<Windowed<String>, ValueWithHeaders<String>> kv = iterator.next();
                         if (kv.key.key().equals(key)
                             && kv.key.window().start() == timestamp
                             && kv.key.window().end() == timestamp) {
 
-                            final AggregationWithHeaders<String> result = kv.value;
+                            final ValueWithHeaders<String> result = kv.value;
                             assertNotNull(result, "Result should not be null");
                             assertEquals(value, result.aggregation(), "Value should match");
 
@@ -1883,20 +1883,20 @@ public class HeadersStoreUpgradeIntegrationTest {
                 if (processorRef.get() == null) {
                     return false;
                 }
-                final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store = processorRef.get().store();
+                final ReadOnlySessionStore<String, ValueWithHeaders<String>> store = processorRef.get().store();
 
                 if (store == null) {
                     return false;
                 }
 
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
+                try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(key)) {
                     while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
+                        final KeyValue<Windowed<String>, ValueWithHeaders<String>> kv = iterator.next();
                         if (kv.key.key().equals(key)
                             && kv.key.window().start() == timestamp
                             && kv.key.window().end() == timestamp) {
 
-                            final AggregationWithHeaders<String> result = kv.value;
+                            final ValueWithHeaders<String> result = kv.value;
                             return result != null
                                 && result.aggregation().equals(value)
                                 && result.headers().equals(expectedHeaders);
@@ -1923,9 +1923,9 @@ public class HeadersStoreUpgradeIntegrationTest {
                 return false;
             }
 
-            try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
+            try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<String>> iterator = store.fetch(key)) {
                 while (iterator.hasNext()) {
-                    final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
+                    final KeyValue<Windowed<String>, ValueWithHeaders<String>> kv = iterator.next();
                     if (kv.key.key().equals(key) && kv.key.window().start() == timestamp) {
                         return true;
                     }
@@ -2014,7 +2014,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         public void process(final Record<String, String> record) {
             final Windowed<String> sessionKey = new Windowed<>(record.key(),
                 new SessionWindow(record.timestamp(), record.timestamp()));
-            store.put(sessionKey, AggregationWithHeaders.make(record.value(), record.headers()));
+            store.put(sessionKey, ValueWithHeaders.make(record.value(), record.headers()));
         }
     }
 

@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 /**
- * Wraps a {@code KeyValueIterator<K, AggregationWithHeaders<V>>} to present a
- * {@code KeyValueIterator<K, V>} by stripping the {@link AggregationWithHeaders} wrapper.
+ * Wraps a {@code KeyValueIterator<K, ValueWithHeaders<V>>} to present a
+ * {@code KeyValueIterator<K, V>} by stripping the {@link ValueWithHeaders} wrapper.
  * <p>
  * This is analogous to {@link KeyValueIteratorFacade} which strips {@code ValueAndTimestamp}.
  *
@@ -30,9 +30,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  * @param <V> the aggregated value type
  */
 public class SessionStoreIteratorFacade<K, V> implements KeyValueIterator<K, V> {
-    private final KeyValueIterator<K, AggregationWithHeaders<V>> innerIterator;
+    private final KeyValueIterator<K, ValueWithHeaders<V>> innerIterator;
 
-    public SessionStoreIteratorFacade(final KeyValueIterator<K, AggregationWithHeaders<V>> iterator) {
+    public SessionStoreIteratorFacade(final KeyValueIterator<K, ValueWithHeaders<V>> iterator) {
         innerIterator = iterator;
     }
 
@@ -48,11 +48,11 @@ public class SessionStoreIteratorFacade<K, V> implements KeyValueIterator<K, V> 
 
     @Override
     public KeyValue<K, V> next() {
-        final KeyValue<K, AggregationWithHeaders<V>> innerKeyValue = innerIterator.next();
+        final KeyValue<K, ValueWithHeaders<V>> innerKeyValue = innerIterator.next();
         if (innerKeyValue == null) {
             return null;
         }
-        return KeyValue.pair(innerKeyValue.key, AggregationWithHeaders.getAggregationOrNull(innerKeyValue.value));
+        return KeyValue.pair(innerKeyValue.key, ValueWithHeaders.getValueOrNull(innerKeyValue.value));
     }
 
     @Override

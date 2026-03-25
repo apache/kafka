@@ -33,10 +33,10 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import java.util.Objects;
 
@@ -44,21 +44,21 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.state.internals.Utils.keyBytes;
 
 public class MeteredSessionStoreWithHeaders<K, AGG>
-    extends MeteredSessionStore<K, AggregationWithHeaders<AGG>>
+    extends MeteredSessionStore<K, ValueWithHeaders<AGG>>
     implements SessionStoreWithHeaders<K, AGG> {
 
     MeteredSessionStoreWithHeaders(final SessionStore<Bytes, byte[]> inner,
                                    final String metricsScope,
                                    final Serde<K> keySerde,
-                                   final Serde<AggregationWithHeaders<AGG>> aggSerde,
+                                   final Serde<ValueWithHeaders<AGG>> aggSerde,
                                    final Time time) {
         super(inner, metricsScope, keySerde, aggSerde, time);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    protected Serde<AggregationWithHeaders<AGG>> prepareValueSerdeForStore(
-            final Serde<AggregationWithHeaders<AGG>> valueSerde,
+    protected Serde<ValueWithHeaders<AGG>> prepareValueSerdeForStore(
+            final Serde<ValueWithHeaders<AGG>> valueSerde,
             final SerdeGetter getter) {
         if (valueSerde == null) {
             return new ValueWithHeadersSerde<>((Serde<AGG>) getter.valueSerde());
@@ -67,12 +67,12 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public void put(final Windowed<K> sessionKey, final AggregationWithHeaders<AGG> aggregate) {
+    public void put(final Windowed<K> sessionKey, final ValueWithHeaders<AGG> valueWithHeaders) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         try {
             maybeMeasureLatency(
                 () -> {
-                    if (aggregate == null) {
+                    if (valueWithHeaders == null) {
                         final ProcessorRecordContext currentContext = internalContext.recordContext();
 
                         // Create new headers object to isolate tombstone operation from input record
@@ -96,9 +96,9 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                             internalContext.setRecordContext(currentContext);
                         }
                     } else {
-                        final Headers headers = aggregate.headers();
+                        final Headers headers = valueWithHeaders.headers();
                         final Bytes key = keyBytes(sessionKey, headers, serdes);
-                        wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate, headers));
+                        wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(valueWithHeaders, headers));
                     }
                 },
                 time,
@@ -106,7 +106,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             );
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
+            final String message = String.format(e.getMessage(), sessionKey.key(), valueWithHeaders);
             throw new ProcessorStateException(message, e);
         }
 
@@ -190,7 +190,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K key) {
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> fetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().fetch(keyBytes(key, new RecordHeaders(), serdes))
@@ -198,7 +198,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K key) {
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> backwardFetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().backwardFetch(keyBytes(key, new RecordHeaders(), serdes))
@@ -206,7 +206,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K keyFrom,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> fetch(final K keyFrom,
                                                                             final K keyTo) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().fetch(
@@ -216,7 +216,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K keyFrom,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> backwardFetch(final K keyFrom,
                                                                                     final K keyTo) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().backwardFetch(
@@ -226,7 +226,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> findSessions(final K key,
                                                                                    final long earliestSessionEndTime,
                                                                                    final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
@@ -239,7 +239,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> backwardFindSessions(final K key,
                                                                                            final long earliestSessionEndTime,
                                                                                            final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
@@ -252,7 +252,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> findSessions(final K keyFrom,
                                                                                    final K keyTo,
                                                                                    final long earliestSessionEndTime,
                                                                                    final long latestSessionStartTime) {
@@ -266,7 +266,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
                                                                                            final K keyTo,
                                                                                            final long earliestSessionEndTime,
                                                                                            final long latestSessionStartTime) {
@@ -280,7 +280,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final long earliestSessionEndTime,
+    public KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>> findSessions(final long earliestSessionEndTime,
                                                                                    final long latestSessionEndTime) {
         return new MeteredSessionStoreWithHeadersIterator(
             wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime)
@@ -307,7 +307,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                     streamsMetrics,
                     bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                     byteArray -> {
-                        final AggregationWithHeaders<AGG> awh =
+                        final ValueWithHeaders<AGG> awh =
                             serdes.valueDeserializer().deserialize(serdes.topic(), byteArray);
                         return awh == null ? null : awh.aggregation();
                     },
@@ -322,12 +322,12 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     private class MeteredSessionStoreWithHeadersIterator
-        implements KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>>, MeteredIterator {
+        implements KeyValueIterator<Windowed<K>, ValueWithHeaders<AGG>>, MeteredIterator {
 
         private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
         private final long startNs;
         private final long startTimestampMs;
-        private KeyValue<Windowed<K>, AggregationWithHeaders<AGG>> cachedNext;
+        private KeyValue<Windowed<K>, ValueWithHeaders<AGG>> cachedNext;
 
         private MeteredSessionStoreWithHeadersIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
             this.iter = iter;
@@ -348,16 +348,16 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         }
 
         @Override
-        public KeyValue<Windowed<K>, AggregationWithHeaders<AGG>> next() {
+        public KeyValue<Windowed<K>, ValueWithHeaders<AGG>> next() {
             if (cachedNext != null) {
-                final KeyValue<Windowed<K>, AggregationWithHeaders<AGG>> result = cachedNext;
+                final KeyValue<Windowed<K>, ValueWithHeaders<AGG>> result = cachedNext;
                 cachedNext = null;
                 return result;
             }
 
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
 
-            final AggregationWithHeaders<AGG> value = serdes.valueFrom(next.value, new RecordHeaders());
+            final ValueWithHeaders<AGG> value = serdes.valueFrom(next.value, new RecordHeaders());
             final Headers headers = value != null ? value.headers() : new RecordHeaders();
             final K key = serdes.keyFrom(next.key.key().get(), headers);
             final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());

@@ -21,7 +21,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 
 import static org.apache.kafka.streams.state.internals.Utils.headers;
-import static org.apache.kafka.streams.state.internals.Utils.rawAggregation;
+import static org.apache.kafka.streams.state.internals.Utils.rawValue;
 
 /**
  * Change-logging wrapper for a session bytes store whose values also carry headers.
@@ -60,7 +60,7 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
         internalContext.logChange(
             name(),
             SessionKeySchema.toBinary(sessionKey),
-            rawAggregation(aggregationWithHeaders),
+            rawValue(aggregationWithHeaders),
             internalContext.recordContext().timestamp(),
             aggregationWithHeaders == null
                 ? internalContext.recordContext().headers()

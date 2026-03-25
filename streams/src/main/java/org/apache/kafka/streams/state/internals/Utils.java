@@ -87,10 +87,10 @@ public class Utils {
     }
 
     /**
-     * Extract the raw aggregation bytes from serialized AggregationWithHeaders,
+     * Extract the raw aggregation bytes from serialized ValueWithHeaders,
      * stripping the headers prefix.
      */
-    public static byte[] rawAggregation(final byte[] aggregationWithHeaders) {
+    public static byte[] rawValue(final byte[] aggregationWithHeaders) {
         if (aggregationWithHeaders == null) {
             return null;
         }

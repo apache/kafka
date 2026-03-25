@@ -23,11 +23,11 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
 class SessionCacheFlushListenerWithHeader<KOut, VOut>
-    implements CacheFlushListener<Windowed<KOut>, AggregationWithHeaders<VOut>> {
+    implements CacheFlushListener<Windowed<KOut>, ValueWithHeaders<VOut>> {
 
     private final InternalProcessorContext<Windowed<KOut>, Change<VOut>> context;
 
@@ -40,12 +40,12 @@ class SessionCacheFlushListenerWithHeader<KOut, VOut>
     }
 
     @Override
-    public void apply(final Record<Windowed<KOut>, Change<AggregationWithHeaders<VOut>>> record) {
+    public void apply(final Record<Windowed<KOut>, Change<ValueWithHeaders<VOut>>> record) {
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            final VOut newValue = AggregationWithHeaders.getAggregationOrNull(record.value().newValue);
-            final VOut oldValue = AggregationWithHeaders.getAggregationOrNull(record.value().oldValue);
+            final VOut newValue = ValueWithHeaders.getValueOrNull(record.value().newValue);
+            final VOut oldValue = ValueWithHeaders.getValueOrNull(record.value().oldValue);
 
             final Headers headers = record.value().newValue != null
                 ? record.value().newValue.headers()

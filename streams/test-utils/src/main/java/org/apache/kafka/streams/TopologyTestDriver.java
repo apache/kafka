@@ -80,7 +80,6 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -94,6 +93,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -1767,7 +1767,7 @@ public class TopologyTestDriver implements Closeable {
         public V fetchSession(final K key,
                               final long sessionStartTime,
                               final long sessionEndTime) {
-            return AggregationWithHeaders.getAggregationOrNull(inner.fetchSession(key, sessionStartTime, sessionEndTime));
+            return ValueWithHeaders.getValueOrNull(inner.fetchSession(key, sessionStartTime, sessionEndTime));
         }
 
         @Override
@@ -1803,7 +1803,7 @@ public class TopologyTestDriver implements Closeable {
 
         @Override
         public void put(final Windowed<K> sessionKey, final V aggregate) {
-            inner.put(sessionKey, AggregationWithHeaders.make(aggregate, new RecordHeaders()));
+            inner.put(sessionKey, ValueWithHeaders.make(aggregate, new RecordHeaders()));
         }
 
         @Override

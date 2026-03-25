@@ -20,7 +20,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,8 +50,8 @@ public class SessionCacheFlushListenerWithHeaderTest {
             new Record<>(
                 new Windowed<>("key", new SessionWindow(21L, 73L)),
                 new Change<>(
-                    AggregationWithHeaders.make("newValue", new RecordHeaders()),
-                    AggregationWithHeaders.make("oldValue", new RecordHeaders())),
+                    ValueWithHeaders.make("newValue", new RecordHeaders()),
+                    ValueWithHeaders.make("oldValue", new RecordHeaders())),
                 42L));
 
         verify(context, times(2)).setCurrentNode(null);

@@ -24,8 +24,8 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,8 +88,8 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
     public void shouldLogPutWithHeaders() {
         final RecordHeaders headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<byte[]> aggWithHeaders = AggregationWithHeaders.make(value1, headers);
-        final byte[] serializedValue = serializer.serialize(TOPIC, aggWithHeaders);
+        final ValueWithHeaders<byte[]> valueWithHeaders = ValueWithHeaders.make(value1, headers);
+        final byte[] serializedValue = serializer.serialize(TOPIC, valueWithHeaders);
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
@@ -112,8 +112,8 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
     public void shouldLogPutWithPosition() {
         final RecordHeaders headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<byte[]> aggWithHeaders = AggregationWithHeaders.make(value1, headers);
-        final byte[] serializedValue = serializer.serialize(TOPIC, aggWithHeaders);
+        final ValueWithHeaders<byte[]> valueWithHeaders = ValueWithHeaders.make(value1, headers);
+        final byte[] serializedValue = serializer.serialize(TOPIC, valueWithHeaders);
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(POSITION);
@@ -157,8 +157,8 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
     @Test
     public void shouldHandleEmptyHeaders() {
         final RecordHeaders emptyHeaders = new RecordHeaders();
-        final AggregationWithHeaders<byte[]> aggWithHeaders = AggregationWithHeaders.make(value1, emptyHeaders);
-        final byte[] serializedValue = serializer.serialize(TOPIC, aggWithHeaders);
+        final ValueWithHeaders<byte[]> valueWithHeaders = ValueWithHeaders.make(value1, emptyHeaders);
+        final byte[] serializedValue = serializer.serialize(TOPIC, valueWithHeaders);
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
@@ -205,8 +205,8 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
         headers.add("header1", "value1".getBytes());
         headers.add("header2", "value2".getBytes());
         headers.add("header3", "value3".getBytes());
-        final AggregationWithHeaders<byte[]> aggWithHeaders = AggregationWithHeaders.make(value1, headers);
-        final byte[] serializedValue = serializer.serialize(TOPIC, aggWithHeaders);
+        final ValueWithHeaders<byte[]> valueWithHeaders = ValueWithHeaders.make(value1, headers);
+        final byte[] serializedValue = serializer.serialize(TOPIC, valueWithHeaders);
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());

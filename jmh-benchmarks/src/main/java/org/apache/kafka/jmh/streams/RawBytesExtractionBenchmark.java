@@ -118,7 +118,7 @@ public class RawBytesExtractionBenchmark {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawAggregationWithoutHeadersOpt(IterationStateForEmptyHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(Utils.rawAggregation(randomValue));
+            bh.consume(Utils.rawValue(randomValue));
         }
     }
 
@@ -134,7 +134,7 @@ public class RawBytesExtractionBenchmark {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testRawAggregationWithHeadersOpt(IterationStateForHeaders state, Blackhole bh) {
         for (byte[] randomValue : state.getRandomValues()) {
-            bh.consume(Utils.rawAggregation(randomValue));
+            bh.consume(Utils.rawValue(randomValue));
         }
     }
 

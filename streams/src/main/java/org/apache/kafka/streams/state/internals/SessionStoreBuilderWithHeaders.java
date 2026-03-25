@@ -20,12 +20,12 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -34,11 +34,11 @@ import java.util.Objects;
  * Builder for {@link SessionStoreWithHeaders} instances.
  *
  * This is analogous to {@link SessionStoreBuilder}, but uses
- * {@link AggregationWithHeaders} as the value wrapper and wires up the
+ * {@link ValueWithHeaders} as the value wrapper and wires up the
  * header-aware store stack (change-logging, caching, metering).
  */
 public class SessionStoreBuilderWithHeaders<K, V>
-    extends AbstractStoreBuilder<K, AggregationWithHeaders<V>, SessionStoreWithHeaders<K, V>> {
+    extends AbstractStoreBuilder<K, ValueWithHeaders<V>, SessionStoreWithHeaders<K, V>> {
 
     private final SessionBytesStoreSupplier storeSupplier;
 

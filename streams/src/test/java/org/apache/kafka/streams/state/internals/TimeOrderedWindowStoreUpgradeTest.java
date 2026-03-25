@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -38,7 +38,7 @@ import java.util.Properties;
 
 import static org.apache.kafka.common.utils.Utils.delete;
 import static org.apache.kafka.streams.state.internals.ValueWithHeadersDeserializer.headers;
-import static org.apache.kafka.streams.state.internals.ValueWithHeadersDeserializer.rawAggregation;
+import static org.apache.kafka.streams.state.internals.ValueWithHeadersDeserializer.rawValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -130,13 +130,13 @@ public class TimeOrderedWindowStoreUpgradeTest {
 
         // Verify we can read old data (lazy migration)
         byte[] fetch = newStore.fetch(key1, baseTime + 100);
-        assertEquals("value1", new String(rawAggregation(fetch)));
+        assertEquals("value1", new String(rawValue(fetch)));
         assertEquals(0, headers(fetch).toArray().length, "Old data should have empty headers after migration");
         fetch = newStore.fetch(key2, baseTime + 200);
-        assertEquals("value2", new String(rawAggregation(fetch)));
+        assertEquals("value2", new String(rawValue(fetch)));
         assertEquals(0, headers(fetch).toArray().length, "Old data should have empty headers after migration");
         fetch = newStore.fetch(key3, baseTime + 300);
-        assertEquals("value3", new String(rawAggregation(fetch)));
+        assertEquals("value3", new String(rawValue(fetch)));
         assertEquals(0, headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
 
@@ -145,17 +145,17 @@ public class TimeOrderedWindowStoreUpgradeTest {
         final ValueWithHeadersSerializer<byte[]> serializer = new ValueWithHeadersSerializer<>(new ByteArraySerializer());
 
         // Write key3 with empty headers
-        newStore.put(key3, serializer.serialize("", AggregationWithHeaders.make("value3-updated".getBytes(), new RecordHeaders())), baseTime + 350);
+        newStore.put(key3, serializer.serialize("", ValueWithHeaders.make("value3-updated".getBytes(), new RecordHeaders())), baseTime + 350);
 
         // Write key4 with actual headers
         final RecordHeaders headersWithData = new RecordHeaders();
         headersWithData.add("header-key-1", "header-value-1".getBytes());
         headersWithData.add("header-key-2", "header-value-2".getBytes());
-        newStore.put(key4, serializer.serialize("", AggregationWithHeaders.make("value4".getBytes(), headersWithData)), baseTime + 400);
+        newStore.put(key4, serializer.serialize("", ValueWithHeaders.make("value4".getBytes(), headersWithData)), baseTime + 400);
 
         // Verify new data - raw values
-        assertEquals("value3-updated", new String(rawAggregation(newStore.fetch(key3, baseTime + 350))));
-        assertEquals("value4", new String(rawAggregation(newStore.fetch(key4, baseTime + 400))));
+        assertEquals("value3-updated", new String(rawValue(newStore.fetch(key3, baseTime + 350))));
+        assertEquals("value4", new String(rawValue(newStore.fetch(key4, baseTime + 400))));
 
         // Verify headers for key3 (empty headers)
         final byte[] fetchedKey3Value = newStore.fetch(key3, baseTime + 350);
@@ -201,7 +201,7 @@ public class TimeOrderedWindowStoreUpgradeTest {
         newStore.init(context, newStore);
 
         // Verify old data still accessible
-        assertEquals("value1", new String(rawAggregation(newStore.fetch(key1, baseTime + 100))));
+        assertEquals("value1", new String(rawValue(newStore.fetch(key1, baseTime + 100))));
 
         newStore.close();
     }

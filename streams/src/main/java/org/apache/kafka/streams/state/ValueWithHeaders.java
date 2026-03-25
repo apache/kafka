@@ -24,62 +24,62 @@ import java.util.Objects;
  * Combines an aggregated value with its associated record headers.
  * This is used by SessionStoreWithHeaders to store session aggregations along with headers.
  *
- * @param <AGG> the aggregation type
+ * @param <V> the aggregation type
  */
-public final class AggregationWithHeaders<AGG> {
+public final class ValueWithHeaders<V> {
 
-    private final AGG aggregation;
+    private final V value;
     private final Headers headers;
 
-    private AggregationWithHeaders(final AGG aggregation, final Headers headers) {
+    private ValueWithHeaders(final V value, final Headers headers) {
         Objects.requireNonNull(headers, "headers must not be null");
-        this.aggregation = aggregation;
+        this.value = value;
         this.headers = headers;
     }
 
     /**
-     * Create a new {@link AggregationWithHeaders} instance if the provided {@code aggregation} is not {@code null}.
+     * Create a new {@link ValueWithHeaders} instance if the provided {@code aggregation} is not {@code null}.
      *
      * @param aggregation the aggregation
      * @param headers     the headers (may be {@code null}, treated as empty)
      * @param <AGG>       the type of the aggregation
-     * @return a new {@link AggregationWithHeaders} instance if the provided {@code aggregation} is not {@code null};
+     * @return a new {@link ValueWithHeaders} instance if the provided {@code aggregation} is not {@code null};
      * otherwise {@code null} is returned
      */
-    public static <AGG> AggregationWithHeaders<AGG> make(final AGG aggregation, final Headers headers) {
+    public static <AGG> ValueWithHeaders<AGG> make(final AGG aggregation, final Headers headers) {
         if (aggregation == null) {
             return null;
         }
-        return new AggregationWithHeaders<>(aggregation, headers);
+        return new ValueWithHeaders<>(aggregation, headers);
     }
 
     /**
-     * Create a new {@link AggregationWithHeaders} instance.
+     * Create a new {@link ValueWithHeaders} instance.
      * The provided {@code aggregation} may be {@code null}.
      *
      * @param aggregation the aggregation (may be {@code null})
      * @param headers     the headers (may be {@code null}, treated as empty)
      * @param <AGG>       the type of the aggregation
-     * @return a new {@link AggregationWithHeaders} instance
+     * @return a new {@link ValueWithHeaders} instance
      */
-    public static <AGG> AggregationWithHeaders<AGG> makeAllowNullable(final AGG aggregation, final Headers headers) {
-        return new AggregationWithHeaders<>(aggregation, headers);
+    public static <AGG> ValueWithHeaders<AGG> makeAllowNullable(final AGG aggregation, final Headers headers) {
+        return new ValueWithHeaders<>(aggregation, headers);
     }
 
     /**
-     * Return the wrapped {@code aggregation} of the given {@code aggregationWithHeaders} parameter
+     * Return the wrapped {@code aggregation} of the given {@code valueWithHeaders} parameter
      * if the parameter is not {@code null}.
      *
-     * @param aggregationWithHeaders an {@link AggregationWithHeaders} instance; can be {@code null}
+     * @param valueWithHeaders an {@link ValueWithHeaders} instance; can be {@code null}
      * @param <AGG>                  the type of the aggregation
-     * @return the wrapped {@code aggregation} of {@code aggregationWithHeaders} if not {@code null}; otherwise {@code null}
+     * @return the wrapped {@code aggregation} of {@code valueWithHeaders} if not {@code null}; otherwise {@code null}
      */
-    public static <AGG> AGG getAggregationOrNull(final AggregationWithHeaders<AGG> aggregationWithHeaders) {
-        return aggregationWithHeaders == null ? null : aggregationWithHeaders.aggregation;
+    public static <AGG> AGG getValueOrNull(final ValueWithHeaders<AGG> valueWithHeaders) {
+        return valueWithHeaders == null ? null : valueWithHeaders.value;
     }
 
-    public AGG aggregation() {
-        return aggregation;
+    public V aggregation() {
+        return value;
     }
 
     public Headers headers() {
@@ -91,23 +91,23 @@ public final class AggregationWithHeaders<AGG> {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof AggregationWithHeaders)) {
+        if (!(o instanceof ValueWithHeaders)) {
             return false;
         }
-        final AggregationWithHeaders<?> that = (AggregationWithHeaders<?>) o;
-        return Objects.equals(aggregation, that.aggregation)
+        final ValueWithHeaders<?> that = (ValueWithHeaders<?>) o;
+        return Objects.equals(value, that.value)
             && Objects.equals(this.headers, that.headers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(aggregation, headers);
+        return Objects.hash(value, headers);
     }
 
     @Override
     public String toString() {
-        return "AggregationWithHeaders{" +
-            "aggregation=" + aggregation +
+        return "ValueWithHeaders{" +
+            "aggregation=" + value +
             ", headers=" + headers +
             '}';
     }

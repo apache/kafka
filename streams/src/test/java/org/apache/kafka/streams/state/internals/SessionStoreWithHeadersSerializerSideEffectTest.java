@@ -32,9 +32,9 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.Test;
 
@@ -121,7 +121,7 @@ public class SessionStoreWithHeadersSerializerSideEffectTest {
             } else {
                 store.put(
                     sessionKey,
-                    AggregationWithHeaders.make(record.value(), record.headers())
+                    ValueWithHeaders.make(record.value(), record.headers())
                 );
             }
 

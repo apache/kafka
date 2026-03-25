@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 public class ReadOnlySessionStoreFacade<K, V> implements ReadOnlySessionStore<K, V> {
     protected final SessionStoreWithHeaders<K, V> inner;
@@ -63,7 +63,7 @@ public class ReadOnlySessionStoreFacade<K, V> implements ReadOnlySessionStore<K,
     public V fetchSession(final K key,
                           final long sessionStartTime,
                           final long sessionEndTime) {
-        return AggregationWithHeaders.getAggregationOrNull(inner.fetchSession(key, sessionStartTime, sessionEndTime));
+        return ValueWithHeaders.getValueOrNull(inner.fetchSession(key, sessionStartTime, sessionEndTime));
     }
 
     @Override

@@ -38,12 +38,12 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -181,10 +181,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(new Record<>("john", "first", 0L));
         processor.process(new Record<>("john", "second", 500L));
 
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> values =
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> values =
                  sessionStore.findSessions("john", 0, 2000)) {
             assertTrue(values.hasNext());
-            assertEquals(Long.valueOf(2), AggregationWithHeaders.getAggregationOrNull(values.next().value));
+            assertEquals(Long.valueOf(2), ValueWithHeaders.getValueOrNull(values.next().value));
         }
     }
 
@@ -194,27 +194,27 @@ public class KStreamSessionWindowAggregateProcessorTest {
         setup(inputType, true);
         final String sessionId = "mel";
         processor.process(new Record<>(sessionId, "first", 0L));
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
             assertTrue(iterator.hasNext());
         }
 
         // move time beyond gap
         processor.process(new Record<>(sessionId, "second", GAP_MS + 1));
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1)) {
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1)) {
             assertTrue(iterator.hasNext());
         }
         // should still exist as not within gap
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
             assertTrue(iterator.hasNext());
         }
         // move time back
         processor.process(new Record<>(sessionId, "third", GAP_MS / 2));
 
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator =
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> iterator =
                  sessionStore.findSessions(sessionId, 0, GAP_MS + 1)) {
-            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> kv = iterator.next();
+            final KeyValue<Windowed<String>, ValueWithHeaders<Long>> kv = iterator.next();
 
-            assertEquals(Long.valueOf(3), AggregationWithHeaders.getAggregationOrNull(kv.value));
+            assertEquals(Long.valueOf(3), ValueWithHeaders.getValueOrNull(kv.value));
             assertFalse(iterator.hasNext());
         }
     }
@@ -225,9 +225,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
         setup(inputType, true);
         processor.process(new Record<>("mel", "first", 0L));
         processor.process(new Record<>("mel", "second", 0L));
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator =
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> iterator =
                  sessionStore.findSessions("mel", 0, 0)) {
-            assertEquals(Long.valueOf(2L), AggregationWithHeaders.getAggregationOrNull(iterator.next().value));
+            assertEquals(Long.valueOf(2L), ValueWithHeaders.getValueOrNull(iterator.next().value));
             assertFalse(iterator.hasNext());
         }
     }
@@ -291,22 +291,22 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(new Record<>("a", "1", 0L));
 
         // first ensure it is in the store
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> a1 =
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> a1 =
                  sessionStore.findSessions("a", 0, 0)) {
-            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> next = a1.next();
+            final KeyValue<Windowed<String>, ValueWithHeaders<Long>> next = a1.next();
             assertEquals(new Windowed<>("a", new SessionWindow(0, 0)), next.key);
-            assertEquals(1L, AggregationWithHeaders.getAggregationOrNull(next.value));
+            assertEquals(1L, ValueWithHeaders.getValueOrNull(next.value));
         }
 
 
         processor.process(new Record<>("a", "2", 100L));
         // a1 from above should have been removed
         // should have merged session in store
-        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> a2 =
+        try (final KeyValueIterator<Windowed<String>, ValueWithHeaders<Long>> a2 =
                  sessionStore.findSessions("a", 0, 100)) {
-            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> next = a2.next();
+            final KeyValue<Windowed<String>, ValueWithHeaders<Long>> next = a2.next();
             assertEquals(new Windowed<>("a", new SessionWindow(0, 100)), next.key);
-            assertEquals(2L, AggregationWithHeaders.getAggregationOrNull(next.value));
+            assertEquals(2L, ValueWithHeaders.getValueOrNull(next.value));
             assertFalse(a2.hasNext());
         }
     }

@@ -28,15 +28,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AggregationWithHeadersTest {
+public class ValueWithHeadersTest {
 
     @Test
-    public void shouldCreateAggregationWithHeaders() {
+    public void shouldCreateValueWithHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
 
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         assertNotNull(aggregationWithHeaders);
         assertEquals(aggregation, aggregationWithHeaders.aggregation());
@@ -45,31 +45,31 @@ public class AggregationWithHeadersTest {
 
     @Test
     public void shouldReturnNullForNullAggregation() {
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(null, new RecordHeaders());
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(null, new RecordHeaders());
         assertNull(aggregationWithHeaders);
     }
 
     @Test
     public void shouldNotCreateWithNullHeaders() {
         final Long aggregation = 100L;
-        assertThrows(NullPointerException.class, () -> AggregationWithHeaders.make(aggregation, null));
+        assertThrows(NullPointerException.class, () -> ValueWithHeaders.make(aggregation, null));
     }
 
     @Test
     public void shouldAllowNullableAggregation() {
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.makeAllowNullable(null, new RecordHeaders());
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.makeAllowNullable(null, new RecordHeaders());
 
         assertNotNull(aggregationWithHeaders);
         assertNull(aggregationWithHeaders.aggregation());
     }
 
     @Test
-    public void shouldGetAggregationOrNull() {
+    public void shouldGetValueOrNull() {
         final Long aggregation = 100L;
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, new RecordHeaders());
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, new RecordHeaders());
 
-        assertEquals(aggregation, AggregationWithHeaders.getAggregationOrNull(aggregationWithHeaders));
-        assertNull(AggregationWithHeaders.getAggregationOrNull(null));
+        assertEquals(aggregation, ValueWithHeaders.getValueOrNull(aggregationWithHeaders));
+        assertNull(ValueWithHeaders.getValueOrNull(null));
     }
 
     @Test
@@ -81,8 +81,8 @@ public class AggregationWithHeadersTest {
         final Headers headers2 = new RecordHeaders();
         headers2.add("key1", "value1".getBytes());
 
-        final AggregationWithHeaders<Long> aggregationWithHeaders1 = AggregationWithHeaders.make(aggregation, headers1);
-        final AggregationWithHeaders<Long> aggregationWithHeaders2 = AggregationWithHeaders.make(aggregation, headers2);
+        final ValueWithHeaders<Long> aggregationWithHeaders1 = ValueWithHeaders.make(aggregation, headers1);
+        final ValueWithHeaders<Long> aggregationWithHeaders2 = ValueWithHeaders.make(aggregation, headers2);
 
         assertEquals(aggregationWithHeaders1, aggregationWithHeaders2);
         assertEquals(aggregationWithHeaders1.hashCode(), aggregationWithHeaders2.hashCode());
@@ -92,8 +92,8 @@ public class AggregationWithHeadersTest {
     public void shouldNotBeEqualWithDifferentAggregations() {
         final Headers headers = new RecordHeaders();
 
-        final AggregationWithHeaders<Long> aggregationWithHeaders1 = AggregationWithHeaders.make(100L, headers);
-        final AggregationWithHeaders<Long> aggregationWithHeaders2 = AggregationWithHeaders.make(200L, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders1 = ValueWithHeaders.make(100L, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders2 = ValueWithHeaders.make(200L, headers);
 
         assertNotEquals(aggregationWithHeaders1, aggregationWithHeaders2);
     }
@@ -108,8 +108,8 @@ public class AggregationWithHeadersTest {
         final Headers headers2 = new RecordHeaders();
         headers2.add("key2", "value2".getBytes());
 
-        final AggregationWithHeaders<Long> aggregationWithHeaders1 = AggregationWithHeaders.make(aggregation, headers1);
-        final AggregationWithHeaders<Long> aggregationWithHeaders2 = AggregationWithHeaders.make(aggregation, headers2);
+        final ValueWithHeaders<Long> aggregationWithHeaders1 = ValueWithHeaders.make(aggregation, headers1);
+        final ValueWithHeaders<Long> aggregationWithHeaders2 = ValueWithHeaders.make(aggregation, headers2);
 
         assertNotEquals(aggregationWithHeaders1, aggregationWithHeaders2);
     }
@@ -120,7 +120,7 @@ public class AggregationWithHeadersTest {
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
 
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
         final String toString = aggregationWithHeaders.toString();
 
         assertNotNull(toString);

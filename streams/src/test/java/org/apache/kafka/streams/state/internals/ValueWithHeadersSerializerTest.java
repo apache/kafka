@@ -20,7 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.ValueWithHeaders;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +44,7 @@ public class ValueWithHeadersSerializerTest {
     public void shouldSerializeAggregationWithEmptyHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         final byte[] result = serializer.serialize("topic", aggregationWithHeaders);
 
@@ -53,12 +53,12 @@ public class ValueWithHeadersSerializerTest {
     }
 
     @Test
-    public void shouldSerializeAggregationWithHeaders() {
+    public void shouldSerializeValueWithHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
         headers.add("key2", "value2".getBytes());
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         final byte[] result = serializer.serialize("topic", aggregationWithHeaders);
 
@@ -72,11 +72,11 @@ public class ValueWithHeadersSerializerTest {
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
         headers.add("key2", null);
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
 
         final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
         final ValueWithHeadersDeserializer<Long> deserializer = new ValueWithHeadersDeserializer<>(Serdes.Long().deserializer());
-        final AggregationWithHeaders<Long> deserialized = deserializer.deserialize("topic", serialized);
+        final ValueWithHeaders<Long> deserialized = deserializer.deserialize("topic", serialized);
 
         assertNotNull(deserialized);
         assertEquals(aggregation, deserialized.aggregation());
@@ -84,8 +84,8 @@ public class ValueWithHeadersSerializerTest {
     }
 
     @Test
-    public void shouldHandleNullAggregationInAggregationWithHeaders() {
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.makeAllowNullable(null, new RecordHeaders());
+    public void shouldHandleNullAggregationInValueWithHeaders() {
+        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.makeAllowNullable(null, new RecordHeaders());
         final byte[] result = serializer.serialize("topic", aggregationWithHeaders);
 
         assertNull(result);
