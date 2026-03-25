@@ -182,6 +182,7 @@ class TransactionLogTest {
 
         assertEquals(200L, deserialized.producerId());
         assertEquals(RecordBatch.NO_PRODUCER_ID, deserialized.prevProducerId());
+        assertEquals(RecordBatch.NO_PRODUCER_ID, deserialized.nextProducerId());
     }
 
     @Test

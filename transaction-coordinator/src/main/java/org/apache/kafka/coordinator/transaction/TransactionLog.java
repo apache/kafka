@@ -85,7 +85,7 @@ public class TransactionLog {
         }
 
         short logValueVersion = transactionVersionLevel.transactionLogValueVersion();
-        TransactionLogValue value = new TransactionLogValue()
+        return MessageUtil.toVersionPrefixedBytes(logValueVersion, new TransactionLogValue()
                         .setProducerId(txnMetadata.producerId())
                         .setProducerEpoch(txnMetadata.producerEpoch())
                         .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
@@ -95,9 +95,7 @@ public class TransactionLog {
                         .setTransactionPartitions(transactionPartitions)
                         .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel())
                         .setPreviousProducerId(txnMetadata.prevProducerId())
-                        .setNextProducerId(txnMetadata.nextProducerId());
-
-        return MessageUtil.toVersionPrefixedBytes(logValueVersion, value);
+                        .setNextProducerId(txnMetadata.nextProducerId()));
     }
 
     /**
