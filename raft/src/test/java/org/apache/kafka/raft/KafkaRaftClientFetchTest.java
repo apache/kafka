@@ -190,8 +190,8 @@ public final class KafkaRaftClientFetchTest {
         var localMaxSizeBytes = 1024;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
-                localKey.id(),
-                localKey.directoryId().get()
+            localKey.id(),
+            localKey.directoryId().get()
         )
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
@@ -233,7 +233,7 @@ public final class KafkaRaftClientFetchTest {
     }
 
     @Test
-    public void testFetchMaxBytesOneOrMoreBatches() throws Exception {
+    public void testFetchMaxBytesWithTwoBatches() throws Exception {
         var epoch = 2;
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
@@ -342,7 +342,7 @@ public final class KafkaRaftClientFetchTest {
         FetchRequestData exactSizeBytesRequest =
             context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
         exactSizeBytesRequest.setMaxBytes(allRecords.sizeInBytes());
-        context.deliverRequest(allRecordsRequest);
+        context.deliverRequest(exactSizeBytesRequest);
         context.pollUntilResponse();
 
         // All the records should be returned
@@ -363,8 +363,8 @@ public final class KafkaRaftClientFetchTest {
         assertFalse(exactIterator.hasNext());
         assertFalse(allIterator.hasNext());
 
-        // Here we sent a fetch with sizeInBytes-1, this will end up returning a single batch
-        // The other batch is omitted.
+        // Send fetch request with sizeInBytes-1. It will appear here that we have only 1 batch
+        // since the other batch is not "complete" (it's missing one byte) and hence not "iterable".
         FetchRequestData oneBatchRequest =
             context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
         oneBatchRequest.setMaxBytes(exactSizeBytesRecords.sizeInBytes() - 1);
@@ -374,7 +374,9 @@ public final class KafkaRaftClientFetchTest {
             (MemoryRecords) FetchResponse.recordsOrFail(context.assertSentFetchPartitionResponse());
         assertTrue(oneBatchRecords.sizeInBytes() < exactSizeBytesRecords.sizeInBytes());
         var oneBatchBatches = oneBatchRecords.batchIterator();
-        oneBatchBatches.next();
+        var firstBatch = oneBatchBatches.next();
+        assertTrue(firstBatch.sizeInBytes() < oneBatchRecords.sizeInBytes());
+        assertEquals(exactSizeBytesRecords.sizeInBytes() - 1, oneBatchRecords.sizeInBytes());
         assertFalse(oneBatchBatches.hasNext(), "Expected 1 batch to be fetched");
     }
 
