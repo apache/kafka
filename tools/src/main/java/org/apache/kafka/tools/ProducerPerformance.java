@@ -109,7 +109,10 @@ public class ProducerPerformance {
 
                 currentTransactionSize++;
                 if (config.transactionsEnabled && config.transactionDurationMs <= (sendStartMs - transactionStartTime)) {
-                    producer.commitTransaction();
+                    if (random.nextDouble() < config.transactionAbortRate)
+                        producer.abortTransaction();
+                    else
+                        producer.commitTransaction();
                     currentTransactionSize = 0;
                 }
 
@@ -118,8 +121,12 @@ public class ProducerPerformance {
                 }
             }
 
-            if (config.transactionsEnabled && currentTransactionSize != 0)
-                producer.commitTransaction();
+            if (config.transactionsEnabled && currentTransactionSize != 0) {
+                if (random.nextDouble() < config.transactionAbortRate)
+                    producer.abortTransaction();
+                else
+                    producer.commitTransaction();
+            }
 
             if (!config.shouldPrintMetrics) {
                 producer.close();
@@ -225,6 +232,40 @@ public class ProducerPerformance {
 
         }
         return payloadByteList;
+    }
+
+    private static void addTransactionArguments(ArgumentParser parser) {
+        parser.addArgument("--transactional-id")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("TRANSACTIONAL-ID")
+                .dest("transactionalId")
+                .help("The transactional id to use. This config takes precedence over the transactional.id " +
+                        "specified via --command-property or --command-config. Note that if the transactional id " +
+                        "is not specified while --transaction-duration-ms is provided, the default value for the " +
+                        "transactional id will be performance-producer- followed by a random uuid.");
+
+        parser.addArgument("--transaction-duration-ms")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("TRANSACTION-DURATION")
+                .dest("transactionDurationMs")
+                .help("The maximum duration of each transaction. The commitTransaction will be called after this time has elapsed. " +
+                        "The value should be greater than 0. If the transactional id is specified via --command-property, " +
+                        "--command-config or --transactional-id but --transaction-duration-ms is not specified, " +
+                        "the default value will be 3000.");
+
+        parser.addArgument("--transaction-abort-rate")
+                .action(store())
+                .required(false)
+                .type(Double.class)
+                .metavar("TRANSACTION-ABORT-RATE")
+                .dest("transactionAbortRate")
+                .setDefault(0.0)
+                .help("The rate of transactions to be aborted. The value should be between 0 and 1. " +
+                        "This config works only if transactions are enabled.");
     }
 
     /** Get the command-line argument parser. */
@@ -354,27 +395,7 @@ public class ProducerPerformance {
                 .dest("printMetrics")
                 .help("Print out metrics at the end of the test.");
 
-        parser.addArgument("--transactional-id")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("TRANSACTIONAL-ID")
-                .dest("transactionalId")
-                .help("The transactional id to use. This config takes precedence over the transactional.id " +
-                        "specified via --command-property or --command-config. Note that if the transactional id " +
-                        "is not specified while --transaction-duration-ms is provided, the default value for the " +
-                        "transactional id will be performance-producer- followed by a random uuid.");
-
-        parser.addArgument("--transaction-duration-ms")
-                .action(store())
-                .required(false)
-                .type(Long.class)
-                .metavar("TRANSACTION-DURATION")
-                .dest("transactionDurationMs")
-                .help("The maximum duration of each transaction. The commitTransaction will be called after this time has elapsed. " +
-                        "The value should be greater than 0. If the transactional id is specified via --command-property, " +
-                        "--command-config or --transactional-id but --transaction-duration-ms is not specified, " +
-                        "the default value will be 3000.");
+        addTransactionArguments(parser);
 
         parser.addArgument("--warmup-records")
                 .action(store())
@@ -578,6 +599,7 @@ public class ProducerPerformance {
         final Long transactionDurationMs;
         final boolean transactionsEnabled;
         final List<byte[]> payloadByteList;
+        final double transactionAbortRate;
         final long reportingInterval;
 
         public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
@@ -591,6 +613,7 @@ public class ProducerPerformance {
             this.payloadMonotonic = namespace.getBoolean("payloadMonotonic");
             this.shouldPrintMetrics = namespace.getBoolean("printMetrics");
             this.reportingInterval = namespace.getLong("reportingInterval");
+            this.transactionAbortRate = Optional.ofNullable(namespace.getDouble("transactionAbortRate")).orElse(0.0);
 
             List<String> producerConfigs = namespace.getList("producerConfig");
             String producerConfigFile = namespace.getString("producerConfigFile");
@@ -619,6 +642,9 @@ public class ProducerPerformance {
             }
             if (transactionDurationMsArg != null && transactionDurationMsArg <= 0) {
                 throw new ArgumentParserException("--transaction-duration-ms should be greater than zero.", parser);
+            }
+            if (transactionAbortRate < 0 || transactionAbortRate > 1) {
+                throw new ArgumentParserException("--transaction-abort-rate should be between 0 and 1.", parser);
             }
             if (reportingInterval <= 0) {
                 throw new ArgumentParserException("--reporting-interval should be greater than zero.", parser);

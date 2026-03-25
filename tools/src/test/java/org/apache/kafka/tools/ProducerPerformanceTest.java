@@ -59,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -211,6 +212,48 @@ public class ProducerPerformanceTest {
         producerPerformanceSpy.start(args);
         verify(producerMock, times(1)).beginTransaction();
         verify(producerMock, times(1)).commitTransaction();
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testTransactionAbortRateAlwaysAbort() throws IOException {
+        doReturn(null).when(producerMock).send(any(), any());
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--payload-monotonic",
+            "--transactional-id", "foobar",
+            "--transaction-abort-rate", "1.0",
+            "--bootstrap-server", "localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(1)).beginTransaction();
+        verify(producerMock, times(1)).abortTransaction();
+        verify(producerMock, never()).commitTransaction();
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testTransactionAbortRateAlwaysCommit() throws IOException {
+        doReturn(null).when(producerMock).send(any(), any());
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--payload-monotonic",
+            "--transactional-id", "foobar",
+            "--transaction-abort-rate", "0.0",
+            "--bootstrap-server", "localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(1)).beginTransaction();
+        verify(producerMock, times(1)).commitTransaction();
+        verify(producerMock, never()).abortTransaction();
         verify(producerMock, times(1)).close();
     }
 
@@ -431,6 +474,7 @@ public class ProducerPerformanceTest {
         assertEquals(5, props.size());
         assertTrue(configs.transactionsEnabled);
         assertEquals(5000, configs.transactionDurationMs);
+        assertEquals(0.0, configs.transactionAbortRate, 0.0);
     }
 
     @Test
@@ -486,6 +530,30 @@ public class ProducerPerformanceTest {
         assertEquals("--reporting-interval should be greater than zero.",
             assertThrows(ArgumentParserException.class,
                 () -> new ProducerPerformance.ConfigPostProcessor(parser, invalidReportingInterval)).getMessage());
+
+        String[] invalidTransactionAbortRate = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--transaction-abort-rate=1.1",
+            "--bootstrap-server", "localhost:9000"};
+        assertTrue(
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, invalidTransactionAbortRate)).getMessage()
+                .contains("--transaction-abort-rate should be between 0 and 1."));
+
+        String[] invalidTransactionAbortRateNegative = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--transaction-abort-rate=-0.1",
+            "--bootstrap-server", "localhost:9000"};
+        assertTrue(
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, invalidTransactionAbortRateNegative)).getMessage()
+                .contains("--transaction-abort-rate should be between 0 and 1."));
     }
 
     @Test
