@@ -255,12 +255,7 @@ public class LogManager {
     }
 
     public boolean onlineLogDirId(Uuid uuid) {
-        for (Uuid id : directoryIds.values()) {
-            if (id.equals(uuid)) {
-                return true;
-            }
-        }
-        return false;
+        return directoryIds.containsValue(uuid);
     }
 
     public ProducerStateManagerConfig producerStateManagerConfig() {
@@ -292,9 +287,9 @@ public class LogManager {
     }
 
     private Set<File> offlineLogDirs() {
-        Set<File> logDirsSet = new HashSet<>(logDirs);
-        liveLogDirs.forEach(logDirsSet::remove);
-        return logDirsSet;
+        Set<File> result = new HashSet<>(logDirs);
+        result.removeAll(liveLogDirs);
+        return result;
     }
 
     // Only for testing
@@ -1320,12 +1315,7 @@ public class LogManager {
                 !preferredLogDirs.containsKey(topicPartition)) {
             // If partition is configured with both targetLogDirectoryId and preferredLogDirs, then
             // preferredLogDirs will be respected, otherwise targetLogDirectoryId will be respected
-            Uuid targetId = targetLogDirectoryId.get();
-            preferredLogDir = directoryIds.entrySet().stream()
-                    .filter(e -> e.getValue().equals(targetId))
-                    .map(Map.Entry::getKey)
-                    .findFirst()
-                    .orElse(null);
+            preferredLogDir = directoryPath(targetLogDirectoryId.get()).orElse(null);
         } else {
             preferredLogDir = preferredLogDirs.get(topicPartition);
         }
@@ -1478,7 +1468,7 @@ public class LogManager {
             abortAndPauseCleaning(tp);
 
             if (currentLog.isPresent()) {
-                LOG.info("Attempting to recover abandoned future log for {} at $futureLog and removing {}", tp, currentLog.get());
+                LOG.info("Attempting to recover abandoned future log for {} at {} and removing {}", tp, futureLog, currentLog.get());
             } else {
                 LOG.info("Attempting to recover abandoned future log for {} at {}", tp, futureLog);
             }
@@ -1527,7 +1517,7 @@ public class LogManager {
                 throw new KafkaStorageException("The future replica for " + topicPartition + " is offline");
             }
 
-            LOG.info("Attempting to replace current log {} with $destLog for {}", sourceLog, topicPartition);
+            LOG.info("Attempting to replace current log {} with {} for {}", sourceLog, destLog, topicPartition);
             replaceCurrentWithFutureLog(Optional.of(sourceLog), destLog, true);
             LOG.info("The current replica is successfully replaced with the future replica for {}", topicPartition);
         }
@@ -1753,7 +1743,7 @@ public class LogManager {
             }
         }
 
-        LOG.debug("Log cleanup completed. $total files deleted in {} seconds", (time.milliseconds() - startMs) / 1000);
+        LOG.debug("Log cleanup completed. {} files deleted in {} seconds", total, (time.milliseconds() - startMs) / 1000);
     }
 
     /**
