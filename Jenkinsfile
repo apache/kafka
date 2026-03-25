@@ -18,6 +18,8 @@
  */
 
 def doValidation() {
+  sh "rm -rf /home/jenkins/.gradle/caches/8.10.2/transforms"
+
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
     ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean check -x test \
