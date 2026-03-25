@@ -54,9 +54,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 
 /**
  * During moving {@link kafka.server.KafkaConfig} out of core AbstractKafkaConfig will be the future KafkaConfig
@@ -576,7 +575,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     public Long logRollTimeJitterMillis() {
         Long millis = getLong(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG);
         if (millis != null) return millis;
-        return 60L * 60L * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG);
+        return TimeUnit.HOURS.toMillis(getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG));
     }
 
     public Long logFlushIntervalMs() {
@@ -616,16 +615,13 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public Long logRetentionTimeMillis() {
-        long millisInMinute = 60L * 1000L;
-        long millisInHour = 60L * millisInMinute;
-
         Long millis = getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG);
         if (millis == null) {
             Integer mins = getInt(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG);
             if (mins != null) {
-                millis = millisInMinute * mins;
+                millis = TimeUnit.MINUTES.toMillis(mins);
             } else {
-                millis = millisInHour * getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG);
+                millis = TimeUnit.HOURS.toMillis(getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG));
             }
         }
 
