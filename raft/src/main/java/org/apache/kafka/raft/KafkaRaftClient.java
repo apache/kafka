@@ -171,7 +171,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int MAX_FETCH_WAIT_MS = 500;
     // visible for testing
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
-    public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final OptionalInt nodeId;
     private final Uuid nodeDirectoryId;
