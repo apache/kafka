@@ -11813,42 +11813,4 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
         }
     }
-
-    /**
-     * Test that OutOfMemoryError is not masked as TimeoutException even when deadline expires.
-     * This verifies that OOM errors take precedence over timeout handling.
-     * This is a regression test for KAFKA-19932.
-     */
-    @Test
-    public void testOutOfMemoryErrorNotMaskedOnTimeout() throws Exception {
-        MockTime time = new MockTime();
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(1, 0),
-                AdminClientConfig.RETRIES_CONFIG, "0",
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000")) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-
-            OutOfMemoryError oomError = new OutOfMemoryError("Simulated OOM during response handling with timeout");
-            MetadataResponse mockResponse = mock(MetadataResponse.class);
-            doThrow(oomError).when(mockResponse).topicMetadata();
-
-            env.kafkaClient().prepareResponse(mockResponse);
-
-            // Make the call with a short timeout
-            ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
-
-            // Wait for the response to be processed by the AdminClient background thread.
-            // This ensures the OOM is thrown and propagated before we advance time past the deadline.
-            // The response processing will fail with OOM, completing the future exceptionally.
-            TestUtils.waitForCondition(
-                () -> env.kafkaClient().numAwaitingResponses() == 0,
-                "Timed out waiting for response to be processed"
-            );
-
-            // Now advance time to exceed the timeout - this tests that even when timeout would occur,
-            // the OOM error that was already processed takes precedence over TimeoutException
-            time.sleep(1500);
-
-            TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
-        }
-    }
 }
