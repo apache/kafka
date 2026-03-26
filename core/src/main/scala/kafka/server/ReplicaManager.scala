@@ -78,7 +78,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
-import java.util.function.{BiConsumer, Consumer}
+import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FunctionConverters.enrichAsJavaConsumer
@@ -423,9 +423,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
-      logManager.asyncDelete(partitionsToDelete.asJava, false, new BiConsumer[TopicPartition, Throwable] {
-        override def accept(tp: TopicPartition, e: Throwable): Unit = errorMap.put(tp, e)
-      })
+      logManager.asyncDelete(partitionsToDelete.asJava, false, (tp, e) => errorMap.put(tp, e))
     }
     remoteLogManager.foreach { rlm =>
       // exclude the partitions with offline/error state

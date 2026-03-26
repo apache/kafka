@@ -588,11 +588,7 @@ public class LogManager {
 
     // create a unique log recovery thread name for each log dir as the format: prefix-dirPath-threadNum, ex: "log-recovery-/tmp/kafkaLogs-0"
     private static String logRecoveryThreadName(String dirPath, int threadNum) {
-        return logRecoveryThreadName(dirPath, threadNum, "log-recovery");
-    }
-
-    private static String logRecoveryThreadName(String dirPath, int threadNum, String prefix) {
-        return prefix + "-" + dirPath + "-" + threadNum;
+        return "log-recovery" + "-" + dirPath + "-" + threadNum;
     }
 
     // Visible for testing
