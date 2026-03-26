@@ -17,6 +17,7 @@
 package org.apache.kafka.common;
 
 import kafka.network.SocketServer;
+
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
