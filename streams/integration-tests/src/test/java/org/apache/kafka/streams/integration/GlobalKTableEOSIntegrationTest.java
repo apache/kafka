@@ -140,13 +140,10 @@ public class GlobalKTableEOSIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldKStreamGlobalKTableLeftJoin(final boolean withHeaders) throws Exception {
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
-        startStreams();
+        startStreams(withHeaders);
         produceTopicValues(streamTopic);
 
         final Map<String, String> expected = new HashMap<>();
@@ -215,13 +212,10 @@ public class GlobalKTableEOSIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldKStreamGlobalKTableJoin(final boolean withHeaders) throws Exception {
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
-        startStreams();
+        startStreams(withHeaders);
         produceTopicValues(streamTopic);
 
         final Map<String, String> expected = new HashMap<>();
@@ -289,12 +283,9 @@ public class GlobalKTableEOSIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldRestoreTransactionalMessages(final boolean withHeaders) throws Exception {
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
         produceInitialGlobalTableValues();
 
-        startStreams();
+        startStreams(withHeaders);
 
         final Map<Long, String> expected = new HashMap<>();
         expected.put(1L, "A");
@@ -325,14 +316,11 @@ public class GlobalKTableEOSIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotRestoreAbortedMessages(final boolean withHeaders) throws Exception {
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
         produceAbortedMessages();
         produceInitialGlobalTableValues();
         produceAbortedMessages();
 
-        startStreams();
+        startStreams(withHeaders);
         
         final Map<Long, String> expected = new HashMap<>();
         expected.put(1L, "A");
@@ -367,7 +355,10 @@ public class GlobalKTableEOSIntegrationTest {
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
     
-    private void startStreams() {
+    private void startStreams(final boolean withHeaders) {
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         startStreams(null);
     }
 
