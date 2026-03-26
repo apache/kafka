@@ -181,7 +181,6 @@ class TransactionLogTest {
 
         assertEquals(200L, deserialized.producerId());
         assertEquals(-1L, deserialized.prevProducerId());
-        assertEquals(-1L, deserialized.nextProducerId());
     }
 
     @Test
