@@ -155,13 +155,13 @@ class TransactionLogTest {
     }
 
     @Test
-    void shouldPersistProducerIdsAtVersion0AsTaggedFields() {
-        // Tagged fields are written even at version 0. Older brokers ignore
-        // unknown tags, so this is safe. Matches clientTransactionVersion behavior.
+    void shouldNotPersistProducerIdsAtVersion0() {
+        // Version 0 is non-flexible, so tagged fields (previousProducerId,
+        // nextProducerId) cannot be written. They fall back to defaults (-1).
         var txnTransitMetadata = new TxnTransitMetadata(
             200L,       // producerId
-            100L,       // prevProducerId — persisted as tagged field
-            201L,       // nextProducerId — persisted as tagged field
+            100L,       // prevProducerId — not persisted at v0
+            201L,       // nextProducerId — not persisted at v0
             (short) 5,  // producerEpoch
             (short) 4,  // lastProducerEpoch
             1000,       // txnTimeoutMs
@@ -180,7 +180,8 @@ class TransactionLogTest {
         var deserialized = readResult.metadata();
 
         assertEquals(200L, deserialized.producerId());
-        assertEquals(100L, deserialized.prevProducerId());
+        assertEquals(-1L, deserialized.prevProducerId());
+        assertEquals(-1L, deserialized.nextProducerId());
     }
 
     @Test
