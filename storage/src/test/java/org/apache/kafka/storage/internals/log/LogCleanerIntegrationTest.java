@@ -375,18 +375,17 @@ public class LogCleanerIntegrationTest {
         logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete");
 
         LogAndMessages result1 = runCleanerAndCheckCompacted(100, compressionType, logProps);
+        UnifiedLog theLog = result1.log();
 
-        // Set the last modified time to an old value to force deletion of old segments
-        long endOffset = result1.log().logEndOffset();
-        for (LogSegment segment : result1.log().logSegments()) {
+        for (LogSegment segment : theLog.logSegments()) {
             segment.setLastModified(time.milliseconds() - (2L * retentionMs));
         }
         TestUtils.waitForCondition(
-            () -> result1.log().logStartOffset() == endOffset && result1.log().numberOfSegments() == 1,
+            () -> theLog.logStartOffset() == theLog.logEndOffset() && theLog.numberOfSegments() == 1,
             "Timed out waiting for deletion of old segments");
 
         cleaner.shutdown();
-        closeLog(result1.log());
+        closeLog(theLog);
 
         // run the cleaner again to make sure if there are no issues post deletion
         LogAndMessages result2 = runCleanerAndCheckCompacted(20, compressionType, logProps);
