@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common;
 
+import kafka.network.SocketServer;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
@@ -72,7 +74,7 @@ public class SocketServerMemoryPoolTest {
     private void sendAndAssert(ClusterInstance clusterInstance, byte[] rawRequestBytes) throws Exception {
         long initialMemoryPoolAvailable = getMemoryPoolAvailable(clusterInstance);
 
-        try (Socket socket = IntegrationTestUtils.connect(clusterInstance.brokerBoundPorts().get(0))) {
+        try (Socket socket = IntegrationTestUtils.connect(getBrokerBoundPort(clusterInstance))) {
             socket.setSoTimeout(/* readTimeoutMs */ 5_000);
             IntegrationTestUtils.sendRequest(socket, rawRequestBytes);
             assertTrue(drainUntilClosed(socket.getInputStream()), "expected connection closed");
@@ -83,8 +85,16 @@ public class SocketServerMemoryPoolTest {
         assertEquals(initialMemoryPoolAvailable, finalMemoryPoolAvailable);
     }
 
+    private SocketServer getSocketServer(ClusterInstance clusterInstance) {
+        return clusterInstance.brokers().get(TestKitDefaults.BROKER_ID_OFFSET).socketServer();
+    }
+
+    private int getBrokerBoundPort(ClusterInstance clusterInstance) {
+        return getSocketServer(clusterInstance).boundPort(ListenerName.normalised(TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME));
+    }
+
     private long getMemoryPoolAvailable(ClusterInstance clusterInstance) {
-        return clusterInstance.brokers().get(TestKitDefaults.BROKER_ID_OFFSET).socketServer().memoryPool().availableMemory();
+        return getSocketServer(clusterInstance).memoryPool().availableMemory();
     }
 
     /*
