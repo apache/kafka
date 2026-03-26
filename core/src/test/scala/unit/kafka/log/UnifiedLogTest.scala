@@ -80,10 +80,6 @@ class UnifiedLogTest {
     }
   }
 
-  /**
-   * test renaming a log's dir without reinitialization, which is the case during topic deletion
-   */
-
   @Test
   def testMaybeUpdateHighWatermarkAsFollower(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
