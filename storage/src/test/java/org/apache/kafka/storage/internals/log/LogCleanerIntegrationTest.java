@@ -106,9 +106,27 @@ public class LogCleanerIntegrationTest {
         new TopicPartition("log", 2)
     );
 
-    public record KeyValueOffset(int key, String value, long firstOffset) { }
-    public record ValueAndRecords(String value, MemoryRecords records) { }
+    private record KeyValueOffset(int key, String value, long firstOffset) { }
+    private record ValueAndRecords(String value, MemoryRecords records) { }
     private record LogAndMessages(UnifiedLog log, List<KeyValueOffset> messages) { }
+
+    @BeforeEach
+    public void setup() {
+        counter = 0;
+    }
+
+    @AfterEach
+    public void teardown() throws IOException, InterruptedException {
+        kafka.utils.TestUtils.clearYammerMetrics();
+        if (cleaner != null) {
+            cleaner.shutdown();
+        }
+        time.scheduler.shutdown();
+        for (UnifiedLog log : logs) {
+            log.close();
+        }
+        Utils.delete(logDir);
+    }
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
@@ -357,19 +375,18 @@ public class LogCleanerIntegrationTest {
         logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete");
 
         LogAndMessages result1 = runCleanerAndCheckCompacted(100, compressionType, logProps);
-        UnifiedLog theLog = result1.log();
 
         // Set the last modified time to an old value to force deletion of old segments
-        long endOffset = theLog.logEndOffset();
-        for (LogSegment segment : theLog.logSegments()) {
+        long endOffset = result1.log().logEndOffset();
+        for (LogSegment segment : result1.log().logSegments()) {
             segment.setLastModified(time.milliseconds() - (2L * retentionMs));
         }
         TestUtils.waitForCondition(
-            () -> theLog.logStartOffset() == endOffset && theLog.numberOfSegments() == 1,
+            () -> result1.log().logStartOffset() == endOffset && result1.log().numberOfSegments() == 1,
             "Timed out waiting for deletion of old segments");
 
         cleaner.shutdown();
-        closeLog(theLog);
+        closeLog(result1.log());
 
         // run the cleaner again to make sure if there are no issues post deletion
         LogAndMessages result2 = runCleanerAndCheckCompacted(20, compressionType, logProps);
@@ -1031,23 +1048,5 @@ public class LogCleanerIntegrationTest {
     private void closeLog(UnifiedLog log) {
         log.close();
         logs.remove(log);
-    }
-
-    @BeforeEach
-    public void setup() {
-        counter = 0;
-    }
-
-    @AfterEach
-    public void teardown() throws IOException, InterruptedException {
-        kafka.utils.TestUtils.clearYammerMetrics();
-        if (cleaner != null) {
-            cleaner.shutdown();
-        }
-        time.scheduler.shutdown();
-        for (UnifiedLog log : logs) {
-            log.close();
-        }
-        Utils.delete(logDir);
     }
 }
