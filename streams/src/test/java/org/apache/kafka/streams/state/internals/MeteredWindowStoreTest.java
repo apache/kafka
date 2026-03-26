@@ -356,10 +356,8 @@ public class MeteredWindowStoreTest {
         store.init(context, store);
         store.commit(Map.of());
 
-        // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
-        // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("flush-rate");
-        assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric commitMetric = metric("commit-rate");
+        assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
     @Test
