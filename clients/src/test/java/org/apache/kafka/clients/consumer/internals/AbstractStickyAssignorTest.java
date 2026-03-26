@@ -35,7 +35,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1428,11 +1427,6 @@ public abstract class AbstractStickyAssignorTest {
         return "0".repeat(Math.max(0, digits - iDigits)) + num;
     }
 
-    private static Map<String, List<Integer>> groupPartitionsByTopic(Collection<TopicPartition> partitions) {
-        return partitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.mapping(TopicPartition::partition, Collectors.toList())));
-    }
-
     protected static List<String> topics(String... topics) {
         return Arrays.asList(topics);
     }
@@ -1527,15 +1521,16 @@ public abstract class AbstractStickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = groupPartitionsByTopic(partitions);
-                Map<String, List<Integer>> otherMap = groupPartitionsByTopic(otherPartitions);
-
                 int moreLoaded = len > otherLen ? i : j;
                 int lessLoaded = len > otherLen ? j : i;
 
+                Set<String> otherTopics = otherPartitions.stream()
+                    .map(TopicPartition::topic)
+                    .collect(Collectors.toSet());
+
                 // If there's any overlap in the subscribed topics, we should have been able to balance partitions
-                for (String topic: map.keySet()) {
-                    assertFalse(otherMap.containsKey(topic),
+                for (TopicPartition tp : partitions) {
+                    assertFalse(otherTopics.contains(tp.topic()),
                         "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded + " to achieve a better balance" +
                         "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
                         "\nSubscriptions: " + subscriptions +
