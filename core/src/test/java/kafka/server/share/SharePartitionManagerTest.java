@@ -18,7 +18,6 @@ package kafka.server.share;
 
 import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -52,9 +51,11 @@ import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -3287,7 +3288,7 @@ public class SharePartitionManagerTest {
                 MAX_IN_FLIGHT_MESSAGES,
                 REMOTE_FETCH_MAX_WAIT_MS,
                 persister,
-                mock(GroupConfigManager.class),
+                new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
                 brokerTopicStats
             );

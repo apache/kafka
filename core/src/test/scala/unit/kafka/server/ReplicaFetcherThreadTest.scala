@@ -39,6 +39,7 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, RecordValidationStats, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._

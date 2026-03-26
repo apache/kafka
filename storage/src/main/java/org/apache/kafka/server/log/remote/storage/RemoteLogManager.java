@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
@@ -60,7 +61,6 @@ import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
-import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
 import org.apache.kafka.storage.internals.log.EpochEntry;
@@ -1893,7 +1893,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         Consumer<List<AbortedTxn>> accumulator =
                 abortedTxns -> abortedTransactions.addAll(abortedTxns.stream()
-                        .map(AbortedTxn::asAbortedTransaction).toList());
+                        .map(txn -> new FetchResponseData.AbortedTransaction()
+                                .setProducerId(txn.producerId())
+                                .setFirstOffset(txn.firstOffset())).toList());
 
         long startTimeNs = time.nanoseconds();
         collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator, log);

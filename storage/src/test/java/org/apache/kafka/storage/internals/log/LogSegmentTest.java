@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;

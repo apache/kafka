@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1449,7 +1450,7 @@ public class UnifiedLogTest {
             public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.DELETE_EMPTY, false);
             }
-            @Override 
+            @Override
             public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
             }
@@ -1498,7 +1499,7 @@ public class UnifiedLogTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
-            @Override 
+            @Override
             public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.RETAIN_EMPTY, true);
             }
@@ -1681,7 +1682,7 @@ public class UnifiedLogTest {
         log.updateHighWatermark(log.logEndOffset());
         log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
         assertEquals(
-                2, 
+                2,
                 log.deleteOldSegments(),
                 "Expecting two segment deletions as log start offset retention should unblock time based retention"
         );
@@ -1752,7 +1753,7 @@ public class UnifiedLogTest {
                 .sorted()
                 .collect(Collectors.toList());
         assertEquals(
-                expectedSnapshotOffsets, 
+                expectedSnapshotOffsets,
                 snapshotOffsets,
                 "expected a snapshot file per segment base offset, except the first segment"
         );
@@ -2603,7 +2604,7 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig, true);
 
-        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() + 
+        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() +
                 ",partition=" + log.topicPartition().partition();
 
         // Append some messages to create 3 segments (15 records / 5 records per segment = 3 segments)
@@ -2642,7 +2643,7 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig, false);
 
-        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() + 
+        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() +
                 ",partition=" + log.topicPartition().partition();
 
         for (int i = 0; i < 10; i++) {
@@ -2716,7 +2717,7 @@ public class UnifiedLogTest {
         assertEquals(200, yammerMetricValue(metricName),
                 "Metric should be updated in finally block even when exception occurs");
     }
-    
+
     @Test
     public void testReadWithMinMessage() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
@@ -2834,7 +2835,7 @@ public class UnifiedLogTest {
                 Compression.NONE,
                 new SimpleRecord(mockTime.milliseconds(), null, "Test".getBytes())
         );
-        
+
         log.appendAsLeader(message, 0);
         log.roll();
         assertEquals(2, logDir.listFiles(f -> f.getName().endsWith(".log")).length);
@@ -3052,7 +3053,7 @@ public class UnifiedLogTest {
         log.appendAsLeader(first, 0);
 
         assertThrows(
-                RecordTooLargeException.class, 
+                RecordTooLargeException.class,
                 () -> log.appendAsLeader(second, 0),
                 "Second message set should throw MessageSizeTooLargeException."
         );
@@ -3460,7 +3461,7 @@ public class UnifiedLogTest {
         UnifiedLog log = createLog(logDir, logConfig);
 
         // Test initial state before any records
-        assertFetchOffsetBySpecialTimestamp(log, Optional.empty(), 
+        assertFetchOffsetBySpecialTimestamp(log, Optional.empty(),
             new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
             ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
 
@@ -4176,8 +4177,8 @@ public class UnifiedLogTest {
             abortedTransactions.addAll(segment.txnIndex().allAbortedTxns());
         }
         List<AbortedTxn> expectedTransactions = List.of(
-            new AbortedTxn(pid1, 0L, 29L, 8L),
-            new AbortedTxn(pid2, 8L, 74L, 36L)
+            new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+            new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
         );
         assertEquals(expectedTransactions, abortedTransactions);
 
@@ -4254,7 +4255,7 @@ public class UnifiedLogTest {
 
     private void prepare(int logStartOffset) throws IOException {
         RemoteLogManagerConfig config = createRemoteLogManagerConfig();
-        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = 
+        DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory =
             new DelayedOperationPurgatory<>("RemoteListOffsets", 0);
         remoteLogManager = spy(new RemoteLogManager(
             config,
@@ -4303,9 +4304,9 @@ public class UnifiedLogTest {
         return result;
     }
 
-    private void assertFetchOffsetBySpecialTimestamp(UnifiedLog log, 
+    private void assertFetchOffsetBySpecialTimestamp(UnifiedLog log,
                                                       Optional<RemoteLogManager> remoteLogManagerOpt,
-                                                      FileRecords.TimestampAndOffset expected, 
+                                                      FileRecords.TimestampAndOffset expected,
                                                       long timestamp) {
         Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
         OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
@@ -4812,7 +4813,7 @@ public class UnifiedLogTest {
                 Compression.NONE, producerId, producerEpoch, sequence,
                 new SimpleRecord("1".getBytes()), new SimpleRecord("2".getBytes()));
 
-        VerificationGuard verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, 
+        VerificationGuard verificationGuard = log.maybeStartTransactionVerification(producerId, sequence,
                 producerEpoch, transactionVerificationEnabled);
         if (transactionVerificationEnabled) {
             // TV2 behavior: Create verification state that supports epoch bumps
