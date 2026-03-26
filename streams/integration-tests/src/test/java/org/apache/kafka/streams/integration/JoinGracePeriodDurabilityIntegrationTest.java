@@ -128,11 +128,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-
-        KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
+        KafkaStreams driver = startStream(streamsConfig, builder, true, withHeaders);
         try {
             produceSynchronouslyToPartitionZero(
                 tableInput,
@@ -176,7 +172,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             // restart the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            driver = getStartedStreams(streamsConfig, builder, false);
+            driver = startStream(streamsConfig, builder, false, withHeaders);
 
 
             // flush those recovered buffered events out.
@@ -230,5 +226,15 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.of(0), toProduce);
+    }
+
+    private KafkaStreams startStream(final Properties streamsConfig,
+                             final StreamsBuilder builder,
+                             final boolean clean,
+                             final boolean withHeaders) {
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+        return getStartedStreams(streamsConfig, builder, clean);
     }
 }
