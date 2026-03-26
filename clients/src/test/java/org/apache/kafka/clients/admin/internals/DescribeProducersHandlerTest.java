@@ -312,13 +312,4 @@ public class DescribeProducersHandlerTest {
 
         return new DescribeProducersResponse(response);
     }
-
-    private static Map<String, Map<Integer, PartitionResponse>> groupPartitionDataByTopic(
-        Map<TopicPartition, PartitionResponse> partitionResponses
-    ) {
-        return partitionResponses.entrySet().stream()
-            .collect(Collectors.groupingBy(
-                e -> e.getKey().topic(),
-                Collectors.toMap(e -> e.getKey().partition(), Map.Entry::getValue)));
-    }
 }
