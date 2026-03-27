@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
@@ -1234,6 +1235,10 @@ public class NetworkClient implements KafkaClient {
     void ensureBootstrapped(final long currentTimeMs) {
         if (bootstrapConfiguration.isBootstrapDisabled || metadataUpdater.isBootstrapped())
             return;
+
+        if (Thread.interrupted()) {
+            throw new InterruptException(new InterruptedException());
+        }
 
         // Timer is already initialized in constructor, just update it with current time
         bootstrapTimer.update(currentTimeMs);
