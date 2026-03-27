@@ -86,7 +86,8 @@ class StandbyTaskCreator {
                     stateDirectory,
                     topology.storeToChangelogTopic(),
                     partitions,
-                    upgradeFrom);
+                    upgradeFrom,
+                    topology.storeNameToReprocessOnRestore());
 
                 final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,

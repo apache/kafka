@@ -829,6 +829,10 @@ public class Topology {
         storeBuilder.withLoggingDisabled();
         internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
 
+        // register reprocess factory so that restoration also goes through the custom processor
+        internalTopologyBuilder.registerReadOnlyStoreReprocessFactory(
+            storeBuilder.name(), stateUpdateSupplier, keyDeserializer, valueDeserializer, processorName);
+
         return this;
     }
 
