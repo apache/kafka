@@ -24,6 +24,9 @@ import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.snapshot.Snapshots;
+
+import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -50,8 +53,8 @@ public class BootstrapMetadata {
     private final String source;
 
     /**
-     * Reads bootstrap metadata from the bootstrap.checkpoint file in the given directory.
-     * Returns the default BootstrapMetadata if the file does not exist.
+     * Reads bootstrap metadata from the given directory. Checks the legacy bootstrap.checkpoint
+     * first, then the zero checkpoint, and falls back to defaults if neither exists.
      */
     public static BootstrapMetadata fromDirectory(Path directory) {
         if (!Files.isDirectory(directory)) {
@@ -63,10 +66,16 @@ public class BootstrapMetadata {
             }
         }
         Path binaryBootstrapPath = directory.resolve(BINARY_BOOTSTRAP_FILENAME);
-        if (!Files.exists(binaryBootstrapPath)) {
-            return fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
+        if (Files.exists(binaryBootstrapPath)) {
+            return fromCheckpointFile(binaryBootstrapPath);
         }
-        return readFromBinaryFile(binaryBootstrapPath.toString());
+        Path partitionDir = directory.resolve(
+            CLUSTER_METADATA_TOPIC_PARTITION.topic() + "-" + CLUSTER_METADATA_TOPIC_PARTITION.partition());
+        Path zeroCheckpointPath = Snapshots.snapshotPath(partitionDir, Snapshots.BOOTSTRAP_SNAPSHOT_ID);
+        if (Files.exists(zeroCheckpointPath)) {
+            return fromCheckpointFile(zeroCheckpointPath);
+        }
+        return fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
     }
 
     /**

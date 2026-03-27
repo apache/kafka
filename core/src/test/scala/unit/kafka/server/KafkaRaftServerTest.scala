@@ -21,7 +21,7 @@ import java.nio.file.Files
 import java.util.{Optional, Properties}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.bootstrap.{BootstrapMetadata, BootstrapTestUtils}
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
@@ -278,32 +278,20 @@ class KafkaRaftServerTest {
       setDirectoryId(Uuid.fromString("4jm0e-YRYeB6CCKBvwoS8w")).
       build()
 
-    val logDir = TestUtils.tempDirectory()
-    try {
-      writeMetaProperties(logDir, metaProperties)
-      writeBootstrapMetadata(logDir, MetadataVersion.IBP_3_3_IV3)
+    val configProperties = new Properties
+    configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
+    configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
+    configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
+    configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
 
-      val configProperties = new Properties
-      configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
-      configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-      configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
-      configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
-      configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-      configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
-      val config = KafkaConfig.fromProps(configProperties)
+    val (metaPropertiesEnsemble, bootstrapMetadata) =
+      invokeLoadMetaProperties(metaProperties, configProperties, Some(MetadataVersion.IBP_3_3_IV3))
 
-      val (metaPropertiesEnsemble, _) =
-        KafkaRaftServer.initializeLogDirs(config, MetaPropertiesEnsemble.LOG, "")
-
-      assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
-      assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
-      assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
-
-      val bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(logDir.getAbsolutePath)
-      assertEquals(MetadataVersion.IBP_3_3_IV3, bootstrapMetadata.metadataVersion())
-    } finally {
-      Utils.delete(logDir)
-    }
+    assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
+    assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
+    assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
+    assertEquals(MetadataVersion.IBP_3_3_IV3, bootstrapMetadata.metadataVersion())
   }
 
   @Test
