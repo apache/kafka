@@ -59,8 +59,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientsTestUtils {
 
-    fasdfsdadfsa;
-
     private static final String KEY_PREFIX = "key ";
     private static final String VALUE_PREFIX = "value ";
 

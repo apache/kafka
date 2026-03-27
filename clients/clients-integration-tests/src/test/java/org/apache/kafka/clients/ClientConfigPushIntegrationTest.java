@@ -37,7 +37,6 @@ import org.apache.kafka.server.policy.ClientConfigPolicy;
 import org.apache.kafka.server.policy.ClientConfigProfileKeys;
 import org.apache.kafka.server.policy.ClientProfile;
 import org.apache.kafka.server.policy.ClientPushConfigData;
-f
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.Collections;
@@ -83,11 +82,7 @@ public class ClientConfigPushIntegrationTest {
     @BeforeEach
     public void setup() throws InterruptedException {
         clusterInstance.waitForReadyBrokers();
-        // Reset test state
-        receivedProfiles.clear();
-        receivedConfigs.clear();
-        profileKeysCallCount.set(0);
-        processCallCount.set(0);
+        clientConfigPolicy = new TestClientConfigPolicy();
     }
 
     @ClusterTest
@@ -104,17 +99,17 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // Verify policy was called
-            assertTrue(profileKeysCallCount.get() > 0, "profileKeys() should have been called");
-            assertTrue(processCallCount.get() > 0, "process() should have been called");
+            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(clientConfigPolicy.processCallCount.get() > 0, "process() should have been called");
 
             // Verify we received a client profile
-            assertFalse(receivedProfiles.isEmpty(), "Should have received client profile");
+            assertFalse(clientConfigPolicy.receivedProfiles.isEmpty(), "Should have received client profile");
 
             // Verify we received configs
-            assertFalse(receivedConfigs.isEmpty(), "Should have received client configs");
+            assertFalse(clientConfigPolicy.receivedConfigs.isEmpty(), "Should have received client configs");
 
             // Verify configs were collected (should have client.id but not bootstrap.servers)
-            Map<String, String> configs = receivedConfigs.values().iterator().next();
+            Map<String, String> configs = clientConfigPolicy.receivedConfigs.values().iterator().next();
             assertTrue(configs.containsKey(ProducerConfig.CLIENT_ID_CONFIG),
                 "Should contain client.id config");
             assertFalse(configs.containsKey(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
@@ -137,13 +132,13 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // Verify policy was called
-            assertTrue(profileKeysCallCount.get() > 0, "profileKeys() should have been called");
-            assertTrue(processCallCount.get() > 0, "process() should have been called");
+            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(clientConfigPolicy.processCallCount.get() > 0, "process() should have been called");
 
             // Verify we received configs
-            assertFalse(receivedConfigs.isEmpty(), "Should have received client configs");
+            assertFalse(clientConfigPolicy.receivedConfigs.isEmpty(), "Should have received client configs");
 
-            Map<String, String> configs = receivedConfigs.values().iterator().next();
+            Map<String, String> configs = clientConfigPolicy.receivedConfigs.values().iterator().next();
             assertTrue(configs.containsKey(ConsumerConfig.GROUP_ID_CONFIG),
                 "Should contain group.id config");
             assertTrue(configs.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG),
@@ -154,7 +149,7 @@ public class ClientConfigPushIntegrationTest {
     @ClusterTest
     public void testConfigPushWithEmptyProfile() throws Exception {
         // Configure policy to return empty profile (no config keys requested)
-        returnEmptyProfile = true;
+        clientConfigPolicy.returnEmptyProfile = true;
 
         Map<String, Object> producerConfig = new java.util.HashMap<>();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
@@ -167,10 +162,10 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // profileKeys() should be called
-            assertTrue(profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
 
             // But process() should NOT be called since no configs were requested
-            assertEquals(0, processCallCount.get(), "process() should NOT have been called with empty profile");
+            assertEquals(0, clientConfigPolicy.processCallCount.get(), "process() should NOT have been called with empty profile");
         }
     }
 
@@ -188,8 +183,8 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // Policy should NOT be called when disabled
-            assertEquals(0, profileKeysCallCount.get(), "profileKeys() should NOT be called when disabled");
-            assertEquals(0, processCallCount.get(), "process() should NOT be called when disabled");
+            assertEquals(0, clientConfigPolicy.profileKeysCallCount.get(), "profileKeys() should NOT be called when disabled");
+            assertEquals(0, clientConfigPolicy.processCallCount.get(), "process() should NOT be called when disabled");
         }
     }
 
@@ -205,8 +200,8 @@ public class ClientConfigPushIntegrationTest {
         try (Producer<String, String> producer = new KafkaProducer<>(producerConfig)) {
             Thread.sleep(2000);
 
-            assertFalse(receivedProfiles.isEmpty(), "Should have received client profile");
-            ClientProfile profile = receivedProfiles.values().iterator().next();
+            assertFalse(clientConfigPolicy.receivedProfiles.isEmpty(), "Should have received client profile");
+            ClientProfile profile = clientConfigPolicy.receivedProfiles.values().iterator().next();
 
             assertNotNull(profile.clientInstanceId(), "Client instance ID should not be null");
             assertNotNull(profile.clientSoftwareName(), "Client software name should not be null");
@@ -231,7 +226,7 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // Verify CRC was computed and is non-zero
-            assertTrue(profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
 
             // The CRC should be deterministic based on the keys
             // (We can't easily verify the exact value here, but we verified it's used)
@@ -252,6 +247,9 @@ public class ClientConfigPushIntegrationTest {
         private final Map<Uuid, Map<String, String>> receivedConfigs = new ConcurrentHashMap<>();
         private final AtomicInteger profileKeysCallCount = new AtomicInteger(0);
         private final AtomicInteger processCallCount = new AtomicInteger(0);
+        private boolean returnEmptyProfile;
+        private boolean throwUnknownProfileOnKeys;
+        private boolean rejectNextPush;
 
         private final SortedSet<String> standardConfigKeys = new TreeSet<>(Set.of(
             "client.id",
