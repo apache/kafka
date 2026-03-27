@@ -944,12 +944,6 @@ kafka.docker.KafkaDockerWrapperTest:
 - testPrepareToolsLog4jConfigs
 - testPrepareToolsLog4jConfigsWithoutEnvVariable
 - testPrepareToolsLog4jConfigsWithoutMountedFile
-kafka.log.LogCleanerParameterizedIntegrationTest:
-- cleanerConfigUpdateTest
-- cleanerTest
-- testCleanerWithMessageFormatV0V1V2
-- testCleaningNestedMessagesWithV0V1
-- testCleansCombinedCompactAndDeleteTopic
 kafka.log.LogCleanerTest:
 - testAbortMarkerRemoval
 - testAbortMarkerRetentionWithEmptyBatch

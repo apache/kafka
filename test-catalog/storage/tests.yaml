@@ -304,8 +304,13 @@ org.apache.kafka.storage.internals.log.LocalLogTest:
 - testTruncateTo
 - testUpdateConfig
 - testWhenFetchOffsetHigherThanMaxOffset
-org.apache.kafka.storage.internals.log.LogCleanerLagIntegrationTest:
+org.apache.kafka.storage.internals.log.LogCleanerIntegrationTest:
+- cleanerConfigUpdateTest
 - cleanerTest
+- testCleanerCompaction
+- testCleanerWithMessageFormatV0V1V2
+- testCleaningNestedMessagesWithV0V1
+- testCleansCombinedCompactAndDeleteTopic
 - testIsThreadFailed
 - testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics
 - testMaxLogCompactionLag
