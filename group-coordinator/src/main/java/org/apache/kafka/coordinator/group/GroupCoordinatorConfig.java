@@ -392,8 +392,6 @@ public class GroupCoordinatorConfig {
         STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
         STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG
     );
-
-    public static final String GROUP_PREFIX = "group.";
     
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs

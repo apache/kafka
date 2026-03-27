@@ -30,24 +30,19 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
 
@@ -727,47 +722,6 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, 20000);
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals(20000, config.streamsGroupMinTaskOffsetIntervalMs());
-    }
-
-    @Test
-    public void testGroupConfigBrokerSynonymNamingConvention() {
-        // GroupConfig entries that have no broker-level synonym.
-        Set<String> groupConfigsWithoutBrokerSynonym = Set.of(
-            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG,
-            GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG,
-            GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG
-        );
-
-        // Combine broker CONFIG_DEFs since broker configs are spread across multiple classes.
-        // If a new config class is introduced, add its CONFIG_DEF here.
-        Set<String> brokerConfigNames = new HashSet<>();
-        brokerConfigNames.addAll(GroupCoordinatorConfig.CONFIG_DEF.names());
-        brokerConfigNames.addAll(ShareGroupConfig.CONFIG_DEF.names());
-
-        // For each GroupConfig entry that has a broker synonym, the broker config name
-        // must be GROUP_PREFIX + groupConfigName.
-        for (String groupConfigName : GroupConfig.configDef().names()) {
-            if (groupConfigsWithoutBrokerSynonym.contains(groupConfigName)) {
-                continue;
-            }
-            String expectedBrokerName = GroupCoordinatorConfig.GROUP_PREFIX + groupConfigName;
-            assertTrue(brokerConfigNames.contains(expectedBrokerName),
-                "GroupConfig entry '" + groupConfigName + "' is not in the exclusion list, " +
-                    "but expected broker config '" + expectedBrokerName + "' was not found. " +
-                    "Either add the broker config following the naming convention, or add this " +
-                    "entry to groupConfigsWithoutBrokerSynonym.");
-        }
-
-        // Verify exclusion list entries truly have no broker-level synonym.
-        for (String excluded : groupConfigsWithoutBrokerSynonym) {
-            assertTrue(GroupConfig.configDef().names().contains(excluded),
-                "'" + excluded + "' is in the exclusion list but not in GroupConfig.configDef(). " +
-                    "Remove it from groupConfigsWithoutBrokerSynonym.");
-            String brokerName = GroupCoordinatorConfig.GROUP_PREFIX + excluded;
-            assertFalse(brokerConfigNames.contains(brokerName),
-                "'" + excluded + "' is in the exclusion list but broker config '" +
-                    brokerName + "' exists. Remove it from groupConfigsWithoutBrokerSynonym.");
-        }
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
