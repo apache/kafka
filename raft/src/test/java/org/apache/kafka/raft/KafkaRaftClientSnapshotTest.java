@@ -1026,6 +1026,87 @@ public final class KafkaRaftClientSnapshotTest {
         assertEquals(leaderId, response.currentLeader().leaderId());
     }
 
+    @Test
+    public void testFetchSnapshotRequestWithPartialData() throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
+        List<String> records = List.of("foo", "bar");
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch(), List.of("a"))
+            .withKip853Rpc(true)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            snapshot.append(records);
+            snapshot.freeze();
+        }
+
+        // Test that we will respond with at least 2 equally sized read of the snapshot.
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        int snapshotSizeBytes = Math.toIntExact(snapshot.sizeInBytes());
+        int expectedNumberOfReads = 2;
+        // Find expectedNumberOfReads where we always have a remainder.
+        // This ensures that we will have expectedNumberOfRead which return fetchSnapshotMaxBytes, followed by one
+        // request with expectedFinalRequestSize that returns the remaining data.
+        while (snapshotSizeBytes % expectedNumberOfReads == 0) expectedNumberOfReads++;
+        int fetchSnapshotMaxBytes = snapshotSizeBytes / expectedNumberOfReads;
+        int expectedFinalRequestSize = snapshotSizeBytes % expectedNumberOfReads;
+        int totalBytesRead = 0;
+        int position = 0;
+        for (int i = 0; i < expectedNumberOfReads; i++) {
+            context.deliverRequest(
+                fetchSnapshotRequest(
+                    context.metadataPartition,
+                    epoch,
+                    snapshotId,
+                    fetchSnapshotMaxBytes,
+                    position
+                )
+            );
+            context.client.poll();
+
+            FetchSnapshotResponseData.PartitionSnapshot response =
+                context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+            assertEquals(epoch, response.currentLeader().leaderEpoch());
+            assertEquals(localId, response.currentLeader().leaderId());
+            int actualSizeBytes = response.unalignedRecords().sizeInBytes();
+            assertEquals(fetchSnapshotMaxBytes, actualSizeBytes);
+
+            totalBytesRead += actualSizeBytes;
+            position += fetchSnapshotMaxBytes;
+        }
+        assertEquals(fetchSnapshotMaxBytes * expectedNumberOfReads, totalBytesRead);
+
+        // Fetch the remaining snapshot bytes.
+        assertTrue(
+            totalBytesRead < snapshotSizeBytes,
+            String.format("Expected totalBytesRead (%d) < snapshotSizeBytes (%d)", totalBytesRead, snapshotSizeBytes)
+        );
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                fetchSnapshotMaxBytes,
+                position
+            )
+        );
+        context.client.poll();
+        FetchSnapshotResponseData.PartitionSnapshot response =
+            context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        assertEquals(epoch, response.currentLeader().leaderEpoch());
+        assertEquals(localId, response.currentLeader().leaderId());
+        assertEquals(expectedFinalRequestSize, response.unalignedRecords().sizeInBytes());
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithInvalidPosition(boolean withKip853Rpc) throws Exception {
@@ -1223,10 +1304,12 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, leaderId);
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
+        int expectedFetchMaxSnapshotBytes = 1024;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
+            .withFetchSnapshotMaxBytes(expectedFetchMaxSnapshotBytes)
             .build();
 
         context.pollUntilRequest();
@@ -1245,7 +1328,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            expectedFetchMaxSnapshotBytes
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1302,10 +1385,12 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, leaderId);
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
+        int expectedFetchMaxSnapshotBytes = 6;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
+            .withFetchSnapshotMaxBytes(expectedFetchMaxSnapshotBytes)
             .build();
 
         context.pollUntilRequest();
@@ -1324,7 +1409,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            expectedFetchMaxSnapshotBytes
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1360,7 +1445,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            expectedFetchMaxSnapshotBytes
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1435,7 +1520,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1497,7 +1582,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1558,7 +1643,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1619,7 +1704,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1653,7 +1738,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1690,7 +1775,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1739,7 +1824,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1807,7 +1892,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());

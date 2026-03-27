@@ -13,13 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cffi 
-virtualenv 
-pyasn1 
-boto3 
-pycrypto 
-pywinrm 
-ipaddress 
-debugpy 
-psutil
-ducktape==0.14.0
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      # 'daily' only runs on weekdays
+      interval: "cron"
+      cronjob: "00 20 * * *"
+    open-pull-requests-limit: 10
+    cooldown:
+      default: 4

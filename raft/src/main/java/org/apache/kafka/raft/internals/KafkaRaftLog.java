@@ -117,14 +117,19 @@ public class KafkaRaftLog implements RaftLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation readIsolation) {
+    public LogFetchInfo read(long startOffset, Isolation readIsolation, int maxTotalBatchBytes) {
         FetchIsolation isolation = switch (readIsolation) {
             case COMMITTED -> FetchIsolation.HIGH_WATERMARK;
             case UNCOMMITTED -> FetchIsolation.LOG_END;
         };
 
         try {
-            FetchDataInfo fetchInfo = log.read(startOffset, config.internalMaxFetchSizeInBytes(), isolation, true);
+            FetchDataInfo fetchInfo = log.read(
+                startOffset,
+                maxTotalBatchBytes,
+                isolation,
+                true
+            );
             return new LogFetchInfo(
                     fetchInfo.records,
                     new LogOffsetMetadata(
@@ -358,7 +363,12 @@ public class KafkaRaftLog implements RaftLog {
           fetches from this offset, the returned batch will start at offset (X - M), and the
           follower will be unable to append it since (X - M) < (X).
          */
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            1 // maxTotalBatchBytes - ensures that we only fetch one batch.
+        ).startOffsetMetadata.offset();
+
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                     "Cannot create snapshot at offset (" + snapshotId.offset() + ") because it is not batch aligned. " +
