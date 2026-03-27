@@ -28,7 +28,10 @@ import static org.apache.kafka.snapshot.Snapshots.snapshotPath;
  */
 public class BootstrapTestUtils {
     /**
-     * Reads bootstrap metadata from the snapshot checkpoint file in the given directory.
+     * Reads bootstrap metadata from the cluster metadata bootstrap checkpoint file of the given metadata directory.
+     *
+     * @param directoryPath the metadata log directory
+     * @return the bootstrap metadata
      */
     public static BootstrapMetadata readBootstrapMetadata(String directoryPath) {
         Path metadataPartitionDir = Path.of(directoryPath,

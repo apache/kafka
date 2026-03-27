@@ -87,13 +87,13 @@ public class BootstrapMetadata {
             String path = file.toString();
             throw new UncheckedIOException(path, new FileNotFoundException(path));
         }
-        return readFromBinaryFile(file.toString());
+        return readFromBinaryFile(file);
     }
 
-    private static BootstrapMetadata readFromBinaryFile(String binaryPath) {
+    private static BootstrapMetadata readFromBinaryFile(Path binaryPath) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         try (BatchFileReader reader = new BatchFileReader.Builder().
-                setPath(binaryPath).build()) {
+                setPath(binaryPath.toString()).build()) {
             while (reader.hasNext()) {
                 BatchAndType batchAndType = reader.next();
                 if (!batchAndType.isControl()) {
