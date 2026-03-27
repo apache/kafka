@@ -989,8 +989,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
-                if (retentionPeriod > 0) {
-                    final long seekTimestamp = time.milliseconds() - retentionPeriod;
+                final long seekTimestamp = retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE
+                    ? time.milliseconds() - retentionPeriod : -1L;
+                if (seekTimestamp > 0) {
                     newPartitionsWithTimestampSeek.put(partition, seekTimestamp);
                     log.debug("Start restoring windowed changelog partition {} from timestamp {} to end offset {}.",
                         partition, seekTimestamp, recordEndOffset(endOffset));
