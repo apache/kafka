@@ -218,6 +218,34 @@ public final class Cluster {
     }
 
     /**
+     * Create a cluster instance preserving the bootstrap state.
+     * This is used internally by MetadataSnapshot to maintain bootstrap flag across metadata updates.
+     *
+     * @param clusterId the cluster id
+     * @param nodes the nodes in the cluster
+     * @param partitions information about partitions
+     * @param unauthorizedTopics unauthorized topics
+     * @param invalidTopics invalid topics
+     * @param internalTopics internal topics
+     * @param controller the controller node
+     * @param topicIds topic IDs
+     * @param isBootstrapConfigured whether the cluster is bootstrapped
+     * @return a new Cluster instance with the specified bootstrap state
+     */
+    public static Cluster withBootstrapFlag(String clusterId,
+                                             Collection<Node> nodes,
+                                             Collection<PartitionInfo> partitions,
+                                             Set<String> unauthorizedTopics,
+                                             Set<String> invalidTopics,
+                                             Set<String> internalTopics,
+                                             Node controller,
+                                             Map<String, Uuid> topicIds,
+                                             boolean isBootstrapConfigured) {
+        return new Cluster(clusterId, isBootstrapConfigured, nodes, partitions,
+                unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds);
+    }
+
+    /**
      * Return a copy of this cluster combined with `partitions`.
      */
     public Cluster withPartitions(Map<TopicPartition, PartitionInfo> partitions) {

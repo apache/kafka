@@ -161,6 +161,7 @@ public class RecordAccumulatorTest {
             Collections.emptySet(),
             null,
             Collections.emptyMap(),
+            false,
             cluster);
         long batchSize = value.length + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         RecordAccumulator accum = createTestRecordAccumulator((int) batchSize, Integer.MAX_VALUE, Compression.NONE, 10);
