@@ -16,6 +16,7 @@ org.apache.kafka.streams.KafkaStreamsTest:
 - shouldGetClientSupplierFromConfigForConstructor
 - shouldGetClientSupplierFromConfigForConstructorWithTime
 - shouldGetQueryMetadataWithSerializerWhenRunningOrRebalancing
+- shouldHandleCloseAfterErrorState
 - shouldInitializeTasksForLocalStateOnStart
 - shouldLogWarningIfNonDefaultClientSupplierUsedWithStreamsProtocol
 - shouldNotAddThreadWhenClosed
