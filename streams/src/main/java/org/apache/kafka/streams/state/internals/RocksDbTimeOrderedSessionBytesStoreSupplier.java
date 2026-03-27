@@ -49,17 +49,24 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
 
     @Override
     public SessionStore<Bytes, byte[]> get() {
-        final RocksDBTimeOrderedSessionSegmentedBytesStore bytesStore =
-            new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                name,
-                metricsScope(),
-                retentionPeriod,
-                segmentIntervalMs(),
-                withIndex
-            );
         if (withHeaders) {
-            return new RocksDBTimeOrderedSessionStoreWithHeaders(bytesStore);
+            final RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders bytesStore =
+                new RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders(
+                    name,
+                    metricsScope(),
+                    retentionPeriod,
+                    segmentIntervalMs(),
+                    withIndex
+                );
+            return new RocksDBTimeOrderedSessionStore(bytesStore);
         }
+        final RocksDBTimeOrderedSessionSegmentedBytesStore<KeyValueSegment> bytesStore =
+            new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                name,
+                retentionPeriod,
+                withIndex,
+                new KeyValueSegments(name, metricsScope(), retentionPeriod, segmentIntervalMs())
+            );
         return new RocksDBTimeOrderedSessionStore(bytesStore);
     }
 

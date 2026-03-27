@@ -148,7 +148,7 @@ public final class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), false);
         VoterSet voterSet = VoterSet.fromMap(new HashMap<>(aVoterMap));
 
-        // Cannot override node id not contianed in the voter set
+        // Cannot override node id not contained in the voter set
         assertEquals(Optional.empty(), voterSet.updateVoterIgnoringDirectoryId(voterNode(4, true)));
 
         // Test that it can override voter set with different directory ids

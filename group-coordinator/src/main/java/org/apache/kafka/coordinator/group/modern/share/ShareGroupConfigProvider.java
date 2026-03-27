@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 
 /**
  * A provider that retrieves share group dynamic configuration values,
@@ -83,5 +84,18 @@ public class ShareGroupConfigProvider {
         return manager.groupConfig(groupId)
             .map(GroupConfig::shareRenewAcknowledgeEnable)
             .orElse(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT);
+    }
+
+    /**
+     * The method is used to get the auto offset reset strategy for the group. If the group config
+     * is present, then the value from the group config is used. Otherwise, the default value is used.
+     *
+     * @param groupId The group id for which the auto offset reset strategy is to be fetched.
+     * @return The auto offset reset strategy for the group.
+     */
+    public ShareGroupAutoOffsetResetStrategy autoOffsetReset(String groupId) {
+        return manager.groupConfig(groupId)
+            .map(GroupConfig::shareAutoOffsetReset)
+            .orElseGet(GroupConfig::defaultShareAutoOffsetReset);
     }
 }

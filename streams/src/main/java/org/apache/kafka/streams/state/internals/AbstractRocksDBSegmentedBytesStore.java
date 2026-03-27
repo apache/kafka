@@ -318,6 +318,17 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         segments.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return segments.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return segments.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         open = false;

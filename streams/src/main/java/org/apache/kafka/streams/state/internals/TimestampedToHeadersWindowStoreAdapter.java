@@ -58,7 +58,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * </ul>
  */
 public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
-    private final WindowStore<Bytes, byte[]> store;
+    final WindowStore<Bytes, byte[]> store;
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
@@ -191,6 +191,17 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         store.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
     }
 
     @Override

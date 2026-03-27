@@ -81,6 +81,7 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -168,6 +169,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
+    private final ShareFetchMetricsManager shareFetchMetricsManager;
     private final KafkaShareConsumerMetrics kafkaShareConsumerMetrics;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
     private Logger log;
@@ -273,7 +275,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
 
-            ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
+            this.shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
             this.acknowledgementEventHandler = new ShareAcknowledgementEventHandler(acknowledgementEventQueue);
@@ -384,7 +386,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.completedAcknowledgements = new LinkedList<>();
 
         ShareConsumerMetrics metricsRegistry = new ShareConsumerMetrics();
-        ShareFetchMetricsManager shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, metricsRegistry.shareFetchMetrics);
+        this.shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, metricsRegistry.shareFetchMetrics);
         this.fetchCollector = new ShareFetchCollector<>(
                 logContext,
                 metadata,
@@ -456,6 +458,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final Deserializer<V> valueDeserializer,
                       final ShareFetchBuffer fetchBuffer,
                       final ShareFetchCollector<K, V> fetchCollector,
+                      final ShareFetchMetricsManager shareFetchMetricsManager,
                       final Time time,
                       final ApplicationEventHandler applicationEventHandler,
                       final BlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
@@ -474,6 +477,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.groupId = groupId;
         this.fetchBuffer = fetchBuffer;
         this.fetchCollector = fetchCollector;
+        this.shareFetchMetricsManager = shareFetchMetricsManager;
         this.time = time;
         this.acknowledgementEventQueue = acknowledgementEventQueue;
         this.acknowledgementEventProcessor = new ShareAcknowledgementEventProcessor();
@@ -955,7 +959,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return Map.copyOf(metrics.metrics());
+        return Collections.unmodifiableMap(metrics.metrics());
     }
 
     /**
@@ -1041,6 +1045,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         closeQuietly(kafkaShareConsumerMetrics, "kafka share consumer metrics", firstException);
         closeQuietly(asyncConsumerMetrics, "kafka async consumer metrics", firstException);
+        closeQuietly(shareFetchMetricsManager, "kafka share consumer fetch metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
         clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "consumer telemetry reporter", firstException));

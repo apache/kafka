@@ -300,15 +300,10 @@ public class MetadataQuorumCommand {
         return node == null ? new ArrayList<>() : node.endpoints();
     }
 
-    private static class Node {
-        private final int id;
-        private final Uuid directoryId;
-        private final List<RaftVoterEndpoint> endpoints;
-
-        private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
-            this.id = id;
-            this.directoryId = Objects.requireNonNull(directoryId);
-            this.endpoints = Objects.requireNonNull(endpoints);
+    private record Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
+        private Node {
+            Objects.requireNonNull(directoryId);
+            Objects.requireNonNull(endpoints);
         }
 
         @Override

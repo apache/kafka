@@ -55,6 +55,7 @@ Default Value:
 
 
 </td></tr> </table>
+
   * #### org.apache.kafka.sasl.oauthbearer.allowed.urls
 
 This system property is used to set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. This property accepts comma-separated list of URLs. By default the value is an empty list. 
@@ -82,6 +83,7 @@ Default Value:
 
 
 </td></tr> </table>
+
   * #### org.apache.kafka.disallowed.login.modules
 
 This system property is used to disable the problematic login modules usage in SASL JAAS configuration. This property accepts comma-separated list of loginModule names. By default **com.sun.security.auth.module.JndiLoginModule** and **com.sun.security.auth.module.LdapLoginModule** loginModule is disabled. 
@@ -123,6 +125,7 @@ Default Value:
 
 com.sun.security.auth.module.JndiLoginModule,com.sun.security.auth.module.LdapLoginModule
 </td></tr> </table>
+
   * #### org.apache.kafka.allowed.login.modules
 
 This system property is used to explicitly allow specific login modules in SASL JAAS configuration. It accepts a comma-separated list of login module class names. This property provides a stricter, allowed-list-based alternative to the deprecated `org.apache.kafka.disallowed.login.modules` property. It is recommended to use this property to improve the security of JAAS configurations. 
@@ -144,6 +147,7 @@ Since:
 
 Default Value:
 </th></tr> </table>
+
   * #### org.apache.kafka.automatic.config.providers
 
 This system property controls the automatic loading of ConfigProvider implementations in Apache Kafka. ConfigProviders are used to dynamically supply configuration values from sources such as files, directories, or environment variables. This property accepts a comma-separated list of ConfigProvider names. By default, all built-in ConfigProviders are enabled, including **FileConfigProvider** , **DirectoryConfigProvider** , and **EnvVarConfigProvider**.

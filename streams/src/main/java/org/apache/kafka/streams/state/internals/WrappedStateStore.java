@@ -128,6 +128,17 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         wrapped.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return wrapped.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return wrapped.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         wrapped.close();

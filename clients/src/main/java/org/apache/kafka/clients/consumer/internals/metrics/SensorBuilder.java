@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -37,7 +36,7 @@ import java.util.function.Supplier;
  */
 public class SensorBuilder {
 
-    private final Metrics metrics;
+    private final MetricsLedger metrics;
 
     private final Sensor sensor;
 
@@ -45,11 +44,11 @@ public class SensorBuilder {
 
     private final Map<String, String> tags;
 
-    public SensorBuilder(Metrics metrics, String name) {
+    public SensorBuilder(MetricsLedger metrics, String name) {
         this(metrics, name, Collections::emptyMap);
     }
 
-    public SensorBuilder(Metrics metrics, String name, Supplier<Map<String, String>> tagsSupplier) {
+    public SensorBuilder(MetricsLedger metrics, String name, Supplier<Map<String, String>> tagsSupplier) {
         this.metrics = metrics;
         Sensor s = metrics.getSensor(name);
 
@@ -64,35 +63,35 @@ public class SensorBuilder {
         }
     }
 
-    SensorBuilder withAvg(MetricNameTemplate name) {
+    public SensorBuilder withAvg(MetricNameTemplate name) {
         if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Avg());
 
         return this;
     }
 
-    SensorBuilder withMin(MetricNameTemplate name) {
+    public SensorBuilder withMin(MetricNameTemplate name) {
         if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Min());
 
         return this;
     }
 
-    SensorBuilder withMax(MetricNameTemplate name) {
+    public SensorBuilder withMax(MetricNameTemplate name) {
         if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Max());
 
         return this;
     }
 
-    SensorBuilder withValue(MetricNameTemplate name) {
+    public SensorBuilder withValue(MetricNameTemplate name) {
         if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Value());
 
         return this;
     }
 
-    SensorBuilder withMeter(MetricNameTemplate rateName, MetricNameTemplate totalName) {
+    public SensorBuilder withMeter(MetricNameTemplate rateName, MetricNameTemplate totalName) {
         if (!preexisting) {
             sensor.add(new Meter(metrics.metricInstance(rateName, tags), metrics.metricInstance(totalName, tags)));
         }
@@ -100,7 +99,7 @@ public class SensorBuilder {
         return this;
     }
 
-    SensorBuilder withMeter(SampledStat sampledStat, MetricNameTemplate rateName, MetricNameTemplate totalName) {
+    public SensorBuilder withMeter(SampledStat sampledStat, MetricNameTemplate rateName, MetricNameTemplate totalName) {
         if (!preexisting) {
             sensor.add(new Meter(sampledStat, metrics.metricInstance(rateName, tags), metrics.metricInstance(totalName, tags)));
         }
@@ -108,8 +107,7 @@ public class SensorBuilder {
         return this;
     }
 
-    Sensor build() {
+    public Sensor build() {
         return sensor;
     }
-
 }
