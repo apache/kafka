@@ -123,11 +123,16 @@ org.apache.kafka.raft.KafkaRaftClientDriverTest:
 - testUncaughtException
 org.apache.kafka.raft.KafkaRaftClientFetchTest:
 - testDefaultHwmDeferred
+- testFetchMaxBytesAlwaysReturnsAllBatchesForLargeMax
+- testFetchMaxBytesAlwaysReturnsAtLeastOneBatch
+- testFetchMaxBytesBatchesInvariants
+- testFetchMaxBytesWithTwoBatches
 - testHighWatermarkSentInFetchRequest
 - testInvalidMemoryRecords
 - testOutdatedHwmCompletedWhenLeaderKnowsHwm
 - testRandomRecords
 - testReplicationOfHigherPartitionLeaderEpoch
+- testSentFetchUsesQuorumMaxBytesConfiguration
 - testUnchangedHighWatermarkDeferred
 - testUnknownHwmDeferredWhenLeaderDoesNotKnowHwm
 - testUpdatedHighWatermarkCompleted
@@ -236,6 +241,7 @@ org.apache.kafka.raft.KafkaRaftClientSnapshotTest:
 - testFetchSnapshotRequestWithInvalidPosition
 - testFetchSnapshotRequestWithNewerEpoch
 - testFetchSnapshotRequestWithOlderEpoch
+- testFetchSnapshotRequestWithPartialData
 - testFetchSnapshotResponseFromNewerEpochLeader
 - testFetchSnapshotResponseFromNewerEpochNotLeader
 - testFetchSnapshotResponseFromOlderEpoch
@@ -430,12 +436,17 @@ org.apache.kafka.raft.MockLogTest:
 - testFailToIncreaseLogStartPastHighWatermark
 - testInvalidLeaderEpoch
 - testInvalidMemoryRecords
+- testLogLimitsReturnsAtLeastOne
+- testLogLimitsReturnsLessThanMaxBytes
 - testMetadataValidation
+- testMockLogReadExtremelyLargeMultiBatch
+- testMockLogReadExtremelyLargeSingleBatch
 - testMonotonicEpochStartOffset
 - testRandomRecords
 - testReadMissingSnapshot
 - testReadOutOfRangeOffset
 - testReadRecords
+- testReadRespectsMaxSizeInBytes
 - testReadUpToHighWatermark
 - testReadUpToLogEnd
 - testTopicId
@@ -717,10 +728,13 @@ org.apache.kafka.raft.internals.KafkaRaftLogTest:
 - testHighWatermarkOffsetMetadata
 - testInvalidLeaderEpoch
 - testInvalidMemoryRecords
+- testLogLimitsReturnsAtLeastOne
+- testLogLimitsReturnsLessThanMaxBytes
 - testMaxBatchSize
 - testRandomRecords
 - testReadMissingSnapshot
 - testReadMissingSnapshotFile
+- testReadRespectsMaxSizeInBytes
 - testSegmentMsConfigIsSetInMetadataLog
 - testSegmentsLessThanLatestSnapshot
 - testSnapshotDeletionWithInvalidSnapshotState
