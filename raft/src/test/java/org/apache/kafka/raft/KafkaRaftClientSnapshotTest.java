@@ -841,7 +841,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         FetchSnapshotRequestData voter1FetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 voter1,
                 context.metadataPartition,
                 epoch,
@@ -851,7 +851,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         FetchSnapshotRequestData voter2FetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 voter2,
                 context.metadataPartition,
                 epoch,
@@ -861,7 +861,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         FetchSnapshotRequestData observerFetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 observer3,
                 context.metadataPartition,
                 epoch,
@@ -1955,7 +1955,7 @@ public final class KafkaRaftClientSnapshotTest {
         // valid cluster id is accepted
         context.deliverRequest(
             fetchSnapshotRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 otherNode,
                 context.metadataPartition,
                 epoch,
@@ -2264,7 +2264,7 @@ public final class KafkaRaftClientSnapshotTest {
     private static void assertBootstrapSnapshot(
         RaftClientTestContext context,
         List<String> expectedRecords
-    ) throws Exception {
+    ) {
         try (SnapshotReader<String> bootstrapSnapshot = context.listener.drainHandledBootstrapSnapshot().get()) {
             assertEquals(Snapshots.BOOTSTRAP_SNAPSHOT_ID, bootstrapSnapshot.snapshotId());
             SnapshotWriterReaderTest.assertDataSnapshot(List.of(expectedRecords), bootstrapSnapshot);

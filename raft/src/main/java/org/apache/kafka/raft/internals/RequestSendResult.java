@@ -17,7 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 /**
- * Type to capture the atempt to send a request.
+ * Type to capture the attempt to send a request.
  *
  * @param requestSent true if the request was sent
  * @param timeToWaitMs the amount of time to wait in milliseconds before attempting to resend the
