@@ -545,13 +545,9 @@ public class Metadata implements Closeable {
             return this.metadataSnapshot.mergeWith(metadataResponse.clusterId(), nodes, partitions,
                 unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds,
                 (topic, isInternal) -> !topics.contains(topic) && retainTopic(topic, isInternal, nowMs));
-        else {
-            // Preserve the bootstrap flag from the current snapshot when creating a new one
-            boolean isBootstrapConfigured = this.metadataSnapshot.cluster().isBootstrapConfigured();
+        else
             return new MetadataSnapshot(metadataResponse.clusterId(), nodes, partitions,
-                unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds,
-                isBootstrapConfigured, null);
-        }
+                unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds);
     }
 
     /**

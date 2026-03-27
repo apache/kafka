@@ -1417,7 +1417,9 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public boolean isBootstrapped() {
-            return metadata.fetch().isBootstrapConfigured();
+            // Check if we have nodes (either from bootstrap or real metadata)
+            // If we have nodes, we can skip DNS resolution
+            return !metadata.fetch().nodes().isEmpty();
         }
 
         @Override
