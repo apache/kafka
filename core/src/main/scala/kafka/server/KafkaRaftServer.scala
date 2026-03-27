@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import kafka.utils.{Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
@@ -181,7 +182,7 @@ object KafkaRaftServer {
     }
 
     // Load the BootstrapMetadata.
-    val bootstrapMetadata = BootstrapMetadata.fromDirectory(java.nio.file.Path.of(config.metadataLogDir))
+    val bootstrapMetadata = BootstrapMetadata.fromDirectory(Path.of(config.metadataLogDir))
     (metaPropsEnsemble, bootstrapMetadata)
   }
 

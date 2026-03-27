@@ -50,7 +50,6 @@ import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -483,23 +482,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
             formatter.setControllerListenerName(controllerListenerName);
             formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
 
-            for (Feature feature : Feature.PRODUCTION_FEATURES) {
-                String featureName = feature.featureName();
-                // MetadataVersion is already set via setReleaseVersion above.
-                // KRaftVersion is derived internally by the Formatter based on quorum configuration.
-                if (featureName.equals(MetadataVersion.FEATURE_NAME) ||
-                    featureName.equals(KRaftVersion.FEATURE_NAME)) {
-                    continue;
+            List<ApiMessageAndVersion> additionalRecords = new ArrayList<>();
+            for (ApiMessageAndVersion record : nodes.bootstrapMetadata().records()) {
+                if (record.message() instanceof FeatureLevelRecord featureRecord) {
+                    // MetadataVersion is already set via setReleaseVersion above.
+                    // KRaftVersion is derived internally by the Formatter based on quorum configuration.
+                    if (!featureRecord.name().equals(MetadataVersion.FEATURE_NAME) &&
+                        !featureRecord.name().equals(KRaftVersion.FEATURE_NAME)) {
+                        formatter.setFeatureLevel(featureRecord.name(), featureRecord.featureLevel());
+                    }
+                } else if (!(record.message() instanceof UserScramCredentialRecord)) {
+                    additionalRecords.add(record);
                 }
-                short level = nodes.bootstrapMetadata().featureLevel(featureName);
-                formatter.setFeatureLevel(featureName, level);
             }
-
-            // Filter out records already handled by the Formatter (feature levels and SCRAM).
-            List<ApiMessageAndVersion> additionalRecords = nodes.bootstrapMetadata().records().stream()
-                .filter(r -> !(r.message() instanceof FeatureLevelRecord)
-                    && !(r.message() instanceof UserScramCredentialRecord))
-                .toList();
             formatter.setAdditionalBootstrapRecords(additionalRecords);
 
             StringBuilder dynamicVotersBuilder = new StringBuilder();
