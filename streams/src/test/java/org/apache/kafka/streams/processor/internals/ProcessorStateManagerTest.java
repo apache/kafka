@@ -594,6 +594,49 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldCommitAndCloseLegacyStoresWithUnknownOffsetPositions() throws Exception {
+        checkpoint.write(emptyMap());
+
+        final File storeCheckpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME + "_" + persistentStore.name());
+
+        // set up ack'ed offsets
+        final HashMap<TopicPartition, Long> ackedOffsets = new HashMap<>();
+        ackedOffsets.put(persistentStorePartition, null);
+        ackedOffsets.put(nonPersistentStorePartition, 456L);
+        ackedOffsets.put(new TopicPartition("nonRegisteredTopic", 1), 789L);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        contextRegistersStateStore(stateMgr);
+        try {
+            // make sure the checkpoint file is not written yet
+            assertFalse(storeCheckpointFile.exists());
+
+            stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
+        } finally {
+            stateMgr.commit();
+
+            assertTrue(persistentStore.committed);
+            assertTrue(nonPersistentStore.committed);
+
+            // make sure that flush is called in the proper order
+            assertThat(persistentStore.getLastCommitCount(), Matchers.lessThan(nonPersistentStore.getLastCommitCount()));
+
+            stateMgr.updateChangelogOffsets(ackedOffsets);
+            stateMgr.commit();
+            stateMgr.close();
+            assertTrue(persistentStore.closed);
+            assertTrue(nonPersistentStore.closed);
+
+            assertTrue(storeCheckpointFile.exists());
+
+            // the checkpoint file should contain an offset from the persistent store only.
+            final OffsetCheckpoint storeCheckpoint = new OffsetCheckpoint(storeCheckpointFile);
+            final Map<TopicPartition, Long> checkpointedOffsets = storeCheckpoint.read();
+            assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), -4L)));
+        }
+    }
+
+    @Test
     public void shouldOverrideOffsetsWhenRestoreAndProcess() throws IOException {
         final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
         checkpoint.write(offsets);
