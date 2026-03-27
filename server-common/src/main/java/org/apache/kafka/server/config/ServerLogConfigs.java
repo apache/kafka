@@ -169,7 +169,7 @@ public class ServerLogConfigs {
             "The class should implement the <code>org.apache.kafka.server.policy.ClientConfigPolicy</code> interface.";
 
     public static final String CLIENT_CONFIG_MAX_BYTES_CONFIG = "client.config.max.bytes";
-    public static final int CLIENT_CONFIG_MAX_BYTES_DEFAULT = 10240; // 10KB
+    public static final int CLIENT_CONFIG_MAX_BYTES_DEFAULT = 1048576; // 1MB
     public static final String CLIENT_CONFIG_MAX_BYTES_DOC = "Maximum size in bytes for client configuration data in PushConfig requests. " +
             "Requests exceeding this limit will be rejected with CONFIG_TOO_LARGE error.";
 

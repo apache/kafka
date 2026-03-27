@@ -22,25 +22,15 @@
   "fields": [
     {
       "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
-      "about": "The duration in milliseconds for which the request was throttled."
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota."
     },
     {
       "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error."
     },
     {
-      "name": "ConfigErrors", "type": "[]ConfigError", "versions": "0+",
-      "about": "Per-config error details, populated when ErrorCode is INVALID_CONFIG.",
-      "fields": [
-        {
-          "name": "ConfigKey", "type": "string", "versions": "0+",
-          "about": "The configuration key that caused the error."
-        },
-        {
-          "name": "ConfigErrorDescription", "type": "string", "versions": "0+", "nullableVersions": "0+",
-          "about": "Description of the configuration error, or null if no error."
-        }
-      ]
+      "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The top-level error message, or null if there was no error."
     }
   ]
 }

@@ -537,8 +537,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata,
                 throttleTimeSensor,
                 clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                null,
-                "producer");
+                null);
 
         short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,

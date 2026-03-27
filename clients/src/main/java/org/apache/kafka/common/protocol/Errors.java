@@ -135,7 +135,7 @@ import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
-import org.apache.kafka.common.errors.UnknownConfigSubscriptionIdException;
+import org.apache.kafka.common.errors.UnknownConfigProfileException;
 import org.apache.kafka.common.errors.UnknownControllerIdException;
 import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -422,7 +422,7 @@ public enum Errors {
     STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new),
     SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new),
     CONFIG_TOO_LARGE(134, "Configuration payload exceeds broker's ConfigMaxBytes limit.", ConfigTooLargeException::new),
-    UNKNOWN_CONFIG_SUBSCRIPTION_ID(135, "Unknown or expired config subscription ID.", UnknownConfigSubscriptionIdException::new);
+    UNKNOWN_CONFIG_PROFILE(135, "Client configuration profile is unknown or not supported.", UnknownConfigProfileException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

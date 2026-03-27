@@ -45,12 +45,12 @@ public class ConfigCollector {
      * @param maxBytes Maximum payload size in bytes
      * @return List of config entries ready for PushConfigRequest
      */
-    public static List<PushConfigRequestData.ClientConfig> collectConfigs(
+    public static List<PushConfigRequestData.Config> collectConfigs(
             AbstractConfig config,
             List<String> requestedKeys,
             int maxBytes) {
 
-        List<PushConfigRequestData.ClientConfig> result = new ArrayList<>();
+        List<PushConfigRequestData.Config> result = new ArrayList<>();
 
         // Expand wildcard "*" to all keys
         Set<String> keysToInclude = expandKeys(config, requestedKeys);
@@ -72,8 +72,8 @@ public class ConfigCollector {
                 continue;  // Unknown config
             }
 
-            PushConfigRequestData.ClientConfig entry =
-                convertToClientConfig(key, value, type);
+            PushConfigRequestData.Config entry =
+                convertToConfig(key, value, type);
 
             // Check size limit
             int entrySize = estimateSize(entry);
@@ -154,22 +154,23 @@ public class ConfigCollector {
     /**
      * Convert a config entry to the protocol format.
      */
-    private static PushConfigRequestData.ClientConfig convertToClientConfig(
+    private static PushConfigRequestData.Config convertToConfig(
             String key,
             Object value,
             ConfigDef.Type type) {
 
-        PushConfigRequestData.ClientConfig config = new PushConfigRequestData.ClientConfig();
-        config.setName(key);
-        config.setValue(String.valueOf(value));
-        config.setType(mapConfigType(type));
+        PushConfigRequestData.Config config = new PushConfigRequestData.Config();
+        config.setConfigKey(key);
+        config.setConfigValue(String.valueOf(value));
+        config.setConfigType(mapConfigType(type));
         return config;
     }
 
     /**
-     * Convert ConfigDef.Type to protocol byte value.
+     * Convert ConfigDef.Type to protocol short value (int16).
+     * Maps to ConfigDef.Type ordinal values. CLASS and PASSWORD types are excluded by filtering.
      */
-    private static byte mapConfigType(ConfigDef.Type type) {
+    private static short mapConfigType(ConfigDef.Type type) {
         switch (type) {
             case BOOLEAN:
                 return 0;
@@ -186,7 +187,7 @@ public class ConfigCollector {
             case LIST:
                 return 6;
             case CLASS:
-                return 7;
+                return 7;  // Should never reach here due to filtering
             case PASSWORD:
                 return 8;  // Should never reach here due to filtering
             default:
@@ -198,8 +199,8 @@ public class ConfigCollector {
      * Estimate the size of a config entry in bytes.
      * This is a rough estimate for checking against maxBytes limit.
      */
-    private static int estimateSize(PushConfigRequestData.ClientConfig config) {
+    private static int estimateSize(PushConfigRequestData.Config config) {
         // Rough estimate: key length + value length + overhead for type and framing
-        return config.name().length() + config.value().length() + 10;
+        return config.configKey().length() + config.configValue().length() + 10;
     }
 }

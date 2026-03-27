@@ -291,8 +291,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AlterShareGroupOffsetsResponse.parse(readable, version);
             case DELETE_SHARE_GROUP_OFFSETS:
                 return DeleteShareGroupOffsetsResponse.parse(readable, version);
-            case GET_CONFIG_SUBSCRIPTION:
-                return GetConfigSubscriptionResponse.parse(readable, version);
+            case GET_CONFIG_PROFILE_KEYS:
+                return GetConfigProfileKeysResponse.parse(readable, version);
             case PUSH_CONFIG:
                 return PushConfigResponse.parse(readable, version);
             default:

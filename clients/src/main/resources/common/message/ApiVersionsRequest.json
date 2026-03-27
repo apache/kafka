@@ -24,7 +24,7 @@
   //
   // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion in the response from being 0.
   //
-  // Version 5 adds ClientSoftwareRole.
+  // Version 5 adds ClientInstanceId and ClientMetadata for KIP-CFG.
   "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
@@ -32,7 +32,16 @@
       "ignorable": true, "about": "The name of the client." },
     { "name": "ClientSoftwareVersion", "type": "string", "versions": "3+",
       "ignorable": true, "about": "The version of the client." },
-    { "name": "ClientSoftwareRole", "type": "string", "versions": "5+",
-      "ignorable": true, "about": "The role of the client (e.g., producer, consumer, admin)." }
+    { "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
+      "ignorable": false, "about": "Unique ID for this client instance, must be set to 0 on the first request." },
+    { "name": "ClientMetadata", "type": "[]ClientMetadataEntry", "versions": "5+",
+      "ignorable": true, "about": "Client metadata as key-value pairs.",
+      "fields": [
+        { "name": "Key", "type": "string", "versions": "5+",
+          "about": "Client metadata key." },
+        { "name": "Value", "type": "string", "versions": "5+",
+          "about": "Client metadata value." }
+      ]
+    }
   ]
 }

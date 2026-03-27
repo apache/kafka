@@ -66,7 +66,6 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.policy.ClientConfigPolicy
-import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -80,7 +79,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
-import java.util.{Collections, Optional, UUID}
+import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -235,7 +234,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS => handleDescribeTopicPartitionsRequest(request)
-        case ApiKeys.GET_CONFIG_SUBSCRIPTION => handleGetConfigSubscriptionRequest(request)
+        case ApiKeys.GET_CONFIG_PROFILE_KEYS => handleGetConfigProfileKeysRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_CONFIG => handlePushConfigRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
@@ -2989,78 +2988,120 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleGetConfigSubscriptionRequest(request: RequestChannel.Request): Unit = {
+  def handleGetConfigProfileKeysRequest(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     val clientInfo = request.context.clientInformation
-    val configKeys: Set[String] = clientConfigPolicy match {
+    // TODO: Extract clientInstanceId and clientMetadata from ApiVersionsRequest context
+    // For now, using placeholder values - need to update RequestContext/ClientInformation
+    // to store these fields from ApiVersionsRequest v5
+    val clientInstanceId = org.apache.kafka.common.Uuid.ZERO_UUID  // TODO: Get from context
+    val clientMetadata = new java.util.TreeMap[String, String]()  // TODO: Get from context
+
+    val clientProfile = new org.apache.kafka.server.policy.ClientProfile(
+      clientInstanceId,
+      clientInfo.softwareName,
+      clientInfo.softwareVersion,
+      clientMetadata
+    )
+
+    val (errorCode, errorMessage, crc, configKeys) = clientConfigPolicy match {
       case Some(policy) =>
-        val metadata = new ClientConfigPolicy.GetConfigSubscriptionRequestMetadata(clientInfo)
-        val keys = policy.configKeysToRequest(metadata)
-        if (keys == null) Set.empty else keys.asScala.toSet
+        try {
+          val profileKeysOpt = policy.profileKeys(clientProfile)
+          OptionConverters.toScala(profileKeysOpt) match {
+            case Some(profileKeys) =>
+              val keys: List[String] = profileKeys.keys().asScala.toList
+              (Errors.NONE.code, null, profileKeys.crc(), keys)
+            case None =>
+              // No profile matched, return empty config keys
+              (Errors.NONE.code, null, 0L, List.empty[String])
+          }
+        } catch {
+          case e: org.apache.kafka.common.errors.UnknownConfigProfileException =>
+            (Errors.UNKNOWN_CONFIG_PROFILE.code, e.getMessage, 0L, List.empty[String])
+          case e: Exception =>
+            (Errors.UNKNOWN_SERVER_ERROR.code, e.getMessage, 0L, List.empty[String])
+        }
       case None =>
-        Set.empty
+        // No policy configured, return empty config keys
+        (Errors.NONE.code, null, 0L, List.empty[String])
     }
 
-    val subscriptionId = math.abs(UUID.randomUUID().hashCode())
-    val configNamesList = configKeys.map { name =>
-      new GetConfigSubscriptionResponseData.ConfigKey().setName(name)
-    }.toList.asJava
+    val configKeysList = configKeys.asJava
 
-    val responseData = new GetConfigSubscriptionResponseData()
-      .setSubscriptionId(subscriptionId)
+    val responseData = new GetConfigProfileKeysResponseData()
+      .setErrorCode(errorCode.toShort)
+      .setErrorMessage(errorMessage)
+      .setConfigurationProfileCrc(crc)
       .setConfigMaxBytes(clientConfigMaxBytes)
-      .setConfigNames(configNamesList)
+      .setConfigKeys(configKeysList)
 
     requestHelper.sendResponseMaybeThrottle(request,
-      requestThrottleMs => new GetConfigSubscriptionResponse(responseData))
+      requestThrottleMs => new GetConfigProfileKeysResponse(responseData.setThrottleTimeMs(requestThrottleMs)))
   }
 
   def handlePushConfigRequest(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     val clientInfo = request.context.clientInformation
-    val configsData = request.body[PushConfigRequest].data.configs.asScala
-    val configs = configsData.map(c => c.name -> c.value).toMap
+    val requestData = request.body[PushConfigRequest].data
+    val configsData = requestData.configs.asScala
+    val configs = configsData.map(c => c.configKey -> c.configValue).toMap
 
     // Calculate size
     val configsSize = configs.foldLeft(0)((acc, kv) =>
       acc + kv._1.getBytes(StandardCharsets.UTF_8).length +
             kv._2.getBytes(StandardCharsets.UTF_8).length)
 
-    val responseData = if (configsSize > clientConfigMaxBytes) {
-      new PushConfigResponseData()
-        .setErrorCode(Errors.CONFIG_TOO_LARGE.code)
+    val (errorCode, errorMessage) = if (configsSize > clientConfigMaxBytes) {
+      (Errors.CONFIG_TOO_LARGE.code, s"Configuration payload size ($configsSize bytes) exceeds limit ($clientConfigMaxBytes bytes)")
     } else {
       clientConfigPolicy match {
         case Some(policy) =>
           try {
-            val metadata = new ClientConfigPolicy.PushConfigRequestMetadata(clientInfo, configs.asJava)
-            policy.validate(metadata)
-            new PushConfigResponseData()
-              .setErrorCode(Errors.NONE.code)
-          } catch {
-            case e: PolicyViolationException =>
-              // Parse validation errors into per-config errors
-              val configErrors = new util.ArrayList[PushConfigResponseData.ConfigError]()
-              // For now, single error - future: parse e.getMessage() for per-config details
-              configErrors.add(new PushConfigResponseData.ConfigError()
-                .setConfigKey("")
-                .setConfigErrorDescription(e.getMessage))
+            // TODO: Extract clientInstanceId and clientMetadata from ApiVersionsRequest context
+            val clientInstanceId = org.apache.kafka.common.Uuid.ZERO_UUID  // TODO: Get from context
+            val clientMetadata = new java.util.TreeMap[String, String]()  // TODO: Get from context
 
-              new PushConfigResponseData()
-                .setErrorCode(Errors.INVALID_CONFIG.code)
-                .setConfigErrors(configErrors)
+            val clientProfile = new org.apache.kafka.server.policy.ClientProfile(
+              clientInstanceId,
+              clientInfo.softwareName,
+              clientInfo.softwareVersion,
+              clientMetadata
+            )
+
+            val timestamp = time.milliseconds()
+            val pushConfigData = new org.apache.kafka.server.policy.ClientPushConfigData(
+              clientProfile,
+              configs.asJava,
+              timestamp
+            )
+
+            policy.process(pushConfigData)
+            (Errors.NONE.code, null)
+          } catch {
+            case e: org.apache.kafka.common.errors.UnknownConfigProfileException =>
+              (Errors.UNKNOWN_CONFIG_PROFILE.code, e.getMessage)
+            case e: org.apache.kafka.common.errors.ConfigTooLargeException =>
+              (Errors.CONFIG_TOO_LARGE.code, e.getMessage)
+            case e: org.apache.kafka.common.errors.ClientConfigPolicyException =>
+              (Errors.INVALID_CONFIG.code, e.getMessage)
+            case e: Exception =>
+              (Errors.UNKNOWN_SERVER_ERROR.code, e.getMessage)
           }
         case None =>
           // No policy configured, accept all
-          new PushConfigResponseData()
-            .setErrorCode(Errors.NONE.code)
+          (Errors.NONE.code, null)
       }
     }
 
+    val responseData = new PushConfigResponseData()
+      .setErrorCode(errorCode)
+      .setErrorMessage(errorMessage)
+
     requestHelper.sendResponseMaybeThrottle(request,
-      requestThrottleMs => new PushConfigResponse(responseData))
+      requestThrottleMs => new PushConfigResponse(responseData.setThrottleTimeMs(requestThrottleMs)))
   }
 
   /**

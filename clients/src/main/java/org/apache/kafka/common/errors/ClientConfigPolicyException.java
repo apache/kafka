@@ -17,19 +17,20 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Exception thrown when a client sends a configuration push request with an unknown or expired subscription ID.
- * This typically happens when the broker's configuration subscription has changed between the time the client
- * received the subscription and when it attempted to push its configuration.
+ * Exception thrown when a client configuration policy violation occurs.
+ * <p>
+ * This is a generic exception for ClientConfigPolicy implementations to throw when
+ * client configurations fail validation or enforcement rules.
  */
-public class UnknownConfigSubscriptionIdException extends RetriableException {
+public class ClientConfigPolicyException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public UnknownConfigSubscriptionIdException(String message) {
+    public ClientConfigPolicyException(String message) {
         super(message);
     }
 
-    public UnknownConfigSubscriptionIdException(String message, Throwable cause) {
+    public ClientConfigPolicyException(String message, Throwable cause) {
         super(message, cause);
     }
 }

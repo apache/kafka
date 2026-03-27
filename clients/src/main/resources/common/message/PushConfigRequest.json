@@ -22,28 +22,24 @@
   "flexibleVersions": "0+",
   "fields": [
     {
-      "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
-      "about": "Unique id for this client instance."
+      "name": "ConfigurationProfileCrc", "type": "int64", "versions": "0+",
+      "about": "CRC for the current configuration profile."
     },
     {
-      "name": "SubscriptionId", "type": "int32", "versions": "0+",
-      "about": "The subscription ID from GetConfigSubscriptionResponse."
-    },
-    {
-      "name": "Configs", "type": "[]ClientConfig", "versions": "0+",
+      "name": "Configs", "type": "[]Config", "versions": "0+",
       "about": "The client configuration entries.",
       "fields": [
         {
-          "name": "Name", "type": "string", "versions": "0+",
-          "about": "The configuration key name."
+          "name": "ConfigKey", "type": "string", "versions": "0+",
+          "about": "The configuration key."
         },
         {
-          "name": "Value", "type": "string", "versions": "0+",
-          "about": "The configuration value as a string."
+          "name": "ConfigValue", "type": "string", "versions": "0+",
+          "about": "The configuration value."
         },
         {
-          "name": "Type", "type": "int8", "versions": "0+",
-          "about": "The configuration type: 0=BOOLEAN, 1=STRING, 2=INT, 3=SHORT, 4=LONG, 5=DOUBLE, 6=LIST, 7=CLASS."
+          "name": "ConfigType", "type": "int16", "versions": "0+",
+          "about": "Type (from ConfigDef.Type) of the ConfigValue field. Maps to ConfigDef.Type ordinal: 0=BOOLEAN, 1=STRING, 2=INT, 3=SHORT, 4=LONG, 5=DOUBLE, 6=LIST. CLASS(7) and PASSWORD(8) types are intentionally excluded."
         }
       ]
     }

@@ -17,13 +17,8 @@
   "apiKey": 93,
   "type": "request",
   "listeners": ["broker"],
-  "name": "GetConfigSubscriptionRequest",
+  "name": "GetConfigProfileKeysRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  "fields": [
-    {
-      "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
-      "about": "Unique id for this client instance, must be set to all zeros on the first request."
-    }
-  ]
+  "fields": []
 }

@@ -487,8 +487,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender,
-                        clientConfigsSender,
-                        "consumer");
+                        clientConfigsSender);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };

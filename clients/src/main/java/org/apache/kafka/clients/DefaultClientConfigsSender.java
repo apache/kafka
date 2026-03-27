@@ -19,14 +19,13 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.message.GetConfigSubscriptionRequestData;
-import org.apache.kafka.common.message.GetConfigSubscriptionResponseData;
+import org.apache.kafka.common.message.GetConfigProfileKeysRequestData;
+import org.apache.kafka.common.message.GetConfigProfileKeysResponseData;
 import org.apache.kafka.common.message.PushConfigRequestData;
-import org.apache.kafka.common.message.PushConfigResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.GetConfigSubscriptionRequest;
-import org.apache.kafka.common.requests.GetConfigSubscriptionResponse;
+import org.apache.kafka.common.requests.GetConfigProfileKeysRequest;
+import org.apache.kafka.common.requests.GetConfigProfileKeysResponse;
 import org.apache.kafka.common.requests.PushConfigRequest;
 import org.apache.kafka.common.requests.PushConfigResponse;
 
@@ -36,14 +35,13 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Default implementation of ClientConfigsSender that manages the config push handshake.
  * <p>
  * This implementation follows a simple state machine:
  * <pre>
- *   NOT_STARTED → SUBSCRIPTION_IN_PROGRESS → PUSH_IN_PROGRESS → COMPLETED/FAILED
+ *   NOT_STARTED → PROFILE_KEYS_IN_PROGRESS → PUSH_IN_PROGRESS → COMPLETED/FAILED
  * </pre>
  */
 public class DefaultClientConfigsSender implements ClientConfigsSender {
@@ -56,8 +54,8 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
     }
 
     private enum State {
-        NOT_STARTED,               // Initial state, need to send GetConfigSubscription
-        SUBSCRIPTION_IN_PROGRESS,  // Waiting for GetConfigSubscription response
+        NOT_STARTED,               // Initial state, need to send GetConfigProfileKeys
+        PROFILE_KEYS_IN_PROGRESS,  // Waiting for GetConfigProfileKeys response
         PUSH_IN_PROGRESS,          // Waiting for PushConfig response
         COMPLETED,                 // Successfully pushed config
         FAILED                     // Failed (but client continues)
@@ -66,7 +64,7 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
     private final AbstractConfig clientConfig;
     private volatile Uuid clientInstanceId = Uuid.ZERO_UUID;
     private volatile State state = State.NOT_STARTED;
-    private volatile int configSubscriptionId = -1;
+    private volatile long configurationProfileCrc = -1L;
     private volatile int configMaxBytes = 0;
     private volatile List<String> requestedConfigKeys = new ArrayList<>();
 
@@ -83,12 +81,12 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
     public synchronized Optional<AbstractRequest.Builder<?>> createRequest() {
         switch (state) {
             case NOT_STARTED:
-                log.debug("Creating GetConfigSubscription request");
-                state = State.SUBSCRIPTION_IN_PROGRESS;
-                return Optional.of(createGetConfigSubscriptionRequest());
+                log.debug("Creating GetConfigProfileKeys request");
+                state = State.PROFILE_KEYS_IN_PROGRESS;
+                return Optional.of(createGetConfigProfileKeysRequest());
 
-            case SUBSCRIPTION_IN_PROGRESS:
-                // Waiting for subscription response, no new request to send
+            case PROFILE_KEYS_IN_PROGRESS:
+                // Waiting for profile keys response, no new request to send
                 return Optional.empty();
 
             case PUSH_IN_PROGRESS:
@@ -110,40 +108,31 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
     }
 
     @Override
-    public synchronized void handleResponse(GetConfigSubscriptionResponse response) {
-        if (state != State.SUBSCRIPTION_IN_PROGRESS) {
-            log.warn("Received GetConfigSubscription response in unexpected state: {}", state);
+    public synchronized void handleResponse(GetConfigProfileKeysResponse response) {
+        if (state != State.PROFILE_KEYS_IN_PROGRESS) {
+            log.warn("Received GetConfigProfileKeys response in unexpected state: {}", state);
             return;
         }
 
         Errors error = response.error();
         if (error != Errors.NONE) {
-            log.warn("GetConfigSubscription request failed with error: {}", error);
+            log.warn("GetConfigProfileKeys request failed with error: {} - {}",
+                error, response.data().errorMessage());
             state = State.FAILED;
             return;
         }
 
-        GetConfigSubscriptionResponseData data = response.data();
+        GetConfigProfileKeysResponseData data = response.data();
 
-        // Store client instance ID if this was the first request
-        Uuid receivedInstanceId = data.clientInstanceId();
-        if (!receivedInstanceId.equals(Uuid.ZERO_UUID)) {
-            clientInstanceId = receivedInstanceId;
-            log.debug("Received client instance ID: {}", clientInstanceId);
-        }
-
-        // Store subscription details
-        configSubscriptionId = data.subscriptionId();
+        // Store configuration profile CRC
+        configurationProfileCrc = data.configurationProfileCrc();
         configMaxBytes = data.configMaxBytes();
 
-        // Extract requested keys
-        requestedConfigKeys = data.configNames()
-            .stream()
-            .map(key -> key.name())
-            .collect(Collectors.toList());
+        // Extract requested keys (now simple string array, not nested structure)
+        requestedConfigKeys = new ArrayList<>(data.configKeys());
 
-        log.debug("Config subscription received: subscriptionId={}, maxBytes={}, keys={}",
-            configSubscriptionId, configMaxBytes, requestedConfigKeys.size());
+        log.debug("Config profile received: crc={}, maxBytes={}, keys={}",
+            configurationProfileCrc, configMaxBytes, requestedConfigKeys.size());
 
         // Transition to next state - PushConfig will be created on next createRequest() call
         state = State.PUSH_IN_PROGRESS;
@@ -163,33 +152,32 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
             state = State.COMPLETED;
 
         } else if (error == Errors.INVALID_CONFIG) {
-            // Log per-config errors from the new ConfigErrors array
-            if (response.hasConfigErrors()) {
-                log.error("Configuration push failed with {} invalid config(s):",
-                    response.configErrors().size());
-                for (PushConfigResponseData.ConfigError configError : response.configErrors()) {
-                    log.error("  Config '{}': {}",
-                        configError.configKey(),
-                        configError.configErrorDescription());
-                }
+            // Log error message from the response
+            String errorMessage = response.data().errorMessage();
+            if (errorMessage != null && !errorMessage.isEmpty()) {
+                log.error("Configuration push failed: INVALID_CONFIG - {}", errorMessage);
             } else {
                 log.error("Configuration push failed: INVALID_CONFIG (no details provided)");
             }
             state = State.FAILED;
 
-        } else if (error == Errors.UNKNOWN_CONFIG_SUBSCRIPTION_ID) {
-            log.warn("Subscription changed, retrying GetConfigSubscription");
+        } else if (error == Errors.UNKNOWN_CONFIG_PROFILE) {
+            log.warn("Configuration profile changed, retrying GetConfigProfileKeys");
             // Reset to retry once
             state = State.NOT_STARTED;
-            configSubscriptionId = -1;
+            configurationProfileCrc = -1L;
             requestedConfigKeys.clear();
 
         } else if (error == Errors.CONFIG_TOO_LARGE) {
-            log.error("Config payload too large, cannot retry");
+            String errorMessage = response.data().errorMessage();
+            log.error("Config payload too large, cannot retry: {}",
+                errorMessage != null ? errorMessage : "");
             state = State.FAILED;
 
         } else {
-            log.warn("PushConfig failed with error: {}", error);
+            String errorMessage = response.data().errorMessage();
+            log.warn("PushConfig failed with error: {} - {}",
+                error, errorMessage != null ? errorMessage : "");
             state = State.FAILED;
         }
     }
@@ -206,7 +194,7 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
 
     @Override
     public synchronized void handleDisconnect() {
-        if (state == State.SUBSCRIPTION_IN_PROGRESS || state == State.PUSH_IN_PROGRESS) {
+        if (state == State.PROFILE_KEYS_IN_PROGRESS || state == State.PUSH_IN_PROGRESS) {
             log.debug("Disconnected during config push handshake");
             state = State.FAILED;
         }
@@ -217,22 +205,22 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
         return clientInstanceId;
     }
 
-    private GetConfigSubscriptionRequest.Builder createGetConfigSubscriptionRequest() {
-        GetConfigSubscriptionRequestData requestData = new GetConfigSubscriptionRequestData()
-            .setClientInstanceId(clientInstanceId);  // ZERO_UUID on first call
+    private GetConfigProfileKeysRequest.Builder createGetConfigProfileKeysRequest() {
+        // No fields in GetConfigProfileKeysRequest - client profile comes from ApiVersionsRequest context
+        GetConfigProfileKeysRequestData requestData = new GetConfigProfileKeysRequestData();
 
-        return new GetConfigSubscriptionRequest.Builder(requestData);
+        return new GetConfigProfileKeysRequest.Builder(requestData);
     }
 
     /**
      * Creates a PushConfig request with collected configuration.
-     * This should only be called after receiving a successful GetConfigSubscription response.
+     * This should only be called after receiving a successful GetConfigProfileKeys response.
      */
     private PushConfigRequest.Builder createPushConfigRequest() {
         log.debug("Collecting and preparing config push");
 
-//        // Collect configs using ConfigCollector
-        List<PushConfigRequestData.ClientConfig> configs;
+        // Collect configs using ConfigCollector
+        List<PushConfigRequestData.Config> configs;
         try {
             configs = ConfigCollector.collectConfigs(
                 clientConfig,
@@ -247,8 +235,7 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
 
         // Build request
         PushConfigRequestData requestData = new PushConfigRequestData()
-            .setClientInstanceId(clientInstanceId)
-            .setSubscriptionId(configSubscriptionId)
+            .setConfigurationProfileCrc(configurationProfileCrc)
             .setConfigs(configs);
 
         return new PushConfigRequest.Builder(requestData);
@@ -256,11 +243,11 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
 
     /**
      * Checks if we need to send a PushConfig request.
-     * This is true when we've received a subscription but haven't pushed yet.
+     * This is true when we've received profile keys but haven't pushed yet.
      */
     synchronized boolean needsPushRequest() {
         return state == State.PUSH_IN_PROGRESS &&
-            configSubscriptionId != -1 &&
+            configurationProfileCrc != -1L &&
             !requestedConfigKeys.isEmpty();
     }
 }

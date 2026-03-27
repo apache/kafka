@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.GetConfigSubscriptionResponseData;
+import org.apache.kafka.common.message.GetConfigProfileKeysResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
@@ -26,19 +26,20 @@ import java.util.Map;
 
 /**
  * Possible error codes:
+ * - {@link Errors#UNKNOWN_CONFIG_PROFILE}
  * - {@link Errors#UNSUPPORTED_VERSION}
  * - {@link Errors#INVALID_REQUEST}
  */
-public class GetConfigSubscriptionResponse extends AbstractResponse {
-    private final GetConfigSubscriptionResponseData data;
+public class GetConfigProfileKeysResponse extends AbstractResponse {
+    private final GetConfigProfileKeysResponseData data;
 
-    public GetConfigSubscriptionResponse(GetConfigSubscriptionResponseData data) {
-        super(ApiKeys.GET_CONFIG_SUBSCRIPTION);
+    public GetConfigProfileKeysResponse(GetConfigProfileKeysResponseData data) {
+        super(ApiKeys.GET_CONFIG_PROFILE_KEYS);
         this.data = data;
     }
 
     @Override
-    public GetConfigSubscriptionResponseData data() {
+    public GetConfigProfileKeysResponseData data() {
         return data;
     }
 
@@ -67,8 +68,7 @@ public class GetConfigSubscriptionResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public static GetConfigSubscriptionResponse parse(Readable readable, short version) {
-        return new GetConfigSubscriptionResponse(new GetConfigSubscriptionResponseData(
-            readable, version));
+    public static GetConfigProfileKeysResponse parse(Readable readable, short version) {
+        return new GetConfigProfileKeysResponse(new GetConfigProfileKeysResponseData(readable, version));
     }
 }

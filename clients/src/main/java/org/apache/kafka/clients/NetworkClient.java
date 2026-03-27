@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CorrelationIdMismatchException;
-import org.apache.kafka.common.requests.GetConfigSubscriptionResponse;
+import org.apache.kafka.common.requests.GetConfigProfileKeysResponse;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -107,9 +107,6 @@ public class NetworkClient implements KafkaClient {
 
     /* the client id used to identify this client in requests to the server */
     private final String clientId;
-
-    /* the client software role used in ApiVersionsRequest */
-    private final String clientSoftwareRole;
 
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
@@ -181,7 +178,6 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              null,
-             null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
@@ -221,7 +217,6 @@ public class NetworkClient implements KafkaClient {
                 null,
                 logContext,
                 new DefaultHostResolver(),
-                null,
                 null,
                 null,
                 rebootstrapTriggerMs,
@@ -265,7 +260,6 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              null,
-             null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
@@ -306,7 +300,6 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              null,
-             null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
@@ -331,7 +324,6 @@ public class NetworkClient implements KafkaClient {
                          HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender,
                          ClientConfigsSender clientConfigsSender,
-                         String clientSoftwareRole,
                          long rebootstrapTriggerMs,
                          MetadataRecoveryStrategy metadataRecoveryStrategy) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
@@ -347,7 +339,6 @@ public class NetworkClient implements KafkaClient {
         }
         this.selector = selector;
         this.clientId = clientId;
-        this.clientSoftwareRole = clientSoftwareRole;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
@@ -1041,8 +1032,8 @@ public class NetworkClient implements KafkaClient {
                 telemetrySender.handleResponse((GetTelemetrySubscriptionsResponse) response);
             else if (req.isInternalRequest && response instanceof PushTelemetryResponse)
                 telemetrySender.handleResponse((PushTelemetryResponse) response);
-            else if (req.isInternalRequest && response instanceof GetConfigSubscriptionResponse)
-                configsSender.handleResponse((GetConfigSubscriptionResponse) response);
+            else if (req.isInternalRequest && response instanceof GetConfigProfileKeysResponse)
+                configsSender.handleResponse((GetConfigProfileKeysResponse) response);
             else if (req.isInternalRequest && response instanceof PushConfigResponse)
                 configsSender.handleResponse((PushConfigResponse) response);
             else
@@ -1070,7 +1061,7 @@ public class NetworkClient implements KafkaClient {
                         maxApiVersion = apiVersion.maxVersion();
                     }
                 }
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion).withRole(this.clientSoftwareRole));
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion));
             }
             return;
         }
@@ -1116,7 +1107,7 @@ public class NetworkClient implements KafkaClient {
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
             if (discoverBrokerVersions) {
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder().withRole(this.clientSoftwareRole));
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
                 log.debug("Completed connection to node {}. Fetching API versions.", node);
             } else {
                 this.connectionStates.ready(node);
@@ -1203,7 +1194,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     private boolean isConfigPushApi(ApiKeys apiKey) {
-        return apiKey == ApiKeys.GET_CONFIG_SUBSCRIPTION || apiKey == ApiKeys.PUSH_CONFIG;
+        return apiKey == ApiKeys.GET_CONFIG_PROFILE_KEYS || apiKey == ApiKeys.PUSH_CONFIG;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
@@ -1511,7 +1502,7 @@ public class NetworkClient implements KafkaClient {
             this.clientConfigsSender = clientConfigsSender;
         }
 
-        public void handleResponse(GetConfigSubscriptionResponse response) {
+        public void handleResponse(GetConfigProfileKeysResponse response) {
             clientConfigsSender.handleResponse(response);
         }
 
@@ -1520,9 +1511,9 @@ public class NetworkClient implements KafkaClient {
         }
 
         public void handleFailedRequest(ApiKeys apiKey, KafkaException maybeFatalException) {
-            if (apiKey == ApiKeys.GET_CONFIG_SUBSCRIPTION)
+            if (apiKey == ApiKeys.GET_CONFIG_PROFILE_KEYS)
                 clientConfigsSender.handleFailedGetConfigsSubscriptionRequest(maybeFatalException);
-            else if (apiKey == ApiKeys.PUSH_TELEMETRY)
+            else if (apiKey == ApiKeys.PUSH_CONFIG)
                 clientConfigsSender.handleFailedPushConfigsRequest(maybeFatalException);
             else
                 throw new IllegalStateException("Invalid api key for failed configs request");

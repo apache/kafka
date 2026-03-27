@@ -580,7 +580,7 @@ public class SaslServerAuthenticator implements Authenticator {
         else {
             metadataRegistry.registerClientInformation(new ClientInformation(apiVersionsRequest.data().clientSoftwareName(),
                 apiVersionsRequest.data().clientSoftwareVersion(),
-                apiVersionsRequest.data().clientSoftwareRole()));
+                null));
             sendKafkaResponse(context, apiVersionSupplier.apply(apiVersionsRequest.version()));
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }
