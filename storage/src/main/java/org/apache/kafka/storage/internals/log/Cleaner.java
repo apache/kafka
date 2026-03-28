@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * This class holds the actual logic for cleaning a log.
@@ -327,18 +328,15 @@ public class Cleaner {
             log.replaceSegments(cleanedSegments, segments);
 
         } catch (LogCleaningAbortedException e) {
-            cleanedSegments.forEach(segment -> {
-                try {
-                    segment.deleteIfExists();
-                } catch (Exception deleteException) {
-                    e.addSuppressed(deleteException);
-                }
-            });
-            try {
-                currentCleaned.deleteIfExists();
-            } catch (Exception deleteException) {
-                e.addSuppressed(deleteException);
-            }
+            Stream.concat(cleanedSegments.stream(), Stream.of(currentCleaned))
+                .distinct()
+                .forEach(segment -> {
+                    try {
+                        segment.deleteIfExists();
+                    } catch (Exception deleteException) {
+                        e.addSuppressed(deleteException);
+                    }
+                });
             throw e;
         }
     }
