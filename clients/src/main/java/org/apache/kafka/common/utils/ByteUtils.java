@@ -146,7 +146,7 @@ public final class ByteUtils {
 
     /**
      * Read an integer stored in variable-length format using unsigned decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>.
      *
      * The implementation is based on Netty's decoding of varint.
      * @see <a href="https://github.com/netty/netty/blob/59aa6e635b9996cf21cd946e64353270679adc73/codec/src/main/java/io/netty/handler/codec/protobuf/ProtobufVarint32FrameDecoder.java#L73">Netty's varint decoding</a>
@@ -187,7 +187,7 @@ public final class ByteUtils {
 
     /**
      * Read an integer stored in variable-length format using unsigned decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>.
      *
      * The implementation is based on Netty's decoding of varint.
      * @see <a href="https://github.com/netty/netty/blob/59aa6e635b9996cf21cd946e64353270679adc73/codec/src/main/java/io/netty/handler/codec/protobuf/ProtobufVarint32FrameDecoder.java#L73">Netty's varint decoding</a>
@@ -230,7 +230,7 @@ public final class ByteUtils {
 
     /**
      * Read an integer stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
      * @return The integer read
@@ -244,7 +244,7 @@ public final class ByteUtils {
 
     /**
      * Read an integer stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>.
      *
      * @param in The input to read from
      * @return The integer read
@@ -259,7 +259,7 @@ public final class ByteUtils {
 
     /**
      * Read a long stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>.
      *
      * @param in The input to read from
      * @return The long value read
@@ -283,7 +283,7 @@ public final class ByteUtils {
 
     /**
      * Read a long stored in variable-length format using zig-zag decoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
      * @return The long value read
@@ -332,7 +332,7 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length unsigned encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>
      * into the buffer.
      *
      * Implementation copied from https://github.com/astei/varint-writing-showdown/tree/dev (MIT License)
@@ -367,7 +367,7 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length unsigned encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>
      * into the buffer.
      * 
      * For implementation notes, see {@link #writeUnsignedVarint(int, ByteBuffer)}
@@ -401,7 +401,7 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>
      * into the output.
      *
      * @param value The value to write
@@ -413,7 +413,7 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>
      * into the buffer.
      *
      * @param value The value to write
@@ -425,7 +425,7 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>
      * into the output.
      *
      * @param value The value to write
@@ -442,7 +442,7 @@ public final class ByteUtils {
 
     /**
      * Write the given integer following the variable-length zig-zag encoding from
-     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * <a href="https://protobuf.dev/programming-guides/encoding"> Google Protocol Buffers</a>
      * into the buffer.
      *
      * @param value The value to write
