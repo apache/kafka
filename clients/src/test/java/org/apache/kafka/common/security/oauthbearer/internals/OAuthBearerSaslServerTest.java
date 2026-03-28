@@ -43,12 +43,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.sasl.SaslException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 public class OAuthBearerSaslServerTest {
     private static final String USER = "user";
@@ -195,6 +202,108 @@ public class OAuthBearerSaslServerTest {
         byte[] bytes = saslServer.evaluateResponse(clientInitialResponse(null, true, Collections.emptyMap()));
         String challenge = new String(bytes, StandardCharsets.UTF_8);
         assertEquals("{\"status\":\"invalid_token\"}", challenge);
+    }
+
+    @Test
+    public void testConstructorThrowsIfCallbackHandlerIsNotInstanceOfAuthenticatedCallbackHandler() {
+        CallbackHandler nonAuthCallbackHandler = callbacks -> { };
+        assertThrows(IllegalArgumentException.class, () -> new OAuthBearerSaslServer(nonAuthCallbackHandler));
+    }
+
+    @Test
+    public void testEvaluateResponseThrowsIfResponseIsByteControlA() throws IOException, UnsupportedCallbackException {
+        saslServer.evaluateResponse(clientInitialResponse(null, true, Collections.emptyMap()));
+        assertThrows(
+                SaslAuthenticationException.class,
+                () -> saslServer.evaluateResponse(new byte[]{OAuthBearerSaslClient.BYTE_CONTROL_A}));
+    }
+
+    @Test
+    public void testEvaluateResponseThrowsSaslExceptionOnInvalidResponse() {
+        assertThrows(SaslException.class,
+                () -> saslServer.evaluateResponse("not a valid response".getBytes()));
+    }
+
+    @Test
+    public void testGetAuthorizationIDThrowsIfNotComplete() {
+        assertThrows(IllegalStateException.class, () -> saslServer.getAuthorizationID());
+    }
+
+    @Test
+    public void testGetAuthorizationIDReturnsUserAfterCompletion() throws Exception {
+        saslServer.evaluateResponse(clientInitialResponse(USER));
+        assertEquals(USER, saslServer.getAuthorizationID());
+    }
+
+    @Test
+    public void testGetMechanismNameReturnsOAuthBearer() {
+        assertEquals(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, saslServer.getMechanismName());
+    }
+
+    @Test
+    public void testGetNegotiatedPropertyThrowsIfNotComplete() {
+        assertThrows(IllegalStateException.class,
+                () -> saslServer.getNegotiatedProperty("any.property"));
+    }
+
+    @Test
+    public void testIsCompleteReturnsFalseBeforeAuthentication() {
+        assertFalse(saslServer.isComplete());
+    }
+
+    @Test
+    public void testIsCompleteReturnsTrueAfterAuthentication() throws Exception {
+        saslServer.evaluateResponse(clientInitialResponse(USER));
+        assertTrue(saslServer.isComplete());
+    }
+
+    @Test
+    public void testUnwrapThrowsIfNotComplete() {
+        assertThrows(IllegalStateException.class,
+                () -> saslServer.unwrap(new byte[0], 0, 0));
+    }
+
+    @Test
+    public void testUnwrapThrowsAfterCompletion() throws Exception {
+        saslServer.evaluateResponse(clientInitialResponse(USER));
+        assertThrows(IllegalStateException.class,
+                () -> saslServer.unwrap(new byte[0], 0, 0));
+    }
+
+    @Test
+    public void testWrapThrowsIfNotComplete() {
+        assertThrows(IllegalStateException.class,
+                () -> saslServer.wrap(new byte[0], 0, 0));
+    }
+
+    @Test
+    public void testWrapThrowsAfterCompletion() throws Exception {
+        saslServer.evaluateResponse(clientInitialResponse(USER));
+        assertThrows(IllegalStateException.class,
+                () -> saslServer.wrap(new byte[0], 0, 0));
+    }
+
+    @Test
+    public void testDisposeResetsState() throws Exception {
+        saslServer.evaluateResponse(clientInitialResponse(USER));
+        assertTrue(saslServer.isComplete());
+
+        saslServer.dispose();
+
+        assertFalse(saslServer.isComplete());
+        assertThrows(IllegalStateException.class, () -> saslServer.getAuthorizationID());
+        assertThrows(IllegalStateException.class, () -> saslServer.getNegotiatedProperty("any.property"));
+    }
+
+    @Test
+    public void testEvaluateResponseThrowsSaslExceptionWhenCallbackHandlerThrowsIOException() throws Exception {
+        AuthenticateCallbackHandler ioExceptionHandler = mock(AuthenticateCallbackHandler.class);
+        doThrow(IOException.class).when(ioExceptionHandler).handle(any());
+
+        saslServer = new OAuthBearerSaslServer(ioExceptionHandler);
+
+        assertThrows(SaslException.class,
+                () -> saslServer.evaluateResponse(clientInitialResponse(null)));
     }
 
     private byte[] clientInitialResponse(String authorizationId)

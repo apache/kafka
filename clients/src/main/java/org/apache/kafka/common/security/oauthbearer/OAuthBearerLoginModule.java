@@ -343,10 +343,6 @@ public class OAuthBearerLoginModule implements LoginModule {
             extensionsRequiringCommit = EMPTY_EXTENSIONS;
             log.debug("CallbackHandler {} does not support SASL extensions. No extensions will be added", callbackHandler.getClass().getName());
         }
-        if (extensionsRequiringCommit ==  null) {
-            log.error("SASL Extensions cannot be null. Check whether your callback handler is explicitly setting them as null.");
-            throw new LoginException("Extensions cannot be null.");
-        }
     }
 
     @Override

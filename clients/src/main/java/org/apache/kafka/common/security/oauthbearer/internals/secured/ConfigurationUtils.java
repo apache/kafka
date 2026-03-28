@@ -221,12 +221,7 @@ public class ConfigurationUtils {
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, value, e.getMessage()));
         }
 
-        String protocol = url.getProtocol();
-
-        if (protocol == null || protocol.trim().isEmpty())
-            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", name, value));
-
-        protocol = protocol.toLowerCase(Locale.ROOT);
+        String protocol = url.getProtocol().toLowerCase(Locale.ROOT);
 
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
@@ -413,5 +408,9 @@ public class ConfigurationUtils {
             );
             throw new ConfigException(configName, configValue, message);
         }
+    }
+
+    String prefix() {
+        return prefix;
     }
 }

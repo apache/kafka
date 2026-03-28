@@ -18,19 +18,23 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
@@ -45,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
-    public void testBasic() throws Exception {
+    public void testHandleValidatesToken() throws Exception {
         String expectedAudience = "a";
         List<String> allAudiences = Arrays.asList(expectedAudience, "b", "c");
         AccessTokenBuilder builder = new AccessTokenBuilder()
@@ -79,6 +83,62 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         } finally {
             handler.close();
         }
+    }
+
+    @Test
+    public void testHandleAcceptsAllInputExtensions() throws Exception {
+        String expectedAudience = "a";
+        List<String> allAudiences = Arrays.asList(expectedAudience, "b", "c");
+        OAuthBearerToken token = new OAuthBearerTokenMock();
+
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        CloseableVerificationKeyResolver mockVerificationKeyResolver = Mockito.mock(CloseableVerificationKeyResolver.class);
+        JwtValidator mockJwtValidator = Mockito.mock(JwtValidator.class);
+        handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(),
+                mockVerificationKeyResolver, mockJwtValidator);
+
+        try {
+            Map<String, String> extensions = new HashMap<>();
+            extensions.put("test1", "123");
+            extensions.put("test2", "123");
+            OAuthBearerExtensionsValidatorCallback callback = new OAuthBearerExtensionsValidatorCallback(
+                    token,
+                    new SaslExtensions(extensions)
+            );
+            handler.handle(new Callback[]{callback});
+
+            assertTrue(callback.validatedExtensions().containsKey("test1"));
+            assertTrue(callback.validatedExtensions().containsKey("test2"));
+        } finally {
+            handler.close();
+        }
+    }
+
+    @Test
+    public void testHandleThrowsOnUnsupportedCallback() {
+        Map<String, ?> configs = getSaslConfigs();
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        CloseableVerificationKeyResolver mockVerificationKeyResolver = Mockito.mock(CloseableVerificationKeyResolver.class);
+        JwtValidator mockJwtValidator = Mockito.mock(JwtValidator.class);
+        handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(),
+                mockVerificationKeyResolver, mockJwtValidator);
+        Callback unknown = new Callback() {
+        };
+
+        try {
+            assertThrows(UnsupportedCallbackException.class, () -> handler.handle(new Callback[]{unknown}));
+        } finally {
+            handler.close();
+        }
+    }
+
+    @Test
+    public void testHandleThrowsIfNotConfigured() {
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback("some.jwt.token");
+
+        assertThrows(IllegalStateException.class, () -> handler.handle(new Callback[]{callback}));
     }
 
     @Test

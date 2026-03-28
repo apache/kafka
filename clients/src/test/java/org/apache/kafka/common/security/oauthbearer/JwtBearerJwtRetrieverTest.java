@@ -148,4 +148,11 @@ public class JwtBearerJwtRetrieverTest extends OAuthBearerTest {
             assertInstanceOf(IOException.class, e.getCause());
         }
     }
+
+    @Test
+    public void testRetrieveCalledBeforeConfigure() throws IOException {
+        try (JwtBearerJwtRetriever jwtRetriever = new JwtBearerJwtRetriever()) {
+            assertThrows(IllegalStateException.class, jwtRetriever::retrieve);
+        }
+    }
 }

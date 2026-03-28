@@ -31,8 +31,8 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.STRING_JSON_VALIDATING_TRANSFORMER;
 
 /**
- * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
- * of a file, interpreting them as a JWT access key in the serialized form.
+ * <code>FileJwtRetriever</code> is a {@link JwtRetriever} that loads the contents
+ * of a file, interpreting them as a JWT access token in serialized form.
  */
 public class FileJwtRetriever implements JwtRetriever {
 
