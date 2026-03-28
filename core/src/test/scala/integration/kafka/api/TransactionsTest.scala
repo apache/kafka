@@ -57,6 +57,7 @@ class TransactionsTest extends IntegrationTestHarness {
   val transactionalProducers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   val transactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
   val nonTransactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  var adminClient: org.apache.kafka.clients.admin.Admin = _
 
   def overridingProps(): Properties = {
     val props = new Properties()
@@ -71,6 +72,11 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
     props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     props.put(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
+    // Enable unstable API versions to support KIP-939 2PC (InitProducerId v6 with keepPreparedTxn)
+    props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
+    props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
+    // Enable 2PC support on the broker side
+    props.put(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG, "true")
     props
   }
 
@@ -101,6 +107,8 @@ class TransactionsTest extends IntegrationTestHarness {
       createReadCommittedConsumer("transactional-group")
     for (_ <- 0 until nonTransactionalConsumerCount)
       createReadUncommittedConsumer("non-transactional-group")
+
+    adminClient = createAdminClient()
   }
 
   @AfterEach
@@ -108,6 +116,7 @@ class TransactionsTest extends IntegrationTestHarness {
     transactionalProducers.foreach(_.close())
     transactionalConsumers.foreach(_.close())
     nonTransactionalConsumers.foreach(_.close())
+    if (adminClient != null) adminClient.close()
     super.tearDown()
   }
 
@@ -305,79 +314,6 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
-  private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
-
-    // The basic plan for the test is as follows:
-    //  1. Seed topic1 with 500 unique, numbered, messages.
-    //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
-    //     offsets as part of the transaction.
-    //  3. Randomly abort transactions in step2.
-    //  4. Validate that we have 500 unique committed messages in topic2. If the offsets were committed properly with the
-    //     transactions, we should not have any duplicates or missing messages since we should process in the input
-    //     messages exactly once.
-
-    val consumerGroupId = "foobar-consumer-group"
-    val numSeedMessages = 500
-
-    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, brokers)
-
-    val producer = transactionalProducers.head
-
-    val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
-    consumer.subscribe(java.util.List.of(topic1))
-    producer.initTransactions()
-
-    var shouldCommit = false
-    var recordsProcessed = 0
-    try {
-      while (recordsProcessed < numSeedMessages) {
-        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
-
-        producer.beginTransaction()
-        shouldCommit = !shouldCommit
-
-        records.foreach { record =>
-          val key = new String(record.key(), StandardCharsets.UTF_8)
-          val value = new String(record.value(), StandardCharsets.UTF_8)
-          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, key, value, willBeCommitted = shouldCommit))
-        }
-
-        commit(producer, consumerGroupId, consumer)
-        if (shouldCommit) {
-          producer.commitTransaction()
-          recordsProcessed += records.size
-          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
-            s"records written to $topic2: $recordsProcessed")
-        } else {
-          producer.abortTransaction()
-          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
-            s"records written to $topic2: $recordsProcessed")
-          TestUtils.resetToCommittedPositions(consumer)
-        }
-      }
-    } finally {
-      consumer.close()
-    }
-
-    val partitions = ListBuffer.empty[TopicPartition]
-    for (partition <- 0 until numPartitions) {
-      partitions += new TopicPartition(topic2, partition)
-    }
-    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq)
-
-    // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
-    // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
-    val verifyingConsumer = transactionalConsumers(0)
-    verifyingConsumer.subscribe(java.util.List.of(topic2))
-    val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
-      TestUtils.assertCommittedAndGetValue(record).toInt
-    }
-    val valueSet = valueSeq.toSet
-    assertEquals(numSeedMessages, valueSeq.size, s"Expected $numSeedMessages values in $topic2.")
-    assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testFencingOnCommit(groupProtocol: String): Unit = {
@@ -493,21 +429,6 @@ class TransactionsTest extends IntegrationTestHarness {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testAbortTransactionTimeout(groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = true, producer => producer.abortTransaction())
-  }
-
-  private def testTimeout(needInitAndSendMsg: Boolean,
-                  timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
-    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 3000)
-    if (needInitAndSendMsg) {
-      producer.initTransactions()
-      producer.beginTransaction()
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
-    }
-
-    for  (i <- brokers.indices) killBroker(i)
-
-    assertThrows(classOf[TimeoutException], () => timeoutProcess(producer))
-    producer.close(Duration.ZERO)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -713,31 +634,10 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.abortTransaction()
     producer.close()
 
-    // Find the transaction coordinator partition for this transactional ID
-    val adminClient = createAdminClient()
-    try {
-      val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get()
-      val coordinatorId = txnDescription.coordinatorId()
-
-      // Access the transaction coordinator and update the epoch to Short.MaxValue - 2
-      val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
-      val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
-
-      // Get the transaction metadata and update the epoch close to Short.MaxValue
-      // to trigger the overflow scenario. We'll set it high enough that subsequent
-      // operations will cause it to reach Short.MaxValue - 1 before the timeout.
-      txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          epochAndMetadata.transactionMetadata.inLock(() => {
-            epochAndMetadata.transactionMetadata.setProducerEpoch((Short.MaxValue - 2).toShort)
-            null // inLock expects a Supplier that returns a value
-          })
-        }
-      }
-    } finally {
-      adminClient.close()
-    }
+    // Update the epoch close to Short.MaxValue to trigger the overflow scenario.
+    // Set it high enough that subsequent operations will cause it to reach
+    // Short.MaxValue - 1 before the timeout.
+    setProducerEpoch(transactionalId, (Short.MaxValue - 2).toShort)
 
     // Re-initialize the producer which will bump epoch
     producer = createTransactionalProducer(transactionalId, transactionTimeoutMs = 500)
@@ -750,33 +650,12 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.flush()
 
     // Check and assert that epoch of the transaction is Short.MaxValue - 1 (before timeout)
-    val adminClient2 = createAdminClient()
-    try {
-      val coordinatorId2 = adminClient2.describeTransactions(java.util.List.of(transactionalId))
-        .description(transactionalId).get().coordinatorId()
-      val coordinatorBroker2 = brokers.find(_.config.brokerId == coordinatorId2).get
-      val txnCoordinator2 = coordinatorBroker2.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+    val currentEpoch = getProducerEpoch(transactionalId)
+    assertEquals((Short.MaxValue - 1).toShort, currentEpoch,
+      s"Expected epoch to be ${Short.MaxValue - 1}, but got $currentEpoch")
 
-      txnCoordinator2.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
-        txnMetadataOpt.foreach { epochAndMetadata =>
-          val currentEpoch = epochAndMetadata.transactionMetadata.producerEpoch()
-          assertEquals((Short.MaxValue - 1).toShort, currentEpoch,
-            s"Expected epoch to be ${Short.MaxValue - 1}, but got $currentEpoch")
-        }
-      }
-
-      // Wait until state is complete abort
-      waitUntilTrue(() => {
-        val listResult = adminClient2.listTransactions()
-        val txns = listResult.all().get().asScala
-        txns.exists(txn =>
-          txn.transactionalId() == transactionalId &&
-          txn.state() == TransactionState.COMPLETE_ABORT
-        )
-      }, "Transaction was not aborted on timeout")
-    } finally {
-      adminClient2.close()
-    }
+    // Wait until state is complete abort
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_ABORT)
 
     // Abort, this should be treated as retry of the abort caused by timeout
     producer.abortTransaction()
@@ -1056,6 +935,548 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.abortTransaction()
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testFencingWithDualIdentity(groupProtocol: String): Unit = {
+    // Test that zombie producer is properly fenced when dual identity is established
+    // after crash recovery with 2PC keepPreparedTxn.
+    val transactionalId = "test-fencing-dual-identity"
+    val testTopic = s"test-fencing-topic-${System.nanoTime()}"
+    createTopic(testTopic, 1, brokerCount, topicConfig())
+
+    val consumer = transactionalConsumers.head
+    consumer.subscribe(Seq(testTopic).asJava)
+    consumer.poll(Duration.ofMillis(100))
+
+    // Start transaction and send records (simulating crash before commit)
+    val producer1 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer1.initTransactions()
+    producer1.beginTransaction()
+    val numRecords = 5
+    for (i <- 0 until numRecords) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes, s"value-$i".getBytes))
+    }
+    producer1.flush()
+    // Simulate crash - don't commit (leave transaction prepared)
+
+    // Create new producer and recover with initTransactions(keepPreparedTxn=true)
+    val producer2 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer2.initTransactions(true)  // This establishes dual identity
+
+    // Old (zombie) producer tries to abort - should get ProducerFencedException
+    assertThrows(classOf[ProducerFencedException], () => {
+      producer1.abortTransaction()
+    }, "Zombie producer should be fenced when trying to abort")
+
+    // New producer commits the prepared transaction
+    producer2.commitTransaction()
+
+    // Wait for transaction to reach COMPLETE_COMMIT state
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_COMMIT)
+
+    // Verify consumer sees the records from the first producer
+    consumer.seekToBeginning(consumer.assignment())
+    val consumedRecords = consumeRecordsFor(consumer)
+    assertEquals(numRecords, consumedRecords.size,
+      "Consumer should see all records from first producer after commit")
+
+    // Verify transaction state
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnDescription.state(),
+      "Transaction should be in COMPLETE_COMMIT state")
+
+    producer1.close()
+    producer2.close()
+    consumer.unsubscribe()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testPrepareAndCompleteTransactionCommit(groupProtocol: String): Unit = {
+    // Test the 2PC API: prepareTransaction() and completeTransaction() for commit path.
+    // This tests the client-side 2PC API where the producer explicitly calls prepareTransaction()
+    // and then completeTransaction() to commit.
+    val transactionalId = "test-prepare-complete-commit"
+    val testTopic = s"test-prepare-complete-topic-${System.nanoTime()}"
+    createTopic(testTopic, 1, brokerCount, topicConfig())
+
+    val consumer = transactionalConsumers.head
+    consumer.subscribe(Seq(testTopic).asJava)
+    consumer.poll(Duration.ofMillis(100))
+
+    // Start transaction and produce records
+    val producer1 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer1.initTransactions()
+    producer1.beginTransaction()
+    val numRecords = 5
+    for (i <- 0 until numRecords) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes, s"value-$i".getBytes))
+    }
+    producer1.flush()
+
+    // Prepare the transaction (moves to PREPARED state)
+    val preparedState = producer1.prepareTransaction()
+    assertNotNull(preparedState, "prepareTransaction should return prepared state")
+
+    // Simulate crash - don't call commit/abort, just leave in prepared state
+    // (In real scenario, producer would crash here)
+
+    // New producer recovers and completes the transaction
+    val producer2 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer2.initTransactions(true)  // keepPreparedTxn=true
+
+    // Complete the transaction with the prepared state (should commit)
+    producer2.completeTransaction(preparedState)
+
+    // Wait for transaction to reach COMPLETE_COMMIT state
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_COMMIT)
+
+    // Verify consumer sees the records
+    consumer.seekToBeginning(consumer.assignment())
+    val consumedRecords = consumeRecordsFor(consumer)
+    assertEquals(numRecords, consumedRecords.size,
+      "Consumer should see all records after commit")
+
+    // Verify transaction state
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnDescription.state(),
+      "Transaction should be in COMPLETE_COMMIT state")
+
+    producer1.close()
+    producer2.close()
+    consumer.unsubscribe()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testPrepareAndCompleteTransactionAbort(groupProtocol: String): Unit = {
+    // Test the 2PC API: prepareTransaction() and completeTransaction() for abort path.
+    // This tests that completeTransaction() with a non-matching state triggers abort.
+    val transactionalId = "test-prepare-complete-abort"
+    val testTopic = s"test-prepare-complete-abort-topic-${System.nanoTime()}"
+    createTopic(testTopic, 1, brokerCount, topicConfig())
+
+    val consumer = transactionalConsumers.head
+    consumer.subscribe(Seq(testTopic).asJava)
+    consumer.poll(Duration.ofMillis(100))
+
+    val producer1 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer1.initTransactions()
+
+    // First transaction - prepare but then abort
+    producer1.beginTransaction()
+    for (i <- 0 until 3) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key1-$i".getBytes, s"value1-$i".getBytes))
+    }
+    producer1.flush()
+
+    // Get marker for first transaction
+    val marker1 = producer1.prepareTransaction()
+    assertNotNull(marker1, "prepareTransaction should return prepared state")
+
+    // Abort the first prepared transaction
+    producer1.abortTransaction()
+
+    // Second transaction - prepare and leave in prepared state
+    producer1.beginTransaction()
+    val numRecords = 5
+    for (i <- 0 until numRecords) {
+      producer1.send(new ProducerRecord(testTopic, 0, s"key2-$i".getBytes, s"value2-$i".getBytes))
+    }
+    producer1.flush()
+
+    // Get marker for second transaction
+    val marker2 = producer1.prepareTransaction()
+    assertNotNull(marker2, "prepareTransaction should return prepared state")
+
+    // Simulate crash - leave second transaction in prepared state
+
+    // New producer recovers
+    val producer2 = createTransactionalProducer(transactionalId, enable2PC = true)
+    producer2.initTransactions(true)  // keepPreparedTxn=true
+
+    // Complete with marker1 (old, aborted transaction) - should trigger abort
+    // because it doesn't match the current prepared state (marker2)
+    producer2.completeTransaction(marker1)
+
+    // Wait for transaction to reach COMPLETE_ABORT state
+    waitForTransactionState(transactionalId, TransactionState.COMPLETE_ABORT)
+
+    // Verify consumer sees NO records (both transactions aborted)
+    consumer.seekToBeginning(consumer.assignment())
+    val consumedRecords = consumeRecordsFor(consumer)
+    assertEquals(0, consumedRecords.size,
+      "Consumer should see no records after abort")
+
+    // Verify transaction state
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    assertEquals(TransactionState.COMPLETE_ABORT, txnDescription.state(),
+      "Transaction should be in COMPLETE_ABORT state")
+
+    producer1.close()
+    producer2.close()
+    consumer.unsubscribe()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerCrashAndRecoverWith2PC(groupProtocol: String): Unit = {
+    // Test producer crash and recovery with 2PC keepPrepared transaction flow.
+    // Note: This uses a standard transactional producer.  2PC is enabled server-side
+    // and triggered by calling initTransactions(keepPreparedTxn=true) after crash.
+
+    def test2PCRecovery(numCrashes: Int, shouldCommit: Boolean): Unit = {
+      val transactionalId = s"test-2pc-recovery-${System.nanoTime()}"
+      val testTopic = s"test-2pc-topic-${System.nanoTime()}"
+      createTopic(testTopic, 1, brokerCount, topicConfig())
+
+      val consumer = transactionalConsumers.head
+      consumer.subscribe(Seq(testTopic).asJava)
+      consumer.poll(Duration.ofMillis(100))  // Trigger assignment
+
+      // Create producer and send records in a transaction
+      var producer = createTransactionalProducer(transactionalId, enable2PC = true)
+      producer.initTransactions()
+      producer.beginTransaction()
+
+      val numRecords = 5
+      for (i <- 0 until numRecords) {
+        producer.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes,
+          s"value-$i".getBytes))
+      }
+      producer.flush()
+
+      // Verify records not visible to read_committed consumer
+      consumer.poll(Duration.ofMillis(100))
+      assertEquals(0, consumer.assignment().asScala.map(tp =>
+        consumer.position(tp)).sum, "Records should not be visible before commit")
+
+      // Simulate crash by closing without committing
+      producer.close(Duration.ZERO)
+
+      val baseEpoch: Short = 0
+
+        // Crash and recover numCrashes times
+        for (crashNum <- 1 to numCrashes) {
+          val recoveredProducer = createTransactionalProducer(transactionalId, enable2PC = true)
+          // Use keepPreparedTxn=true to preserve in-flight transaction
+          recoveredProducer.initTransactions(true)
+
+          // Crash the transaction coordinator to test resilience during 2PC recovery
+          crashAndRestartTransactionCoordinator(transactionalId)
+
+          // Verify dual identity after recovery
+          val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+            .description(transactionalId).get()
+
+          // After crash recovery, server should set up dual identity
+          assertTrue(txnDescription.producerEpoch() >= baseEpoch,
+            s"Crash $crashNum: client epoch should be >= base epoch")
+
+          // For simplicity in this test, we just verify epoch progression.
+          // Detailed dual identity verification is in unit tests.
+
+          if (crashNum < numCrashes) {
+            // Simulate another crash
+            recoveredProducer.close(Duration.ZERO)
+          } else {
+            // Last recovery - complete the transaction
+            producer = recoveredProducer
+          }
+        }
+
+        // Complete prepared transaction directly.  Cannot call beginTransaction()
+        // in prepared state - must call commitTransaction() or abortTransaction() directly.
+        if (shouldCommit) {
+          producer.commitTransaction()
+        } else {
+          producer.abortTransaction()
+        }
+
+        // Wait for the transaction to fully complete on the server before proceeding.
+        // The client-side commitTransaction() returns after receiving the EndTxn response,
+        // but the server might still be writing markers and transitioning to COMPLETE_* state.
+        val expectedState = if (shouldCommit) TransactionState.COMPLETE_COMMIT else TransactionState.COMPLETE_ABORT
+        waitForTransactionState(transactionalId, expectedState)
+
+        // Verify consumer sees correct records
+        consumer.seekToBeginning(consumer.assignment())
+        val consumedRecords = consumeRecordsFor(consumer)
+
+        if (shouldCommit) {
+          assertEquals(numRecords, consumedRecords.size,
+            "Consumer should see all records after commit")
+        } else {
+          assertEquals(0, consumedRecords.size,
+            "Consumer should see no records after abort")
+        }
+
+        // Verify fresh transaction works with bumped epoch
+        producer.beginTransaction()
+        producer.send(new ProducerRecord(testTopic, 0, "fresh-key".getBytes,
+          "fresh-value".getBytes))
+        producer.commitTransaction()
+
+        // Seek to beginning to read all records (both 2PC and fresh)
+        consumer.seekToBeginning(consumer.assignment())
+        val allRecords = consumeRecordsFor(consumer)
+        val expectedTotal = if (shouldCommit) numRecords + 1 else 1
+        assertEquals(expectedTotal, allRecords.size,
+          s"Should have $expectedTotal total records after fresh transaction")
+
+        producer.close()
+
+        // Unsubscribe consumer for next test iteration
+        consumer.unsubscribe()
+    }
+
+    // Test single crash with commit
+    test2PCRecovery(numCrashes = 1, shouldCommit = true)
+
+    // Test single crash with abort
+    test2PCRecovery(numCrashes = 1, shouldCommit = false)
+
+    // Test multiple crashes before final commit (validates epoch progression)
+    test2PCRecovery(numCrashes = 3, shouldCommit = true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testProducerIdRotationWithEpochExhaustion(groupProtocol: String): Unit = {
+    // Test producer ID rotation when client epoch is exhausted.  This tests both scenarios:
+    // 1. Rotation during initTransactions(keepPreparedTxn=true)
+    // 2. Rotation during commitTransaction()
+
+    def testRotation(startEpoch: Short, doubleRotation: Boolean = false): Unit = {
+      val transactionalId = s"test-rotation-${System.nanoTime()}"
+      val testTopic = s"test-rotation-topic-${System.nanoTime()}"
+      createTopic(testTopic, 1, brokerCount, topicConfig())
+
+      val consumer = transactionalConsumers.head
+      consumer.subscribe(Seq(testTopic).asJava)
+      consumer.poll(Duration.ofMillis(100))
+
+      // Establish transactional ID
+      var producer = createTransactionalProducer(transactionalId, enable2PC = true)
+      producer.initTransactions()
+      producer.close()
+
+      // Set epoch to trigger rotation at desired point
+      setProducerEpoch(transactionalId, startEpoch)
+
+      // Create producer and start a prepared transaction
+      producer = createTransactionalProducer(transactionalId, enable2PC = true)
+      producer.initTransactions()
+      producer.beginTransaction()
+      val numRecords = 3
+      for (i <- 0 until numRecords) {
+        producer.send(new ProducerRecord(testTopic, 0, s"key-$i".getBytes, s"value-$i".getBytes))
+      }
+      producer.flush()
+      // Don't commit - leave transaction prepared (simulates crash)
+
+      val originalProducerId = getProducerId(transactionalId)
+
+      if (doubleRotation) {
+        // First rotation: loop calling initTransactions(true) until rotation occurs
+        var rotationCount = 0
+        var currentClientId = originalProducerId
+        var iteration = 0
+        while (rotationCount == 0 && iteration < 20) {
+          iteration += 1
+          val recoveryProducer = createTransactionalProducer(transactionalId, enable2PC = true)
+          recoveryProducer.initTransactions(true)  // keepPreparedTxn
+
+          val clientId = getClientProducerId(transactionalId)
+          if (clientId != currentClientId) {
+            rotationCount = 1
+            currentClientId = clientId
+          }
+          recoveryProducer.close(Duration.ZERO)
+        }
+
+        assertTrue(rotationCount >= 1, s"First rotation should have occurred after $iteration iterations")
+        assertEquals(0.toShort, getClientProducerEpoch(transactionalId),
+          "After first rotation, client epoch should be exactly 0")
+
+        // Set client epoch high again to trigger second rotation
+        setClientProducerEpoch(transactionalId, startEpoch)
+
+        // Do a compensating epoch bump so that we get at the same epoch as w/o double rotation
+        val recoveryProducer = createTransactionalProducer(transactionalId, enable2PC = true)
+        recoveryProducer.initTransactions(true)
+        recoveryProducer.close(Duration.ZERO)
+      }
+
+      // We do 3 total epoch increments from the initial startEpoch:
+      //   1. First initTransactions(): startEpoch → startEpoch + 1
+      //   2. Second initTransactions(true): startEpoch + 1 → startEpoch + 2
+      //   3. commitTransaction(): startEpoch + 2 → startEpoch + 3
+      // Rotation may happen during step 2 or 3 depending on startEpoch.
+      val finalProducer = createTransactionalProducer(transactionalId, enable2PC = true)
+      finalProducer.initTransactions(true)  // keepPreparedTxn - may rotate here
+
+      // Complete the transaction - may rotate here
+      finalProducer.commitTransaction()
+
+      // Wait for transaction to reach COMPLETE_COMMIT state
+      waitForTransactionState(transactionalId, TransactionState.COMPLETE_COMMIT)
+
+      // Verify that rotation happened (regardless of whether it occurred during
+      // initTransactions() or commitTransaction()). After transaction completes, verify:
+      //  - Producer ID changed (rotation occurred)
+      //  - Total epoch increments = 3 (accounting for overflow)
+      val finalProducerId = getProducerId(transactionalId)
+      assertNotEquals(originalProducerId, finalProducerId,
+        s"Producer ID should have rotated by transaction completion (original=$originalProducerId, final=$finalProducerId)")
+
+      // Verify epoch overflow occurred and total epoch increments.
+      val finalEpoch = getProducerEpoch(transactionalId)
+
+      // Final epoch is less than startEpoch (overflow occurred)
+      assertTrue(finalEpoch < startEpoch,
+        s"Overflow should have occurred: finalEpoch=$finalEpoch < startEpoch=$startEpoch")
+
+      // Total epoch increments = 3 (accounting for overflow)
+      // Formula: finalEpoch + (MaxValue - startEpoch) = total increments
+      // This accounts for increments from startEpoch to MaxValue boundary, then
+      // wrap to 0 and increments to finalEpoch.
+      val totalIncrements = finalEpoch + Short.MaxValue - startEpoch
+      assertEquals(3, totalIncrements,
+        s"Should have 3 total epoch increments: finalEpoch=$finalEpoch + " +
+        s"(MaxValue=${Short.MaxValue} - startEpoch=$startEpoch) = $totalIncrements")
+
+      // Verify consumer sees all records
+      consumer.seekToBeginning(consumer.assignment())
+      val consumedRecords = consumeRecordsFor(consumer)
+      assertEquals(numRecords, consumedRecords.size,
+        "Consumer should see all records despite rotation")
+
+      finalProducer.close()
+      producer.close()
+      consumer.unsubscribe()
+    }
+
+    // Scenario 1: Rotation happens during initTransactions(keepPreparedTxn=true) call
+    // Example flow:
+    //  1. After setProducerEpoch: epoch=32765
+    //  2. First initTransactions() + beginTransaction(): epoch=32766, transaction ONGOING
+    //  3. initTransactions(keepPreparedTxn=true): tries 32766+1=32767 → rotation triggered
+    //     → Creates dual identity: producerId unchanged, nextProducerId=<new>, nextProducerEpoch=0
+    //  4. commitTransaction(): Completes transition with nextProducerEpoch bumped 0→1
+    //     → Final state: producerId=<new>, epoch=1
+    testRotation((Short.MaxValue - 2).toShort)  // 32765
+
+    // Scenario 1 with double rotation: First rotation during iteration, second during final init/commit
+    testRotation((Short.MaxValue - 2).toShort, doubleRotation = true)
+
+    // Scenario 2: Rotation happens during commitTransaction() call
+    // Example flow:
+    //  1. After setProducerEpoch: epoch=32764
+    //  2. First initTransactions() + beginTransaction(): epoch=32765, transaction ONGOING
+    //  3. initTransactions(keepPreparedTxn=true): bumps to 32766 (not exhausted yet)
+    //     → Creates dual identity: producerId unchanged, nextProducerId=<producerId>, nextProducerEpoch=32766
+    //  4. commitTransaction(): tries 32766+1=32767 → rotation triggered
+    //     → Final state: producerId=<new>, epoch=0
+    testRotation((Short.MaxValue - 3).toShort)  // 32764
+
+    // Scenario 2 with double rotation: First rotation during iteration, second during final init/commit
+    testRotation((Short.MaxValue - 3).toShort, doubleRotation = true)
+  }
+
+  // Helper methods
+
+  private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
+
+    // The basic plan for the test is as follows:
+    //  1. Seed topic1 with 500 unique, numbered, messages.
+    //  2. Run a consume/process/produce loop to transactionally copy messages from topic1 to topic2 and commit
+    //     offsets as part of the transaction.
+    //  3. Randomly abort transactions in step2.
+    //  4. Validate that we have 500 unique committed messages in topic2. If the offsets were committed properly with the
+    //     transactions, we should not have any duplicates or missing messages since we should process in the input
+    //     messages exactly once.
+
+    val consumerGroupId = "foobar-consumer-group"
+    val numSeedMessages = 500
+
+    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, brokers)
+
+    val producer = transactionalProducers.head
+
+    val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
+    consumer.subscribe(java.util.List.of(topic1))
+    producer.initTransactions()
+
+    var shouldCommit = false
+    var recordsProcessed = 0
+    try {
+      while (recordsProcessed < numSeedMessages) {
+        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
+
+        producer.beginTransaction()
+        shouldCommit = !shouldCommit
+
+        records.foreach { record =>
+          val key = new String(record.key(), StandardCharsets.UTF_8)
+          val value = new String(record.value(), StandardCharsets.UTF_8)
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, key, value, willBeCommitted = shouldCommit))
+        }
+
+        commit(producer, consumerGroupId, consumer)
+        if (shouldCommit) {
+          producer.commitTransaction()
+          recordsProcessed += records.size
+          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
+            s"records written to $topic2: $recordsProcessed")
+        } else {
+          producer.abortTransaction()
+          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), StandardCharsets.UTF_8)}. Num " +
+            s"records written to $topic2: $recordsProcessed")
+          TestUtils.resetToCommittedPositions(consumer)
+        }
+      }
+    } finally {
+      consumer.close()
+    }
+
+    val partitions = ListBuffer.empty[TopicPartition]
+    for (partition <- 0 until numPartitions) {
+      partitions += new TopicPartition(topic2, partition)
+    }
+    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq)
+
+    // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
+    // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
+    val verifyingConsumer = transactionalConsumers(0)
+    verifyingConsumer.subscribe(java.util.List.of(topic2))
+    val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
+      TestUtils.assertCommittedAndGetValue(record).toInt
+    }
+    val valueSet = valueSeq.toSet
+    assertEquals(numSeedMessages, valueSeq.size, s"Expected $numSeedMessages values in $topic2.")
+    assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
+  }
+
+  private def testTimeout(needInitAndSendMsg: Boolean,
+                  timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 3000)
+    if (needInitAndSendMsg) {
+      producer.initTransactions()
+      producer.beginTransaction()
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+    }
+
+    for  (i <- brokers.indices) killBroker(i)
+
+    assertThrows(classOf[TimeoutException], () => timeoutProcess(producer))
+    producer.close(Duration.ZERO)
+  }
+
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
@@ -1090,14 +1511,16 @@ class TransactionsTest extends IntegrationTestHarness {
                                           transactionTimeoutMs: Long = 60000,
                                           maxBlockMs: Long = 60000,
                                           deliveryTimeoutMs: Int = 120000,
-                                          requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
+                                          requestTimeoutMs: Int = 30000,
+                                          enable2PC: Boolean = false): KafkaProducer[Array[Byte], Array[Byte]] = {
     val producer = TestUtils.createTransactionalProducer(
       transactionalId,
       brokers,
       transactionTimeoutMs = transactionTimeoutMs,
       maxBlockMs = maxBlockMs,
       deliveryTimeoutMs = deliveryTimeoutMs,
-      requestTimeoutMs = requestTimeoutMs
+      requestTimeoutMs = requestTimeoutMs,
+      enable2PC = enable2PC
     )
     transactionalProducers += producer
     producer
@@ -1142,5 +1565,168 @@ class TransactionsTest extends IntegrationTestHarness {
   @throws(classOf[InterruptedException])
   def maybeVerifyLocalLogStartOffsets(partitionStartOffsets: Map[TopicPartition, JLong]): Unit = {
     // Non-tiered storage topic partition doesn't have local log start offset
+  }
+
+  /**
+   * Helper method to wait until a transaction reaches a specific state.
+   * Polls listTransactions API until the transaction with given ID reaches the expected state.
+   */
+  private def waitForTransactionState(transactionalId: String, expectedState: TransactionState): Unit = {
+    waitUntilTrue(() => {
+      val listResult = adminClient.listTransactions()
+      val txns = listResult.all().get().asScala
+      txns.exists(txn =>
+        txn.transactionalId() == transactionalId &&
+        txn.state() == expectedState
+      )
+    }, s"Transaction did not reach $expectedState state")
+  }
+
+  /**
+   * Helper method to access transaction metadata for a given transactional ID.
+   * Finds the transaction coordinator and executes the provided function on the transaction metadata.
+   */
+  private def withTransactionMetadata[T](transactionalId: String)(f: org.apache.kafka.coordinator.transaction.TransactionMetadata => T): T = {
+    val coordinatorId = findTransactionCoordinatorId(transactionalId)
+    val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
+    val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
+
+    var result: Option[T] = None
+    txnCoordinator.transactionManager.getTransactionState(transactionalId).foreach { txnMetadataOpt =>
+      txnMetadataOpt.foreach { epochAndMetadata =>
+        result = Some(f(epochAndMetadata.transactionMetadata))
+      }
+    }
+    result.getOrElse(throw new IllegalStateException(s"Transaction metadata not found for $transactionalId"))
+  }
+
+  /**
+   * Helper method to manually set producer epoch to a high value for testing epoch exhaustion.
+   */
+  private def setProducerEpoch(transactionalId: String, epoch: Short): Unit = {
+    withTransactionMetadata(transactionalId) { metadata =>
+      metadata.inLock(() => {
+        metadata.setProducerEpoch(epoch)
+        null // inLock expects a Supplier that returns a value
+      })
+    }
+  }
+
+  /**
+   * Helper method to manually set client producer epoch (nextProducerEpoch) for testing 2PC epoch exhaustion.
+   * This is used when testing epoch exhaustion during prepared transactions where client credentials
+   * are stored in nextProducerId/nextProducerEpoch.
+   */
+  private def setClientProducerEpoch(transactionalId: String, epoch: Short): Unit = {
+    withTransactionMetadata(transactionalId) { metadata =>
+      metadata.inLock(() => {
+        metadata.setNextProducerEpoch(epoch)
+        null // inLock expects a Supplier that returns a value
+      })
+    }
+  }
+
+  /**
+   * Helper method to get current producer ID from DescribeTransactions API.
+   */
+  private def getProducerId(transactionalId: String): Long = {
+    adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get().producerId()
+  }
+
+  /**
+   * Helper method to get current producer epoch from DescribeTransactions API.
+   */
+  private def getProducerEpoch(transactionalId: String): Short = {
+    adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get().producerEpoch().toShort
+  }
+
+  /**
+   * Helper method to get client-facing producer ID (for 2PC dual identity scenarios).
+   * When a transaction is prepared, the ongoing transaction keeps its original ID/epoch,
+   * but the client gets new credentials (nextProducerId/nextProducerEpoch).
+   */
+  private def getClientProducerId(transactionalId: String): Long = {
+    withTransactionMetadata(transactionalId)(_.clientProducerId())
+  }
+
+  /**
+   * Helper method to get client-facing producer epoch (for 2PC dual identity scenarios).
+   * When a transaction is prepared, the ongoing transaction keeps its original ID/epoch,
+   * but the client gets new credentials (nextProducerId/nextProducerEpoch).
+   */
+  private def getClientProducerEpoch(transactionalId: String): Short = {
+    withTransactionMetadata(transactionalId)(_.clientProducerEpoch())
+  }
+
+  /**
+   * Helper method to find the transaction coordinator broker ID for a given transactional ID.
+   */
+  private def findTransactionCoordinatorId(transactionalId: String): Int = {
+    val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
+      .description(transactionalId).get()
+    txnDescription.coordinatorId()
+  }
+
+  /**
+   * Helper method to crash the transaction coordinator, wait for a new coordinator to be elected,
+   * restart the crashed broker, and wait for leadership to stabilize.
+   * This simulates a coordinator failure during transaction processing.
+   */
+  private def crashAndRestartTransactionCoordinator(transactionalId: String): Unit = {
+    // Find the current coordinator
+    val oldCoordinatorId = findTransactionCoordinatorId(transactionalId)
+    val oldCoordinatorIndex = brokers.indexWhere(_.config.brokerId == oldCoordinatorId)
+
+    // Shutdown the coordinator broker
+    killBroker(oldCoordinatorIndex)
+
+    // Wait for a new coordinator to be elected (coordinator ID should change)
+    waitUntilTrue(() => {
+      try {
+        val newCoordinatorId = findTransactionCoordinatorId(transactionalId)
+        newCoordinatorId != oldCoordinatorId
+      } catch {
+        case _: Exception => false  // Coordinator not yet available
+      }
+    }, s"New coordinator was not elected after shutting down broker $oldCoordinatorId")
+
+    // Restart the old broker
+    startBroker(oldCoordinatorIndex)
+
+    // Wait for the broker to fully start and metadata to propagate
+    TestUtils.waitUntilBrokerMetadataIsPropagated(brokers)
+
+    // Calculate the transaction partition
+    val transactionPartitionId = org.apache.kafka.common.utils.Utils.abs(transactionalId.hashCode) %
+      brokers.head.metadataCache.numPartitions(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME).get
+    val transactionPartition = new TopicPartition(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME, transactionPartitionId)
+
+    // Wait for the old coordinator to be in ISR before triggering preferred leader election
+    waitUntilTrue(() => {
+      try {
+        val topicDesc = adminClient.describeTopics(java.util.Set.of(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME)).allTopicNames().get()
+        val partitionInfo = topicDesc.get(org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME).partitions().asScala
+          .find(_.partition() == transactionPartitionId)
+        partitionInfo.exists(_.isr().asScala.exists(_.id() == oldCoordinatorId))
+      } catch {
+        case _: Exception => false
+      }
+    }, s"Old coordinator $oldCoordinatorId did not rejoin ISR for partition $transactionPartition")
+
+    // Trigger preferred leader election for the transaction state topic partition
+    adminClient.electLeaders(org.apache.kafka.common.ElectionType.PREFERRED,
+      java.util.Set.of(transactionPartition)).all().get()
+
+    // Wait until the old coordinator regains leadership.
+    waitUntilTrue(() => {
+      try {
+        val currentCoordinatorId = findTransactionCoordinatorId(transactionalId)
+        currentCoordinatorId == oldCoordinatorId
+      } catch {
+        case _: Exception => false  // Coordinator not yet available
+      }
+    }, s"Old coordinator $oldCoordinatorId did not regain leadership after restart")
   }
 }

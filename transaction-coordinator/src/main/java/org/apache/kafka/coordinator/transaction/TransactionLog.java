@@ -84,18 +84,25 @@ public class TransactionLog {
                             .setPartitionIds(entry.getValue().stream().map(TopicPartition::partition).toList())).toList();
         }
 
-        return MessageUtil.toVersionPrefixedBytes(
-                transactionVersionLevel.transactionLogValueVersion(),
-                new TransactionLogValue()
-                        .setProducerId(txnMetadata.producerId())
-                        .setProducerEpoch(txnMetadata.producerEpoch())
-                        .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
-                        .setTransactionStatus(txnMetadata.txnState().id())
-                        .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
-                        .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
-                        .setTransactionPartitions(transactionPartitions)
-                        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel())
-        );
+        short logVersion = transactionVersionLevel.transactionLogValueVersion();
+        TransactionLogValue value = new TransactionLogValue()
+                .setProducerId(txnMetadata.producerId())
+                .setProducerEpoch(txnMetadata.producerEpoch())
+                .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
+                .setTransactionStatus(txnMetadata.txnState().id())
+                .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
+                .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
+                .setTransactionPartitions(transactionPartitions)
+                .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
+
+        // Tagged fields are only supported in log version 1+ (flexible versions)
+        if (logVersion >= 1) {
+            value.setPreviousProducerId(txnMetadata.prevProducerId());
+            value.setNextProducerId(txnMetadata.nextProducerId());
+            value.setNextProducerEpoch(txnMetadata.nextProducerEpoch());
+        }
+
+        return MessageUtil.toVersionPrefixedBytes(logVersion, value);
     }
 
     /**
@@ -171,6 +178,7 @@ public class TransactionLog {
                     value.nextProducerId(),
                     value.producerEpoch(),
                     RecordBatch.NO_PRODUCER_EPOCH,
+                    value.nextProducerEpoch(),
                     value.transactionTimeoutMs(),
                     state,
                     tps,

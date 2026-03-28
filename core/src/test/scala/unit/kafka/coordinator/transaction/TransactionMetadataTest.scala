@@ -51,6 +51,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -75,6 +76,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
@@ -101,6 +103,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -124,6 +127,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -131,7 +135,7 @@ class TransactionMetadataTest {
       time.milliseconds(),
       TV_2)
 
-    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -149,6 +153,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_ABORT,
       util.Set.of,
@@ -156,7 +161,7 @@ class TransactionMetadataTest {
       time.milliseconds(),
       TV_2)
 
-    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -174,6 +179,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_COMMIT,
       util.Set.of,
@@ -181,7 +187,7 @@ class TransactionMetadataTest {
       time.milliseconds(),
       TV_2)
 
-    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -197,6 +203,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
@@ -226,6 +233,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -252,6 +260,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
@@ -291,6 +300,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
       util.Set.of,
@@ -299,7 +309,7 @@ class TransactionMetadataTest {
       TV_0)
 
     // let new time be smaller
-    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1, false)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_0, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
@@ -319,6 +329,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
       util.Set.of,
@@ -327,7 +338,7 @@ class TransactionMetadataTest {
       TV_0)
 
     // let new time be smaller
-    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1, false)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
@@ -350,6 +361,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       lastProducerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.PREPARE_COMMIT,
       util.Set.of(),
@@ -383,6 +395,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       lastProducerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.PREPARE_ABORT,
       util.Set.of,
@@ -414,6 +427,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
       util.Set.of,
@@ -430,7 +444,7 @@ class TransactionMetadataTest {
     // We should reset the pending state to make way for the abort transition.
     txnMetadata.pendingState(Optional.empty())
 
-    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds(), false)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, transitMetadata.producerId)
   }
@@ -445,6 +459,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_COMMIT,
@@ -468,6 +483,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_ABORT,
       util.Set.of,
@@ -489,6 +505,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
@@ -518,6 +535,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -546,6 +564,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
       util.Set.of,
@@ -553,7 +572,7 @@ class TransactionMetadataTest {
       time.milliseconds(),
       TV_2)
 
-    var transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1, false)
+    var transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
@@ -578,6 +597,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
       util.Set.of,
@@ -587,7 +607,7 @@ class TransactionMetadataTest {
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
     val newProducerId = 9893L
-    var transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, newProducerId, time.milliseconds() - 1, false)
+    var transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, newProducerId, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
@@ -632,6 +652,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -656,6 +677,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
@@ -683,6 +705,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       lastProducerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -709,6 +732,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
       lastProducerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
       util.Set.of,
@@ -774,6 +798,7 @@ class TransactionMetadataTest {
       producerId,
       RecordBatch.NO_PRODUCER_ID,
       producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       state,

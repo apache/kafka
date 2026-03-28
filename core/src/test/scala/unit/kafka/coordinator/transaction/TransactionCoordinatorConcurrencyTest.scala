@@ -512,6 +512,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       RecordBatch.NO_PRODUCER_ID,
       (Short.MaxValue - 1).toShort,
       RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH,
       60000,
       TransactionState.EMPTY,
       new util.HashSet[TopicPartition](),
