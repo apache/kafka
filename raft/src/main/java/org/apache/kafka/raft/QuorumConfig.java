@@ -108,6 +108,15 @@ public class QuorumConfig {
         "join the cluster metadata partition for its cluster id.";
     public static final boolean DEFAULT_QUORUM_AUTO_JOIN_ENABLE = false;
 
+    public static final String QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG = QUORUM_PREFIX + "fetch.snapshot.max.bytes";
+    public static final String QUORUM_FETCH_SNAPSHOT_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each FetchSnapshot request to the controller.";
+    public static final int DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES = 1048576;
+
+    public static final String QUORUM_FETCH_MAX_BYTES_CONFIG = QUORUM_PREFIX + "fetch.max.bytes";
+    public static final String QUORUM_FETCH_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each Fetch request. " +
+            "Always returns at least one batch even if it is greater than controller.quorum.fetch.max.bytes.";
+    public static final int DEFAULT_QUORUM_FETCH_MAX_BYTES = 1048576;
+
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
             .define(QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new ControllerQuorumBootstrapServersValidator(), HIGH, QUORUM_BOOTSTRAP_SERVERS_DOC)
@@ -117,7 +126,9 @@ public class QuorumConfig {
             .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, atLeast(0), MEDIUM, QUORUM_LINGER_MS_DOC)
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC)
-            .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC);
+            .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC)
+            .define(QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_SNAPSHOT_MAX_BYTES_DOC)
+            .define(QUORUM_FETCH_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_MAX_BYTES_DOC);
 
     private final List<String> voters;
     private final List<String> bootstrapServers;
@@ -128,6 +139,8 @@ public class QuorumConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
     private final boolean autoJoin;
+    private final int fetchSnapshotMaxBytes;
+    private final int fetchMaxBytes;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
         this.voters = abstractConfig.getList(QUORUM_VOTERS_CONFIG);
@@ -139,6 +152,8 @@ public class QuorumConfig {
         this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
         this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
         this.autoJoin = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE_CONFIG);
+        this.fetchSnapshotMaxBytes = abstractConfig.getInt(QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG);
+        this.fetchMaxBytes = abstractConfig.getInt(QUORUM_FETCH_MAX_BYTES_CONFIG);
     }
 
     public List<String> voters() {
@@ -175,6 +190,14 @@ public class QuorumConfig {
 
     public boolean autoJoin() {
         return autoJoin;
+    }
+
+    public int fetchSnapshotMaxBytes() {
+        return fetchSnapshotMaxBytes;
+    }
+
+    public int fetchMaxBytes() {
+        return fetchMaxBytes;
     }
 
     private static Integer parseVoterId(String idString) {

@@ -91,7 +91,7 @@ public class MeteredKeyValueStore<K, V>
     protected Sensor allSensor;
     protected Sensor rangeSensor;
     protected Sensor prefixScanSensor;
-    private Sensor flushSensor;
+    private Sensor commitSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
     protected InternalProcessorContext<?, ?> internalContext;
@@ -143,6 +143,7 @@ public class MeteredKeyValueStore<K, V>
         super.init(stateStoreContext, root);
     }
 
+    @SuppressWarnings("deprecation")
     private void registerMetrics() {
         putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         putIfAbsentSensor = StateStoreMetrics.putIfAbsentSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
@@ -151,7 +152,10 @@ public class MeteredKeyValueStore<K, V>
         allSensor = StateStoreMetrics.allSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         rangeSensor = StateStoreMetrics.rangeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         prefixScanSensor = StateStoreMetrics.prefixScanSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        // flush metrics ar deprecated per KIP-1035 and will be removed in the next major release.
+        // Here we just register the sensor without recording
+        StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        commitSensor = StateStoreMetrics.commitSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
@@ -416,7 +420,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, flushSensor);
+        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, commitSensor);
     }
 
     @Override

@@ -30,13 +30,16 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -51,6 +54,7 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager;
@@ -4342,5 +4346,668 @@ public class UnifiedLogTest {
                 .get()
                 .getValue();
         return gauge.value();
+    }
+
+    @Test
+    public void testTransactionIndexUpdatedThroughReplication() throws IOException {
+        short epoch = 0;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+
+        long pid1 = 1L;
+        long pid2 = 2L;
+        long pid3 = 3L;
+        long pid4 = 4L;
+
+        BiConsumer<Long, Integer> appendPid1 = appendTransactionalToBuffer(buffer, pid1, epoch);
+        BiConsumer<Long, Integer> appendPid2 = appendTransactionalToBuffer(buffer, pid2, epoch);
+        BiConsumer<Long, Integer> appendPid3 = appendTransactionalToBuffer(buffer, pid3, epoch);
+        BiConsumer<Long, Integer> appendPid4 = appendTransactionalToBuffer(buffer, pid4, epoch);
+
+        appendPid1.accept(0L, 5);
+        appendNonTransactionalToBuffer(buffer, 5L, 3);
+        appendPid2.accept(8L, 2);
+        appendPid1.accept(10L, 4);
+        appendPid3.accept(14L, 3);
+        appendNonTransactionalToBuffer(buffer, 17L, 2);
+        appendPid1.accept(19L, 10);
+        appendEndTxnMarkerToBuffer(buffer, pid1, epoch, 29L, ControlRecordType.ABORT);
+        appendPid2.accept(30L, 6);
+        appendPid4.accept(36L, 3);
+        appendNonTransactionalToBuffer(buffer, 39L, 10);
+        appendPid3.accept(49L, 9);
+        appendEndTxnMarkerToBuffer(buffer, pid3, epoch, 58L, ControlRecordType.COMMIT);
+        appendPid4.accept(59L, 8);
+        appendPid2.accept(67L, 7);
+        appendEndTxnMarkerToBuffer(buffer, pid2, epoch, 74L, ControlRecordType.ABORT);
+        appendNonTransactionalToBuffer(buffer, 75L, 10);
+        appendPid4.accept(85L, 4);
+        appendEndTxnMarkerToBuffer(buffer, pid4, epoch, 89L, ControlRecordType.COMMIT);
+
+        buffer.flip();
+
+        appendAsFollower(log, MemoryRecords.readableRecords(buffer), epoch);
+
+        List<AbortedTxn> abortedTransactions = LogTestUtils.allAbortedTransactions(log);
+        List<AbortedTxn> expectedTransactions = List.of(
+            new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+            new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
+        );
+
+        assertEquals(expectedTransactions, abortedTransactions);
+
+        // Verify caching of the segment position of the first unstable offset
+        log.updateHighWatermark(30L);
+        assertCachedFirstUnstableOffset(log, 8L);
+
+        log.updateHighWatermark(75L);
+        assertCachedFirstUnstableOffset(log, 36L);
+
+        log.updateHighWatermark(log.logEndOffset());
+        assertEquals(Optional.empty(), log.firstUnstableOffset());
+    }
+
+    @Test
+    public void testZombieCoordinatorFenced() throws IOException {
+        long pid = 1L;
+        short epoch = 0;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        Consumer<Integer> append = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime);
+
+        append.accept(10);
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+            1, 0, TransactionVersion.TV_0.featureLevel());
+
+        append.accept(5);
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(),
+            2, 0, TransactionVersion.TV_0.featureLevel());
+
+        assertThrows(TransactionCoordinatorFencedException.class,
+            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                1, 0, TransactionVersion.TV_0.featureLevel()));
+    }
+
+    @Test
+    public void testZombieCoordinatorFencedEmptyTransaction() throws IOException {
+        long pid = 1L;
+        short epoch = 0;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        BiConsumer<Long, Integer> append = appendTransactionalToBuffer(buffer, pid, epoch, 1);
+        append.accept(0L, 10);
+        appendEndTxnMarkerToBuffer(buffer, pid, epoch, 10L, ControlRecordType.COMMIT, 1);
+
+        buffer.flip();
+        log.appendAsFollower(MemoryRecords.readableRecords(buffer), epoch);
+
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                2, 1, TransactionVersion.TV_0.featureLevel());
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+            2, 1, TransactionVersion.TV_0.featureLevel());
+        assertThrows(TransactionCoordinatorFencedException.class,
+            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                1, 1, TransactionVersion.TV_0.featureLevel()));
+    }
+
+    @ParameterizedTest(name = "testEndTxnWithFencedProducerEpoch with transactionVersion={0}")
+    @ValueSource(shorts = {0, 1, 2})
+    public void testEndTxnWithFencedProducerEpoch(short transactionVersion) throws IOException {
+        long producerId = 1L;
+        short epoch = 5;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        // First, write some transactional records to establish the current epoch
+        MemoryRecords records = MemoryRecords.withTransactionalRecords(
+            Compression.NONE, producerId, epoch, 0,
+            new SimpleRecord("key".getBytes(), "value".getBytes())
+        );
+        log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
+
+        // Test 1: Old epoch (epoch - 1) should be rejected for both TV0/TV1 and TV2
+        // TV0/TV1: markerEpoch < currentEpoch is rejected
+        // TV2: markerEpoch <= currentEpoch is rejected (requires strict >)
+        assertThrows(InvalidProducerEpochException.class,
+            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (short) (epoch - 1),
+                ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
+
+        // Test 2: Same epoch behavior differs between TV0/TV1 and TV2
+        // TV0/TV1: same epoch is allowed (markerEpoch >= currentEpoch)
+        // TV2: same epoch is rejected (requires strict >, markerEpoch > currentEpoch)
+        if (transactionVersion >= 2) {
+            // TV2: same epoch should be rejected
+            assertThrows(InvalidProducerEpochException.class,
+                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
+                    ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
+        } else {
+            // TV0/TV1: same epoch should be allowed
+            assertDoesNotThrow(() -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
+                ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
+        }
+    }
+
+    @Test
+    public void testTV2MarkerWithBumpedEpochSucceeds() throws IOException {
+        // Test that TV2 markers with bumped epochs (epoch + 1) are accepted (positive case)
+        // TV2 (KIP-890): Coordinator bumps epoch before writing marker, so markerEpoch = currentEpoch + 1
+        short transactionVersion = 2;
+        long producerId = 1L;
+        short epoch = 5;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        // First, write some transactional records to establish the current epoch
+        MemoryRecords records = MemoryRecords.withTransactionalRecords(
+            Compression.NONE, producerId, epoch, 0,
+            new SimpleRecord("key".getBytes(), "value".getBytes())
+        );
+        log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
+
+        // TV2: Verify that bumped epoch (epoch + 1) is accepted
+        short bumpedEpoch = (short) (epoch + 1);
+        assertDoesNotThrow(() -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, bumpedEpoch,
+            ControlRecordType.COMMIT, mockTime.milliseconds(), 1,
+            0, TransactionVersion.TV_2.featureLevel()));
+
+        // Verify the marker was successfully appended by checking producer state
+        ProducerStateEntry producerState = log.producerStateManager().activeProducers().get(producerId);
+        assertNotNull(producerState);
+        // After a commit marker, the producer epoch should be updated to the bumped epoch for TV2
+        assertEquals(bumpedEpoch, producerState.producerEpoch());
+    }
+
+    @Test
+    public void testReplicationWithTVUnknownAllowed() throws IOException {
+        // Test that TV_UNKNOWN is allowed for replication (REPLICATION origin) and uses TV_0 validation
+        // This simulates the scenario where:
+        // 1. Leader receives WriteTxnMarkersRequest with transactionVersion=2 and validates with strict TV2 rules
+        // 2. Leader writes MemoryRecords to log (transactionVersion is not stored in MemoryRecords)
+        // 3. Follower receives MemoryRecords via replication (without transactionVersion metadata)
+        // 4. Follower uses TV_UNKNOWN which defaults to TV_0 validation (more permissive, safe because leader already validated)
+        long producerId = 1L;
+        short epoch = 5;
+        int coordinatorEpoch = 1;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        // Step 1: Write transactional records as leader to establish current epoch
+        MemoryRecords transactionalRecords = MemoryRecords.withTransactionalRecords(
+            Compression.NONE, producerId, epoch, 0,
+            new SimpleRecord("key".getBytes(), "value".getBytes())
+        );
+        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel());
+
+        // Step 2: Simulate leader writing TV2 marker with bumped epoch (epoch + 1)
+        // This is what happens at the leader when WriteTxnMarkersRequest is received
+        short bumpedEpoch = (short) (epoch + 1);
+        MemoryRecords leaderMarker = MemoryRecords.withEndTransactionMarker(
+            mockTime.milliseconds(),
+            producerId,
+            bumpedEpoch,
+            new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+        );
+        // Leader validates with TV2 (strict: markerEpoch > currentEpoch)
+        log.appendAsLeader(leaderMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel());
+
+        // Verify leader state
+        ProducerStateEntry leaderProducerState = log.producerStateManager().activeProducers().get(producerId);
+        assertNotNull(leaderProducerState);
+        assertEquals(bumpedEpoch, leaderProducerState.producerEpoch());
+
+        // Step 3: Create a new log to simulate a follower
+        File followerLogDir = TestUtils.randomPartitionLogDir(tmpDir);
+        UnifiedLog followerLog = createLog(followerLogDir, logConfig);
+
+        // Step 4: Follower replicates transactional records first
+        MemoryRecords followerTransactionalRecords = MemoryRecords.withTransactionalRecords(
+            0L, Compression.NONE, producerId, epoch, 0, 0,
+            new SimpleRecord("key".getBytes(), "value".getBytes())
+        );
+        followerLog.appendAsFollower(followerTransactionalRecords, 0);
+
+        // Step 5: Follower replicates the marker (appendAsFollower uses TV_UNKNOWN internally)
+        // This should succeed because TV_UNKNOWN is allowed for REPLICATION origin
+        // and defaults to TV_0 validation (markerEpoch >= currentEpoch), which is more permissive
+        // The marker should be at offset 1 (after the transactional record at offset 0)
+        MemoryRecords followerMarker = MemoryRecords.withEndTransactionMarker(
+            1L, // offset after the transactional record
+            mockTime.milliseconds(),
+            0, // partition leader epoch
+            producerId,
+            bumpedEpoch,
+            new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+        );
+
+        // This should not throw an exception - TV_UNKNOWN is allowed for replication
+        assertDoesNotThrow(() -> followerLog.appendAsFollower(followerMarker, 0));
+
+        // Verify follower state matches leader state
+        ProducerStateEntry followerProducerState = followerLog.producerStateManager().activeProducers().get(producerId);
+        assertNotNull(followerProducerState);
+        assertEquals(bumpedEpoch, followerProducerState.producerEpoch());
+        assertEquals(coordinatorEpoch, followerProducerState.coordinatorEpoch());
+
+        // Verify the marker was written to the follower log
+        assertEquals(2L, followerLog.logEndOffset()); // 1 transactional record + 1 marker
+    }
+
+    @Test
+    public void testLeaderRejectsTVUnknownForTransactionMarker() throws IOException {
+        // Test that TV_UNKNOWN is rejected for COORDINATOR origin (leader writing transaction markers)
+        // TV_UNKNOWN is only allowed for REPLICATION origin (followers)
+        long producerId = 1L;
+        short epoch = 5;
+        int coordinatorEpoch = 1;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        // Write transactional records as leader to establish current epoch
+        MemoryRecords transactionalRecords = MemoryRecords.withTransactionalRecords(
+            Compression.NONE, producerId, epoch, 0,
+            new SimpleRecord("key".getBytes(), "value".getBytes())
+        );
+        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel());
+
+        // Attempt to write a transaction marker with TV_UNKNOWN as COORDINATOR (leader)
+        // This should throw IllegalArgumentException because TV_UNKNOWN is not allowed for COORDINATOR origin
+        MemoryRecords marker = MemoryRecords.withEndTransactionMarker(
+            mockTime.milliseconds(),
+            producerId,
+            (short) (epoch + 1), // bumped epoch for TV2
+            new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+        );
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+            log.appendAsLeader(marker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN));
+
+        assertTrue(exception.getMessage().contains("transactionVersion must be explicitly specified"));
+        assertTrue(exception.getMessage().contains("TV_UNKNOWN"));
+        assertTrue(exception.getMessage().contains("COORDINATOR"));
+    }
+
+    @Test
+    public void testLastStableOffsetDoesNotExceedLogStartOffsetMidSegment() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+        short epoch = 0;
+        long pid = 1L;
+        Consumer<Integer> appendPid = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime);
+
+        appendPid.accept(5);
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3);
+        assertEquals(8L, log.logEndOffset());
+
+        log.roll();
+        assertEquals(2, log.logSegments().size());
+        appendPid.accept(5);
+
+        assertEquals(Optional.of(0L), log.firstUnstableOffset());
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(5L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+
+        // the first unstable offset should be lower bounded by the log start offset
+        assertEquals(Optional.of(5L), log.firstUnstableOffset());
+    }
+
+    @Test
+    public void testLastStableOffsetDoesNotExceedLogStartOffsetAfterSegmentDeletion() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+        short epoch = 0;
+        long pid = 1L;
+        Consumer<Integer> appendPid = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime);
+
+        appendPid.accept(5);
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3);
+        assertEquals(8L, log.logEndOffset());
+
+        log.roll();
+        assertEquals(2, log.logSegments().size());
+        appendPid.accept(5);
+
+        assertEquals(Optional.of(0L), log.firstUnstableOffset());
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(8L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+        log.updateHighWatermark(log.logEndOffset());
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(1, log.logSegments().size());
+
+        // the first unstable offset should be lower bounded by the log start offset
+        assertEquals(Optional.of(8L), log.firstUnstableOffset());
+    }
+
+    @Test
+    public void testAppendToTransactionIndexFailure() throws IOException {
+        long pid = 1L;
+        short epoch = 0;
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        Consumer<Integer> append = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime);
+        append.accept(10);
+
+        // Kind of a hack, but renaming the index to a directory ensures that the append
+        // to the index will fail.
+        log.activeSegment().txnIndex().renameTo(log.dir());
+
+        // The append will be written to the log successfully, but the write to the index will fail
+        assertThrows(KafkaStorageException.class,
+            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                1, 0, TransactionVersion.TV_0.featureLevel()));
+        assertEquals(11L, log.logEndOffset());
+        assertEquals(0L, log.lastStableOffset());
+
+        // Try the append a second time. The appended offset in the log should not increase
+        // because the log dir is marked as failed.  Nor will there be a write to the transaction
+        // index.
+        assertThrows(KafkaStorageException.class,
+            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                1, 0, TransactionVersion.TV_0.featureLevel()));
+        assertEquals(11L, log.logEndOffset());
+        assertEquals(0L, log.lastStableOffset());
+
+        // Even if the high watermark is updated, the first unstable offset does not move
+        log.updateHighWatermark(12L);
+        assertEquals(0L, log.lastStableOffset());
+
+        assertThrows(KafkaStorageException.class, () -> log.close());
+        UnifiedLog reopenedLog = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats, mockTime.scheduler, mockTime,
+            producerStateManagerConfig, false, Optional.empty(), false);
+        assertEquals(11L, reopenedLog.logEndOffset());
+        assertEquals(1, reopenedLog.activeSegment().txnIndex().allAbortedTxns().size());
+        reopenedLog.updateHighWatermark(12L);
+        assertEquals(Optional.empty(), reopenedLog.firstUnstableOffset());
+    }
+
+    @Test
+    public void testOffsetSnapshot() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        // append a few records
+        appendAsFollower(
+            log,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord("a".getBytes()),
+                new SimpleRecord("b".getBytes()),
+                new SimpleRecord("c".getBytes())
+            ),
+            5
+        );
+
+        log.updateHighWatermark(3L);
+        LogOffsetSnapshot offsets = log.fetchOffsetSnapshot();
+        assertEquals(3L, offsets.highWatermark().messageOffset);
+        assertFalse(offsets.highWatermark().messageOffsetOnly());
+
+        offsets = log.fetchOffsetSnapshot();
+        assertEquals(3L, offsets.highWatermark().messageOffset);
+        assertFalse(offsets.highWatermark().messageOffsetOnly());
+    }
+
+    @Test
+    public void testLastStableOffsetWithMixedProducerData() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
+        // for convenience, both producers share the same epoch
+        short epoch = 5;
+
+        long pid1 = 137L;
+        int seq1 = 0;
+        long pid2 = 983L;
+        int seq2 = 0;
+
+        // add some transactional records
+        LogAppendInfo firstAppendInfo = log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid1, epoch, seq1,
+            new SimpleRecord("a".getBytes()),
+            new SimpleRecord("b".getBytes()),
+            new SimpleRecord("c".getBytes())), 0);
+        assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
+
+        // mix in some non-transactional data
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+            new SimpleRecord("g".getBytes()),
+            new SimpleRecord("h".getBytes()),
+            new SimpleRecord("i".getBytes())), 0);
+
+        // append data from a second transactional producer
+        LogAppendInfo secondAppendInfo = log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid2, epoch, seq2,
+            new SimpleRecord("d".getBytes()),
+            new SimpleRecord("e".getBytes()),
+            new SimpleRecord("f".getBytes())), 0);
+
+        // LSO should not have changed
+        assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
+
+        // now first producer's transaction is aborted
+        LogAppendInfo abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+        log.updateHighWatermark(abortAppendInfo.lastOffset() + 1);
+
+        // LSO should now point to one less than the first offset of the second transaction
+        assertEquals(Optional.of(secondAppendInfo.firstOffset()), log.firstUnstableOffset());
+
+        // commit the second transaction
+        LogAppendInfo commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+        log.updateHighWatermark(commitAppendInfo.lastOffset() + 1);
+
+        // now there should be no first unstable offset
+        assertEquals(Optional.empty(), log.firstUnstableOffset());
+    }
+
+    @Test
+    public void testAbortedTransactionSpanningMultipleSegments() throws IOException {
+        long pid = 137L;
+        short epoch = 5;
+        int seq = 0;
+
+        MemoryRecords records = MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
+            new SimpleRecord("a".getBytes()),
+            new SimpleRecord("b".getBytes()),
+            new SimpleRecord("c".getBytes()));
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(records.sizeInBytes()).build();
+        log = createLog(logDir, logConfig);
+
+        LogAppendInfo firstAppendInfo = log.appendAsLeader(records, 0);
+        assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
+
+        // this write should spill to the second segment
+        log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, 3,
+            new SimpleRecord("d".getBytes()),
+            new SimpleRecord("e".getBytes()),
+            new SimpleRecord("f".getBytes())), 0);
+        assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
+        assertEquals(3L, log.logEndOffsetMetadata().segmentBaseOffset);
+
+        // now abort the transaction
+        LogAppendInfo abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+        log.updateHighWatermark(abortAppendInfo.lastOffset() + 1);
+        assertEquals(Optional.empty(), log.firstUnstableOffset());
+
+        // now check that a fetch includes the aborted transaction
+        FetchDataInfo fetchDataInfo = log.read(0L, 2048, FetchIsolation.TXN_COMMITTED, true);
+
+        assertTrue(fetchDataInfo.abortedTransactions.isPresent());
+        assertEquals(1, fetchDataInfo.abortedTransactions.get().size());
+        assertEquals(new FetchResponseData.AbortedTransaction().setProducerId(pid).setFirstOffset(0), fetchDataInfo.abortedTransactions.get().get(0));
+    }
+
+    @Test
+    public void testLoadPartitionDirWithNoSegmentsShouldNotThrow() throws IOException {
+        String dirName = UnifiedLog.logDeleteDirName(new TopicPartition("foo", 3));
+        File testLogDir = new File(tmpDir, dirName);
+        testLogDir.mkdirs();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().build();
+        UnifiedLog testLog = createLog(testLogDir, logConfig);
+        assertEquals(1, testLog.numberOfSegments());
+    }
+
+    @Test
+    public void testSegmentDeletionWithHighWatermarkInitialization() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(512).segmentIndexBytes(1000).retentionMs(999).build();
+        log = createLog(logDir, logConfig);
+
+        long expiredTimestamp = mockTime.milliseconds() - 1000;
+        for (int i = 0; i < 100; i++) {
+            MemoryRecords records = LogTestUtils.singletonRecords(("test" + i).getBytes(), Compression.NONE, null, expiredTimestamp);
+            log.appendAsLeader(records, 0);
+        }
+
+        long initialHighWatermark = log.updateHighWatermark(25L);
+        assertEquals(25L, initialHighWatermark);
+
+        int initialNumSegments = log.numberOfSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertTrue(log.numberOfSegments() < initialNumSegments);
+        assertTrue(log.logStartOffset() <= initialHighWatermark);
+    }
+
+    @Test
+    public void testCannotDeleteSegmentsAtOrAboveHighWatermark() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(512).segmentIndexBytes(1000).retentionMs(999).build();
+        log = createLog(logDir, logConfig);
+
+        long expiredTimestamp = mockTime.milliseconds() - 1000;
+        for (int i = 0; i < 100; i++) {
+            MemoryRecords records = LogTestUtils.singletonRecords(("test" + i).getBytes(), Compression.NONE, null, expiredTimestamp);
+            log.appendAsLeader(records, 0);
+        }
+
+        // ensure we have at least a few segments so the test case is not trivial
+        assertTrue(log.numberOfSegments() > 5);
+        assertEquals(0L, log.highWatermark());
+        assertEquals(0L, log.logStartOffset());
+        assertEquals(100L, log.logEndOffset());
+
+        for (int hw = 0; hw <= 100; hw++) {
+            log.updateHighWatermark(hw);
+            assertEquals(hw, log.highWatermark());
+            log.deleteOldSegments();
+            assertTrue(log.logStartOffset() <= hw);
+
+            // verify that all segments up to the high watermark have been deleted
+            List<LogSegment> segments = log.logSegments();
+            if (!segments.isEmpty()) {
+                assertTrue(segments.get(0).baseOffset() <= hw);
+                assertTrue(segments.get(0).baseOffset() >= log.logStartOffset());
+            }
+            for (int i = 1; i < segments.size(); i++) {
+                assertTrue(segments.get(i).baseOffset() > hw);
+                assertTrue(segments.get(i).baseOffset() >= log.logStartOffset());
+            }
+        }
+
+        assertEquals(100L, log.logStartOffset());
+        assertEquals(1, log.numberOfSegments());
+        assertEquals(0, log.activeSegment().size());
+    }
+
+    @Test
+    public void testCannotIncrementLogStartOffsetPastHighWatermark() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(512).segmentIndexBytes(1000).build();
+        log = createLog(logDir, logConfig);
+
+        for (int i = 0; i < 100; i++) {
+            MemoryRecords records = LogTestUtils.singletonRecords(("test" + i).getBytes(), null);
+            log.appendAsLeader(records, 0);
+        }
+
+        log.updateHighWatermark(25L);
+        assertThrows(OffsetOutOfRangeException.class,
+            () -> log.maybeIncrementLogStartOffset(26L, LogStartOffsetIncrementReason.ClientRecordDeletion));
+    }
+
+    @Test
+    public void testBackgroundDeletionWithIOException() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024).build();
+        log = createLog(logDir, logConfig);
+        assertEquals(1, log.numberOfSegments(), "The number of segments should be 1");
+
+        // Delete the underlying directory to trigger a KafkaStorageException
+        File dir = log.dir();
+        Utils.delete(dir);
+        Files.createFile(dir.toPath());
+
+        assertThrows(KafkaStorageException.class, () -> log.delete());
+        assertTrue(log.logDirFailureChannel().hasOfflineLogDir(tmpDir.toString()));
+    }
+
+    /**
+     * test renaming a log's dir without reinitialization, which is the case during topic deletion
+     */
+    @Test
+    public void testRenamingDirWithoutReinitialization() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(1024 * 1024).build();
+        log = createLog(logDir, logConfig);
+        assertEquals(1, log.numberOfSegments(), "The number of segments should be 1");
+
+        File newDir = TestUtils.randomPartitionLogDir(tmpDir);
+        assertTrue(newDir.exists());
+
+        log.renameDir(newDir.getName(), false);
+        assertFalse(log.leaderEpochCache().nonEmpty());
+        assertTrue(log.partitionMetadataFile().isEmpty());
+        assertEquals(0, log.logEndOffset());
+
+        // verify that the background deletion can succeed
+        log.delete();
+        assertEquals(0, log.numberOfSegments(), "The number of segments should be 0");
+        assertFalse(newDir.exists());
+    }
+
+    private BiConsumer<Long, Integer> appendTransactionalToBuffer(ByteBuffer buffer, long producerId, short producerEpoch) {
+        return appendTransactionalToBuffer(buffer, producerId, producerEpoch, 0);
+    }
+
+    private BiConsumer<Long, Integer> appendTransactionalToBuffer(ByteBuffer buffer, long producerId, short producerEpoch, int leaderEpoch) {
+        int[] sequence = {0};
+        return (offset, numRecords) -> {
+            int baseSequence = sequence[0];
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME,
+                offset, mockTime.milliseconds(), producerId, producerEpoch, baseSequence, true, leaderEpoch);
+            for (int seq = baseSequence; seq < baseSequence + numRecords; seq++) {
+                builder.append(new SimpleRecord(String.valueOf(seq).getBytes()));
+            }
+            sequence[0] += numRecords;
+            builder.close();
+        };
+    }
+
+    private void appendEndTxnMarkerToBuffer(ByteBuffer buffer, long producerId, short producerEpoch,
+                                             long offset, ControlRecordType controlType) {
+        appendEndTxnMarkerToBuffer(buffer, producerId, producerEpoch, offset, controlType, 0, 0);
+    }
+
+    private void appendEndTxnMarkerToBuffer(ByteBuffer buffer, long producerId, short producerEpoch,
+                                             long offset, ControlRecordType controlType,
+                                             int coordinatorEpoch) {
+        appendEndTxnMarkerToBuffer(buffer, producerId, producerEpoch, offset, controlType, coordinatorEpoch, 0);
+    }
+
+    private void appendEndTxnMarkerToBuffer(ByteBuffer buffer, long producerId, short producerEpoch,
+                                             long offset, ControlRecordType controlType,
+                                             int coordinatorEpoch, int leaderEpoch) {
+        EndTransactionMarker marker = new EndTransactionMarker(controlType, coordinatorEpoch);
+        MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), leaderEpoch, producerId, producerEpoch, marker);
+    }
+
+    private void appendNonTransactionalToBuffer(ByteBuffer buffer, long offset, int numRecords) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, offset);
+        for (int seq = 0; seq < numRecords; seq++) {
+            builder.append(new SimpleRecord(String.valueOf(seq).getBytes()));
+        }
+        builder.close();
     }
 }
