@@ -4854,6 +4854,7 @@ org.apache.kafka.streams.state.internals.MeteredKeyValueStoreTest:
 - shouldNotThrowNullPointerExceptionIfGetReturnsNull
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
+- shouldPassRecordHeadersToValueDeserializerWhenFlushListenerIsSet
 - shouldPutAllToInnerStoreAndRecordPutAllMetric
 - shouldPutIfAbsentAndRecordPutIfAbsentMetric
 - shouldRecordRestoreLatencyOnRecordRestoreTime
@@ -4892,6 +4893,7 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreTest:
 - shouldNotThrowNullPointerExceptionIfFetchSessionReturnsNull
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
+- shouldPassRecordHeadersToValueDeserializerWhenFlushListenerIsSet
 - shouldRecordRestoreLatencyOnRecordRestoreTime
 - shouldRemoveFromStoreAndRecordRemoveMetric
 - shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
@@ -5072,6 +5074,7 @@ org.apache.kafka.streams.state.internals.MeteredWindowStoreTest:
 - shouldNotThrowNullPointerExceptionIfFetchReturnsNull
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
+- shouldPassRecordHeadersToValueDeserializerWhenFlushListenerIsSet
 - shouldPutToInnerStoreAndRecordPutMetrics
 - shouldRecordCommitLatency
 - shouldRecordRestoreLatencyOnRecordRestoreTime
