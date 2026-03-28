@@ -20,6 +20,7 @@ package org.apache.kafka.coordinator.share.metrics;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -115,6 +116,10 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             throw new IllegalArgumentException("ShareCoordinatorMetrics can only deactivate ShareCoordinatorMetricShard");
         }
         shards.remove(shard.topicPartition());
+        ShareGroupPruneMetrics removed = pruneMetrics.remove(shard.topicPartition());
+        if (removed != null) {
+            metrics.removeSensor(removed.pruneSensor.name());
+        }
     }
 
     @Override
@@ -159,7 +164,7 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
         ShareGroupPruneMetrics(TopicPartition tp) {
             String sensorNameSuffix = tp.toString();
-            Map<String, String> tags = Map.of(
+            Map<String, String> tags = MetricsUtils.getTags(
                 "topic", tp.topic(),
                 "partition", Integer.toString(tp.partition())
             );
