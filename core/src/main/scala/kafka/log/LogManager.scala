@@ -118,7 +118,7 @@ class LogManager(logDirs: Seq[File],
   def currentDefaultConfig: LogConfig = _currentDefaultConfig
 
   def liveLogDirs: Seq[File] = {
-    if (_liveLogDirs.size == logDirs.size)
+    if (_liveLogDirs.asScala.sizeCompare(logDirs) == 0)
       logDirs
     else
       _liveLogDirs.asScala.toBuffer
