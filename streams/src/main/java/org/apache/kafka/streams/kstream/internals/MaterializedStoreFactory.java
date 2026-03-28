@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreSupplier;
@@ -30,8 +31,9 @@ import java.util.Map;
 public abstract class MaterializedStoreFactory<K, V, S extends StateStore> extends AbstractConfigurableStoreFactory {
     protected final MaterializedInternal<K, V, S> materialized;
 
-    public MaterializedStoreFactory(final MaterializedInternal<K, V, S> materialized) {
-        super(materialized.dslStoreSuppliers().orElse(null));
+    public MaterializedStoreFactory(final MaterializedInternal<K, V, S> materialized,
+                                    final DslStoreFormat defaultStoreFormat) {
+        super(materialized.dslStoreSuppliers().orElse(null), defaultStoreFormat);
         this.materialized = materialized;
     }
 

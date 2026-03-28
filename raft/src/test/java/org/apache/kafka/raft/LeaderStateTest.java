@@ -732,7 +732,7 @@ public class LeaderStateTest {
                 .get()
         );
 
-        // Upate in-memory voter and check state
+        // Update in-memory voter and check state
         assertTrue(
             state.compareAndSetVolatileVoters(votersWithLeaderUpdated, updatedVoters)
         );

@@ -1585,7 +1585,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void closeToError() {
+    void closeToError() {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {

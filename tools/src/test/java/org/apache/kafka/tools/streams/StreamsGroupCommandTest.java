@@ -473,7 +473,7 @@ public class StreamsGroupCommandTest {
         when(adminClient.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(result);
         when(result.partitionsToOffsetAndMetadata(anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
-        assertThrows(UnknownTopicOrPartitionException.class, () -> service.resetOffsets());
+        assertThrows(UnknownTopicOrPartitionException.class, service::resetOffsets);
         service.close();
     }
 

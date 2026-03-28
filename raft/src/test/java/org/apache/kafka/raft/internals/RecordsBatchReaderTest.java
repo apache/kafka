@@ -133,7 +133,7 @@ class RecordsBatchReaderTest {
             true,
             new LogContext()
         );
-        try {
+        try (reader) {
             for (TestBatch<String> batch : expectedBatches) {
                 assertTrue(reader.hasNext());
                 assertEquals(batch, TestBatch.from(reader.next()));
@@ -141,8 +141,6 @@ class RecordsBatchReaderTest {
 
             assertFalse(reader.hasNext());
             assertThrows(NoSuchElementException.class, reader::next);
-        } finally {
-            reader.close();
         }
 
         Mockito.verify(closeListener).onClose(reader);

@@ -61,6 +61,14 @@ class HeadersSerializer {
         }
     }
 
+    // for testing
+    static byte[] serialize(final Headers headers) {
+        final PreSerializedHeaders prep = prepareSerialization(headers);
+        final ByteBuffer buffer = ByteBuffer.allocate(prep.requiredBufferSizeForHeaders);
+        serialize(prep, buffer);
+        return buffer.array();
+    }
+
     public static PreSerializedHeaders prepareSerialization(final Headers headers) {
         final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
 
