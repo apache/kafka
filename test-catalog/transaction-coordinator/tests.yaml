@@ -29,7 +29,9 @@ org.apache.kafka.coordinator.transaction.TransactionLogTest:
 - ONGOING
 - PREPARE_ABORT
 - PREPARE_COMMIT
+- shouldNotPersistProducerIdsAtVersion0
 - shouldReturnTxnTombstoneForNullValue
+- shouldRoundTripPreviousAndNextProducerIds
 - shouldThrowExceptionWriteInvalidTxn
 - testDeserializeFutureTransactionLogValue
 - testDeserializeHighestSupportedTransactionLogValue
