@@ -32,7 +32,7 @@ public enum SslClientAuth {
 
     public static SslClientAuth forConfig(String key) {
         if (key == null) {
-            return SslClientAuth.NONE;
+            return null;
         }
         String upperCaseKey = key.toUpperCase(Locale.ROOT);
         for (SslClientAuth auth : VALUES) {
@@ -40,7 +40,7 @@ public enum SslClientAuth {
                 return auth;
             }
         }
-        return null;
+        return SslClientAuth.NONE;
     }
 
     @Override
