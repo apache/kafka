@@ -323,7 +323,7 @@ public class Cleaner {
             cleanedSegments.add(currentCleaned);
 
             // swap in all cleaned segments (maybe multiple if overflow occurred)
-            logger.info("Swapping in {} cleaned segment(s) for segment(s) {} in log {}", cleanedSegments.size(), segments, log);
+            logger.info("Swapping in cleaned segment(s) {} for segment(s) {} in log {}", cleanedSegments, segments, log);
             log.replaceSegments(cleanedSegments, segments);
 
         } catch (LogCleaningAbortedException e) {

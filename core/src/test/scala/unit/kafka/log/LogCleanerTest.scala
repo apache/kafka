@@ -1650,7 +1650,6 @@ class LogCleanerTest extends Logging {
 
     val sourceSegments = log.logSegments.asScala.take(2).toSeq
     val singleBatchSize = sourceSegments.head.log.batches.asScala.map(_.sizeInBytes).max
-    // Allow 1.5 batches: fits the first batch, but adding a second batch overflows.
     // maxCleanedSize allows exactly 1 batch; adding a 2nd batch overflows.
     val maxCleanedSize = singleBatchSize.toLong + 1L
 
