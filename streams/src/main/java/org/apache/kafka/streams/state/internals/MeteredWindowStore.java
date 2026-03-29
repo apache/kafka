@@ -205,8 +205,8 @@ public class MeteredWindowStore<K, V>
                 record -> listener.apply(
                     record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
                         .withValue(new Change<>(
-                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, new RecordHeaders()) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, new RecordHeaders()) : null,
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, record.headers()) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, record.headers()) : null,
                             record.value().isLatest
                         ))
                 ),

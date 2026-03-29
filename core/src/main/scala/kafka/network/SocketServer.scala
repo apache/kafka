@@ -324,8 +324,8 @@ class SocketServer(
     }
     val maxConnectionsPerIpOverrides = newConfig.maxConnectionsPerIpOverrides
     if (maxConnectionsPerIpOverrides != oldConfig.maxConnectionsPerIpOverrides) {
-      info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.map { case (k, v) => s"$k=$v" }.mkString(",")}")
-      connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides)
+      info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.asScala.map { case (k, v) => s"$k=$v" }.mkString(",")}")
+      connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides.asScala.map  { case (k, v) => (k, v.intValue()) }.toMap)
     }
     val maxConnections = newConfig.maxConnections
     if (maxConnections != oldConfig.maxConnections) {
@@ -1275,7 +1275,7 @@ private[kafka] class Processor(
 class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
 
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
-  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.asScala.map { case (host, count) => (InetAddress.getByName(host), count.intValue()) }.toMap
   @volatile private var brokerMaxConnections = config.maxConnections
   private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
@@ -1313,7 +1313,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   private[network] def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = {
-    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }.toMap
   }
 
   private[network] def updateBrokerMaxConnections(maxConnections: Int): Unit = {

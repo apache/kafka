@@ -55,7 +55,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,10 +109,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         if (value == null) {
             return null;
         }
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
-        final byte[] rawHeaders = HeadersSerializer
-            .serialize(preSerializedHeaders, ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders))
-            .array();
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
