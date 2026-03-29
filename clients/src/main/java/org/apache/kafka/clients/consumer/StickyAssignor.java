@@ -27,11 +27,11 @@ import org.apache.kafka.common.protocol.types.Type;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * <p>The sticky assignor serves two purposes. First, it guarantees an assignment that is as balanced as possible, meaning either:
@@ -230,8 +230,10 @@ public class StickyAssignor extends AbstractStickyAssignor {
     static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();
-        Map<String, List<Integer>> partitionsByTopic = memberData.partitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.mapping(TopicPartition::partition, Collectors.toList())));
+        var partitionsByTopic = new HashMap<String, List<Integer>>();
+        for (TopicPartition tp : memberData.partitions) {
+            partitionsByTopic.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition());
+        }
         for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
