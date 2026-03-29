@@ -22,7 +22,8 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature
 import kafka.Kafka
-import kafka.tools.{StorageTool, TerseFailure}
+import kafka.tools.StorageTool
+import org.apache.kafka.server.util.TerseFailure
 import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,18 +15,25 @@
  * limitations under the License.
  */
 
-package kafka.tools
+package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.KafkaException;
 
 /**
  * An exception thrown to indicate that the command has failed, but we don't want to
  * print a stack trace.
- *
- * @param message     The message to print out before exiting.  A stack trace will not
- *                    be printed.
- * @param cause       The exception's cause
  */
-class TerseFailure(message: String, cause: Throwable) extends KafkaException(message, cause) {
-  def this(message: String) = this(message, null)
+public class TerseFailure extends KafkaException {
+    public TerseFailure(String message) {
+        super(message);
+    }
+
+    /**
+     * @param message     The message to print out before exiting.  A stack trace will not
+     *                    be printed.
+     * @param cause       The exception's cause
+     */
+    public TerseFailure(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
