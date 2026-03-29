@@ -727,15 +727,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * (to keep subscription state changes in the background)
      */
     private void process(final ApplyAssignmentEvent event) {
-        if (requestManagers.consumerMembershipManager.isEmpty()) {
-            log.warn("ConsumerMembershipManager not present when processing ApplyAssignmentEvent");
-            event.future().completeExceptionally(
-                new IllegalStateException("ConsumerMembershipManager not available"));
-            return;
-        }
         try {
-            requestManagers.consumerMembershipManager.get().applyAssignment(
-                event.assignedPartitions(), event.addedPartitions());
+            if (requestManagers.consumerMembershipManager.isPresent()) {
+                requestManagers.consumerMembershipManager.get().applyAssignment(
+                    event.assignedPartitions(), event.addedPartitions());
+            } else if (requestManagers.streamsMembershipManager.isPresent()) {
+                requestManagers.streamsMembershipManager.get().applyAssignment(
+                    event.assignedPartitions(), event.addedPartitions());
+            } else {
+                log.warn("Neither ConsumerMembershipManager nor StreamsMembershipManager present " +
+                    "when processing ApplyAssignmentEvent");
+                event.future().completeExceptionally(
+                    new IllegalStateException("No membership manager available when processing ApplyAssignmentEvent"));
+                return;
+            }
             event.future().complete(null);
         } catch (Exception e) {
             event.future().completeExceptionally(e);

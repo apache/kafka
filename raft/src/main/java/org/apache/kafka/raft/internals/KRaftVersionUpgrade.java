@@ -31,16 +31,16 @@ import java.util.Optional;
  * avoid blocking locks.
  */
 public sealed interface KRaftVersionUpgrade {
-    public record Empty() implements KRaftVersionUpgrade {
+    record Empty() implements KRaftVersionUpgrade {
     }
 
-    public record Version(KRaftVersion kraftVersion) implements KRaftVersionUpgrade {
+    record Version(KRaftVersion kraftVersion) implements KRaftVersionUpgrade {
     }
 
-    public record Voters(VoterSet voters) implements KRaftVersionUpgrade {
+    record Voters(VoterSet voters) implements KRaftVersionUpgrade {
     }
 
-    public default Optional<Voters> toVoters() {
+    default Optional<Voters> toVoters() {
         if (this instanceof Voters) {
             return Optional.of(((Voters) this));
         } else {
@@ -48,7 +48,7 @@ public sealed interface KRaftVersionUpgrade {
         }
     }
 
-    public default Optional<Version> toVersion() {
+    default Optional<Version> toVersion() {
         if (this instanceof Version) {
             return Optional.of(((Version) this));
         } else {
@@ -56,9 +56,9 @@ public sealed interface KRaftVersionUpgrade {
         }
     }
 
-    static final KRaftVersionUpgrade EMPTY = new Empty();
+    KRaftVersionUpgrade EMPTY = new Empty();
 
-    public static KRaftVersionUpgrade empty() {
+    static KRaftVersionUpgrade empty() {
         return EMPTY;
     }
 

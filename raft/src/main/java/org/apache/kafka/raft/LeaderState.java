@@ -563,7 +563,7 @@ public class LeaderState<T> implements EpochState {
             );
         }
 
-        // Upgrade to kraft.verion 1 is only supported; this needs to change when kraft.version 2 is added
+        // Upgrade to kraft.version 1 is only supported; this needs to change when kraft.version 2 is added
         var inMemoryVoters = kraftVersionUpgradeState.get().toVoters().orElseThrow(() ->
             new InvalidUpdateVersionException(
                 String.format(
