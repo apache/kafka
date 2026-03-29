@@ -459,7 +459,7 @@ class KafkaApisTest extends Logging {
     assertEquals(ConfigResource.Type.GROUP.id, describeConfigsResult.resourceType)
     assertEquals(consumerGroupId, describeConfigsResult.resourceName)
     val configs = describeConfigsResult.configs
-    assertEquals(GroupConfig.configDef().names().size, configs.size)
+    assertEquals(GroupConfig.CONFIG_DEF.names().size, configs.size)
 
     val configMap = configs.asScala.map(c => c.name -> c).toMap
 

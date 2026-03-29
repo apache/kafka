@@ -157,7 +157,7 @@ public final class GroupConfig extends AbstractConfig {
 
     public final boolean shareRenewAcknowledgeEnable;
 
-    private static final ConfigDef CONFIG = new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -311,7 +311,7 @@ public final class GroupConfig extends AbstractConfig {
     );
 
     public GroupConfig(Map<?, ?> props) {
-        super(CONFIG, props, false);
+        super(CONFIG_DEF, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         // These have to be optionals because their default group coordinator configs are dynamic,
@@ -356,16 +356,12 @@ public final class GroupConfig extends AbstractConfig {
         this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
 
-    public static ConfigDef configDef() {
-        return CONFIG;
-    }
-
     public static Optional<Type> configType(String configName) {
-        return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
+        return Optional.ofNullable(CONFIG_DEF.configKeys().get(configName)).map(c -> c.type);
     }
 
     public static Set<String> configNames() {
-        return CONFIG.names();
+        return CONFIG_DEF.names();
     }
 
     /**
@@ -385,7 +381,7 @@ public final class GroupConfig extends AbstractConfig {
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private static void validateValues(Map<String, Object> unparsedMap, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
-        Map<String, Object> valueMaps = CONFIG.parse(unparsedMap);
+        Map<String, Object> valueMaps = CONFIG_DEF.parse(unparsedMap);
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         int consumerAssignmentIntervalMs = (Integer) valueMaps.get(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG);
@@ -928,6 +924,6 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtml(4, config -> "groupconfigs_" + config));
+        System.out.println(CONFIG_DEF.toHtml(4, config -> "groupconfigs_" + config));
     }
 }

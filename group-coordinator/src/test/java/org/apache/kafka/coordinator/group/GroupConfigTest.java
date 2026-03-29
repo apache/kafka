@@ -650,7 +650,7 @@ public class GroupConfigTest {
         );
 
         // Every GroupConfig entry must be in ALL_GROUP_CONFIG_SYNONYMS or in the exclusion list.
-        for (String groupConfigName : GroupConfig.configDef().names()) {
+        for (String groupConfigName : GroupConfig.CONFIG_DEF.names()) {
             if (groupConfigsWithoutBrokerSynonym.contains(groupConfigName)) {
                 assertFalse(GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.containsKey(groupConfigName),
                     "Config '" + groupConfigName + "' should not be in both the exclusion list " +
@@ -665,14 +665,14 @@ public class GroupConfigTest {
 
         // Every key in ALL_GROUP_CONFIG_SYNONYMS must be a valid GroupConfig entry.
         for (String key : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.keySet()) {
-            assertTrue(GroupConfig.configDef().names().contains(key),
+            assertTrue(GroupConfig.CONFIG_DEF.names().contains(key),
                 "ALL_GROUP_CONFIG_SYNONYMS contains key '" + key + "' which is not a valid " +
                     "GroupConfig entry. Remove it or fix the typo.");
         }
 
         // Every entry in the exclusion list must be a valid GroupConfig entry.
         for (String excluded : groupConfigsWithoutBrokerSynonym) {
-            assertTrue(GroupConfig.configDef().names().contains(excluded),
+            assertTrue(GroupConfig.CONFIG_DEF.names().contains(excluded),
                 "Exclusion list contains '" + excluded + "' which is not a valid GroupConfig " +
                     "entry. Remove it or fix the typo.");
         }

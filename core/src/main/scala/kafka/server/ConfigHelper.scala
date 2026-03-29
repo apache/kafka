@@ -170,7 +170,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
         configSynonyms(brokerConfigName, brokerSynonyms(brokerConfigName), isSensitive)
       else
         // No broker synonym, fall back to GroupConfig defaults
-        Option(GroupConfig.configDef().defaultValues().get(name))
+        Option(GroupConfig.CONFIG_DEF.defaultValues().get(name))
           .map(v => List(new DescribeConfigsResponseData.DescribeConfigsSynonym()
             .setName(name)
             .setValue(if (isSensitive) null else ConfigDef.convertToString(v, configEntryType.orNull))
