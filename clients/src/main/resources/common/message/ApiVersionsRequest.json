@@ -24,7 +24,7 @@
   //
   // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion in the response from being 0.
   //
-  // Version 5 introduces ClusterId and NodeId cbecking and REBOOTSTRAP_REQUIRED error (KIP-1242).
+  // Version 5 introduces ClusterId and NodeId checking and REBOOTSTRAP_REQUIRED error (KIP-1242).
   "validVersions": "0-5",
   "flexibleVersions": "3+",
   "latestVersionUnstable": true,
