@@ -91,8 +91,8 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     or a combination of port/port-range separated by comma (like 2181,9092 or 2181,5005-5008).
     By default no port is exposed. See README.md for more detail on this option.
 
-    If -j|--jdk is specified, you can customize the OpenJDK base image used for building
-    the ducker container. Defaults to ${default_jdk}. Example: -j openjdk:17-bullseye
+    If -j|--jdk is specified, you can customize the JDK base image used for building
+    the ducker container. Defaults to ${default_jdk}. Example: -j docker.io/library/eclipse-temurin:17-jdk-jammy
 
     If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
 
