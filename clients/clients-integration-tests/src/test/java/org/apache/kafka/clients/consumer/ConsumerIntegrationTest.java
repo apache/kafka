@@ -441,6 +441,66 @@ public class ConsumerIntegrationTest {
         }
     }
 
+    /**
+     * Verifies that rapidly switching partitions via assign() correctly commits offsets for all
+     * previously-assigned partitions. No intermediate commit check — only verifies final state.
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    })
+    public void testRapidAssignAutoCommitCorrectness(ClusterInstance clusterInstance) throws Exception {
+        String topic = "test-rapid-assign-autocommit";
+        String groupId = "test-rapid-assign-autocommit-group";
+        clusterInstance.createTopic(topic, 2, (short) 1);
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+
+        try (var producer = clusterInstance.producer()) {
+            producer.send(new ProducerRecord<>(topic, 0, "key0".getBytes(), "value0".getBytes()));
+            producer.send(new ProducerRecord<>(topic, 1, "key1".getBytes(), "value1".getBytes()));
+            producer.flush();
+        }
+
+        try (var consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, groupId,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true",
+                ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "300000",
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
+            ));
+             var admin = clusterInstance.admin()) {
+
+            // Consume from each partition first to advance position
+            consumer.assign(List.of(tp0));
+            TestUtils.waitForCondition(
+                () -> !consumer.poll(Duration.ofMillis(500)).isEmpty(),
+                10000, "Should receive records from tp0");
+
+            consumer.assign(List.of(tp1));
+            TestUtils.waitForCondition(
+                () -> !consumer.poll(Duration.ofMillis(500)).isEmpty(),
+                10000, "Should receive records from tp1");
+
+            // Rapidly switch partitions without waiting — each assign() fires a best-effort commit
+            for (int i = 0; i < 5; i++) {
+                consumer.assign(List.of(tp0));
+                consumer.assign(List.of(tp1));
+            }
+
+            // Final: assign both to trigger commit for the last assigned partition
+            consumer.assign(List.of(tp0, tp1));
+
+            // Verify both partitions have correct committed offsets at the end
+            TestUtils.waitForCondition(() -> {
+                var offsets = admin.listConsumerGroupOffsets(groupId)
+                    .partitionsToOffsetAndMetadata().get();
+                return offsets.containsKey(tp0) && offsets.get(tp0) != null && offsets.get(tp0).offset() == 1 &&
+                       offsets.containsKey(tp1) && offsets.get(tp1) != null && offsets.get(tp1).offset() == 1;
+            }, 10000, "Both tp0 and tp1 should have committed offset 1 after rapid assign switching");
+        }
+    }
+
     private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {
         try (var producer = clusterInstance.producer(Map.of(
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
