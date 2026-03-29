@@ -1253,12 +1253,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     /**
      * Best-effort, non-blocking auto-commit used when assign() is called.
-     * Fires once without blocking; on a retriable error the timer is reset to
-     * rebalanceConfig.retryBackoffMs.
+     * Fires once without blocking. The auto-commit timer is not reset so the
+     * next periodic commit fires on its natural schedule.
      */
     public void maybeAutoCommitOnAssignment() {
         if (autoCommitEnabled) {
-            nextAutoCommitTimer.reset(autoCommitIntervalMs);
             autoCommitOffsetsAsync();
         }
     }
