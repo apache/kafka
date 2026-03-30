@@ -43,7 +43,6 @@ public class InMemoryRocksDBAccessor implements RocksDBStore.DBAccessor {
      */
     private static final Comparator<byte[]> BYTES_COMPARATOR = Arrays::compare;
 
-
     /**
      * Per-CF stores, keyed by {@link ColumnFamilyHandle} object identity.
      */
