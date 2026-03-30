@@ -131,7 +131,7 @@ abstract class AbstractColumnFamilyAccessorTest {
     }
 
     @Test
-    public void shouldWipeCommitedOffsetsOnEmptyCommit() throws RocksDBException {
+    public void shouldWipeCommittedOffsetsOnEmptyCommit() throws RocksDBException {
         dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
