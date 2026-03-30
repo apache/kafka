@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -58,6 +59,7 @@ public class MetadataBatchLoader {
     private final Time time;
     private final FaultHandler faultHandler;
     private final MetadataUpdater callback;
+    private final SupportedConfigChecker supportedConfigChecker;
 
     private MetadataImage image;
     private MetadataDelta delta;
@@ -74,12 +76,14 @@ public class MetadataBatchLoader {
         LogContext logContext,
         Time time,
         FaultHandler faultHandler,
-        MetadataUpdater callback
+        MetadataUpdater callback,
+        SupportedConfigChecker supportedConfigChecker
     ) {
         this.log = logContext.logger(MetadataBatchLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
         this.callback = callback;
+        this.supportedConfigChecker = supportedConfigChecker;
         this.resetToImage(MetadataImage.EMPTY);
         this.hasSeenRecord = false;
     }
@@ -101,7 +105,10 @@ public class MetadataBatchLoader {
     public final void resetToImage(MetadataImage image) {
         this.image = image;
         this.hasSeenRecord = !image.isEmpty();
-        this.delta = new MetadataDelta.Builder().setImage(image).build();
+        this.delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .setSupportedConfigChecker(supportedConfigChecker)
+            .build();
         this.transactionState = TransactionState.NO_TRANSACTION;
         this.lastOffset = image.provenance().lastContainedOffset();
         this.lastEpoch = image.provenance().lastContainedEpoch();
@@ -199,7 +206,10 @@ public class MetadataBatchLoader {
                 log.debug("handleCommit: publishing empty delta between {} and {} from {} batch(es) " +
                     "since a transaction was aborted", image.offset(), manifest.provenance().lastContainedOffset(),
                     manifest.numBatches());
-                applyDeltaAndUpdate(new MetadataDelta.Builder().setImage(image).build(), manifest);
+                applyDeltaAndUpdate(new MetadataDelta.Builder()
+                    .setImage(image)
+                    .setSupportedConfigChecker(supportedConfigChecker)
+                    .build(), manifest);
                 break;
             case ENDED_TRANSACTION:
             case NO_TRANSACTION:

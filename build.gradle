@@ -2591,6 +2591,7 @@ project(':shell') {
     implementation project(':core')
     implementation project(':metadata')
     implementation project(':raft')
+    implementation project(':server')
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJakartarsJsonProvider

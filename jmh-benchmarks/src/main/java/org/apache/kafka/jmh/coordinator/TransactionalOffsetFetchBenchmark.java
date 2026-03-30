@@ -82,7 +82,9 @@ public class TransactionalOffsetFetchBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         LogContext logContext = new LogContext();
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord()
             .setTopicId(Uuid.randomUuid())
             .setName(TOPIC_NAME));

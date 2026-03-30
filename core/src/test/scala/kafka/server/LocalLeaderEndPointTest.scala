@@ -74,7 +74,9 @@ class LocalLeaderEndPointTest extends Logging {
       alterPartitionManager = alterPartitionManager
     )
 
-    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -250,7 +252,9 @@ class LocalLeaderEndPointTest extends Logging {
   }
 
   private def bumpLeaderEpoch(): Unit = {
-    val delta = new MetadataDelta(image)
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new PartitionChangeRecord()
       .setTopicId(topicId)
       .setPartitionId(partition)

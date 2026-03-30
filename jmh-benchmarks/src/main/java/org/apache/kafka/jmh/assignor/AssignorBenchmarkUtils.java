@@ -139,7 +139,9 @@ public class AssignorBenchmarkUtils {
      *         subscription metadata.
      */
     public static TopicsImage createTopicsImage(Map<String, TopicMetadata> subscriptionMetadata) {
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
 
         for (Map.Entry<String, TopicMetadata> entry : subscriptionMetadata.entrySet()) {
             TopicMetadata topicMetadata = entry.getValue();

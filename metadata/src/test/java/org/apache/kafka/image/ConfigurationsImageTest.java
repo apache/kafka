@@ -22,6 +22,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -34,10 +35,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -83,7 +87,7 @@ public class ConfigurationsImageTest {
             setResourceName("2").setName("foo").setValue("bar"),
             CONFIG_RECORD.highestSupportedVersion()));
 
-        DELTA1 = new ConfigurationsDelta(IMAGE1);
+        DELTA1 = new ConfigurationsDelta(IMAGE1, SupportedConfigChecker.TRUE);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<ConfigResource, ConfigurationImage> map2 = new HashMap<>();
@@ -119,6 +123,43 @@ public class ConfigurationsImageTest {
         testToImage(IMAGE2);
     }
 
+    @Test
+    public void testConfigurationDeltaFiltering() {
+        Set<String> validConfigs = Set.of("foo", "bar");
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
+
+        Map<String, String> initialConfigs = Map.of("foo", "value1"); // valid
+        ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
+
+        ConfigurationDelta delta = new ConfigurationDelta(image, supportedConfigChecker);
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("bar").setValue("value2"));
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("qux").setValue("value3"));
+
+        ConfigurationImage result = delta.apply();
+
+        assertTrue(result.data().containsKey("foo"));
+        assertTrue(result.data().containsKey("bar"));
+        assertFalse(result.data().containsKey("qux"));
+    }
+
+    @Test
+    public void testConfigurationDeltaWithoutFiltering() {
+        Map<String, String> initialConfigs = Map.of("foo", "value1", "bar", "value2");
+        ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
+
+        ConfigurationDelta delta = new ConfigurationDelta(image, SupportedConfigChecker.TRUE);
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("baz").setValue("value3"));
+
+        ConfigurationImage result = delta.apply();
+
+        assertTrue(result.data().containsKey("foo"));
+        assertTrue(result.data().containsKey("bar"));
+        assertTrue(result.data().containsKey("baz"));
+    }
+
     private static void testToImage(ConfigurationsImage image) {
         testToImage(image, Optional.empty());
     }
@@ -131,7 +172,7 @@ public class ConfigurationsImageTest {
         // test from empty image stopping each of the various intermediate images along the way
         new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> ConfigurationsImage.EMPTY,
-            ConfigurationsDelta::new
+            img -> new ConfigurationsDelta(img, SupportedConfigChecker.TRUE)
         ).test(image, fromRecords);
     }
 

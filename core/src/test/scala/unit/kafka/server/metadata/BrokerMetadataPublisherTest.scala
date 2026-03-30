@@ -210,7 +210,9 @@ class BrokerMetadataPublisherTest {
     )
 
     val topicId = Uuid.randomUuid()
-    var delta = new MetadataDelta(MetadataImage.EMPTY)
+    var delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new TopicRecord()
       .setName(Topic.GROUP_METADATA_TOPIC_NAME)
       .setTopicId(topicId)
@@ -227,7 +229,9 @@ class BrokerMetadataPublisherTest {
     )
     val image = delta.apply(MetadataProvenance.EMPTY)
 
-    delta = new MetadataDelta(image)
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new RemoveTopicRecord()
       .setTopicId(topicId)
     )

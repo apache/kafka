@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.mutable.BoundedList;
@@ -77,6 +78,7 @@ public class ConfigurationControlManager {
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
     private final FeatureControlManager featureControl;
+    private final SupportedConfigChecker supportedConfigChecker;
 
     static class Builder {
         private LogContext logContext = null;
@@ -88,6 +90,7 @@ public class ConfigurationControlManager {
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -134,6 +137,11 @@ public class ConfigurationControlManager {
             return this;
         }
 
+        Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
+            return this;
+        }
+
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -152,7 +160,8 @@ public class ConfigurationControlManager {
                 validator,
                 staticConfig,
                 nodeId,
-                featureControl);
+                featureControl,
+                supportedConfigChecker);
         }
     }
 
@@ -164,7 +173,8 @@ public class ConfigurationControlManager {
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
             int nodeId,
-            FeatureControlManager featureControl
+            FeatureControlManager featureControl,
+            SupportedConfigChecker supportedConfigChecker
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -177,6 +187,7 @@ public class ConfigurationControlManager {
         this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
+        this.supportedConfigChecker = supportedConfigChecker;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -504,6 +515,13 @@ public class ConfigurationControlManager {
     public void replay(ConfigRecord record) {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
+
+        if (!supportedConfigChecker.isSupported(configResource.type(), record.name())) {
+            // We skip unsupported configs during replay. This can happen when the config was
+            // deprecated and removed, but old records still exist in the log.
+            log.info("Skipping unsupported config {} for resource {} during replay", record.name(), configResource);
+            return;
+        }
         TimelineHashMap<String, String> configs = configData.get(configResource);
         if (configs == null) {
             configs = new TimelineHashMap<>(snapshotRegistry, 0);

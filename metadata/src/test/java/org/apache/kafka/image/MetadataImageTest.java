@@ -140,7 +140,7 @@ public class MetadataImageTest {
         // test from empty image stopping each of the various intermediate images along the way
         new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> MetadataImage.EMPTY,
-            MetadataDelta::new
+            img -> new MetadataDelta.Builder().setImage(img).build()
         ) {
             @Override
             public MetadataImage createImageByApplyingDelta(MetadataDelta delta) {

@@ -25,10 +25,12 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -533,5 +535,70 @@ public class ConfigurationControlManagerTest {
         } else {
             assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
         }
+    }
+
+    private FeatureControlManager createFeatureControlManager() {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        featureControlManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        return featureControlManager;
+    }
+
+    @Test
+    public void testValidateAlterConfigWithInvalidExistingConfigs() {
+        Set<String> validConfigs = Set.of("abc", "def");
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
+
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setSupportedConfigChecker(supportedConfigChecker).
+            build();
+
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("abc").setValue("value1"));
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("invalid.config").setValue("should-be-filtered"));
+
+        Map<String, String> configs = manager.getConfigs(MYTOPIC);
+        assertTrue(configs.containsKey("abc"));
+        assertFalse(configs.containsKey("invalid.config"));
+
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(
+            MYTOPIC,
+            toMap(entry("def", entry(SET, "newValue"))),
+            false);
+
+        assertEquals(ApiError.NONE, result.response());
+    }
+
+    @Test
+    public void testReplayFiltersInvalidConfigs() {
+        Set<String> validConfigs = Set.of("abc", "def", "ghi");
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
+
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setSupportedConfigChecker(supportedConfigChecker).
+            build();
+
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("abc").setValue("value1"));
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("def").setValue("value2"));
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("invalid.config").setValue("should-be-filtered"));
+
+        Map<String, String> configs = manager.getConfigs(MYTOPIC);
+        assertEquals(2, configs.size());
+        assertTrue(configs.containsKey("abc"));
+        assertTrue(configs.containsKey("def"));
+        assertFalse(configs.containsKey("invalid.config"));
     }
 }

@@ -9767,7 +9767,9 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
     metadataCache = {
       val cache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      val delta = new MetadataDelta.Builder()
+        .setImage(MetadataImage.EMPTY)
+        .build()
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
         .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -9997,7 +9999,9 @@ class KafkaApisTest extends Logging {
     expectedResponse.groups.add(expectedDescribedGroup)
     metadataCache = {
       val cache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      val delta = new MetadataDelta.Builder()
+        .setImage(MetadataImage.EMPTY)
+        .build()
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
         .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())

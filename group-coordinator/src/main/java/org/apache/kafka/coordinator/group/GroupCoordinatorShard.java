@@ -741,7 +741,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     @Override
     public void onLoaded(MetadataImage newImage) {
-        MetadataDelta emptyDelta = new MetadataDelta(newImage);
+        MetadataDelta emptyDelta = new MetadataDelta.Builder()
+            .setImage(newImage)
+            .build();
         groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
