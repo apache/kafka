@@ -3152,7 +3152,12 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+        service.onNewMetadataImage(
+            image,
+            new MetadataDelta.Builder()
+                .setImage(image)
+                .build()
+        );
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-partition-deleted"),
@@ -3210,7 +3215,12 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+        service.onNewMetadataImage(
+            image,
+            new MetadataDelta.Builder()
+                .setImage(image)
+                .build()
+        );
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(

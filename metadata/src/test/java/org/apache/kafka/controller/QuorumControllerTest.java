@@ -97,6 +97,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.RecordTestUtils.ImageDeltaPair;
 import org.apache.kafka.metadata.RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
@@ -1651,7 +1652,7 @@ public class QuorumControllerTest {
             new ImageDeltaPair<>(() -> AclsImage.EMPTY, AclsDelta::new),
             new ImageDeltaPair<>(() -> ClientQuotasImage.EMPTY, ClientQuotasDelta::new),
             new ImageDeltaPair<>(() -> ClusterImage.EMPTY, ClusterDelta::new),
-            new ImageDeltaPair<>(() -> ConfigurationsImage.EMPTY, ConfigurationsDelta::new),
+            new ImageDeltaPair<>(() -> ConfigurationsImage.EMPTY, image -> new ConfigurationsDelta(image, SupportedConfigChecker.TRUE)),
             new ImageDeltaPair<>(() -> DelegationTokenImage.EMPTY, DelegationTokenDelta::new),
             new ImageDeltaPair<>(() -> FeaturesImage.EMPTY, FeaturesDelta::new),
             new ImageDeltaPair<>(() -> ProducerIdsImage.EMPTY, ProducerIdsDelta::new),

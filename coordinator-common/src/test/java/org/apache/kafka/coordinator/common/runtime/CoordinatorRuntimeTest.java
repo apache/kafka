@@ -1982,7 +1982,9 @@ public class CoordinatorRuntimeTest {
         verify(coordinator0).onLoaded(MetadataImage.EMPTY);
 
         // Publish a new image.
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         MetadataImage newImage = delta.apply(MetadataProvenance.EMPTY);
         runtime.onNewMetadataImage(newImage, delta);
 

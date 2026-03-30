@@ -815,7 +815,9 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(
             newMetadataImage,
-            new MetadataDelta(newMetadataImage)
+            new MetadataDelta.Builder()
+                .setImage(newMetadataImage)
+                .build()
         );
         // If a topic is updated, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -900,13 +902,17 @@ public class GroupMetadataManagerTest {
         ));
 
         // Remove foo topic from metadata image.
-        MetadataDelta delta = new MetadataDelta(metadataImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(metadataImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
         MetadataImage newMetadataImage = delta.apply(MetadataProvenance.EMPTY);
 
         context.groupMetadataManager.onNewMetadataImage(
             newMetadataImage,
-            new MetadataDelta(newMetadataImage)
+            new MetadataDelta.Builder()
+                .setImage(newMetadataImage)
+                .build()
         );
         // If a topic is removed, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -3401,7 +3407,9 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new MockPartitionAssignor("range")))
             .build();
 
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
         context.groupMetadataManager.onNewMetadataImage(image, delta);
@@ -3458,7 +3466,9 @@ public class GroupMetadataManagerTest {
         Uuid topicE = Uuid.randomUuid();
 
         // Create a first base image with topic a, b, c and d.
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord().setTopicId(topicA).setName("a"));
         delta.replay(new PartitionRecord().setTopicId(topicA).setPartitionId(0));
         delta.replay(new TopicRecord().setTopicId(topicB).setName("b"));
@@ -3470,7 +3480,9 @@ public class GroupMetadataManagerTest {
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
         // Create a delta which updates topic B, deletes topic D and creates topic E.
-        delta = new MetadataDelta(image);
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(2));
         delta.replay(new RemoveTopicRecord().setTopicId(topicD));
         delta.replay(new TopicRecord().setTopicId(topicE).setName("e"));
@@ -18535,7 +18547,9 @@ public class GroupMetadataManagerTest {
         Uuid topicE = Uuid.randomUuid();
 
         // Create a first base image with topic a, b, c and d.
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord().setTopicId(topicA).setName("a"));
         delta.replay(new PartitionRecord().setTopicId(topicA).setPartitionId(0));
         delta.replay(new TopicRecord().setTopicId(topicB).setName("b"));
@@ -18547,7 +18561,9 @@ public class GroupMetadataManagerTest {
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
         // Create a delta which updates topic B, deletes topic D and creates topic E.
-        delta = new MetadataDelta(image);
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(2));
         delta.replay(new RemoveTopicRecord().setTopicId(topicD));
         delta.replay(new TopicRecord().setTopicId(topicE).setName("e"));
@@ -20724,7 +20740,9 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(
             newImage,
-            new MetadataDelta(newImage)
+            new MetadataDelta.Builder()
+                .setImage(newImage)
+                .build()
         );
 
         // A member heartbeats.
@@ -21915,7 +21933,9 @@ public class GroupMetadataManagerTest {
             .addTopic(t2Uuid, t2Name, 2)
             .build();
 
-        MetadataDelta delta = new MetadataDelta(image);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         context.groupMetadataManager.onNewMetadataImage(image, delta);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
@@ -21982,7 +22002,9 @@ public class GroupMetadataManagerTest {
             .addTopic(t3Uuid, t3Name, 2)
             .build();
 
-        MetadataDelta delta = new MetadataDelta(image);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         context.groupMetadataManager.onNewMetadataImage(image, delta);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
@@ -23074,7 +23096,12 @@ public class GroupMetadataManagerTest {
             .addTopic(t3Id, t3Name, 3)
             .build();
 
-        context.groupMetadataManager.onNewMetadataImage(metadataImage, new MetadataDelta(metadataImage));
+        context.groupMetadataManager.onNewMetadataImage(
+            metadataImage,
+            new MetadataDelta.Builder()
+                .setImage(metadataImage)
+                .build()
+        );
 
         // Since t1 is initializing and t2 is initialized due to replay above.
         timeNow = timeNow + 2 * offsetWriteTimeout + 1;
@@ -23120,7 +23147,9 @@ public class GroupMetadataManagerTest {
             .addTopic(t2Id, t2Name, 3)
             .build();
 
-        MetadataDelta delta = new MetadataDelta(image);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         context.groupMetadataManager.onNewMetadataImage(image, delta);
 
         // Cleanup happens from initialzing state only.
@@ -23203,7 +23232,9 @@ public class GroupMetadataManagerTest {
             .addTopic(t5Id, t5Name, 3)
             .build();
 
-        MetadataDelta delta = new MetadataDelta(image);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         context.groupMetadataManager.onNewMetadataImage(image, delta);
 
         context.groupMetadataManager.replay(

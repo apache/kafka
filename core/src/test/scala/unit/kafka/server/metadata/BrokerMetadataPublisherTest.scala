@@ -214,7 +214,9 @@ class BrokerMetadataPublisherTest {
     )
 
     val topicId = Uuid.randomUuid()
-    var delta = new MetadataDelta(MetadataImage.EMPTY)
+    var delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new TopicRecord()
       .setName(Topic.GROUP_METADATA_TOPIC_NAME)
       .setTopicId(topicId)
@@ -231,7 +233,9 @@ class BrokerMetadataPublisherTest {
     )
     val image = delta.apply(MetadataProvenance.EMPTY)
 
-    delta = new MetadataDelta(image)
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new RemoveTopicRecord()
       .setTopicId(topicId)
     )
@@ -339,7 +343,9 @@ class BrokerMetadataPublisherTest {
     )
 
     // Share version 1 is getting passed to features delta.
-    val delta = new MetadataDelta(image)
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new FeatureLevelRecord().setName(ShareVersion.FEATURE_NAME).setFeatureLevel(1))
 
     metadataPublisher.onMetadataUpdate(
