@@ -113,6 +113,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -618,6 +619,72 @@ public class KafkaConsumerTest {
 
         assertEquals("Failed to construct kafka consumer", e.getMessage());
         assertEquals("Class an.invalid.class cannot be found", e.getCause().getMessage());
+    }
+
+    @Test
+    public void testClassicProtocolLogsRecommendationToTryConsumerProtocol() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
+            consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+            assertTrue(
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    "Log message about consumer protocol not showing as expected when starting a consumer using the classic protocol"
+            );
+        }
+    }
+
+    @Test
+    public void testConsumerProtocolDoesNotLogRecommendation() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
+            consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+            assertFalse(
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    "Should not log recommendation when already using consumer protocol"
+            );
+        }
+    }
+
+    @Test
+    public void testDefaultProtocolLogsRecommendationToTryConsumerProtocol() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
+            consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+            assertTrue(
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    "Log message about consumer protocol not showing as expected when starting a consumer using the default (classic) protocol"
+            );
+        }
+    }
+
+    @Test
+    public void testNoGroupIdDoesNotLogGroupProtocolMessage() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
+            consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+            assertFalse(
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    "Should not log recommendation when no group.id is set"
+            );
+        }
     }
 
     @ParameterizedTest
