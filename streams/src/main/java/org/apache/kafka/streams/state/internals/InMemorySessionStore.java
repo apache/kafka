@@ -67,10 +67,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
     private final long retentionPeriod;
 
     private static final String INVALID_RANGE_WARN_MSG =
-            "Returning empty iterator for fetch with invalid key range: from > to. " +
-                    "This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers";
+        "Returning empty iterator for fetch with invalid key range: from > to. " +
+        "This may be due to range arguments set in the wrong order, " +
+        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+        "Note that the built-in numerical serdes do not follow this for negative numbers";
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap = new ConcurrentSkipListMap<>();
     private final Set<InMemorySessionStoreIterator> openIterators  = ConcurrentHashMap.newKeySet();
@@ -128,19 +128,19 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                     false
             );
             stateStoreContext.register(
-                    root,
-                    (RecordBatchingStateRestoreCallback) records -> {
-                        synchronized (position) {
-                            for (final ConsumerRecord<byte[], byte[]> record : records) {
-                                put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
-                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                        record,
-                                        consistencyEnabled,
-                                        position
-                                );
-                            }
+                root,
+                (RecordBatchingStateRestoreCallback) records -> {
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
                         }
                     }
+                }
             );
         }
         open = true;
@@ -230,7 +230,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         removeExpiredSegments();
 
         final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimSubMap
-                = endTimeMap.subMap(earliestSessionEndTime, true, latestSessionEndTime, true);
+            = endTimeMap.subMap(earliestSessionEndTime, true, latestSessionEndTime, true);
 
         return registerNewIterator(null, null, Long.MAX_VALUE, endTimSubMap.entrySet().iterator(), true);
     }
@@ -244,10 +244,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         removeExpiredSegments();
 
         return registerNewIterator(key,
-                key,
-                latestSessionStartTime,
-                endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator(),
-                true);
+                                   key,
+                                   latestSessionStartTime,
+                                   endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator(),
+                                   true);
     }
 
     @Override
@@ -259,11 +259,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         removeExpiredSegments();
 
         return registerNewIterator(
-                key,
-                key,
-                latestSessionStartTime,
-                endTimeMap.tailMap(earliestSessionEndTime, true).descendingMap().entrySet().iterator(),
-                false
+            key,
+            key,
+            latestSessionStartTime,
+            endTimeMap.tailMap(earliestSessionEndTime, true).descendingMap().entrySet().iterator(),
+            false
         );
     }
 
@@ -280,10 +280,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         }
 
         return registerNewIterator(keyFrom,
-                keyTo,
-                latestSessionStartTime,
-                endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator(),
-                true);
+                                   keyTo,
+                                   latestSessionStartTime,
+                                   endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator(),
+                                   true);
     }
 
     @Override
@@ -299,11 +299,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         }
 
         return registerNewIterator(
-                keyFrom,
-                keyTo,
-                latestSessionStartTime,
-                endTimeMap.tailMap(earliestSessionEndTime, true).descendingMap().entrySet().iterator(),
-                false
+            keyFrom,
+            keyTo,
+            latestSessionStartTime,
+            endTimeMap.tailMap(earliestSessionEndTime, true).descendingMap().entrySet().iterator(),
+            false
         );
     }
 
@@ -339,7 +339,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         removeExpiredSegments();
 
         return registerNewIterator(
-                keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), false);
+            keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), false);
     }
 
     @Override
@@ -358,12 +358,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                     final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                config,
-                this,
-                position,
-                context
+            query,
+            positionBound,
+            config,
+            this,
+            position,
+            context
         );
     }
 
@@ -388,9 +388,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
     long numEntries() {
         return endTimeMap.values().stream()
-                .flatMap(keyMap -> keyMap.values().stream())
-                .mapToLong(Map::size)
-                .sum();
+            .flatMap(keyMap -> keyMap.values().stream())
+            .mapToLong(Map::size)
+            .sum();
     }
 
     private void removeExpiredSegments() {
@@ -409,14 +409,14 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                                              final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator,
                                                              final boolean forward) {
         final InMemorySessionStoreIterator iterator =
-                new InMemorySessionStoreIterator(
-                        keyFrom,
-                        keyTo,
-                        latestSessionStartTime,
-                        endTimeIterator,
-                        openIterators::remove,
-                        forward
-                );
+            new InMemorySessionStoreIterator(
+                keyFrom,
+                keyTo,
+                latestSessionStartTime,
+                endTimeIterator,
+                openIterators::remove,
+                forward
+            );
         openIterators.add(iterator);
         return iterator;
     }
@@ -567,13 +567,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                 } else {
                     if (forward) {
                         recordIterator = nextKeyEntry.getValue()
-                                .headMap(latestSessionStartTime, true)
-                                .descendingMap()
-                                .entrySet().iterator();
+                                                     .headMap(latestSessionStartTime, true)
+                                                     .descendingMap()
+                                                     .entrySet().iterator();
                     } else {
                         recordIterator = nextKeyEntry.getValue()
-                                .headMap(latestSessionStartTime, true)
-                                .entrySet().iterator();
+                                                     .headMap(latestSessionStartTime, true)
+                                                     .entrySet().iterator();
                     }
                 }
 
