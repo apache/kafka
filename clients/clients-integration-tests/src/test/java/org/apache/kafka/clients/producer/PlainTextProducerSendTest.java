@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -75,7 +76,7 @@ public class PlainTextProducerSendTest {
     @ClusterTest
     public void testSendOffset() throws InterruptedException, ExecutionException {
         int partition = 0;
-        try (Producer<Object, Object> producer = clusterInstance.producer()) {
+        try (var producer = clusterInstance.producer()) {
             clusterInstance.createTopic(topic, 1, (short) 2);
             List<ProducerRecord<Object, Object>> records = List.of(
                 new ProducerRecord<>(topic, partition, "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8)),
@@ -105,22 +106,22 @@ public class PlainTextProducerSendTest {
         }
     }
 
-    private void sendAndVerifyTimestamp(Producer<byte[], byte[]> producer, TimestampType timestampType) throws InterruptedException, ExecutionException {
+    private void sendAndVerifyTimestamp(Producer<Object, Object> producer, TimestampType timestampType) throws InterruptedException, ExecutionException {
         int partition = 0;
         long baseTimestamp = 123456;
         long startTime = System.currentTimeMillis();
         Map<String, String> properties = Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, timestampType.name);
         clusterInstance.createTopic(topic, 1, (short) 2, properties);
-        final long[] callbackOffset = {0L};
-        List<ProducerRecord<byte[], byte[]>> records = new ArrayList<>();
+        var callbackOffset = new AtomicLong(0L);
+        List<ProducerRecord<Object, Object>> records = new ArrayList<>();
         List<Future<RecordMetadata>> futures = new ArrayList<>();
         for (int i = 0; i < numRecords; i++) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, partition, baseTimestamp + i,
+            ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, partition, baseTimestamp + i,
                 String.format("key%d", i).getBytes(StandardCharsets.UTF_8), String.format("value%d", i).getBytes(StandardCharsets.UTF_8));
             records.add(record);
             futures.add(producer.send(record, (metadata, exception) -> {
-                assertEquals(callbackOffset[0], metadata.offset());
-                callbackOffset[0]++;
+                assertEquals(callbackOffset.get(), metadata.offset());
+                callbackOffset.incrementAndGet();
             }));
         }
         producer.flush();
@@ -139,7 +140,7 @@ public class PlainTextProducerSendTest {
 
     @ClusterTest
     public void testSendCompressedMessageWithCreateTime() throws ExecutionException, InterruptedException {
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
+        try (var producer = clusterInstance.producer(Map.of(
             ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip",
             ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
             ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
@@ -150,7 +151,7 @@ public class PlainTextProducerSendTest {
 
     @ClusterTest
     public void testSendNonCompressedMessageWithCreateTime() throws ExecutionException, InterruptedException {
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
+        try (var producer = clusterInstance.producer(Map.of(
             ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
             ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
         ))) {
@@ -160,7 +161,7 @@ public class PlainTextProducerSendTest {
 
     @ClusterTest
     public void testClose() throws InterruptedException, ExecutionException {
-        try (Producer<Object, Object> producer = clusterInstance.producer()) {
+        try (var producer = clusterInstance.producer()) {
             clusterInstance.createTopic(topic, 1, (short) 2);
             ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, null, "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8));
             for (int i = 0; i < numRecords; i++) {
@@ -174,8 +175,8 @@ public class PlainTextProducerSendTest {
     }
 
     @ClusterTest
-    public void testSendToPartition() throws InterruptedException, ExecutionException {
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(); Consumer<Object, Object> consumer = clusterInstance.consumer()) {
+    public void testSendToPartition() throws InterruptedException {
+        try (var producer = clusterInstance.producer(); Consumer<Object, Object> consumer = clusterInstance.consumer()) {
             clusterInstance.createTopic(topic, 2, (short) 2);
             int partition = 1;
             ClientsTestUtils.sendRecordsAndVerify(producer, topic, partition, numRecords, 0);
@@ -198,7 +199,7 @@ public class PlainTextProducerSendTest {
     public void testSendToPartitionWithFollowerShutdownShouldNotTimeout() throws InterruptedException, ExecutionException {
         int follower = 1;
 
-        try (Producer<Object, Object> producer = clusterInstance.producer(); Consumer<Object, Object> consumer = clusterInstance.consumer()) {
+        try (var producer = clusterInstance.producer(); Consumer<Object, Object> consumer = clusterInstance.consumer()) {
             clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(0, follower)));
             int partition = 0;
             long now = System.currentTimeMillis();
@@ -231,7 +232,7 @@ public class PlainTextProducerSendTest {
 
     @ClusterTest
     public void testSendBeforeAndAfterPartitionExpansion() throws InterruptedException, ExecutionException {
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000))) {
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000))) {
             clusterInstance.createTopic(topic, 1, (short) 2);
             int partition0 = 0;
             ClientsTestUtils.sendRecordsAndVerify(producer, topic, partition0, numRecords, 0);
@@ -246,7 +247,7 @@ public class PlainTextProducerSendTest {
 
     @ClusterTest
     public void testFlush() throws InterruptedException {
-        try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(
+        try (var producer = clusterInstance.producer(Map.of(
             ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
         ))) {
             clusterInstance.createTopic(topic, 2, (short) 2);
@@ -269,7 +270,7 @@ public class PlainTextProducerSendTest {
         int partition = 0;
         ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, partition, null, "value".getBytes(StandardCharsets.UTF_8));
         for (int i = 0; i < 50; i++) {
-            try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE))) {
+            try (var producer = clusterInstance.producer(Map.of(ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE))) {
                 List<Future<RecordMetadata>> futures = new ArrayList<>();
                 for (int j = 0; j < numRecords; j++) {
                     futures.add(producer.send(record));
@@ -295,7 +296,7 @@ public class PlainTextProducerSendTest {
             ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, partition, null, "value".getBytes(StandardCharsets.UTF_8));
             for (int i = 0; i < 50; i++) {
                 final boolean sendRecords = i == 0;
-                try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(
+                try (var producer = clusterInstance.producer(Map.of(
                     ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
                 ))) {
                     // send message to partition 0
@@ -332,7 +333,7 @@ public class PlainTextProducerSendTest {
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer",
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer"
         );
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(props)) {
+        try (var producer = clusterInstance.producer(props)) {
             assertThrows(SerializationException.class, () -> producer.send(new ProducerRecord<>(topic, 0, "key".getBytes(), "value".getBytes())));
         }
     }
@@ -345,7 +346,7 @@ public class PlainTextProducerSendTest {
         );
         int partition = 0;
         clusterInstance.createTopic(topic, 2, (short) 2);
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(props)) {
+        try (var producer = clusterInstance.producer(props)) {
             List<Future<RecordMetadata>> futures = new ArrayList<>();
             for (int i = 0; i < numRecords; i++) {
                 if (nullKey) {
@@ -386,7 +387,7 @@ public class PlainTextProducerSendTest {
             ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
             ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
         );
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(props)) {
+        try (var producer = clusterInstance.producer(props)) {
             sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME);
         }
     }
@@ -397,16 +398,15 @@ public class PlainTextProducerSendTest {
             ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
             ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
         );
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(props)) {
+        try (var producer = clusterInstance.producer(props)) {
             sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME);
         }
     }
 
     @ClusterTest
     public void testAutoCreateTopic() throws ExecutionException, InterruptedException {
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(); Admin admin = clusterInstance.admin()) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes());
-            assertEquals(0, producer.send(record).get().offset());
+        try (var producer = clusterInstance.producer(); Admin admin = clusterInstance.admin()) {
+            assertEquals(0, producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes())).get().offset());
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> infos = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic).partitions();
                 return infos.stream().anyMatch(info -> info.partition() == 0 && !info.leader().isEmpty());
@@ -421,7 +421,7 @@ public class PlainTextProducerSendTest {
         }
     )
     public void testSendTimeoutErrorMessageWhenTopicDoesNotExist() {
-        try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500))) {
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500))) {
             Exception e = TestUtils.assertFutureThrows(TimeoutException.class, producer.send(new ProducerRecord<>(topic, null, "key".getBytes(), "value".getBytes())));
             assertEquals("Topic topic not present in metadata after 500 ms.", e.getMessage());
         }
@@ -429,7 +429,7 @@ public class PlainTextProducerSendTest {
 
     @ClusterTest
     public void testSendTimeoutErrorWhenPartitionDoesNotExist() throws ExecutionException, InterruptedException {
-        try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500))) {
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500))) {
             assertEquals(0, producer.send(new ProducerRecord<>(topic, null, "key".getBytes(), "value".getBytes())).get().offset());
             Exception e = TestUtils.assertFutureThrows(TimeoutException.class, producer.send(new ProducerRecord<>(topic, 10, "key".getBytes(), "value".getBytes())));
             assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", e.getMessage());
@@ -442,7 +442,7 @@ public class PlainTextProducerSendTest {
         }
     )
     public void testPartitionsForTimeoutErrorWhenTopicDoesNotExist() {
-        try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500))) {
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500))) {
             Exception e = assertThrows(TimeoutException.class, () -> producer.partitionsFor("unexisting-topic"));
             assertEquals("Topic unexisting-topic not present in metadata after 500 ms.", e.getMessage());
         }
@@ -464,10 +464,10 @@ public class PlainTextProducerSendTest {
             for (Map.Entry<String, Long> entry: config.entrySet()) {
                 String timestampTopic = String.format("topic-%s", entry.getKey());
                 clusterInstance.createTopic(timestampTopic, 1, (short) 2, Map.of(entry.getKey(), String.valueOf(oneMinuteInMs)));
-                try (Producer<Object, Object> producer = clusterInstance.producer()) {
+                try (var producer = clusterInstance.producer()) {
                     TestUtils.assertFutureThrows(InvalidTimestampException.class, producer.send(new ProducerRecord<>(timestampTopic, 0, entry.getValue(), "key".getBytes(), "value".getBytes())));
                 }
-                try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+                try (var producer = clusterInstance.producer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
                     TestUtils.assertFutureThrows(InvalidTimestampException.class, producer.send(new ProducerRecord<>(timestampTopic, 0, entry.getValue(), "key".getBytes(), "value".getBytes())));
                 }
             }
@@ -480,10 +480,10 @@ public class PlainTextProducerSendTest {
             for (Map.Entry<String, Long> entry: config.entrySet()) {
                 String timestampTopic = String.format("topic-%s", entry.getKey());
                 clusterInstance.createTopic(timestampTopic, 1, (short) 2, Map.of(entry.getKey(), String.valueOf(entry.getValue())));
-                try (Producer<Object, Object> producer = clusterInstance.producer()) {
+                try (var producer = clusterInstance.producer()) {
                     assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(timestampTopic, 0, entry.getValue(), "key".getBytes(), "value".getBytes())));
                 }
-                try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+                try (var producer = clusterInstance.producer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
                     assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(timestampTopic, 0, entry.getValue(), "key".getBytes(), "value".getBytes())));
                 }
             }
@@ -497,10 +497,10 @@ public class PlainTextProducerSendTest {
             for (Map.Entry<String, Long> entry: config.entrySet()) {
                 String timestampTopic = String.format("topic-%s", entry.getKey());
                 clusterInstance.createTopic(timestampTopic, 1, (short) 2, Map.of(entry.getKey(), String.valueOf(tenMinutesInMs)));
-                try (Producer<Object, Object> producer = clusterInstance.producer()) {
+                try (var producer = clusterInstance.producer()) {
                     assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(timestampTopic, 0, entry.getValue(), "key".getBytes(), "value".getBytes())));
                 }
-                try (Producer<Object, Object> producer = clusterInstance.producer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+                try (var producer = clusterInstance.producer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
                     assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(timestampTopic, 0, entry.getValue(), "key".getBytes(), "value".getBytes())));
                 }
             }
@@ -512,7 +512,7 @@ public class PlainTextProducerSendTest {
     // or buffer is full.
     @ClusterTest
     public void testNonBlockingProducer() throws InterruptedException, ExecutionException {
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
+        try (var producer = clusterInstance.producer(Map.of(
             ProducerConfig.MAX_BLOCK_MS_CONFIG, 0,
             ProducerConfig.LINGER_MS_CONFIG, 15000,
             ProducerConfig.BATCH_SIZE_CONFIG, 1100,
