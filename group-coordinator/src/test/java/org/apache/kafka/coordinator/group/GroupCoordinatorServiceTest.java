@@ -3163,7 +3163,12 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(new MetadataDelta(image)));
+        service.onNewMetadataImage(
+            new KRaftCoordinatorMetadataImage(image),
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta.Builder()
+                .setImage(image)
+                .build())
+        );
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-partition-deleted"),
@@ -3221,7 +3226,12 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(new MetadataDelta(image)));
+        service.onNewMetadataImage(
+            new KRaftCoordinatorMetadataImage(image),
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta.Builder()
+                .setImage(image)
+                .build())
+        );
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(

@@ -96,7 +96,9 @@ public class RegexResolutionBenchmark {
     public void setup() {
         Random random = new Random();
 
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         for (int i = 0; i < topicCount; i++) {
             String topicName =
                 WORDS.get(random.nextInt(WORDS.size())) + "_" +

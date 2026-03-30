@@ -28,6 +28,7 @@ import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
@@ -81,6 +82,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private FaultHandler faultHandler = FaultHandlerException::new;
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -112,6 +114,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
+        public Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
+            return this;
+        }
+
         public MetadataLoader build() {
             if (logContext == null) {
                 logContext = new LogContext("[MetadataLoader id=" + nodeId + "] ");
@@ -132,7 +139,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 threadNamePrefix,
                 faultHandler,
                 metrics,
-                highWaterMarkAccessor);
+                highWaterMarkAccessor,
+                supportedConfigChecker);
         }
     }
 
@@ -196,19 +204,26 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      */
     private final KafkaEventQueue eventQueue;
 
+    /**
+     * Config checker for filtering unsupported configurations.
+     */
+    private final SupportedConfigChecker supportedConfigChecker;
+
     private MetadataLoader(
         Time time,
         LogContext logContext,
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
-        Supplier<OptionalLong> highWaterMarkAccessor
+        Supplier<OptionalLong> highWaterMarkAccessor,
+        SupportedConfigChecker supportedConfigChecker
     ) {
         this.log = logContext.logger(MetadataLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
         this.metrics = metrics;
         this.highWaterMarkAccessor = highWaterMarkAccessor;
+        this.supportedConfigChecker = supportedConfigChecker;
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
@@ -216,7 +231,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             logContext,
             time,
             faultHandler,
-            this::maybePublishMetadata);
+            this::maybePublishMetadata,
+            supportedConfigChecker);
         this.eventQueue = new KafkaEventQueue(
             time,
             logContext,
@@ -296,6 +312,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         // haven't seen anything previously.
         MetadataDelta delta = new MetadataDelta.Builder().
                 setImage(MetadataImage.EMPTY).
+                setSupportedConfigChecker(supportedConfigChecker).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
@@ -406,6 +423,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     snapshotName, numLoaded);
                 MetadataDelta delta = new MetadataDelta.Builder().
                     setImage(image).
+                    setSupportedConfigChecker(supportedConfigChecker).
                     build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
                 log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +

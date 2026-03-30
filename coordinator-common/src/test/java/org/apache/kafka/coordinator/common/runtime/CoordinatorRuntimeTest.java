@@ -2107,7 +2107,11 @@ public class CoordinatorRuntimeTest {
         verify(coordinator0).onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // Publish a new image.
-        CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY));
+        CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(
+            new MetadataDelta.Builder()
+                .setImage(MetadataImage.EMPTY)
+                .build()
+        );
         CoordinatorMetadataImage newImage = CoordinatorMetadataImage.EMPTY;
         runtime.onNewMetadataImage(newImage, delta);
 

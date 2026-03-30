@@ -18,8 +18,10 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -28,6 +30,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -40,6 +43,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.Properties;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -148,7 +152,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testAlignedTransactionBatches"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -184,7 +189,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testSingletonBeginAndEnd"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // All in one commit
@@ -233,7 +239,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         Batch<ApiMessageAndVersion> batch1 = Batch.data(
@@ -263,7 +270,8 @@ public class MetadataBatchLoaderTest {
                 new LogContext(),
                 new MockTime(),
                 faultHandler,
-                updater
+                updater,
+                SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -296,7 +304,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -333,7 +342,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -417,7 +427,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testOneTransactionInMultipleBatches"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -447,6 +458,48 @@ public class MetadataBatchLoaderTest {
         } else {
             assertNotNull(updater.latestImage.topics().getTopic("bar"));
         }
+    }
+
+    @Test
+    public void testUnsupportedConfigFilteredInBatch() {
+        SupportedConfigChecker checker = (type, name) ->
+            !(type == ConfigResource.Type.TOPIC && name.equals("unsupported.config"));
+
+        MockMetadataUpdater updater = new MockMetadataUpdater();
+        MetadataBatchLoader batchLoader = new MetadataBatchLoader(
+            new LogContext(),
+            new MockTime(),
+            new MockFaultHandler("testUnsupportedConfigFilteredInBatch"),
+            updater,
+            checker
+        );
+
+        List<ApiMessageAndVersion> records = List.of(
+            new ApiMessageAndVersion(new TopicRecord()
+                .setName("foo")
+                .setTopicId(TOPIC_FOO), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id())
+                .setResourceName("foo")
+                .setName("unsupported.config")
+                .setValue("some-value"), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id())
+                .setResourceName("foo")
+                .setName("retention.ms")
+                .setValue("1000"), (short) 0)
+        );
+
+        Batch<ApiMessageAndVersion> batch = Batch.data(10, 42, 0, 100, records);
+        batchLoader.resetToImage(MetadataImage.EMPTY);
+        batchLoader.loadBatch(batch, LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
+
+        assertEquals(1, updater.updates);
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, "foo");
+        Properties props = updater.latestImage.configs().configProperties(resource);
+        assertFalse(props.containsKey("unsupported.config"));
+        assertEquals("1000", props.getProperty("retention.ms"));
     }
 
     @Test

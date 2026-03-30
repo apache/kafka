@@ -136,7 +136,9 @@ public class KRaftMetadataRequestBenchmark {
     }
 
     private void initializeMetadataCache() {
-        MetadataDelta buildupMetadataDelta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta buildupMetadataDelta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         IntStream.range(0, 5).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
             endpoints.addAll(endpoints(brokerId));

@@ -38,7 +38,9 @@ class DefaultApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
   private val metadataCache = {
     val cache = new KRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
-    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.latestProduction().featureLevel())
