@@ -189,7 +189,7 @@ public class QuorumControllerTest {
                     Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel()))).
                 setBrokerId(0).
                 setLogDirs(List.of(Uuid.fromString("iiaQjkRPQcuMULNII0MUeA"))).
-                setClusterId(clientEnv.clusterId())).get();
+                setClusterId(clientEnv.clusterId().getOrThrow())).get();
             testConfigurationOperations(controlEnv.activeController());
 
             testToImages(clientEnv.allRecords());
@@ -230,7 +230,7 @@ public class QuorumControllerTest {
                         Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel()))).
                     setBrokerId(0).
                     setLogDirs(List.of(Uuid.fromString("sTbzRAMnTpahIyIPNjiLhw"))).
-                    setClusterId(clientEnv.clusterId())).get();
+                    setClusterId(clientEnv.clusterId().getOrThrow())).get();
             testDelayedConfigurationOperations(clientEnv, controlEnv.activeController());
 
             testToImages(clientEnv.allRecords());

@@ -59,6 +59,7 @@ import org.apache.kafka.server.{ApiVersionManager, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 import org.apache.kafka.server.quota.ControllerMutationQuota
+import org.apache.kafka.server.util.DeferredValue
 
 import scala.jdk.CollectionConverters._
 
@@ -74,7 +75,7 @@ class ControllerApis(
   val controller: Controller,
   val raftManager: RaftManager[ApiMessageAndVersion],
   val config: KafkaConfig,
-  val clusterId: String,
+  val clusterId: DeferredValue[String],
   val registrationsPublisher: ControllerRegistrationsPublisher,
   val apiVersionManager: ApiVersionManager,
   val metadataCache: KRaftMetadataCache
@@ -1068,7 +1069,7 @@ class ControllerApis(
     val response = authHelper.computeDescribeClusterResponse(
       request,
       EndpointType.CONTROLLER,
-      clusterId,
+      clusterId.getNow,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
       () => raftManager.client.leaderAndEpoch.leaderId().orElse(-1)
     )

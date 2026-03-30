@@ -1851,7 +1851,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.deliverRequest(
             context.updateVoterRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 follower,
                 epoch - 1,
                 Feature.KRAFT_VERSION.supportedVersionRange(),
@@ -1884,7 +1884,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.deliverRequest(
             context.updateVoterRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 follower,
                 epoch + 1,
                 Feature.KRAFT_VERSION.supportedVersionRange(),

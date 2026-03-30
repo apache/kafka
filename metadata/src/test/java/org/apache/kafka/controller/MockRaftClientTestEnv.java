@@ -26,6 +26,7 @@ import org.apache.kafka.controller.MockRaftClient.SharedLogData;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 
@@ -45,7 +46,7 @@ public class MockRaftClientTestEnv implements AutoCloseable {
     private static final Logger log =
         LoggerFactory.getLogger(MockRaftClientTestEnv.class);
 
-    private final String clusterId;
+    private final DeferredValue<String> clusterId;
 
     /**
      * The first error we encountered during this test, or the empty string if we have
@@ -128,7 +129,7 @@ public class MockRaftClientTestEnv implements AutoCloseable {
         Consumer<SharedLogData> sharedLogDataInitializer,
         KRaftVersion lastKRaftVersion
     ) {
-        clusterId = Uuid.randomUuid().toString();
+        clusterId = DeferredValue.completed(Uuid.randomUuid().toString());
         dir = TestUtils.tempDirectory();
         shared = new SharedLogData(snapshotReader);
         sharedLogDataInitializer.accept(shared);
@@ -171,7 +172,7 @@ public class MockRaftClientTestEnv implements AutoCloseable {
         shared.append(new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
     }
 
-    public String clusterId() {
+    public DeferredValue<String> clusterId() {
         return clusterId;
     }
 
