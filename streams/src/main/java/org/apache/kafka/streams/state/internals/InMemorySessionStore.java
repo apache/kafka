@@ -112,9 +112,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             this.context = (InternalProcessorContext<?, ?>) stateStoreContext;
             final StreamsMetricsImpl metrics = this.context.metrics();
             expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                    threadId,
-                    taskName,
-                    metrics
+                threadId,
+                taskName,
+                metrics
             );
         } else {
             this.context = null;
@@ -123,9 +123,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                    stateStoreContext.appConfigs(),
-                    IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                    false
+                stateStoreContext.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
             );
             stateStoreContext.register(
                 root,

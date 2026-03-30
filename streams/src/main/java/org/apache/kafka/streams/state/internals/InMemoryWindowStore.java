@@ -114,35 +114,35 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         final String threadId = Thread.currentThread().getName();
         final String taskName = stateStoreContext.taskId().toString();
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                threadId,
-                taskName,
-                metrics
+            threadId,
+            taskName,
+            metrics
         );
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                    stateStoreContext.appConfigs(),
-                    IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                    false
+                stateStoreContext.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
             );
             stateStoreContext.register(
-                    root,
-                    (RecordBatchingStateRestoreCallback) records -> {
-                        synchronized (position) {
-                            for (final ConsumerRecord<byte[], byte[]> record : records) {
-                                put(
-                                        Bytes.wrap(extractStoreKeyBytes(record.key())),
-                                        record.value(),
-                                        extractStoreTimestamp(record.key())
-                                );
-                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                        record,
-                                        consistencyEnabled,
-                                        position
-                                );
-                            }
+                root,
+                (RecordBatchingStateRestoreCallback) records -> {
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(
+                                Bytes.wrap(extractStoreKeyBytes(record.key())),
+                                record.value(),
+                                extractStoreTimestamp(record.key())
+                            );
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
                         }
                     }
+                }
             );
         }
         open = true;
@@ -226,17 +226,17 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (forward) {
             return registerNewWindowStoreIterator(
-                    key,
-                    segmentMap.subMap(minTime, true, timeTo, true)
-                            .entrySet().iterator(),
-                    true
+                key,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .entrySet().iterator(),
+                true
             );
         } else {
             return registerNewWindowStoreIterator(
-                    key,
-                    segmentMap.subMap(minTime, true, timeTo, true)
-                            .descendingMap().entrySet().iterator(),
-                    false
+                key,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator(),
+                false
             );
         }
     }
@@ -266,9 +266,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (from != null && to != null && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                    "This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
@@ -281,19 +281,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (forward) {
             return registerNewWindowedKeyValueIterator(
-                    from,
-                    to,
-                    segmentMap.subMap(minTime, true, timeTo, true)
-                            .entrySet().iterator(),
-                    true
+                from,
+                to,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .entrySet().iterator(),
+                true
             );
         } else {
             return registerNewWindowedKeyValueIterator(
-                    from,
-                    to,
-                    segmentMap.subMap(minTime, true, timeTo, true)
-                            .descendingMap().entrySet().iterator(),
-                    false
+                from,
+                to,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator(),
+                false
             );
         }
     }
@@ -320,19 +320,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (forward) {
             return registerNewWindowedKeyValueIterator(
-                    null,
-                    null,
-                    segmentMap.subMap(minTime, true, timeTo, true)
-                            .entrySet().iterator(),
-                    true
+                null,
+                null,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .entrySet().iterator(),
+                true
             );
         } else {
             return registerNewWindowedKeyValueIterator(
-                    null,
-                    null,
-                    segmentMap.subMap(minTime, true, timeTo, true)
-                            .descendingMap().entrySet().iterator(),
-                    false
+                null,
+                null,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator(),
+                false
             );
         }
     }
@@ -344,10 +344,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         final long minTime = observedStreamTime - retentionPeriod;
 
         return registerNewWindowedKeyValueIterator(
-                null,
-                null,
-                segmentMap.tailMap(minTime, false).entrySet().iterator(),
-                true
+            null,
+            null,
+            segmentMap.tailMap(minTime, false).entrySet().iterator(),
+            true
         );
     }
 
@@ -358,10 +358,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         final long minTime = observedStreamTime - retentionPeriod;
 
         return registerNewWindowedKeyValueIterator(
-                null,
-                null,
-                segmentMap.tailMap(minTime, false).descendingMap().entrySet().iterator(),
-                false
+            null,
+            null,
+            segmentMap.tailMap(minTime, false).descendingMap().entrySet().iterator(),
+            false
         );
     }
 
@@ -381,12 +381,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                                     final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                config,
-                this,
-                position,
-                internalProcessorContext
+            query,
+            positionBound,
+            config,
+            this,
+            position,
+            internalProcessorContext
         );
     }
 
@@ -410,8 +410,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
     long numEntries() {
         return segmentMap.values().stream()
-                .mapToLong(Map::size)
-                .sum();
+            .mapToLong(Map::size)
+            .sum();
     }
 
     private void removeExpiredSegments() {
@@ -449,7 +449,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         final Bytes keyTo = retainDuplicates ? wrapForDups(key, Integer.MAX_VALUE) : key;
 
         final WrappedInMemoryWindowStoreIterator iterator =
-                new WrappedInMemoryWindowStoreIterator(keyFrom, keyTo, segmentIterator, openIterators::remove, retainDuplicates, forward);
+            new WrappedInMemoryWindowStoreIterator(keyFrom, keyTo, segmentIterator, openIterators::remove, retainDuplicates, forward);
 
         openIterators.add(iterator);
         return iterator;
@@ -463,14 +463,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         final Bytes to = (retainDuplicates && keyTo != null) ? wrapForDups(keyTo, Integer.MAX_VALUE) : keyTo;
 
         final WrappedWindowedKeyValueIterator iterator =
-                new WrappedWindowedKeyValueIterator(
-                        from,
-                        to,
-                        segmentIterator,
-                        openIterators::remove,
-                        retainDuplicates,
-                        windowSize,
-                        forward);
+            new WrappedWindowedKeyValueIterator(
+                from,
+                to,
+                segmentIterator,
+                openIterators::remove,
+                retainDuplicates,
+                windowSize,
+                forward);
         openIterators.add(iterator);
         return iterator;
     }
@@ -643,8 +643,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
     }
 
     private static class WrappedWindowedKeyValueIterator
-            extends InMemoryWindowStoreIteratorWrapper
-            implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+        extends InMemoryWindowStoreIteratorWrapper
+        implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
         private final long windowSize;
 
