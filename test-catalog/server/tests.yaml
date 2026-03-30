@@ -262,6 +262,8 @@ org.apache.kafka.server.config.AbstractKafkaConfigTest:
 - testPopulateSynonymsOnEmptyMap
 - testPopulateSynonymsOnMapWithoutBrokerId
 - testPopulateSynonymsOnMapWithoutNodeId
+org.apache.kafka.server.config.DefaultSupportedConfigCheckerTest:
+- testIsSupported
 org.apache.kafka.server.config.DelegationTokenManagerConfigsTest:
 - testDefaults
 - testInvalidProperty
