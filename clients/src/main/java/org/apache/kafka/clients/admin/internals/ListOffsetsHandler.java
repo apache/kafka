@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -80,17 +79,15 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
     @Override
     ListOffsetsRequest.Builder buildBatchedRequest(int brokerId, Set<TopicPartition> keys) {
-        Map<String, ListOffsetsTopic> topicsByName = CollectionUtils.groupPartitionsByTopic(
-            keys,
-            topicName -> new ListOffsetsTopic().setName(topicName),
-            (listOffsetsTopic, partitionId) -> {
-                TopicPartition topicPartition = new TopicPartition(listOffsetsTopic.name(), partitionId);
-                long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-                listOffsetsTopic.partitions().add(
-                    new ListOffsetsPartition()
-                        .setPartitionIndex(partitionId)
-                        .setTimestamp(offsetTimestamp));
-            });
+        Map<String, ListOffsetsTopic> topicsByName = new HashMap<>();
+        for (TopicPartition topicPartition : keys) {
+            ListOffsetsTopic topic = topicsByName.computeIfAbsent(
+                topicPartition.topic(), t -> new ListOffsetsTopic().setName(t));
+            long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
+            topic.partitions().add(new ListOffsetsPartition()
+                .setPartitionIndex(topicPartition.partition())
+                .setTimestamp(offsetTimestamp));
+        }
         boolean supportsMaxTimestamp = keys
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);

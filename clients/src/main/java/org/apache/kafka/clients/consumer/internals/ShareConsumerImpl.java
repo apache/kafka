@@ -81,6 +81,7 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -958,7 +959,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return Map.copyOf(metrics.metrics());
+        return Collections.unmodifiableMap(metrics.metrics());
     }
 
     /**

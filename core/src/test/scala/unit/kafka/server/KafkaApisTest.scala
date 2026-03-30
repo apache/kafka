@@ -96,7 +96,7 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
-import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ThrottleCallback}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicaQuota, ReplicationQuotaManager, ThrottleCallback}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
@@ -10496,7 +10496,7 @@ class KafkaApisTest extends Logging {
     val tp4 = new TopicPartition("invalid;topic", 1)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    val data = new DescribeProducersRequestData().setTopics(util.List.of(
+    val data = new DescribeProducersRequestData().setTopics(new DescribeProducersRequestData.TopicRequestCollection(util.List.of(
       new DescribeProducersRequestData.TopicRequest()
         .setName(tp1.topic)
         .setPartitionIndexes(util.List.of(Int.box(tp1.partition))),
@@ -10509,7 +10509,7 @@ class KafkaApisTest extends Logging {
       new DescribeProducersRequestData.TopicRequest()
         .setName(tp4.topic)
         .setPartitionIndexes(util.List.of(Int.box(tp4.partition)))
-    ))
+    ).iterator()))
 
     def buildExpectedActions(topic: String): util.List[Action] = {
       val pattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)

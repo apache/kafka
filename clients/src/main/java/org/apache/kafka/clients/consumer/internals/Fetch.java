@@ -34,7 +34,7 @@ public class Fetch<K, V> {
     private int numRecords;
 
     public static <K, V> Fetch<K, V> empty() {
-        return new Fetch<>(new HashMap<>(), false, 0, new HashMap<>());
+        return new Fetch<>(false, 0);
     }
 
     public static <K, V> Fetch<K, V> forPartition(
@@ -43,25 +43,34 @@ public class Fetch<K, V> {
             boolean positionAdvanced,
             OffsetAndMetadata nextOffsetAndMetadata
     ) {
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
-                ? Map.of()
-                : Map.of(partition, records);
-        Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap = Map.of(partition, nextOffsetAndMetadata);
-        return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextOffsetAndMetadataMap);
+        return new Fetch<>(positionAdvanced, partition, records, nextOffsetAndMetadata);
     }
 
     private Fetch(
-            Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
             boolean positionAdvanced,
-            int numRecords,
-            Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata
+            int numRecords
     ) {
-        this.records = records;
+        this.records = new HashMap<>();
         this.positionAdvanced = positionAdvanced;
         this.numRecords = numRecords;
-        this.nextOffsetAndMetadata = nextOffsetAndMetadata;
+        this.nextOffsetAndMetadata = new HashMap<>();
     }
 
+    private Fetch(
+            boolean positionAdvanced,
+            TopicPartition partition,
+            List<ConsumerRecord<K, V>> records,
+            OffsetAndMetadata offsetAndMetadata
+    ) {
+        this.records = new HashMap<>();
+        if (!records.isEmpty()) {
+            this.records.put(partition, records);
+        }
+        this.positionAdvanced = positionAdvanced;
+        this.numRecords = records.size();
+        this.nextOffsetAndMetadata = new HashMap<>();
+        this.nextOffsetAndMetadata.put(partition, offsetAndMetadata);
+    }
     /**
      * Add another {@link Fetch} to this one; all of its records will be added to this fetch's
      * {@link #records() records}, and if the other fetch

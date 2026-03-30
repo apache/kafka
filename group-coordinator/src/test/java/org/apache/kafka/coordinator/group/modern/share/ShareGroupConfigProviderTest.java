@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 
 import org.junit.jupiter.api.Test;
 
@@ -110,5 +111,25 @@ public class ShareGroupConfigProviderTest {
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
         assertTrue(provider.isRenewAcknowledgeEnabled("test-group"));
+    }
+
+    @Test
+    void testAutoOffsetResetWithGroupConfig() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig groupConfig = mock(GroupConfig.class);
+        when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.EARLIEST);
+        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
+        provider = new ShareGroupConfigProvider(groupConfigManager);
+
+        assertEquals(ShareGroupAutoOffsetResetStrategy.EARLIEST, provider.autoOffsetReset("test-group"));
+    }
+
+    @Test
+    void testAutoOffsetResetWithoutGroupConfig() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
+        provider = new ShareGroupConfigProvider(groupConfigManager);
+
+        assertEquals(GroupConfig.defaultShareAutoOffsetReset(), provider.autoOffsetReset("test-group"));
     }
 }

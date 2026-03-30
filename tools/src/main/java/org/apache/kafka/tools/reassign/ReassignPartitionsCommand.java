@@ -1061,7 +1061,7 @@ public class ReassignPartitionsCommand {
 
             if (partMoves.containsKey(part.partition())) {
                 PartitionMove move = partMoves.get(part.partition());
-                sources.addAll(move.sources);
+                sources.addAll(move.sources());
             } else if (currentParts.containsKey(part))
                 sources.addAll(currentParts.get(part));
             else
@@ -1086,7 +1086,7 @@ public class ReassignPartitionsCommand {
         moveMap.forEach((topicName, partMoveMap) -> {
             Set<String> components = new TreeSet<>();
             partMoveMap.forEach((partId, move) ->
-                move.sources.forEach(source -> components.add(String.format("%d:%d", partId, source))));
+                move.sources().forEach(source -> components.add(String.format("%d:%d", partId, source))));
             results.put(topicName, String.join(",", components));
         });
         return results;
@@ -1103,8 +1103,8 @@ public class ReassignPartitionsCommand {
         moveMap.forEach((topicName, partMoveMap) -> {
             Set<String> components = new TreeSet<>();
             partMoveMap.forEach((partId, move) ->
-                move.destinations.forEach(destination -> {
-                    if (!move.sources.contains(destination)) {
+                move.destinations().forEach(destination -> {
+                    if (!move.sources().contains(destination)) {
                         components.add(String.format("%d:%d", partId, destination));
                     }
                 })
@@ -1124,8 +1124,8 @@ public class ReassignPartitionsCommand {
     static Set<Integer> calculateReassigningBrokers(Map<String, Map<Integer, PartitionMove>> moveMap) {
         Set<Integer> reassigningBrokers = new TreeSet<>();
         moveMap.values().forEach(partMoveMap -> partMoveMap.values().forEach(partMove -> {
-            reassigningBrokers.addAll(partMove.sources);
-            reassigningBrokers.addAll(partMove.destinations);
+            reassigningBrokers.addAll(partMove.sources());
+            reassigningBrokers.addAll(partMove.destinations());
         }));
         return reassigningBrokers;
     }

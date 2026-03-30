@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
@@ -202,6 +203,14 @@ public class LogTestUtils {
 
     public static MemoryRecords records(List<SimpleRecord> records, byte magicValue, long baseOffset) {
         return records(records, magicValue, Compression.NONE, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static List<AbortedTxn> allAbortedTransactions(UnifiedLog log) {
+        List<AbortedTxn> result = new ArrayList<>();
+        for (LogSegment segment : log.logSegments()) {
+            result.addAll(segment.txnIndex().allAbortedTxns());
+        }
+        return result;
     }
 
     public static void deleteProducerSnapshotFiles(File logDir) {

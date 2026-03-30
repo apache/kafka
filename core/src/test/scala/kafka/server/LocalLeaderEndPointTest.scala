@@ -160,7 +160,7 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
+    replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, 7))
   }
@@ -262,7 +262,7 @@ class LocalLeaderEndPointTest extends Logging {
 
     // Bump epoch and advance local log start offset without changing log start offset
     bumpLeaderEpoch()
-    replicaManager.logManager.getLog(topicPartition).foreach(_.updateLocalLogStartOffset(3))
+    replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
 
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 1)
     assertEquals(new OffsetAndEpoch(-1L, -1), result)

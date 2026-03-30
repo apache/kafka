@@ -22,7 +22,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Iterator;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -50,8 +49,7 @@ public class HeadersDeserializerTest {
 
     @Test
     public void shouldRoundTripEmptyHeaders() {
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(new RecordHeaders());
-        final byte[] serialized = HeadersSerializer.serialize(preSerializedHeaders, ByteBuffer.allocate(0)).array();
+        final byte[] serialized = HeadersSerializer.serialize(new RecordHeaders());
 
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
@@ -63,11 +61,7 @@ public class HeadersDeserializerTest {
     public void shouldRoundTripSingleHeader() {
         final Headers original = new RecordHeaders()
             .add("key1", "value1".getBytes());
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(original);
 
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
@@ -86,11 +80,7 @@ public class HeadersDeserializerTest {
             .add("key0", "value0".getBytes())
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(original);
 
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
@@ -109,11 +99,7 @@ public class HeadersDeserializerTest {
     public void shouldRoundTripHeaderWithNullValue() {
         final Headers original = new RecordHeaders()
             .add("key1", null);
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(original);
 
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
@@ -130,11 +116,7 @@ public class HeadersDeserializerTest {
     public void shouldRoundTripHeaderWithEmptyValue() {
         final Headers original = new RecordHeaders()
             .add("key1", new byte[0]);
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(original);
 
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
@@ -155,11 +137,7 @@ public class HeadersDeserializerTest {
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes())
             .add("key2", "value3".getBytes());
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(original);
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(original);
 
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
