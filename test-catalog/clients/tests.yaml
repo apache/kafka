@@ -2226,9 +2226,11 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testHandleFetchResponseError
 - testHeaders
 - testInvalidDefaultRecordBatch
-- testLeadershipChangeAfterFetchBeforeClose
+- testLeadershipChangeAfterFetchBeforeCloseMove
 - testLeadershipChangeAfterFetchBeforeCommitAsync
 - testLeadershipChangeAfterFetchBeforeCommitSync
+- testLeadershipChangeAfterFetchMoveBeforeClose
+- testLeadershipChangeAfterFetchMoveBeforeCloseMove
 - testMultipleFetches
 - testMultipleTopicsFetch
 - testMultipleTopicsFetchError
