@@ -82,11 +82,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
-    public long retentionPeriod() {
-        return retentionPeriod;
-    }
-
-    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
 
         final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);

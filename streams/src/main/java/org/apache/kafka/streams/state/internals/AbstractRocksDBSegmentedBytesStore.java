@@ -81,11 +81,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public long retentionPeriod() {
-        return retentionPeriod;
-    }
-
-    @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
                                                  final long to) {

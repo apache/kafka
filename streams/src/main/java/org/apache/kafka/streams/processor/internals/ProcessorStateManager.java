@@ -103,6 +103,8 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
+        private final long retentionPeriod;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
