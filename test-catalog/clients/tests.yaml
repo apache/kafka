@@ -5415,9 +5415,6 @@ org.apache.kafka.common.utils.CircularIteratorTest:
 - testCycleCollection
 - testEmptyCollection
 - testNullCollection
-org.apache.kafka.common.utils.CollectionUtilsTest:
-- testSubtractMapDoesntRemoveAnythingWhenEmptyMap
-- testSubtractMapRemovesSecondMapsKeys
 org.apache.kafka.common.utils.ConfigUtilsTest:
 - testConfigMapToRedactedStringForEmptyMap
 - testConfigMapToRedactedStringWithSecrets

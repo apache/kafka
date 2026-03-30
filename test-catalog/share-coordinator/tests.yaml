@@ -105,5 +105,6 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testWriteStateSuccess
 org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetricsTest:
 - testCoordinatorGlobalSensors
+- testDeactivateMetricsShardCleansUpPruneMetrics
 - testMetricNames
 - testShardGlobalSensors
