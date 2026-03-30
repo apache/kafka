@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -30,23 +32,33 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.KeyValueIteratorStub;
+import org.apache.kafka.test.MockRecordCollector;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -61,14 +73,17 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -348,6 +363,56 @@ public class MeteredKeyValueStoreTest {
             Serdes.String()
         );
         assertTrue(metered.setFlushListener(null, false));
+    }
+
+    @Test
+    public void shouldPassRecordHeadersToValueDeserializerWhenFlushListenerIsSet() {
+        final String headerKey = "flush";
+        final Deserializer<String> valueDeserializer = mock(Deserializer.class);
+        final Serde<String> valueSerde = Serdes.serdeFrom(Serdes.String().serializer(), valueDeserializer);
+        when(valueDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn(VALUE);
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(new Metrics(), "test", new MockTime());
+        final InternalMockProcessorContext<?, ?> processorContext = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 1024L, streamsMetrics),
+            Time.SYSTEM
+        );
+
+        final InMemoryKeyValueStore innerStore = new InMemoryKeyValueStore(STORE_NAME);
+        final CachingKeyValueStore cachingStore = new CachingKeyValueStore(
+            innerStore,
+            CachingKeyValueStore.CacheType.KEY_VALUE_STORE
+        );
+        final MeteredKeyValueStore<String, String> meteredStore = new MeteredKeyValueStore<>(
+            cachingStore,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            valueSerde
+        );
+        meteredStore.init(processorContext, meteredStore);
+        assertTrue(meteredStore.setFlushListener(record -> { }, false));
+
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add(headerKey, "new".getBytes(StandardCharsets.UTF_8));
+
+        processorContext.setRecordContext(new ProcessorRecordContext(0L, 0L, 0, "topic", headers));
+        meteredStore.put(KEY, VALUE);
+        meteredStore.commit(Map.of());
+
+        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        verify(valueDeserializer).deserialize(anyString(), headersCaptor.capture(), any(byte[].class));
+
+        final Header capturedLastHeader = headersCaptor.getValue().lastHeader(headerKey);
+        assertNotNull(capturedLastHeader);
+        assertThat(new String(capturedLastHeader.value(), StandardCharsets.UTF_8), equalTo("new"));
     }
 
     @Test

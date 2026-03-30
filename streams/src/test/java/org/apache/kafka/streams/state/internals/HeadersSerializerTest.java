@@ -22,8 +22,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
-
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,10 +32,7 @@ public class HeadersSerializerTest {
 
     @Test
     public void shouldSerializeNullHeaders() {
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(null);
-        assertEquals(0, preSerializedHeaders.requiredBufferSizeForHeaders);
-
-        final byte[] serialized = HeadersSerializer.serialize(preSerializedHeaders, ByteBuffer.allocate(0)).array();
+        final byte[] serialized = HeadersSerializer.serialize(null);
 
         assertNotNull(serialized);
         assertEquals(0, serialized.length, "Null headers should serialize to empty byte array (0 bytes)");
@@ -45,10 +40,7 @@ public class HeadersSerializerTest {
 
     @Test
     public void shouldSerializeEmptyHeaders() {
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(new RecordHeaders());
-        assertEquals(0, preSerializedHeaders.requiredBufferSizeForHeaders);
-
-        final byte[] serialized = HeadersSerializer.serialize(preSerializedHeaders, ByteBuffer.allocate(0)).array();
+        final byte[] serialized = HeadersSerializer.serialize(new RecordHeaders());
 
         assertNotNull(serialized);
         assertEquals(0, serialized.length, "Empty headers should serialize to empty byte array (0 bytes)");
@@ -58,12 +50,8 @@ public class HeadersSerializerTest {
     public void shouldSerializeSingleHeader() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
@@ -84,12 +72,8 @@ public class HeadersSerializerTest {
             .add("key0", "value0".getBytes())
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
@@ -110,12 +94,8 @@ public class HeadersSerializerTest {
     public void shouldSerializeHeaderWithNullValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", null);
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
@@ -134,12 +114,8 @@ public class HeadersSerializerTest {
     public void shouldSerializeHeadersWithEmptyValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", new byte[0]);
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
 
-        final byte[] serialized = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
