@@ -643,7 +643,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * were assigned. If topic subscription was used, then this will give the set of topic partitions currently assigned
      * to the consumer (which may be none if the assignment hasn't happened yet, or the partitions are in the
      * process of getting reassigned).
-     * @return The set of partitions currently assigned to this consumer
+     *
+     * <p>The returned set is a snapshot of the current assignment at the time of the call. It will not be updated
+     * if the assignment changes afterward.
+     *
+     * @return An immutable snapshot of the set of partitions currently assigned to this consumer
      */
     public Set<TopicPartition> assignment() {
         return delegate.assignment();
@@ -652,7 +656,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the current subscription. Will return the same topics used in the most recent call to
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, or an empty set if no such call has been made.
-     * @return The set of topics currently subscribed to
+     *
+     * <p>The returned set is a snapshot of the current subscription at the time of the call. It will not be updated
+     * if the subscription changes afterward.
+     *
+     * @return An immutable snapshot of the set of topics currently subscribed to
      */
     public Set<String> subscription() {
         return delegate.subscription();
@@ -1398,8 +1406,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return delegate.clientInstanceId(timeout);
     }
 
-  /**
+    /**
      * Get the metrics kept by the consumer
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the consumer
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {

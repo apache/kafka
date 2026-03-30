@@ -42,14 +42,14 @@ public class BenchmarkConfigUtils {
         props.put(ServerConfigs.BROKER_ID_CONFIG, "0");
 
         props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:9092");
-        props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092");
+        props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093");
         props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT");
 
         File dir = TestUtils.tempDirectory();
         props.put(ServerLogConfigs.LOG_DIR_CONFIG, dir.getAbsolutePath());
 
-        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
+        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller");
         props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:0");
 
         props.put(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG, "1500");

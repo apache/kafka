@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.LogContext;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -142,7 +141,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override

@@ -140,7 +140,7 @@ public class BatchAccumulator<T> implements Closeable {
             long lastOffset = nextOffset + records.size() - 1;
             maybeCompleteDrain();
 
-            BatchBuilder<T> batch = null;
+            BatchBuilder<T> batch;
             batch = maybeAllocateBatch(records, serializationCache);
             if (batch == null) {
                 throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
@@ -576,7 +576,7 @@ public class BatchAccumulator<T> implements Closeable {
             this.pool = pool;
             this.initialBuffer = initialBuffer;
 
-            validateContruction();
+            validateConstruction();
         }
 
         private CompletedBatch(
@@ -593,10 +593,10 @@ public class BatchAccumulator<T> implements Closeable {
             this.pool = pool;
             this.initialBuffer = initialBuffer;
 
-            validateContruction();
+            validateConstruction();
         }
 
-        private void validateContruction() {
+        private void validateConstruction() {
             Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
 
             if (numRecords <= 0) {

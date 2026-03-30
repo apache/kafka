@@ -26,7 +26,6 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicationQuotaManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.share.SharePartitionManager;
 
@@ -65,6 +64,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.quota.ClientQuotaManager;
 import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
+import org.apache.kafka.server.quota.ReplicationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;

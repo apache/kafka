@@ -39,9 +39,8 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
@@ -91,11 +90,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static kafka.server.share.ShareFetchUtils.deliveryCountLimitOrDefault;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
-import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -194,11 +191,12 @@ public class SharePartition {
     private final AtomicReference<Uuid> fetchLock;
 
     /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The max in-flight records is used to limit the number of records that can be in-flight at any
      * given time. The max in-flight records is used to prevent the consumer from fetching too many
      * records from the leader and running out of memory.
      */
-    private final int maxInFlightRecords;
+    private final int defaultMaxInFlightRecords;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -209,9 +207,9 @@ public class SharePartition {
     private final int defaultMaxDeliveryCount;
 
     /**
-     * The group config manager is used to retrieve the values for dynamic group configurations
+     * The provider used to retrieve share group dynamic configuration values.
      */
-    private final GroupConfigManager groupConfigManager;
+    private final ShareGroupConfigProvider configProvider;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -331,18 +329,18 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
+        int defaultMaxInFlightRecords,
         int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
         Persister persister,
         ReplicaManager replicaManager,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         SharePartitionListener listener
     ) {
-        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
-            timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
+        this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
+            timer, time, persister, replicaManager, configProvider, SharePartitionState.EMPTY, listener,
             new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
 
@@ -352,14 +350,14 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
+        int defaultMaxInFlightRecords,
         int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
         Persister persister,
         ReplicaManager replicaManager,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         SharePartitionState sharePartitionState,
         SharePartitionListener listener,
         SharePartitionMetrics sharePartitionMetrics
@@ -367,7 +365,7 @@ public class SharePartition {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.leaderEpoch = leaderEpoch;
-        this.maxInFlightRecords = maxInFlightRecords;
+        this.defaultMaxInFlightRecords = defaultMaxInFlightRecords;
         this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
@@ -380,7 +378,7 @@ public class SharePartition {
         this.persister = persister;
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
-        this.groupConfigManager = groupConfigManager;
+        this.configProvider = configProvider;
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
@@ -1482,7 +1480,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-        return numInFlightRecords() < maxInFlightRecords;
+        return numInFlightRecords() < maxInFlightRecords();
     }
 
     /**
@@ -1675,6 +1673,7 @@ public class SharePartition {
         // and only acquire limited records.
         int maxRecordsToAcquire;
         long lastOffsetToAcquire = lastOffset;
+        int maxInFlightRecords = maxInFlightRecords();
         lock.readLock().lock();
         try {
             int inFlightRecordsCount = numInFlightRecords();
@@ -1851,7 +1850,7 @@ public class SharePartition {
                         null,
                         timeoutHandler,
                         sharePartitionMetrics);
-                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    int delayMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
                     inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
                     updateFindNextFetchOffset(true);
@@ -2298,6 +2297,11 @@ public class SharePartition {
                 byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
 
                 if (ackType == AcknowledgeType.RENEW.id) {
+                    if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                        log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                        return Optional.of(new InvalidRecordStateException(
+                            "Renewing acquisition locks is not enabled for the group."));
+                    }
                     // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
                     // We do not care about recordState map here.
                     // Only valid for ACQUIRED offsets; the check above ensures this.
@@ -2371,6 +2375,11 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
+                if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                    log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                    return Optional.of(new InvalidRecordStateException(
+                        "Renewing acquisition locks is not enabled for the group."));
+                }
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
                 log.debug("Renewing acquisition lock for {}-{} with batch {}-{} for member {}.",
@@ -2831,7 +2840,7 @@ public class SharePartition {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
-        int recordLockDurationMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+        int recordLockDurationMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
@@ -3023,12 +3032,7 @@ public class SharePartition {
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;
         }
-        ShareGroupAutoOffsetResetStrategy offsetResetStrategy;
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            offsetResetStrategy = groupConfigManager.groupConfig(groupId).get().shareAutoOffsetReset();
-        } else {
-            offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
-        }
+        ShareGroupAutoOffsetResetStrategy offsetResetStrategy = configProvider.autoOffsetReset(groupId);
 
         if (offsetResetStrategy.type() == ShareGroupAutoOffsetResetStrategy.StrategyType.LATEST) {
             return offsetForLatestTimestamp(topicIdPartition, replicaManager, leaderEpoch);
@@ -3313,7 +3317,7 @@ public class SharePartition {
      * config if available, otherwise the broker default.
      */
     int maxDeliveryCount() {
-        return deliveryCountLimitOrDefault(groupConfigManager, groupId, defaultMaxDeliveryCount);
+        return configProvider.deliveryCountLimitOrDefault(groupId, defaultMaxDeliveryCount);
     }
 
     /**
@@ -3324,7 +3328,13 @@ public class SharePartition {
         return Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
     }
 
-
+    /**
+     * Returns the effective max in-flight records for this share partition, using the per-group dynamic
+     * config if available, otherwise the broker default.
+     */
+    int maxInFlightRecords() {
+        return configProvider.partitionMaxRecordLocksOrDefault(groupId, defaultMaxInFlightRecords);
+    }
 
     /**
      * The GapWindow class is used to record the gap start and end offset of the probable gaps

@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
@@ -540,7 +541,9 @@ public class LocalLog {
         List<FetchResponseData.AbortedTransaction> abortedTransactions = new ArrayList<>();
         Consumer<List<AbortedTxn>> accumulator = abortedTxns -> {
             for (AbortedTxn abortedTxn : abortedTxns)
-                abortedTransactions.add(abortedTxn.asAbortedTransaction());
+                abortedTransactions.add(new FetchResponseData.AbortedTransaction()
+                    .setProducerId(abortedTxn.producerId())
+                    .setFirstOffset(abortedTxn.firstOffset()));
         };
         collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator);
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
@@ -738,8 +741,8 @@ public class LocalLog {
         return topicPartition.topic() + "-" + topicPartition.partition();
     }
 
-    private static KafkaException exception(File dir) throws IOException {
-        return new KafkaException("Found directory " + dir.getCanonicalPath() + ", '" + dir.getName() + "' is not in the form of " +
+    private static KafkaException exception(File dir) {
+        return new KafkaException("Found directory " + dir.getAbsolutePath() + ", '" + dir.getName() + "' is not in the form of " +
                 "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
                 "Kafka's log directories (and children) should only contain Kafka topic data.");
     }
@@ -747,7 +750,7 @@ public class LocalLog {
     /**
      * Parse the topic and partition out of the directory name of a log
      */
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         if (dir == null) {
             throw new KafkaException("dir should not be null");
         }

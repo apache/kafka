@@ -47,6 +47,7 @@ import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLAS
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
+import org.apache.kafka.server.controller.ControllerRegistrationManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -308,7 +309,6 @@ class ControllerServer(
 
       // Create the registration manager, which handles sending KIP-919 controller registrations.
       registrationManager = new ControllerRegistrationManager(config.nodeId,
-        clusterId,
         time,
         s"controller-${config.nodeId}-",
         QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
