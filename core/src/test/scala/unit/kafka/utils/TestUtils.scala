@@ -17,7 +17,6 @@
 package kafka.utils
 
 import com.yammer.metrics.core.{Histogram, Meter}
-import kafka.log.LogManager
 import kafka.network.RequestChannel
 import kafka.security.JaasTestUtils
 import kafka.server._
@@ -57,7 +56,7 @@ import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, Replicatio
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, LogManager, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -971,26 +970,26 @@ object TestUtils extends Logging {
                        logFn: Option[(TopicPartition, Option[Uuid]) => UnifiedLog] = None,
                        remoteStorageSystemEnable: Boolean = false,
                        initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT): LogManager = {
-    val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
-                   initialOfflineDirs = Array.empty[File],
-                   configRepository = configRepository,
-                   initialDefaultConfig = defaultConfig,
-                   cleanerConfig = cleanerConfig,
-                   recoveryThreadsPerDataDir = recoveryThreadsPerDataDir,
-                   flushCheckMs = 1000L,
-                   flushRecoveryOffsetCheckpointMs = 10000L,
-                   flushStartOffsetCheckpointMs = 10000L,
-                   retentionCheckMs = 1000L,
-                   maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-                   scheduler = time.scheduler,
-                   time = time,
-                   brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-                   remoteStorageSystemEnable = remoteStorageSystemEnable,
-                   initialTaskDelayMs = initialTaskDelayMs,
-                   cleanerFactory = (cleanerConfig, files, map, logDirFailureChannel, time) => Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
+    val logManager = new LogManager(logDirs.map(_.getAbsoluteFile).asJava,
+                   util.List.of,
+                   configRepository,
+                   defaultConfig,
+                   cleanerConfig,
+                   recoveryThreadsPerDataDir,
+                   1000L,
+                   10000L,
+                   10000L,
+                   1000L,
+                   5 * 60 * 1000,
+                   new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
+                   TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                   time.scheduler,
+                   new BrokerTopicStats,
+                   new LogDirFailureChannel(logDirs.size),
+                   time,
+                   remoteStorageSystemEnable,
+                   initialTaskDelayMs,
+                   (cleanerConfig, files, map, logDirFailureChannel, time) => Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
     )
 
     if (logFn.isDefined) {
@@ -999,7 +998,7 @@ object TestUtils extends Logging {
         val topicPartition = answer.getArgument(0, classOf[TopicPartition])
         val topicId = answer.getArgument(3, classOf[Optional[Uuid]])
         logFn.get(topicPartition, OptionConverters.toScala(topicId))
-      }).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Option[Uuid]]))
+      }).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Optional[Uuid]]))
       spyLogManager
     } else
       logManager
@@ -1104,7 +1103,7 @@ object TestUtils extends Logging {
       "Replica logs not deleted after delete topic is complete")
     // ensure that topic is removed from all cleaner offsets
     waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall { tp =>
-      val checkpoints = broker.logManager.liveLogDirs.map { logDir =>
+      val checkpoints = broker.logManager.liveLogDirs.asScala.map { logDir =>
         new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.containsKey(tp))

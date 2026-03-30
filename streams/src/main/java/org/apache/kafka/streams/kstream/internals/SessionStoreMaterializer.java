@@ -41,7 +41,7 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
             final SessionWindows sessionWindows,
             final EmitStrategy emitStrategy
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.PLAIN);
         this.materialized = materialized;
         this.sessionWindows = sessionWindows;
         this.emitStrategy = emitStrategy;
@@ -60,13 +60,12 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
 
     @Override
     public  StoreBuilder<SessionStoreWithHeaders<K, V>> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : dslStoreFormat();
         final SessionBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().sessionStore(new DslSessionParams(
                         materialized.storeName(),
                         Duration.ofMillis(retentionPeriod),
                         emitStrategy,
-                        storeFormat))
+                        dslStoreFormat()))
                 : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<SessionStoreWithHeaders<K, V>> builder = Stores.sessionStoreBuilderWithHeaders(

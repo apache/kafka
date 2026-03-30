@@ -22,7 +22,6 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.LogManager
 import kafka.server.share.SharePartitionManager
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.utils.TestUtils
@@ -45,6 +44,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
