@@ -45,7 +45,6 @@ import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,6 +80,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -574,7 +574,7 @@ public class ProcessorStateManagerTest {
             assertTrue(nonPersistentStore.committed);
 
             // make sure that flush is called in the proper order
-            assertThat(persistentStore.getLastCommitCount(), Matchers.lessThan(nonPersistentStore.getLastCommitCount()));
+            assertThat(persistentStore.getLastCommitCount(), lessThan(nonPersistentStore.getLastCommitCount()));
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
             stateMgr.commit();
@@ -619,7 +619,7 @@ public class ProcessorStateManagerTest {
             assertTrue(nonPersistentStore.committed);
 
             // make sure that flush is called in the proper order
-            assertThat(persistentStore.getLastCommitCount(), Matchers.lessThan(nonPersistentStore.getLastCommitCount()));
+            assertThat(persistentStore.getLastCommitCount(), lessThan(nonPersistentStore.getLastCommitCount()));
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
             stateMgr.commit();
@@ -633,6 +633,14 @@ public class ProcessorStateManagerTest {
             final OffsetCheckpoint storeCheckpoint = new OffsetCheckpoint(storeCheckpointFile);
             final Map<TopicPartition, Long> checkpointedOffsets = storeCheckpoint.read();
             assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), -4L)));
+
+            try {
+                // Reopen to verify null commited offset
+                stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
+                assertNull(stateMgr.storeMetadata(persistentStorePartition).offset());
+            } finally {
+                stateMgr.close();
+            }
         }
     }
 
