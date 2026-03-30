@@ -166,8 +166,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
       val brokerConfigName = GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.get(name)
-      val list = if (brokerConfigName != null)
-        configSynonyms(brokerConfigName, brokerSynonyms(brokerConfigName), isSensitive)
+      val list = if (brokerConfigName != null && brokerConfigName.isPresent)
+        configSynonyms(brokerConfigName.get, brokerSynonyms(brokerConfigName.get), isSensitive)
       else
         // No broker synonym, fall back to GroupConfig defaults
         Option(GroupConfig.CONFIG_DEF.defaultValues().get(name))

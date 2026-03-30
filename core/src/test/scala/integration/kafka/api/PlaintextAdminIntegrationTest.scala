@@ -1204,6 +1204,221 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testDescribeGroupConfigSynonymsWithBrokerSynonym(): Unit = {
+    client = createAdminClient
+    val group = "synonym-test-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+    val brokerDefaultResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val describeOptions = new DescribeConfigsOptions().includeSynonyms(true)
+
+    def synonymsList(entry: ConfigEntry): List[(String, ConfigSource)] =
+      entry.synonyms.asScala.map(s => (s.name, s.source)).toList
+
+    // Verify default config only, no dynamic broker config, no group override.
+    // Expected chain: DEFAULT_CONFIG
+    var configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    var assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT.toString, assignInterval.value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Set per-broker dynamic config for all brokers.
+    // Expected chain: DYNAMIC_BROKER_CONFIG → DEFAULT_CONFIG
+    val perBrokerProps = new Properties
+    perBrokerProps.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "1500")
+    TestUtils.incrementalAlterConfigs(brokers, client, perBrokerProps, perBrokerConfig = true)
+      .all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("1500", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_BROKER_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Set dynamic default broker config, verify per-broker config still takes precedence.
+    // Expected chain: DYNAMIC_BROKER_CONFIG → DYNAMIC_DEFAULT_BROKER_CONFIG → DEFAULT_CONFIG
+    val dynamicAlterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "2000"), AlterConfigOp.OpType.SET)
+    )
+    client.incrementalAlterConfigs(util.Map.of(brokerDefaultResource, dynamicAlterOps)).all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("1500", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_BROKER_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Set group override, verify it takes precedence over all broker configs.
+    // Expected chain: DYNAMIC_GROUP_CONFIG → DYNAMIC_BROKER_CONFIG → DYNAMIC_DEFAULT_BROKER_CONFIG → DEFAULT_CONFIG
+    val groupAlterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "3000"), AlterConfigOp.OpType.SET)
+    )
+    client.incrementalAlterConfigs(util.Map.of(groupResource, groupAlterOps)).all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("3000", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_GROUP_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+  }
+
+  @Test
+  def testDescribeGroupConfigSynonymsWithoutBrokerSynonym(): Unit = {
+    client = createAdminClient
+    val group = "synonym-no-broker-test-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+    val describeOptions = new DescribeConfigsOptions().includeSynonyms(true)
+
+    def synonymsList(entry: ConfigEntry): List[(String, ConfigSource)] =
+      entry.synonyms.asScala.map(s => (s.name, s.source)).toList
+
+    // Verify default config only, no group override, config has no broker synonym.
+    // Expected chain: DEFAULT_CONFIG
+    var configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    var shareAutoOffsetReset = configs.get(groupResource).get(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG)
+    assertEquals(GroupConfig.SHARE_AUTO_OFFSET_RESET_DEFAULT, shareAutoOffsetReset.value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, shareAutoOffsetReset.source)
+    assertEquals(List(
+      (GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(shareAutoOffsetReset))
+
+    // Set group override, verify synonyms use group config name (no broker synonym).
+    // Expected chain: DYNAMIC_GROUP_CONFIG → DEFAULT_CONFIG
+    val groupAlterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "earliest"), AlterConfigOp.OpType.SET)
+    )
+    client.incrementalAlterConfigs(util.Map.of(groupResource, groupAlterOps)).all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    shareAutoOffsetReset = configs.get(groupResource).get(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG)
+    assertEquals("earliest", shareAutoOffsetReset.value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, shareAutoOffsetReset.source)
+    assertEquals(List(
+      (GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, ConfigSource.DYNAMIC_GROUP_CONFIG),
+      (GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(shareAutoOffsetReset))
+  }
+
+  @Test
+  def testDescribeGroupConfigSynonymsWithStaticBrokerConfig(): Unit = {
+    // This test requires group.consumer.assignment.interval.ms=2000 in static broker config,
+    // configured via BaseAdminIntegrationTest.modifyConfigs.
+    client = createAdminClient
+    val group = "synonym-static-test-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+    val brokerDefaultResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val describeOptions = new DescribeConfigsOptions().includeSynonyms(true)
+
+    def synonymsList(entry: ConfigEntry): List[(String, ConfigSource)] =
+      entry.synonyms.asScala.map(s => (s.name, s.source)).toList
+
+    // Verify static broker config is reflected in synonyms.
+    // Expected chain: STATIC_BROKER_CONFIG → DEFAULT_CONFIG
+    var configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    var assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("2000", assignInterval.value)
+    assertEquals(ConfigSource.STATIC_BROKER_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Set group override, verify it takes precedence over static broker config.
+    // Expected chain: DYNAMIC_GROUP_CONFIG → STATIC_BROKER_CONFIG → DEFAULT_CONFIG
+    val groupAlterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "3000"), AlterConfigOp.OpType.SET)
+    )
+    client.incrementalAlterConfigs(util.Map.of(groupResource, groupAlterOps)).all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("3000", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_GROUP_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Add dynamic default broker config.
+    // Expected chain: DYNAMIC_GROUP_CONFIG → DYNAMIC_DEFAULT_BROKER_CONFIG → STATIC_BROKER_CONFIG → DEFAULT_CONFIG
+    val dynamicAlterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "4000"), AlterConfigOp.OpType.SET)
+    )
+    client.incrementalAlterConfigs(util.Map.of(brokerDefaultResource, dynamicAlterOps)).all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("3000", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_GROUP_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Add per-broker dynamic config, verify full synonym chain with all five layers.
+    // Expected chain: DYNAMIC_GROUP_CONFIG → DYNAMIC_BROKER_CONFIG → DYNAMIC_DEFAULT_BROKER_CONFIG → STATIC_BROKER_CONFIG → DEFAULT_CONFIG
+    val perBrokerProps = new Properties
+    perBrokerProps.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "5000")
+    TestUtils.incrementalAlterConfigs(brokers, client, perBrokerProps, perBrokerConfig = true)
+      .all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("3000", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_GROUP_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+
+    // Delete group override, verify synonyms fall back to per-broker dynamic config.
+    // Expected chain: DYNAMIC_BROKER_CONFIG → DYNAMIC_DEFAULT_BROKER_CONFIG → STATIC_BROKER_CONFIG → DEFAULT_CONFIG
+    val groupDeleteOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
+    )
+    client.incrementalAlterConfigs(util.Map.of(groupResource, groupDeleteOps)).all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    configs = client.describeConfigs(util.List.of(groupResource), describeOptions).all.get(15, TimeUnit.SECONDS)
+    assignInterval = configs.get(groupResource).get(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)
+    assertEquals("5000", assignInterval.value)
+    assertEquals(ConfigSource.DYNAMIC_BROKER_CONFIG, assignInterval.source)
+    assertEquals(List(
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, ConfigSource.DEFAULT_CONFIG)
+    ), synonymsList(assignInterval))
+  }
+
+  @Test
   def testCreatePartitions(): Unit = {
     client = createAdminClient
 

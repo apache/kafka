@@ -60,7 +60,6 @@ import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.S
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -642,50 +641,29 @@ public class GroupConfigTest {
 
     @Test
     public void testAllGroupConfigSynonyms() {
-        // GroupConfig entries with no broker-level synonym.
-        Set<String> groupConfigsWithoutBrokerSynonym = Set.of(
-            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG,
-            GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG,
-            GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG
-        );
-
-        // Every GroupConfig entry must be in ALL_GROUP_CONFIG_SYNONYMS or in the exclusion list.
+        // Every GroupConfig entry should have an entry in ALL_GROUP_CONFIG_SYNONYMS.
         for (String groupConfigName : GroupConfig.CONFIG_DEF.names()) {
-            if (groupConfigsWithoutBrokerSynonym.contains(groupConfigName)) {
-                assertFalse(GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.containsKey(groupConfigName),
-                    "Config '" + groupConfigName + "' should not be in both the exclusion list " +
-                        "and ALL_GROUP_CONFIG_SYNONYMS.");
-                continue;
-            }
             assertTrue(GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.containsKey(groupConfigName),
-                "GroupConfig entry '" + groupConfigName + "' is not in ALL_GROUP_CONFIG_SYNONYMS " +
-                    "and not in the exclusion list. Add it to ALL_GROUP_CONFIG_SYNONYMS or " +
-                    "to groupConfigsWithoutBrokerSynonym.");
+                "GroupConfig entry '" + groupConfigName + "' is not in ALL_GROUP_CONFIG_SYNONYMS. " +
+                    "Add it with Optional.of(brokerConfigName) or Optional.empty() if it has no broker synonym.");
         }
 
-        // Every key in ALL_GROUP_CONFIG_SYNONYMS must be a valid GroupConfig entry.
+        // Every key in ALL_GROUP_CONFIG_SYNONYMS should be a valid GroupConfig entry.
         for (String key : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.keySet()) {
             assertTrue(GroupConfig.CONFIG_DEF.names().contains(key),
-                "ALL_GROUP_CONFIG_SYNONYMS contains key '" + key + "' which is not a valid " +
-                    "GroupConfig entry. Remove it or fix the typo.");
+                "ALL_GROUP_CONFIG_SYNONYMS contains '" + key + "' which is not a valid GroupConfig entry.");
         }
 
-        // Every entry in the exclusion list must be a valid GroupConfig entry.
-        for (String excluded : groupConfigsWithoutBrokerSynonym) {
-            assertTrue(GroupConfig.CONFIG_DEF.names().contains(excluded),
-                "Exclusion list contains '" + excluded + "' which is not a valid GroupConfig " +
-                    "entry. Remove it or fix the typo.");
-        }
-
-        // Every synonym value must point to a valid broker config.
+        // Every present synonym mapping should point to a valid broker config.
         Set<String> brokerConfigNames = new HashSet<>();
         brokerConfigNames.addAll(GroupCoordinatorConfig.CONFIG_DEF.names());
         brokerConfigNames.addAll(ShareGroupConfig.CONFIG_DEF.names());
 
-        for (Map.Entry<String, String> entry : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.entrySet()) {
-            assertTrue(brokerConfigNames.contains(entry.getValue()),
-                "ALL_GROUP_CONFIG_SYNONYMS maps '" + entry.getKey() + "' to '" +
-                    entry.getValue() + "' but this broker config does not exist.");
+        for (Map.Entry<String, Optional<String>> entry : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.entrySet()) {
+            entry.getValue().ifPresent(brokerConfigName ->
+                assertTrue(brokerConfigNames.contains(brokerConfigName),
+                    "ALL_GROUP_CONFIG_SYNONYMS maps '" + entry.getKey() + "' to '" +
+                        brokerConfigName + "' but this broker config does not exist."));
         }
     }
 
