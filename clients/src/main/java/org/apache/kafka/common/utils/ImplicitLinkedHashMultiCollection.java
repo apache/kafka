@@ -56,6 +56,9 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
         super(iter);
     }
 
+    public ImplicitLinkedHashMultiCollection(Iterable<E> iterable) {
+        super(iterable);
+    }
 
     /**
      * Adds a new element to the appropriate place in the elements array.

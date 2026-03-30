@@ -436,7 +436,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       util.List.of(new JoinGroupRequestData.JoinGroupRequestProtocol()
         .setName(protocolName)
         .setMetadata("test".getBytes())
-    ).iterator())
+    ))
 
     new JoinGroupRequest.Builder(
       new JoinGroupRequestData()
@@ -628,7 +628,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def describeLogDirsRequest = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(new DescribeLogDirsRequestData.DescribableLogDirTopicCollection(util.Set.of(
-    new DescribeLogDirsRequestData.DescribableLogDirTopic().setTopic(tp.topic).setPartitions(util.List.of(tp.partition))).iterator()))).build()
+    new DescribeLogDirsRequestData.DescribableLogDirTopic().setTopic(tp.topic).setPartitions(util.List.of(tp.partition)))))).build()
 
   private def addPartitionsToTxnRequest = AddPartitionsToTxnRequest.Builder.forClient(transactionalId, 1, 1, util.List.of(tp)).build()
 
@@ -652,7 +652,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         new DescribeProducersRequestData.TopicRequest()
           .setName(tp.topic)
           .setPartitionIndexes(java.util.List.of(Int.box(tp.partition)))
-      ).iterator()))
+      )))
   ).build()
 
   private def describeTransactionsRequest: DescribeTransactionsRequest = new DescribeTransactionsRequest.Builder(

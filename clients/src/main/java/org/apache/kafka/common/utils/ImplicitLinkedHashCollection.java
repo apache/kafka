@@ -562,6 +562,17 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
+     * Create a new ImplicitLinkedHashCollection.
+     *
+     * @param iterable  We will add all the elements accessible through this iterable
+     *                  to the set.
+     */
+    @SuppressWarnings("this-escape")
+    public ImplicitLinkedHashCollection(Iterable<E> iterable) {
+        this(iterable.iterator());
+    }
+
+    /**
      * Removes all of the elements from this set.
      */
     @Override

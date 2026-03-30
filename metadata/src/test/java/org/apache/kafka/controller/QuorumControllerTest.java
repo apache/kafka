@@ -298,7 +298,7 @@ public class QuorumControllerTest {
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Set.of(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
-                        setReplicationFactor(replicationFactor)).iterator()));
+                        setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
                 Set.of("foo")).get();
@@ -419,7 +419,7 @@ public class QuorumControllerTest {
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Set.of(
                     new CreatableTopic().setName("foo").setNumPartitions(1).
-                        setReplicationFactor(replicationFactor)).iterator()));
+                        setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
                 Set.of("foo")).get();
@@ -558,7 +558,7 @@ public class QuorumControllerTest {
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Set.of(
                     new CreatableTopic().setName("foo").setNumPartitions(1).
-                        setReplicationFactor(replicationFactor)).iterator()));
+                        setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
                 Set.of("foo")).get();
@@ -655,7 +655,7 @@ public class QuorumControllerTest {
                         setReplicationFactor(replicationFactor),
                     new CreatableTopic().setName("bar").setNumPartitions(1).
                         setReplicationFactor(replicationFactor)
-                ).iterator()));
+                )));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
                 Set.of("foo", "bar")).get();
@@ -780,7 +780,7 @@ public class QuorumControllerTest {
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Set.of(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
-                        setReplicationFactor(replicationFactor)).iterator()));
+                        setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData, Set.of("foo")).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
@@ -1005,7 +1005,7 @@ public class QuorumControllerTest {
                 new CreateTopicsRequestData().setTopics(
                     new CreatableTopicCollection(Set.of(
                         new CreatableTopic().setName("foo").setNumPartitions(1).
-                            setReplicationFactor((short) 1)).iterator()));
+                            setReplicationFactor((short) 1))));
             assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
                 ANONYMOUS_CONTEXT,
                 createTopicsRequestData, Set.of("foo")).get().
@@ -1081,7 +1081,7 @@ public class QuorumControllerTest {
                                     setHost("localhost").
                                     setPort(8000 + i).
                                     setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                                ).iterator()
+                                )
                         )).
                         setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
                             List.of(
@@ -1089,7 +1089,7 @@ public class QuorumControllerTest {
                                     setName(MetadataVersion.FEATURE_NAME).
                                     setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                                     setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())
-                            ).iterator()
+                            )
                         ))).get();
             }
             for (int i = 0; i < numBrokers; i++) {
@@ -1102,7 +1102,7 @@ public class QuorumControllerTest {
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(List.of(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092 + i)).iterator()))).get();
+                            setPort(9092 + i))))).get();
                 brokerEpochs.put(i, reply.epoch());
             }
             for (int i = 0; i < numBrokers - 1; i++) {
@@ -1123,7 +1123,7 @@ public class QuorumControllerTest {
                                     new CreatableReplicaAssignment().
                                         setPartitionIndex(1).
                                         setBrokerIds(List.of(1, 2, 0))).
-                                            iterator()))).iterator())),
+                                            iterator()))))),
                 Set.of("foo")).get();
             fooId = fooData.topics().find("foo").topicId();
             active.allocateProducerIds(ANONYMOUS_CONTEXT,
@@ -1152,13 +1152,13 @@ public class QuorumControllerTest {
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8000).
-                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)))).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
                     List.of(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())))),
                     (short) 0),
             new ApiMessageAndVersion(new RegisterControllerRecord().
                 setControllerId(1).
@@ -1169,13 +1169,13 @@ public class QuorumControllerTest {
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8001).
-                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)))).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
                     List.of(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())))),
                     (short) 0),
             new ApiMessageAndVersion(new RegisterControllerRecord().
                 setControllerId(2).
@@ -1186,20 +1186,20 @@ public class QuorumControllerTest {
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8002).
-                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)))).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
                     List.of(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())))),
                 (short) 0),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                 setEndPoints(new BrokerEndpointCollection(
                     List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                        setPort(9092).setSecurityProtocol((short) 0)).iterator())).
+                        setPort(9092).setSecurityProtocol((short) 0)))).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -1208,7 +1208,7 @@ public class QuorumControllerTest {
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
                 setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                        setPort(9093).setSecurityProtocol((short) 0)).iterator())).
+                        setPort(9093).setSecurityProtocol((short) 0)))).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -1217,7 +1217,7 @@ public class QuorumControllerTest {
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
                 setEndPoints(new BrokerEndpointCollection(
                     List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                        setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                        setPort(9094).setSecurityProtocol((short) 0)))).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -1226,7 +1226,7 @@ public class QuorumControllerTest {
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
                 setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                        setPort(9095).setSecurityProtocol((short) 0)).iterator())).
+                        setPort(9095).setSecurityProtocol((short) 0)))).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -1279,7 +1279,7 @@ public class QuorumControllerTest {
             CompletableFuture<CreateTopicsResponseData> createFuture =
                 controller.createTopics(context0, new CreateTopicsRequestData().setTimeoutMs(0).
                     setTopics(new CreatableTopicCollection(Set.of(
-                        new CreatableTopic().setName("foo")).iterator())),
+                        new CreatableTopic().setName("foo")))),
                     Set.of());
             CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
                 controller.deleteTopics(context0, List.of(Uuid.ZERO_UUID));

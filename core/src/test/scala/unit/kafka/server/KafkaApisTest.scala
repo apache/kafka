@@ -2150,7 +2150,7 @@ class KafkaApisTest extends Logging {
             util.List.of(new AddPartitionsToTxnTopic()
               .setName(tp0.topic)
               .setPartitions(util.List.of(tp0.partition))
-            ).iterator())
+            ))
           ), new AddPartitionsToTxnTransaction()
           .setTransactionalId(transactionalId2)
           .setProducerId(producerId)
@@ -2160,9 +2160,9 @@ class KafkaApisTest extends Logging {
             util.List.of(new AddPartitionsToTxnTopic()
               .setName(tp1.topic)
               .setPartitions(util.List.of(tp1.partition))
-            ).iterator())
+            ))
           )
-        ).iterator()
+        )
       )
     ).build(4.toShort)
     val request = buildRequest(addPartitionsToTxnRequest)
@@ -2230,8 +2230,8 @@ class KafkaApisTest extends Logging {
                   util.List.of(new AddPartitionsToTxnTopic()
                     .setName(tp.topic)
                     .setPartitions(util.List.of(tp.partition))
-                  ).iterator()))
-              ).iterator())).build(version)
+                  )))
+              ))).build(version)
 
       val requestChannelRequest = buildRequest(addPartitionsToTxnRequest, requestMetrics = requestMetrics)
 
@@ -2291,8 +2291,8 @@ class KafkaApisTest extends Logging {
               util.List.of(new AddPartitionsToTxnTopic()
                 .setName(tp0.topic)
                 .setPartitions(util.List.of[Integer](tp0.partition, tp1.partition()))
-              ).iterator()))
-          ).iterator())).build(version)
+              )))
+          ))).build(version)
 
     val requestChannelRequest = buildRequest(addPartitionsToTxnRequest)
     kafkaApis = createKafkaApis()
@@ -3975,7 +3975,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setErrorCode(Errors.NONE.code)
           ).iterator))
-      ).iterator()))
+      )))
 
     future.complete(offsetDeleteResponseData)
 
@@ -4208,7 +4208,7 @@ class KafkaApisTest extends Logging {
           .setPartitions(util.List.of(new OffsetDeleteRequestPartition()
             .setPartitionIndex(0)
           ))
-        ).iterator()))
+        )))
     ).build()
     val request = buildRequest(offsetDeleteRequest)
 
@@ -10509,7 +10509,7 @@ class KafkaApisTest extends Logging {
       new DescribeProducersRequestData.TopicRequest()
         .setName(tp4.topic)
         .setPartitionIndexes(util.List.of(Int.box(tp4.partition)))
-    ).iterator()))
+    )))
 
     def buildExpectedActions(topic: String): util.List[Action] = {
       val pattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
@@ -10786,7 +10786,7 @@ class KafkaApisTest extends Logging {
           setResourceType(BROKER.id()).
           setConfigs(new LAlterableConfigCollection(util.List.of(new LAlterableConfig().
             setName("foo").
-            setValue(null)).iterator()))).iterator())), 1.toShort))
+            setValue(null))))))), 1.toShort))
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
@@ -10828,7 +10828,7 @@ class KafkaApisTest extends Logging {
         setResourceType(BROKER_LOGGER.id()).
         setConfigs(new IAlterableConfigCollection(util.List.of(new IAlterableConfig().
           setName(LoggingController.ROOT_LOGGER).
-          setValue("TRACE")).iterator()))).iterator())), 1.toShort)
+          setValue("TRACE"))))))), 1.toShort)
     assertEquals(
       "IncrementalAlterConfigsRequestData(resources=[" +
         "AlterConfigsResource(resourceType=" + BROKER_LOGGER.id() + ", " +
@@ -14057,7 +14057,7 @@ class KafkaApisTest extends Logging {
               .setPartitions(util.List.of(
                 new AlterShareGroupOffsetsRequestPartition().setPartitionIndex(0).setStartOffset(0))
               )
-          ).iterator()
+          )
         )
       )
 
