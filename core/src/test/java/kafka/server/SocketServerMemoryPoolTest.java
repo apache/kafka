@@ -16,19 +16,22 @@
  */
 package kafka.server;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.Metric;
 import kafka.network.SocketServer;
-import kafka.test.junit.ClusterTestExtensions;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.protocol.ApiKeys;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
+import kafka.test.junit.ClusterTestExtensions;
+
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Metric;
+
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.EOFException;
