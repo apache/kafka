@@ -47,6 +47,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     private volatile KafkaException error;
     private volatile boolean isComplete;
     private volatile boolean isValidatePositionsComplete;
+    private volatile boolean pendingReconciliationChecked;
 
     /**
      * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
@@ -85,6 +86,25 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         this.isValidatePositionsComplete = true;
     }
 
+    /**
+     *
+     * @return true if the background already checked any pending reconciliation when processing this poll event.
+     * If it completed the check, we know that revocations where handled (commit triggered and partitions marked as pending revocation),
+     * so the app thread can safely process to fetch/collect records.
+     */
+    public boolean isReconciliationCheckComplete() {
+        return pendingReconciliationChecked;
+    }
+
+    /**
+     * Mark that reconciliation check is complete for this poll event.
+     * This should be called after the background has checked pending reconciliations when processing this poll event
+     * (triggered commits, and marked partitions as pending revocation if needed)
+     */
+    public void markReconciliationCheckComplete() {
+        this.pendingReconciliationChecked = true;
+    }
+
     public boolean isComplete() {
         return isComplete;
     }
@@ -110,6 +130,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
             ", pollTimeMs=" + pollTimeMs +
             ", error=" + error +
             ", isComplete=" + isComplete +
-            ", isValidatePositionsComplete=" + isValidatePositionsComplete;
+            ", isValidatePositionsComplete=" + isValidatePositionsComplete +
+            ", pendingReconciliationChecked=" + pendingReconciliationChecked;
     }
 }

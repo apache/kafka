@@ -2004,6 +2004,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * for returning.
      */
     private Fetch<K, V> collectFetch() {
+        // Do not return buffered records if the background hasn't checked for pending reconciliations
+        // for the inflight poll event.
+        // This is key because partitions may need revocation, so we need to wait for the reconciliation check
+        // that triggers commits and marks partitions as pending revocation, before we can
+        // safely collect records from the buffer.
+        if (inflightPoll != null && !inflightPoll.isReconciliationCheckComplete()) {
+            return Fetch.empty();
+        }
+
         // With the non-blocking async poll, it's critical that the application thread wait until the background
         // thread has completed the stage of validating positions. This prevents a race condition where both
         // threads may attempt to update the SubscriptionState.position() for a given partition. So if the background
