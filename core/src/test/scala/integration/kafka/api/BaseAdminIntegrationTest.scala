@@ -202,13 +202,6 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
         config.setProperty(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, "123")
       })
     }
-    // For testDescribeGroupConfigSynonymsWithStaticBrokerConfig, set a static broker config so
-    // that we can verify the synonym chain includes STATIC_BROKER_CONFIG.
-    if (testInfo.getTestMethod.toString.contains("testDescribeGroupConfigSynonymsWithStaticBrokerConfig")) {
-      configs.foreach(config => {
-        config.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "2000")
-      })
-    }
     configs.foreach { config =>
       config.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
       config.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
