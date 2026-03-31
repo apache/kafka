@@ -23,6 +23,14 @@ org.apache.kafka.clients.TransactionsExpirationTest:
 - testTransactionAfterProducerIdExpiresWithTV2
 org.apache.kafka.clients.TransactionsWithMaxInFlightOneTest:
 - testTransactionalProducerSingleBrokerMaxInFlightOne
+org.apache.kafka.clients.admin.AddPartitionsTest:
+- testIncrementPartitions
+- testManualAssignmentOfReplicas
+- testMissingPartitionsInCreatePartitions
+- testMissingPartitionsInCreateTopics
+- testReplicaPlacementAllServers
+- testReplicaPlacementPartialServers
+- testWrongReplicaCount
 org.apache.kafka.clients.admin.AdminClientWithPoliciesIntegrationTest:
 - testInvalidAlterConfigsDueToPolicy
 org.apache.kafka.clients.admin.AdminFenceProducersTest:
