@@ -656,11 +656,7 @@ public class LogManager {
                             // Ignore remote-log-index-cache directory as that is index cache maintained by tiered storage subsystem
                             // but not any topic-partition dir.
                             if (logDir.getName().equals(RemoteIndexCache.DIR_NAME)) return false;
-                            try {
-                                return !UnifiedLog.parseTopicPartitionName(logDir).topic().equals(Topic.CLUSTER_METADATA_TOPIC_NAME);
-                            } catch (IOException e) {
-                                return false;
-                            }
+                            return !UnifiedLog.parseTopicPartitionName(logDir).topic().equals(Topic.CLUSTER_METADATA_TOPIC_NAME);
                         })
                         .toList();
                 numTotalLogs += logsToLoad.size();

@@ -504,7 +504,7 @@ class LocalLogTest {
     }
 
     @Test
-    public void testParseTopicPartitionName() throws IOException {
+    public void testParseTopicPartitionName() {
         String topic = "test_topic";
         String partition = "143";
         File dir = new File(logDir, topicPartitionName(topic, partition));
@@ -518,7 +518,7 @@ class LocalLogTest {
      * are parsed correctly by `Log.parseTopicPartitionName` (see KAFKA-5232 for details).
      */
     @Test
-    public void testParseTopicPartitionNameWithPeriodForDeletedTopic() throws IOException {
+    public void testParseTopicPartitionNameWithPeriodForDeletedTopic() {
         String topic = "foo.bar-testtopic";
         String partition = "42";
         File dir = new File(logDir, LocalLog.logDeleteDirName(new TopicPartition(topic, Integer.parseInt(partition))));
@@ -528,9 +528,9 @@ class LocalLogTest {
     }
 
     @Test
-    public void testParseTopicPartitionNameForEmptyName() throws IOException {
+    public void testParseTopicPartitionNameForEmptyName() {
         File dir = new File("");
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
     }
 
@@ -542,68 +542,68 @@ class LocalLogTest {
     }
 
     @Test
-    public void testParseTopicPartitionNameForMissingSeparator() throws IOException {
+    public void testParseTopicPartitionNameForMissingSeparator() {
         String topic = "test_topic";
         String partition = "1999";
         File dir = new File(logDir, topic + partition);
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, topic + partition + "." + LogFileUtils.DELETE_DIR_SUFFIX);
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForMissingTopic() throws IOException {
+    public void testParseTopicPartitionNameForMissingTopic() {
         String topic = "";
         String partition = "1999";
         File dir = new File(logDir, topicPartitionName(topic, partition));
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
 
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, LocalLog.logDeleteDirName(new TopicPartition(topic, Integer.parseInt(partition))));
 
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForMissingPartition() throws IOException {
+    public void testParseTopicPartitionNameForMissingPartition() {
         String topic = "test_topic";
         String partition = "";
         File dir = new File(logDir.getPath() + topicPartitionName(topic, partition));
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
 
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + LogFileUtils.DELETE_DIR_SUFFIX);
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForInvalidPartition() throws IOException {
+    public void testParseTopicPartitionNameForInvalidPartition() {
         String topic = "test_topic";
         String partition = "1999a";
         File dir = new File(logDir, topicPartitionName(topic, partition));
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
 
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, topic + partition + "." + LogFileUtils.DELETE_DIR_SUFFIX);
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForExistingInvalidDir() throws IOException {
+    public void testParseTopicPartitionNameForExistingInvalidDir() {
         File dir1 = new File(logDir.getPath() + "/non_kafka_dir");
-        String msg = "KafkaException should have been thrown for dir: " + dir1.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir1.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir1), msg);
         File dir2 = new File(logDir.getPath() + "/non_kafka_dir-delete");
-        msg = "KafkaException should have been thrown for dir: " + dir2.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + dir2.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir2), msg);
     }
 

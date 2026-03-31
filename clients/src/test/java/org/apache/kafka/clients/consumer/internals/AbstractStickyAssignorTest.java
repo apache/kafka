@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.api.Flaky;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -1522,15 +1521,16 @@ public abstract class AbstractStickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
-                Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
-
                 int moreLoaded = len > otherLen ? i : j;
                 int lessLoaded = len > otherLen ? j : i;
 
+                Set<String> otherTopics = otherPartitions.stream()
+                    .map(TopicPartition::topic)
+                    .collect(Collectors.toSet());
+
                 // If there's any overlap in the subscribed topics, we should have been able to balance partitions
-                for (String topic: map.keySet()) {
-                    assertFalse(otherMap.containsKey(topic),
+                for (TopicPartition tp : partitions) {
+                    assertFalse(otherTopics.contains(tp.topic()),
                         "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded + " to achieve a better balance" +
                         "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
                         "\nSubscriptions: " + subscriptions +

@@ -652,9 +652,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DESCRIBE_PRODUCERS =>
           new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
-            .setTopics(util.List.of(new DescribeProducersRequestData.TopicRequest()
+            .setTopics(new DescribeProducersRequestData.TopicRequestCollection(util.List.of(new DescribeProducersRequestData.TopicRequest()
               .setName("test-topic")
-              .setPartitionIndexes(util.List.of[Integer](1, 2, 3)))))
+              .setPartitionIndexes(util.List.of[Integer](1, 2, 3))).iterator())))
 
         case ApiKeys.BROKER_REGISTRATION =>
           new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())

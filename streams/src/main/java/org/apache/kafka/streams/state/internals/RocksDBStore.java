@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.BytesUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -579,7 +579,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // RocksDB's deleteRange() does not support a null upper bound so in the event
         // of overflow from increment(), the operation cannot be performed and an
         // IndexOutOfBoundsException will be thrown.
-        cfAccessor.deleteRange(dbAccessor, keyFrom.get(), BytesUtils.increment(keyTo).get());
+        cfAccessor.deleteRange(dbAccessor, keyFrom.get(), ByteUtils.increment(keyTo).get());
     }
 
     @Override
@@ -1168,7 +1168,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     /**
-     * Same as {@link BytesUtils#increment(Bytes)} but {@code null} is returned instead of throwing
+     * Same as {@link ByteUtils#increment(Bytes)} but {@code null} is returned instead of throwing
      * {@code IndexOutOfBoundsException} in the event of overflow.
      *
      * @param input bytes to increment
@@ -1177,7 +1177,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
      */
     static Bytes incrementWithoutOverflow(final Bytes input) {
         try {
-            return BytesUtils.increment(input);
+            return ByteUtils.increment(input);
         } catch (final IndexOutOfBoundsException e) {
             return null;
         }
