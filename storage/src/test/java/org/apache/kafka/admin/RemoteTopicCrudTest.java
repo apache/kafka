@@ -59,8 +59,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import scala.jdk.javaapi.OptionConverters;
-
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -559,7 +557,6 @@ class RemoteTopicCrudTest {
             var logBuffer = cluster.brokers().values()
                 .stream()
                 .map(broker -> broker.logManager().getLog(new TopicPartition(testTopicName, 0), false))
-                .map(OptionConverters::toJava)
                 .flatMap(Optional::stream)
                 .toList();
     

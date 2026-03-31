@@ -20,8 +20,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -55,7 +55,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,10 +109,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         if (value == null) {
             return null;
         }
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
-        final byte[] rawHeaders = HeadersSerializer
-            .serialize(preSerializedHeaders, ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders))
-            .array();
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {

@@ -72,8 +72,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import scala.jdk.javaapi.CollectionConverters;
-
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 
@@ -289,7 +287,7 @@ public interface ClusterInstance {
 
         // Ensure that the topic is removed from all cleaner offsets
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker -> {
-            List<File> liveLogDirs = CollectionConverters.asJava(broker.logManager().liveLogDirs());
+            Collection<File> liveLogDirs = broker.logManager().liveLogDirs();
             return liveLogDirs.stream().allMatch(logDir -> {
                 OffsetCheckpointFile checkpointFile;
                 try {

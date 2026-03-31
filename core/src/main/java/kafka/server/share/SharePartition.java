@@ -39,8 +39,6 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
@@ -209,11 +207,6 @@ public class SharePartition {
     private final int defaultMaxDeliveryCount;
 
     /**
-     * The group config manager is used to retrieve the values for dynamic group configurations
-     */
-    private final GroupConfigManager groupConfigManager;
-
-    /**
      * The provider used to retrieve share group dynamic configuration values.
      */
     private final ShareGroupConfigProvider configProvider;
@@ -343,11 +336,11 @@ public class SharePartition {
         Time time,
         Persister persister,
         ReplicaManager replicaManager,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         SharePartitionListener listener
     ) {
         this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
-            timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
+            timer, time, persister, replicaManager, configProvider, SharePartitionState.EMPTY, listener,
             new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
 
@@ -364,7 +357,7 @@ public class SharePartition {
         Time time,
         Persister persister,
         ReplicaManager replicaManager,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         SharePartitionState sharePartitionState,
         SharePartitionListener listener,
         SharePartitionMetrics sharePartitionMetrics
@@ -385,8 +378,7 @@ public class SharePartition {
         this.persister = persister;
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
-        this.groupConfigManager = groupConfigManager;
-        this.configProvider = new ShareGroupConfigProvider(groupConfigManager);
+        this.configProvider = configProvider;
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
@@ -3040,9 +3032,7 @@ public class SharePartition {
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;
         }
-        ShareGroupAutoOffsetResetStrategy offsetResetStrategy = groupConfigManager.groupConfig(groupId)
-            .map(GroupConfig::shareAutoOffsetReset)
-            .orElseGet(GroupConfig::defaultShareAutoOffsetReset);
+        ShareGroupAutoOffsetResetStrategy offsetResetStrategy = configProvider.autoOffsetReset(groupId);
 
         if (offsetResetStrategy.type() == ShareGroupAutoOffsetResetStrategy.StrategyType.LATEST) {
             return offsetForLatestTimestamp(topicIdPartition, replicaManager, leaderEpoch);

@@ -297,11 +297,11 @@
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
-              files="(LogLoader|LogValidator|RemoteLogManager|UnifiedLog).java"/>
+              files="(LogLoader|LogManager|LogValidator|RemoteLogManager|UnifiedLog).java"/>
     <suppress checks="NPathComplexity"
-              files="(LocalLog|LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
+              files="(LocalLog|LogLoader|LogManager|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
     <suppress checks="ParameterNumber"
-              files="(LogLoader|UnifiedLog).java"/>
+              files="(LogLoader|LogManager|UnifiedLog).java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest|UnifiedLogTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>

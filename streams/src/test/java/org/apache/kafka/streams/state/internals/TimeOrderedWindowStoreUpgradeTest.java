@@ -19,8 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -91,11 +91,7 @@ public class TimeOrderedWindowStoreUpgradeTest {
         if (value == null) {
             return null;
         }
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
-        final byte[] rawHeaders = HeadersSerializer.serialize(
-            preSerializedHeaders,
-            ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders)
-        ).array();
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {

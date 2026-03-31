@@ -741,8 +741,8 @@ public class LocalLog {
         return topicPartition.topic() + "-" + topicPartition.partition();
     }
 
-    private static KafkaException exception(File dir) throws IOException {
-        return new KafkaException("Found directory " + dir.getCanonicalPath() + ", '" + dir.getName() + "' is not in the form of " +
+    private static KafkaException exception(File dir) {
+        return new KafkaException("Found directory " + dir.getAbsolutePath() + ", '" + dir.getName() + "' is not in the form of " +
                 "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
                 "Kafka's log directories (and children) should only contain Kafka topic data.");
     }
@@ -750,7 +750,7 @@ public class LocalLog {
     /**
      * Parse the topic and partition out of the directory name of a log
      */
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         if (dir == null) {
             throw new KafkaException("dir should not be null");
         }
@@ -1037,9 +1037,10 @@ public class LocalLog {
         // delete the old files
         List<LogSegment> deletedNotReplaced = new ArrayList<>();
         for (LogSegment segment : sortedOldSegments) {
-            // remove the index entry
-            if (segment.baseOffset() != sortedNewSegments.get(0).baseOffset()) {
+            // remove the index entry; skip removal for base offsets that a new segment is replacing in-place
+            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
                 existingSegments.remove(segment.baseOffset());
+                deletedNotReplaced.add(segment);
             }
             deleteSegmentFiles(
                     List.of(segment),
@@ -1050,9 +1051,6 @@ public class LocalLog {
                     scheduler,
                     logDirFailureChannel,
                     logPrefix);
-            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
-                deletedNotReplaced.add(segment);
-            }
         }
 
         // okay we are safe now, remove the swap suffix

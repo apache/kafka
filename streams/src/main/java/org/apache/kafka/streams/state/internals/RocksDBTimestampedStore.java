@@ -63,23 +63,29 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsColumnFamily = columnFamilies.get(2);
 
-        final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
-        noTimestampsIter.seekToFirst();
-        if (noTimestampsIter.isValid()) {
-            log.info("Opening store {} in upgrade mode", name);
-            cfAccessor = new DualColumnFamilyAccessor(
-                offsetsColumnFamily,
-                noTimestampColumnFamily,
-                withTimestampColumnFamily,
-                TimestampedBytesStore::convertToTimestampedFormat,
-                this, open
-            );
-        } else {
-            log.info("Opening store {} in regular mode", name);
-            cfAccessor = new SingleColumnFamilyAccessor(offsetsColumnFamily, withTimestampColumnFamily);
-            noTimestampColumnFamily.close();
+        try (final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily)) {
+            noTimestampsIter.seekToFirst();
+            if (noTimestampsIter.isValid()) {
+                log.info("Opening store {} in upgrade mode", name);
+                cfAccessor = new DualColumnFamilyAccessor(
+                    offsetsColumnFamily,
+                    noTimestampColumnFamily,
+                    withTimestampColumnFamily,
+                    TimestampedBytesStore::convertToTimestampedFormat,
+                    this,
+                    open
+                );
+            } else {
+                log.info("Opening store {} in regular mode", name);
+                cfAccessor = new SingleColumnFamilyAccessor(offsetsColumnFamily, withTimestampColumnFamily);
+                noTimestampColumnFamily.close();
+            }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
+            }
+            throw e;
         }
-        noTimestampsIter.close();
     }
 
 }

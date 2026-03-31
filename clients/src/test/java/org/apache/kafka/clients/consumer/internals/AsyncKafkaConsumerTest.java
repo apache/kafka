@@ -150,6 +150,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
@@ -160,6 +161,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1682,6 +1684,52 @@ public class AsyncKafkaConsumerTest {
 
         assertEquals(singleton(topicName), consumer.subscription());
         assertEquals(partitions, consumer.assignment());
+    }
+
+    /**
+     * Verifies that at most one {@link AsyncPollEvent} is in-flight at a time. When {@code poll()} runs
+     * multiple loop iterations (e.g. empty fetches), it must not enqueue a new event while the previous
+     * one is still in-flight. This prevents unnecessary queueing. See KAFKA-20315.
+     */
+    @Test
+    public void testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight() {
+        // Build a consumer with a mocked FetchBuffer so we can deterministically advance MockTime and avoid
+        // tight spinning while poll() waits.
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions);
+
+        final String topicName = "topic1";
+        final TopicPartition tp = new TopicPartition(topicName, 0);
+
+        // Satisfy poll() preconditions without needing assign() (which would require stubbing addAndGet()).
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Make pollForFetches() "wait" by advancing mock time.
+        doReturn(100L).when(applicationEventHandler).maximumTimeToWait();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            ((MockTime) time).sleep(pollTimer.remainingMs());
+            return null;
+        }).when(fetchBuffer).awaitWakeup(any(Timer.class));
+
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+
+        // Leave AsyncPollEvent in-flight (do not complete it) so the next loop iteration sees inflightPoll != null
+        doAnswer(invocation -> null).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ofMillis(450));
+        assertTrue(result.isEmpty());
+
+        // Ensure we actually exercised the "wait for fetches" path (i.e., more than a trivial single pass).
+        verify(fetchBuffer, atLeastOnce()).awaitWakeup(any(Timer.class));
+
+        // Only one AsyncPollEvent must have been added despite multiple poll loop iterations.
+        verify(applicationEventHandler, times(1)).add(isA(AsyncPollEvent.class));
     }
 
     /**
