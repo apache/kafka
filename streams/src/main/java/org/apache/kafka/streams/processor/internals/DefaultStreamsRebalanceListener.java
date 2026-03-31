@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -65,11 +66,11 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
 
     @Override
     public void onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
-        final Map<TaskId, Set<TopicPartition>> activeTasksToRevokeWithPartitions =
-            pairWithTopicPartitions(tasks.stream());
-        final Set<TopicPartition> partitionsToRevoke = activeTasksToRevokeWithPartitions.values().stream()
-            .flatMap(Collection::stream)
-            .collect(Collectors.toSet());
+        final Set<TopicPartition> partitionsToRevoke = tasks.stream()
+                .map(streamsRebalanceData.reconciledAssignment().activeTaskInputPartitions()::get)
+                .filter(Objects::nonNull)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toSet());
 
         final long start = time.milliseconds();
         try {
@@ -88,8 +89,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     @Override
     public void onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
         final long start = time.milliseconds();
-        final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
-            pairWithTopicPartitions(assignment.activeTasks().stream());
+        final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions = toTaskPartitionMap(assignment.activeTaskInputPartitions());
         final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
             pairWithTopicPartitions(Stream.concat(assignment.standbyTasks().stream(), assignment.warmupTasks().stream()));
 
@@ -115,6 +115,15 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         } finally {
             tasksLostSensor.record(time.milliseconds() - start);
         }
+    }
+
+    private Map<TaskId, Set<TopicPartition>> toTaskPartitionMap(
+            final Map<StreamsRebalanceData.TaskId, Set<TopicPartition>> assignmentMap
+    ) {
+        return assignmentMap.entrySet().stream().collect(Collectors.toMap(
+                entry -> toTaskId(entry.getKey()),
+                entry -> Set.copyOf(entry.getValue())
+        ));
     }
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsRebalanceData.TaskId> taskIdStream) {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
@@ -30,6 +31,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue.TaskIds;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
@@ -398,6 +401,42 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(GROUP_ID));
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentResolvedTopicIdsRecord() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new StreamsGroupTargetAssignmentResolvedTopicIdsKey()
+                .setGroupId(GROUP_ID),
+            new ApiMessageAndVersion(
+                new StreamsGroupTargetAssignmentResolvedTopicIdsValue()
+                    .setAssignmentEpoch(42)
+                    .setResolvedTopicIdsBySubtopology(List.of(
+                        new StreamsGroupTargetAssignmentResolvedTopicIdsValue.ResolvedTopicIds()
+                            .setSubtopologyId(SUBTOPOLOGY_1)
+                            .setTopicIds(List.of(topicId2)),
+                        new StreamsGroupTargetAssignmentResolvedTopicIdsValue.ResolvedTopicIds()
+                            .setSubtopologyId(SUBTOPOLOGY_2)
+                            .setTopicIds(List.of(topicId1))
+                    )),
+                (short) 0
+            )
+        );
+
+        assertEquals(
+            expectedRecord,
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+                GROUP_ID,
+                42,
+                Map.of(
+                    SUBTOPOLOGY_2, List.of(topicId1),
+                    SUBTOPOLOGY_1, List.of(topicId2)
+                )
+            )
+        );
     }
 
     @Test
