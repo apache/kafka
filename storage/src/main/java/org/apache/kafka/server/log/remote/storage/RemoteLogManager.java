@@ -978,19 +978,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (copyLagMs == 0 || copyLagBytes == 0) {
                 return false;
             }
-
+            
             if (copyLagMs > 0 && hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs)) {
-                return false;
+                return true;
             }
 
-            if (copyLagBytes > 0 && hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
-                return false;
-            }
-
-            return false;
+            return copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
         }
-
-
+        
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
             if (isCancelled())
                 return;
