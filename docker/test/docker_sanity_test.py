@@ -221,6 +221,47 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
+class DockerSanityTestDefaultMode(DockerSanityTest):
+    def setUp(self) -> None:
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.DEFAULT_MODE_COMPOSE}")
+    def tearDown(self) -> None:
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.DEFAULT_MODE_COMPOSE}")
+    def test_bed(self):
+        self.execute()
+
+    def plaintext_flow(self):
+        print(f"Running {constants.PLAINTEXT_FLOW_TESTS}")
+        errors = []
+        try:
+            self.assertTrue(self.create_topic(constants.PLAINTEXT_TOPIC, ["--bootstrap-server", "localhost:9092"]))
+        except AssertionError as e:
+            errors.append(constants.PLAINTEXT_ERROR_PREFIX + str(e))
+            return errors
+
+        producer_config = ["--bootstrap-server", "localhost:9092"]
+        self.produce_message(constants.PLAINTEXT_TOPIC, producer_config, "key", "message")
+        consumer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "auto.offset.reset=earliest"]
+        message = self.consume_message(constants.PLAINTEXT_TOPIC, consumer_config)
+        try:
+            self.assertEqual(message, "key:message")
+        except AssertionError as e:
+            errors.append(constants.PLAINTEXT_ERROR_PREFIX + str(e))
+        return errors
+
+    def execute(self):
+        total_errors = []
+        try:
+            total_errors.extend(self.plaintext_flow())
+        except Exception as e:
+            print(constants.PLAINTEXT_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
+        try:
+            total_errors.extend(self.broker_restart_flow())
+        except Exception as e:
+            print(constants.BROKER_RESTART_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
+        self.assertEqual(total_errors, [])
+
 def run_tests(image, mode, fixtures_dir):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
@@ -228,7 +269,7 @@ def run_tests(image, mode, fixtures_dir):
 
     test_classes_to_run = []
     if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
+        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode, DockerSanityTestDefaultMode]
     
     loader = unittest.TestLoader()
     suites_list = []
