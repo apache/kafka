@@ -260,7 +260,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventHandler.addAndGet(applyEvent);
             } catch (Exception e) {
                 // Send error to the background thread, so it can complete the ongoing reconciliation (failed to update assignment to run callbacks)
-                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(e, "Failed to update the assignment to run the onPartitionsAssigned callback");
+                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(e, "Failed to apply the new assignment");
                 applicationEventHandler.add(new ConsumerRebalanceListenerCallbackCompletedEvent(ON_PARTITIONS_ASSIGNED, event.future(), Optional.of(error)));
                 throw error;
             }
@@ -318,7 +318,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventHandler.addAndGet(applyEvent);
             } catch (Exception e) {
                 // Send error to the background thread, so it can complete the ongoing reconciliation (failed to update assignment to run callbacks)
-                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(e, "Failed to update the assignment to run the onTasksAssigned callback");
+                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(e, "Failed to apply the new assignment");
                 applicationEventHandler.add(new StreamsOnTasksAssignedCallbackCompletedEvent(event.future(), Optional.of(error)));
                 throw error;
             }
