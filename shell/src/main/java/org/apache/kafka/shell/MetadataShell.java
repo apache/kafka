@@ -22,7 +22,9 @@ import kafka.tools.TerseFailure;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.util.SnapshotFileReader;
+import org.apache.kafka.server.config.DefaultSupportedConfigChecker;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
 import org.apache.kafka.server.util.FileLock;
@@ -148,10 +150,13 @@ public final class MetadataShell {
 
     private void initializeWithSnapshotFileReader() throws Exception {
         this.fileLock = takeDirectoryLockIfExists(parentParent(new File(snapshotPath)));
+        SupportedConfigChecker supportedConfigChecker = new DefaultSupportedConfigChecker();
+
         this.loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setNodeId(-1).
                 setHighWaterMarkAccessor(() -> snapshotFileReader.highWaterMark()).
+                setSupportedConfigChecker(supportedConfigChecker).
                 build();
         snapshotFileReader = new SnapshotFileReader(snapshotPath, loader);
         snapshotFileReader.startup();

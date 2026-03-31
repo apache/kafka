@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -92,7 +91,7 @@ public class ElectLeadersRequest extends AbstractRequest {
 
     public Set<TopicPartition> topicPartitions() {
         if (this.data.topicPartitions() == null) {
-            return Collections.emptySet();
+            return Set.of();
         }
         return this.data.topicPartitions().stream()
             .flatMap(topicPartition -> topicPartition.partitions().stream()
