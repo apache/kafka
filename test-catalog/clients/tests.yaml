@@ -1194,6 +1194,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testOffsetsForTimesOnNullPartitions
 - testOffsetsForTimesTimeoutException
 - testOffsetsForTimesWithZeroTimeout
+- testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollThrowsInterruptExceptionIfInterrupted
 - testProcessBackgroundEventsTimesOut
 - testProcessBackgroundEventsWithInitialDelay
@@ -2282,6 +2283,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testInvalidGroupId
 - testMetricsRemovedOnClose
 - testMultipleBackgroundErrors
+- testPollDoesNotAddNewSharePollEventWhenOneIsAlreadyInFlight
 - testProcessBackgroundEventsTimesOut
 - testProcessBackgroundEventsWithInitialDelay
 - testProcessBackgroundEventsWithoutDelay

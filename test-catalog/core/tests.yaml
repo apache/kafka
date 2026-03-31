@@ -960,6 +960,8 @@ kafka.log.LogCleanerTest:
 - testCleanSegmentsWithConcurrentSegmentDeletion
 - testCleanTombstone
 - testCleanWithTransactionsSpanningSegments
+- testCleanedSegmentOffsetOverflow
+- testCleanedSegmentSizeOverflow
 - testCleaningBeyondMissingOffsets
 - testCleaningWithDeletes
 - testCleaningWithKeysConflictingWithTxnMarkerKeys
@@ -995,7 +997,6 @@ kafka.log.LogCleanerTest:
 - testSegmentGroupingFollowingLoadOfZeroIndex
 - testSegmentGroupingWithSparseOffsets
 - testSegmentGroupingWithSparseOffsetsAndEmptySegments
-- testSegmentWithOffsetOverflow
 - testSizeTrimmedForPreallocatedAndCompactedTopic
 kafka.log.LogConfigTest:
 - shouldValidateThrottledReplicasConfig
