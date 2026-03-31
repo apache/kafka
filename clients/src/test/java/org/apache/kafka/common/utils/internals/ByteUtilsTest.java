@@ -64,7 +64,7 @@ public class ByteUtilsTest {
         byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
         byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
         Bytes output = ByteUtils.increment(Bytes.wrap(input));
-        assertArrayEquals(expected,output.get());
+        assertArrayEquals(expected, output.get());
     }
 
     @Test
