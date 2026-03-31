@@ -53,6 +53,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -113,6 +115,7 @@ import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -1290,6 +1293,56 @@ public class QueryableStateIntegrationTest {
                     incrementIteration();
                 }
             }
+        }
+    }
+
+    // IQv1 verification for headers-aware stores (KIP-1271/KIP-1285): ensures that
+    // ReadOnlyKeyValueStore is accessible and returns correct results when a
+    // persistentTimestampedKeyValueStoreWithHeaders supplier is used directly.
+    @Test
+    public void shouldBeAbleToQueryHeadersAwareStoreWithIQv1(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("hello", "world")),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            // Wait until the store reflects the produced record
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStore()));
+                assertThat(store, notNullValue());
+                final ValueAndTimestamp<String> result = store.get("hello");
+                assertThat(result, notNullValue());
+                assertThat(result.value(), is("world"));
+            });
         }
     }
 

@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -56,6 +57,10 @@ import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -115,6 +120,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -330,6 +336,56 @@ public class IQv2StoreIntegrationTest {
             public boolean isSession() {
                 return true;
             }
+        },
+        TIME_ROCKS_KV_HEADERS {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
+
+            @Override
+            public boolean isHeadersAware() {
+                return true;
+            }
+        },
+        TIME_ROCKS_WINDOW_HEADERS {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.persistentTimestampedWindowStoreWithHeaders(
+                    STORE_NAME, Duration.ofDays(1), WINDOW_SIZE, false
+                );
+            }
+
+            @Override
+            public boolean isWindowed() {
+                return true;
+            }
+
+            @Override
+            public boolean isHeadersAware() {
+                return true;
+            }
+        },
+        ROCKS_SESSION_HEADERS {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofDays(1));
+            }
+
+            @Override
+            public boolean isSession() {
+                return true;
+            }
+
+            @Override
+            public boolean isHeadersAware() {
+                return true;
+            }
         };
 
         public abstract StoreSupplier<?> supplier();
@@ -351,6 +407,10 @@ public class IQv2StoreIntegrationTest {
         }
 
         public boolean isSession() {
+            return false;
+        }
+
+        public boolean isHeadersAware() {
             return false;
         }
     }
@@ -841,10 +901,76 @@ public class IQv2StoreIntegrationTest {
                         shouldHandleSessionKeyPAPIQueries();
                     }
                 }
+
+                // IQv1 verification for headers-aware stores: ensure ReadOnly store interfaces
+                // are accessible and return correct results when dsl.store.format=HEADERS is used.
+                if (storeToTest.isHeadersAware()) {
+                    if (storeToTest.keyValue()) {
+                        shouldHandleIQv1KeyValueQuery();
+                    }
+                    if (storeToTest.isWindowed()) {
+                        shouldHandleIQv1WindowQuery();
+                    }
+                    if (storeToTest.isSession()) {
+                        shouldHandleIQv1SessionQuery();
+                    }
+                }
             }
         } catch (final AssertionError e) {
             LOG.error("Failed assertion", e);
             throw e;
+        }
+    }
+
+    private void shouldHandleIQv1KeyValueQuery() {
+        final ReadOnlyKeyValueStore<Integer, ValueAndTimestamp<Integer>> store =
+            kafkaStreams.store(
+                StoreQueryParameters.fromNameAndType(
+                    STORE_NAME,
+                    QueryableStoreTypes.timestampedKeyValueStore()
+                )
+            );
+        assertThat(store, notNullValue());
+        final ValueAndTimestamp<Integer> result = store.get(2);
+        assertThat(result, notNullValue());
+        assertThat(result.value(), is(5));
+
+        // Verify all() iterator is accessible
+        try (final KeyValueIterator<Integer, ValueAndTimestamp<Integer>> it = store.all()) {
+            assertThat(it.hasNext(), is(true));
+        }
+    }
+
+    private void shouldHandleIQv1WindowQuery() {
+        final ReadOnlyWindowStore<Integer, ValueAndTimestamp<Integer>> store =
+            kafkaStreams.store(
+                StoreQueryParameters.fromNameAndType(
+                    STORE_NAME,
+                    QueryableStoreTypes.timestampedWindowStore()
+                )
+            );
+        assertThat(store, notNullValue());
+        final ValueAndTimestamp<Integer> result = store.fetch(
+            2,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START + WINDOW_SIZE.toMillis())
+        );
+        assertThat(result, notNullValue());
+        assertThat(result.value(), is(5));
+    }
+
+    private void shouldHandleIQv1SessionQuery() {
+        final ReadOnlySessionStore<Integer, Integer> store =
+            kafkaStreams.store(
+                StoreQueryParameters.fromNameAndType(
+                    STORE_NAME,
+                    QueryableStoreTypes.sessionStore()
+                )
+            );
+        assertThat(store, notNullValue());
+        try (final KeyValueIterator<Windowed<Integer>, Integer> it = store.fetch(2)) {
+            assertThat(it.hasNext(), is(true));
+            assertThat(it.next().value, is(5));
         }
     }
 
