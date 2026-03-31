@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.api.TestKitDefaults;
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
@@ -28,7 +30,12 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
@@ -44,6 +51,31 @@ import java.util.stream.Stream;
 
 @SuppressWarnings("NPathComplexity")
 public class TestKitNodes {
+    private static final Logger log = LoggerFactory.getLogger(TestKitNodes.class);
+
+    /**
+     * Create a temporary directory with the prefix {@code kafka-}. The directory is
+     * scheduled for deletion on JVM shutdown.
+     */
+    static File tempDirectory() {
+        final File file;
+        String prefix = "kafka-";
+        try {
+            file = Files.createTempDirectory(prefix).toFile();
+        } catch (final IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
+
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
+            }
+        });
+
+        return file;
+    }
 
     public static class Builder {
         private boolean combined;
@@ -161,7 +193,7 @@ public class TestKitNodes {
                 throw new IllegalArgumentException("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol");
             }
             if (baseDirectory == null) {
-                this.baseDirectory = TestUtils.tempDirectory().toPath();
+                this.baseDirectory = TestKitNodes.tempDirectory().toPath();
             }
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid().toString();

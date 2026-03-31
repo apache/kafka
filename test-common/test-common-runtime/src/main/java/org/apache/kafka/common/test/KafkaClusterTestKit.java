@@ -555,7 +555,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         controller.waitForReadyBrokers(brokers.size()).get();
 
         // make sure metadata cache in each broker server is up-to-date
-        TestUtils.waitForCondition(() ->
+        ClusterInstance.waitForCondition(() ->
                 brokers.values().stream().map(BrokerServer::metadataCache)
                     .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
@@ -655,7 +655,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Controller waitForActiveController() throws InterruptedException {
         AtomicReference<Controller> active = new AtomicReference<>(null);
-        TestUtils.waitForCondition(() -> {
+        ClusterInstance.waitForCondition(() -> {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
                     active.set(controllerServer.controller());
@@ -747,7 +747,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     private void waitForAllThreads() throws InterruptedException {
-        TestUtils.waitForCondition(() -> Thread.getAllStackTraces().keySet()
+        ClusterInstance.waitForCondition(() -> Thread.getAllStackTraces().keySet()
                     .stream().noneMatch(t -> threadFactory.getThreadIds().contains(t.getId())),
                 "Failed to wait for all threads to shut down.");
     }

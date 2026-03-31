@@ -148,7 +148,7 @@ public class KafkaClusterTestKitTest {
 
     @Test
     public void testCreateClusterWithSpecificBaseDir() throws Exception {
-        Path baseDirectory = TestUtils.tempDirectory().toPath();
+        Path baseDirectory = TestKitNodes.tempDirectory().toPath();
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder().
                 setBaseDirectory(baseDirectory).
