@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -39,7 +40,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
             final Windows<?> windows,
             final EmitStrategy emitStrategy
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
         this.windows = windows;
         this.emitStrategy = emitStrategy;
 
@@ -56,31 +57,23 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().windowStore(new DslWindowParams(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.size()),
-                        false,
-                        emitStrategy,
-                        false,
-                        storeFormat
-                ))
-                : (WindowBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().windowStore(new DslWindowParams(
+            materialized.storeName(),
+            Duration.ofMillis(retentionPeriod),
+            Duration.ofMillis(windows.size()),
+            false,
+            emitStrategy,
+            false,
+            dslStoreFormat()
+        ))
+            : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<?> builder;
-        if (storeFormat == DslStoreFormat.HEADERS) {
-            builder = Stores.timestampedWindowStoreWithHeadersBuilder(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde());
-        } else {
-            builder = Stores.timestampedWindowStoreBuilder(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde());
-        }
+        final StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
+            supplier,
+            materialized.keySerde(),
+            materialized.valueSerde()
+        );
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

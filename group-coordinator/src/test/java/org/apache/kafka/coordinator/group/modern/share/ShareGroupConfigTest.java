@@ -26,14 +26,12 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareGroupConfigTest {
 
     @Test
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, true);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, 100);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, 10000);
@@ -48,7 +46,6 @@ public class ShareGroupConfigTest {
 
         ShareGroupConfig config = createConfig(configs);
 
-        assertTrue(config.isShareGroupEnabled());
         assertEquals(200, config.shareGroupPartitionMaxRecordLocks());
         assertEquals(5, config.shareGroupDeliveryCountLimit());
         assertEquals(30000, config.shareGroupRecordLockDurationMs());
@@ -137,7 +134,6 @@ public class ShareGroupConfigTest {
     }
 
     public static ShareGroupConfig createShareGroupConfig(
-        boolean shareGroupEnable,
         int shareGroupPartitionMaxRecordLocks,
         int shareGroupMinPartitionMaxRecordLocks,
         int shareGroupMaxPartitionMaxRecordLocks,
@@ -149,7 +145,6 @@ public class ShareGroupConfigTest {
         int shareGroupMaxRecordLockDurationMs
     ) {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, shareGroupEnable);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupPartitionMaxRecordLocks);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupMinPartitionMaxRecordLocks);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupMaxPartitionMaxRecordLocks);

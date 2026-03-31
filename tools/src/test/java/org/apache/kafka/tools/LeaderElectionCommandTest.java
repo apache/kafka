@@ -111,13 +111,13 @@ public class LeaderElectionCommandTest {
         Path adminConfigPath = tempAdminConfig(defaultApiTimeoutMs, requestTimeoutMs);
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
-            String output = ToolsTestUtils.captureStandardOut(() -> {
+            String output = ToolsTestUtils.captureStandardOut(() ->
                 LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--election-type", "unclean", "--all-topic-partitions",
                     "--admin.config", adminConfigPath.toString()
-                );
-            });
+                )
+            );
             assertTrue(output.contains("Option --admin.config has been deprecated and will be removed in a future version. Use --command-config instead."));
 
             ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
@@ -161,14 +161,14 @@ public class LeaderElectionCommandTest {
             // Mock Exit because CommandLineUtils.checkInvalidArgs calls exit
             Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
 
-            String output = ToolsTestUtils.captureStandardErr(() -> {
+            String output = ToolsTestUtils.captureStandardErr(() ->
                 LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", "localhost:9092",
                     "--election-type", "unclean", "--all-topic-partitions",
                     "--admin.config", adminConfigPath.toString(),
                     "--command-config", adminConfigPath.toString()
-                );
-            });
+                )
+            );
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[admin.config]", "[command-config]")));

@@ -48,7 +48,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
@@ -1003,7 +1003,7 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    private TimestampedWindowStore<String, String> getWindowStore(final long windowSize) {
+    private TimestampedWindowStoreWithHeaders<String, String> getWindowStore(final long windowSize) {
         final WindowBytesStoreSupplier supplier;
         if (emitFinal) {
             supplier = RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
@@ -1015,7 +1015,7 @@ public class KStreamWindowAggregateTest {
                 false
             );
         } else {
-            supplier = Stores.persistentTimestampedWindowStore(
+            supplier = Stores.persistentTimestampedWindowStoreWithHeaders(
                 WINDOW_STORE_NAME,
                 Duration.ofDays(1),
                 Duration.ofMillis(windowSize),
@@ -1023,7 +1023,7 @@ public class KStreamWindowAggregateTest {
             );
         }
 
-        return Stores.timestampedWindowStoreBuilder(supplier, Serdes.String(), Serdes.String())
+        return Stores.timestampedWindowStoreWithHeadersBuilder(supplier, Serdes.String(), Serdes.String())
             .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
             .withCachingDisabled() // Caching is not supported by MockProcessorContext.
             .build();
@@ -1039,7 +1039,7 @@ public class KStreamWindowAggregateTest {
         context.setCurrentNode(new ProcessorNode<>("testNode"));
 
         // Create, initialize, and register the state store.
-        final TimestampedWindowStore<String, String> store = getWindowStore(windowSize);
+        final TimestampedWindowStoreWithHeaders<String, String> store = getWindowStore(windowSize);
         store.init(context, store);
         context.getStateStoreContext().register(store, null);
 

@@ -40,7 +40,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.Test;
@@ -61,8 +60,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -234,18 +231,6 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     @Test
-    public void shouldGetWithBinary() {
-        setUp();
-        when(inner.get(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
-
-        init();
-
-        final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(KEY);
-        assertEquals(VALUE_AND_TIMESTAMP, valueWithBinary.value);
-        assertArrayEquals(VALUE_AND_TIMESTAMP_BYTES, valueWithBinary.rawValue);
-    }
-
-    @Test
     public void shouldNotPutIfSameValuesAndGreaterTimestamp() {
         setUp();
         init();
@@ -366,8 +351,8 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         metered.commit(Map.of());
 
-        final KafkaMetric metric = metric("flush-rate");
-        assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric commitMetric = metric("commit-rate");
+        assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
     private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }

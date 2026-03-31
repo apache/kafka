@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import org.slf4j.Logger;
@@ -112,7 +113,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store.store(),
                     context,
-                    new TimestampedCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
                     sendOldValues);
             }
         }
@@ -138,7 +139,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
             }
 
             if (queryableName != null) {
-                final ValueAndTimestamp<VIn> oldValueAndTimestamp = store.get(record.key());
+                final ValueTimestampHeaders<VIn> oldValueAndTimestamp = store.get(record.key());
                 final VIn oldValue;
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();
@@ -166,7 +167,8 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 } else {
                     oldValue = null;
                 }
-                final long putReturnCode = store.put(record.key(), record.value(), record.timestamp());
+                final long putReturnCode;
+                putReturnCode = store.put(record.key(), record.value(), record.timestamp(), new RecordHeaders());
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));

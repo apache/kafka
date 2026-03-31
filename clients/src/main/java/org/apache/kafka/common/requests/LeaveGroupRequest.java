@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 import java.util.List;
 
 public class LeaveGroupRequest extends AbstractRequest {
@@ -97,14 +96,14 @@ public class LeaveGroupRequest extends AbstractRequest {
         } else {
             return new LeaveGroupRequestData()
                 .setGroupId(data.groupId())
-                .setMembers(Collections.singletonList(
+                .setMembers(List.of(
                     new MemberIdentity().setMemberId(data.memberId())));
         }
     }
 
     public List<MemberIdentity> members() {
         // Before version 3, leave group request is still in single mode
-        return version() <= 2 ? Collections.singletonList(
+        return version() <= 2 ? List.of(
             new MemberIdentity()
                 .setMemberId(data.memberId())) : data.members();
     }

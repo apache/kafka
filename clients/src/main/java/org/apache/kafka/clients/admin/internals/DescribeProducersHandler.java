@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -89,15 +88,17 @@ public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicParti
         Set<TopicPartition> topicPartitions
     ) {
         DescribeProducersRequestData request = new DescribeProducersRequestData();
-        DescribeProducersRequest.Builder builder = new DescribeProducersRequest.Builder(request);
 
-        CollectionUtils.groupPartitionsByTopic(
-            topicPartitions,
-            builder::addTopic,
-            (topicRequest, partitionId) -> topicRequest.partitionIndexes().add(partitionId)
-        );
+        for (TopicPartition tp : topicPartitions) {
+            DescribeProducersRequestData.TopicRequest topicRequest = request.topics().find(tp.topic());
+            if (topicRequest == null) {
+                topicRequest = new DescribeProducersRequestData.TopicRequest().setName(tp.topic());
+                request.topics().add(topicRequest);
+            }
+            topicRequest.partitionIndexes().add(tp.partition());
+        }
 
-        return builder;
+        return new DescribeProducersRequest.Builder(request);
     }
 
     private void handlePartitionError(

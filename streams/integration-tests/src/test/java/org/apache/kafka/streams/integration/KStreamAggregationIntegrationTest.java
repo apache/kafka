@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -71,11 +74,15 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -718,8 +725,9 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldCountSessionWindows() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCountSessionWindows(final boolean withHeaders) throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
         final List<KeyValue<String, String>> t1Messages = Arrays.asList(
             new KeyValue<>("bob", "start"),
@@ -797,6 +805,10 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
 
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(sessionGap)))
@@ -819,88 +831,37 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair(1L, t3)));
     }
 
-    @Test
-    public void shouldReduceSessionWindows() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReduceSessionWindows(final boolean withHeaders) throws Exception {
         final long sessionGap = 1000L; // something to do with time
-        final List<KeyValue<String, String>> t1Messages = Arrays.asList(
-            new KeyValue<>("bob", "start"),
-            new KeyValue<>("penny", "start"),
-            new KeyValue<>("jo", "pause"),
-            new KeyValue<>("emily", "pause")
-        );
+
+        final Properties producerConfig = TestUtils.producerConfig(
+            CLUSTER.bootstrapServers(),
+            StringSerializer.class,
+            StringSerializer.class,
+            new Properties());
 
         final long t1 = mockTime.milliseconds();
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            userSessionsStream,
-            t1Messages,
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            t1
-        );
         final long t2 = t1 + (sessionGap / 2);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            userSessionsStream,
-            Collections.singletonList(
-                new KeyValue<>("emily", "resume")
-            ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            t2
-        );
         final long t3 = t1 + sessionGap + 1;
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            userSessionsStream,
-            Arrays.asList(
-                new KeyValue<>("bob", "pause"),
-                new KeyValue<>("penny", "stop")
-            ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            t3
-        );
         final long t4 = t3 + (sessionGap / 2);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            userSessionsStream,
-            Arrays.asList(
-                new KeyValue<>("bob", "resume"), // bobs session continues
-                new KeyValue<>("jo", "resume")   // jo's starts new session
-            ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            t4
-        );
         final long t5 = t4 - 1;
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            userSessionsStream,
-            Collections.singletonList(
-                new KeyValue<>("jo", "late")   // jo has late arrival
-            ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            t5
-        );
+
+        produceSessionWindowData(producerConfig, withHeaders, t1, t2, t3, t4, t5, sessionGap);
 
         final Map<Windowed<String>, KeyValue<String, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
         final String userSessionsStore = "UserSessionsStore";
 
+        if (withHeaders) {
+            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey(Grouped.with(Serdes.String(), Serdes.String())) .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(sessionGap), ofMinutes(1))) .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(sessionGap), ofMinutes(1)))
+            .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
             .toStream()
             .process(() -> (Processor<Windowed<String>, String, Object, Object>) record -> {
                 results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));
@@ -919,9 +880,61 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(KeyValue.pair("pause:resume", t4)));
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair("stop", t3)));
 
-        // verify can query data via IQ
+        verifySessionStore(userSessionsStore, t1, t3, t4);
+
+    }
+
+    private void produceSessionWindowData(final Properties producerConfig,
+                                           final boolean withHeaders,
+                                           final long t1, final long t2, final long t3,
+                                           final long t4, final long t5,
+                                           final long sessionGap) throws Exception {
+        final List<KeyValue<String, String>> t1Messages = Arrays.asList(
+            new KeyValue<>("bob", "start"),
+            new KeyValue<>("penny", "start"),
+            new KeyValue<>("jo", "pause"),
+            new KeyValue<>("emily", "pause")
+        );
+
+        produceWithOptionalHeaders(t1Messages, producerConfig, withHeaders, "t1", t1);
+        produceWithOptionalHeaders(
+            Collections.singletonList(new KeyValue<>("emily", "resume")),
+            producerConfig, withHeaders, "t2", t2);
+        produceWithOptionalHeaders(
+            Arrays.asList(new KeyValue<>("bob", "pause"), new KeyValue<>("penny", "stop")),
+            producerConfig, withHeaders, "t3", t3);
+        produceWithOptionalHeaders(
+            Arrays.asList(
+                new KeyValue<>("bob", "resume"),  // bobs session continues
+                new KeyValue<>("jo", "resume")),  // jo's starts new session
+            producerConfig, withHeaders, "t4", t4);
+        produceWithOptionalHeaders(
+            Collections.singletonList(new KeyValue<>("jo", "late")),  // jo has late arrival
+            producerConfig, withHeaders, "t5", t5);
+    }
+
+    private void produceWithOptionalHeaders(final Collection<KeyValue<String, String>> records,
+                                             final Properties producerConfig,
+                                             final boolean withHeaders,
+                                             final String batchId,
+                                             final long timestamp) throws Exception {
+        if (withHeaders) {
+            final Headers headers = new RecordHeaders(Arrays.asList(
+                new RecordHeader("batch", batchId.getBytes(StandardCharsets.UTF_8)),
+                new RecordHeader("source", "test".getBytes(StandardCharsets.UTF_8))
+            ));
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                userSessionsStream, records, producerConfig, headers, timestamp, false);
+        } else {
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                userSessionsStream, records, producerConfig, timestamp);
+        }
+    }
+
+    private void verifySessionStore(final String storeName,
+                                    final long t1, final long t3, final long t4) throws Exception {
         final ReadOnlySessionStore<String, String> sessionStore =
-            IntegrationTestUtils.getStore(userSessionsStore, kafkaStreams, QueryableStoreTypes.sessionStore());
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
 
         try (final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob")) {
             assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
@@ -929,7 +942,7 @@ public class KStreamAggregationIntegrationTest {
             assertFalse(bob.hasNext());
         }
     }
-
+    
     @Test
     public void shouldCountUnlimitedWindows() throws Exception {
         final long startTime = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;

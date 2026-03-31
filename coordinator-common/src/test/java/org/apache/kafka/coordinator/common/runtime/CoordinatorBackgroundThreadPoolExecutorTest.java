@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -80,7 +81,7 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
             task1Unblocked.countDown();
             task1.get(5, TimeUnit.SECONDS);
 
-            // Task 3 starts.
+            // Task 3 starts after task 1's metrics are recorded.
             task3Started.await();
 
             // Task 2 takes 500 ms.
@@ -88,20 +89,24 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
             task2Unblocked.countDown();
             task2.get(5, TimeUnit.SECONDS);
 
+            // Wait until the metrics are recorded before advancing the clock.
+            verify(metrics, timeout(5000).times(1)).recordBackgroundProcessingTime(500L);
+            verify(metrics, timeout(5000).times(1)).recordBackgroundThreadBusyTime(250.0);
+
             // Task 3 takes 500 ms.
             mockTime.sleep(100);
             task3Unblocked.countDown();
             task3.get(5, TimeUnit.SECONDS);
-
-            verify(metrics, times(2)).recordBackgroundQueueTime(0);
-            verify(metrics, times(1)).recordBackgroundQueueTime(100);
-            verify(metrics, times(1)).recordBackgroundProcessingTime(100);
-            verify(metrics, times(2)).recordBackgroundProcessingTime(500);
-            verify(metrics, times(1)).recordBackgroundThreadBusyTime(50.0);
-            verify(metrics, times(2)).recordBackgroundThreadBusyTime(250.0);
         } finally {
             threadPoolExecutor.shutdown();
             threadPoolExecutor.awaitTermination(5, TimeUnit.SECONDS);
         }
+
+        verify(metrics, times(2)).recordBackgroundQueueTime(0L);
+        verify(metrics, times(1)).recordBackgroundQueueTime(100L);
+        verify(metrics, times(1)).recordBackgroundProcessingTime(100L);
+        verify(metrics, times(2)).recordBackgroundProcessingTime(500L);
+        verify(metrics, times(1)).recordBackgroundThreadBusyTime(50.0);
+        verify(metrics, times(2)).recordBackgroundThreadBusyTime(250.0);
     }
 }

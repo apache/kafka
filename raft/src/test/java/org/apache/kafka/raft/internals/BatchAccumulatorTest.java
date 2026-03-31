@@ -28,9 +28,9 @@ import org.apache.kafka.common.record.internal.ControlRecordUtils;
 import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

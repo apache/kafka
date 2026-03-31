@@ -766,7 +766,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         Map<Integer, PartitionErrorData> partitionErrors =
                             Optional.ofNullable(topicPartitionErrorsMap)
                                 .map(map -> map.get(topic.topicId()))
-                                .orElse(Collections.emptyMap());
+                                .orElse(Map.of());
                         PartitionErrorData error = partitionErrors.get(partition.partitionIndex());
                         if (error == null) {
                             partitionData = partition.duplicate();

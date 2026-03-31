@@ -17,12 +17,12 @@
 
 package kafka.coordinator
 
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
-import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
@@ -38,7 +38,7 @@ import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperation
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, RecordValidationStats, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogManager, RecordValidationStats, UnifiedLog, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.Mockito.{mock, when, withSettings}
 
@@ -63,7 +63,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     scheduler = new MockScheduler(time)
     executor = Executors.newFixedThreadPool(nThreads)
     val mockLogMger = mock(classOf[LogManager])
-    when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
+    when(mockLogMger.liveLogDirs).thenReturn(util.List.of)
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, 1000, false, true)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)

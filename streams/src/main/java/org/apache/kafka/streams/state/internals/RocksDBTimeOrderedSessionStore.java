@@ -31,12 +31,12 @@ import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFi
 import java.util.Objects;
 
 public class RocksDBTimeOrderedSessionStore
-    extends WrappedStateStore<RocksDBTimeOrderedSessionSegmentedBytesStore, Object, Object>
+    extends WrappedStateStore<AbstractRocksDBTimeOrderedSegmentedBytesStore<? extends Segment>, Object, Object>
     implements SessionStore<Bytes, byte[]> {
 
     private StateStoreContext stateStoreContext;
 
-    RocksDBTimeOrderedSessionStore(final RocksDBTimeOrderedSessionSegmentedBytesStore store) {
+    RocksDBTimeOrderedSessionStore(final AbstractRocksDBTimeOrderedSegmentedBytesStore<? extends Segment> store) {
         super(store);
         Objects.requireNonNull(store, "store is null");
     }

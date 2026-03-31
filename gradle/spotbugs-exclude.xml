@@ -678,7 +678,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <Or>
             <!-- Internal comparator is not intended for serialization -->
-            <Class name="org.apache.kafka.common.utils.internals.BytesUtils$LexicographicByteArrayComparator"/>
+            <Class name="org.apache.kafka.common.utils.internals.ByteUtils$LexicographicByteArrayComparator"/>
             <!-- Benchmark comparator is not intended for serialization -->
             <Class name="org.apache.kafka.jmh.util.BytesCompareBenchmark$HandwrittenLexicoComparator"/>
         </Or>
