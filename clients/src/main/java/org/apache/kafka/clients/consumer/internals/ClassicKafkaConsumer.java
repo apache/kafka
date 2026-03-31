@@ -222,7 +222,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     log.info("\n" +
                             "****************************************************************\n" +
                             "* The consumer rebalance protocol (KIP-848) is production ready!\n" +
-                            "* Set {}={} to try it out.\n" +
+                            "* Set the consumer configuration {}={} to try it out.\n" +
                             "* See https://kafka.apache.org/documentation/#consumer_rebalance_protocol\n" +
                             "****************************************************************",
                             ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
