@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
 /**
@@ -56,13 +57,23 @@ public class BuiltInDslStoreSuppliers {
             final DslStoreFormat storeFormat = params.dslStoreFormat();
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 final boolean withHeaders = (storeFormat == DslStoreFormat.HEADERS);
-                return RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                if (!withHeaders) {
+                    return RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),
                         params.retainDuplicates(),
-                        params.isSlidingWindow(),
-                        withHeaders);
+                        params.isSlidingWindow()
+                    );
+                } else {
+                    return RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier.create(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates(),
+                        params.isSlidingWindow()
+                    );
+                }
             }
 
             final DslStoreFormat format = (storeFormat == null) ? DslStoreFormat.TIMESTAMPED : storeFormat;

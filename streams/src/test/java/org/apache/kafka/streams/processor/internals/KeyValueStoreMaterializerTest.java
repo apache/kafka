@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
@@ -72,8 +73,6 @@ public class KeyValueStoreMaterializerTest {
     @Mock
     private InternalNameProvider nameProvider;
     @Mock
-    private HeadersBytesStoreSupplier headersStoreSupplier;
-    @Mock
     private VersionedBytesStoreSupplier versionedStoreSupplier;
     private final KeyValueStore<Bytes, byte[]> innerKeyValueStore = new InMemoryKeyValueStore(STORE_NAME);
     @Mock
@@ -102,10 +101,21 @@ public class KeyValueStoreMaterializerTest {
         when(versionedStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
     }
 
-    private void mockHeadersStoreSupplier() {
-        when(headersStoreSupplier.get()).thenReturn(innerKeyValueStore);
-        when(headersStoreSupplier.name()).thenReturn(STORE_NAME);
-        when(headersStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
+    private final class HeadersStoreSupplier implements KeyValueBytesStoreSupplier, HeadersBytesStoreSupplier {
+        @Override
+        public String name() {
+            return STORE_NAME;
+        }
+
+        @Override
+        public KeyValueStore<Bytes, byte[]> get() {
+            return innerKeyValueStore;
+        }
+
+        @Override
+        public String metricsScope() {
+            return METRICS_SCOPE;
+        }
     }
 
     @Test
@@ -162,9 +172,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateHeadersStoreWithProvidedSupplierAndCachingAndLoggingEnabledByDefault() {
-        mockHeadersStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.as(headersStoreSupplier), nameProvider, STORE_PREFIX);
+            new MaterializedInternal<>(Materialized.as(new HeadersStoreSupplier()), nameProvider, STORE_PREFIX);
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
@@ -178,9 +187,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateHeadersStoreWithProvidedSupplierAndCachingDisabled() {
-        mockHeadersStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.<String, String>as(headersStoreSupplier).withCachingDisabled(), nameProvider, STORE_PREFIX);
+            new MaterializedInternal<>(Materialized.<String, String>as(new HeadersStoreSupplier()).withCachingDisabled(), nameProvider, STORE_PREFIX);
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
@@ -191,9 +199,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateHeadersStoreWithProvidedSupplierAndLoggingDisabled() {
-        mockHeadersStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.<String, String>as(headersStoreSupplier).withLoggingDisabled(), nameProvider, STORE_PREFIX);
+            new MaterializedInternal<>(Materialized.<String, String>as(new HeadersStoreSupplier()).withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
@@ -205,9 +212,8 @@ public class KeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateHeadersStoreWithProvidedSupplierAndCachingAndLoggingDisabled() {
-        mockHeadersStoreSupplier();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.<String, String>as(headersStoreSupplier).withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX);
+            new MaterializedInternal<>(Materialized.<String, String>as(new HeadersStoreSupplier()).withCachingDisabled().withLoggingDisabled(), nameProvider, STORE_PREFIX);
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
