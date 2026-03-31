@@ -132,7 +132,11 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
 
         // check if leader writes 3 bootstrap records to the log
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = context.log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
@@ -195,7 +199,11 @@ public class KafkaRaftClientReconfigTest {
         // check leader does not write bootstrap records to log
         context.unattachedToLeader();
 
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = context.log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
@@ -2451,7 +2459,11 @@ public class KafkaRaftClientReconfigTest {
         // check if leader writes 2 control records to the log;
         // one for the kraft version and one for the voter set
         var updatedVoters = VoterSetTest.voterSet(Stream.of(local, voter1, voter2));
-        var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
+        var records = context.log.read(
+            localLogEndOffset,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         var recordsIterator = batch.iterator();
@@ -2559,7 +2571,11 @@ public class KafkaRaftClientReconfigTest {
         context.client.poll();
 
         // check that the leader wrote voters control record to the log;
-        var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
+        var records = context.log.read(
+            localLogEndOffset,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         var recordsIterator = batch.iterator();

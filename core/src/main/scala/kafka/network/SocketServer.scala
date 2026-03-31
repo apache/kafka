@@ -324,8 +324,8 @@ class SocketServer(
     }
     val maxConnectionsPerIpOverrides = newConfig.maxConnectionsPerIpOverrides
     if (maxConnectionsPerIpOverrides != oldConfig.maxConnectionsPerIpOverrides) {
-      info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.map { case (k, v) => s"$k=$v" }.mkString(",")}")
-      connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides)
+      info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.asScala.map { case (k, v) => s"$k=$v" }.mkString(",")}")
+      connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides.asScala.map  { case (k, v) => (k, v.intValue()) }.toMap)
     }
     val maxConnections = newConfig.maxConnections
     if (maxConnections != oldConfig.maxConnections) {
@@ -1001,10 +1001,12 @@ private[kafka] class Processor(
 
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
+      var header: RequestHeader = null
+      var req: RequestChannel.Request = null
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
-            val header = parseRequestHeader(apiVersionManager, receive.payload)
+            header = parseRequestHeader(apiVersionManager, receive.payload)
             if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
               () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")
@@ -1014,6 +1016,7 @@ private[kafka] class Processor(
                 // be sure to decrease connection count and drop any in-flight responses
                 debug(s"Disconnecting expired channel: $channel : $header")
                 close(channel.id)
+                receive.close() // return buffer to memory pool
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
                 val connectionId = receive.source
@@ -1021,7 +1024,7 @@ private[kafka] class Processor(
                   channel.principal, listenerName, securityProtocol, channel.channelMetadataRegistry.clientInformation,
                   isPrivilegedListener, channel.principalSerde)
 
-                val req = new RequestChannel.Request(processor = id, context = context,
+                req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
 
                 // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
@@ -1047,6 +1050,9 @@ private[kafka] class Processor(
         // note that even though we got an exception, we can assume that receive.source is valid.
         // Issues with constructing a valid receive object were handled earlier
         case e: Throwable =>
+          if (header == null || req == null) {
+             receive.close() // return buffer to memory pool
+          }
           processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
       }
     }
@@ -1269,7 +1275,7 @@ private[kafka] class Processor(
 class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
 
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
-  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.asScala.map { case (host, count) => (InetAddress.getByName(host), count.intValue()) }.toMap
   @volatile private var brokerMaxConnections = config.maxConnections
   private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
@@ -1307,7 +1313,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   private[network] def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = {
-    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }.toMap
   }
 
   private[network] def updateBrokerMaxConnections(maxConnections: Int): Unit = {

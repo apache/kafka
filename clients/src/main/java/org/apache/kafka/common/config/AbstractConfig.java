@@ -133,7 +133,7 @@ public class AbstractConfig {
      * @param originals  the configuration properties plus any optional config provider properties; may not be null
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
-        this(definition, originals, Collections.emptyMap(), true);
+        this(definition, originals, Map.of(), true);
     }
 
     /**
@@ -146,7 +146,7 @@ public class AbstractConfig {
      * @param doLog      whether the configurations should be logged
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
-        this(definition, originals, Collections.emptyMap(), doLog);
+        this(definition, originals, Map.of(), doLog);
     }
 
     /**
@@ -168,7 +168,7 @@ public class AbstractConfig {
      * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
      */
     protected Map<String, Object> postProcessParsedConfig(Map<String, Object> parsedValues) {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     protected Object get(String key) {
@@ -430,7 +430,7 @@ public class AbstractConfig {
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
-        return getConfiguredInstance(key, t, Collections.emptyMap());
+        return getConfiguredInstance(key, t, Map.of());
     }
 
     /**
@@ -458,7 +458,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
-        return getConfiguredInstances(key, t, Collections.emptyMap());
+        return getConfiguredInstances(key, t, Map.of());
     }
 
     /**
@@ -606,7 +606,7 @@ public class AbstractConfig {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
         if (configProviders == null || configProviders.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         Map<String, String> providerMap = new HashMap<>();

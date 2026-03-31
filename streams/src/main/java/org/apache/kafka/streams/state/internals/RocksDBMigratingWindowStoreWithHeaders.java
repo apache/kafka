@@ -77,8 +77,6 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
             noHeadersIter.seekToFirst();
             if (noHeadersIter.isValid()) {
                 log.info("Opening window store {} in upgrade mode from plain value format", name);
-                // Migrate from [value] to [headers][value]
-                // Add empty headers prefix [0x00] to plain value
                 cfAccessor = new DualColumnFamilyAccessor(
                     offsetsCf,
                     noHeadersColumnFamily,
@@ -92,6 +90,11 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
                 cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, withHeadersColumnFamily);
                 noHeadersColumnFamily.close();
             }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
+            }
+            throw e;
         }
     }
 }

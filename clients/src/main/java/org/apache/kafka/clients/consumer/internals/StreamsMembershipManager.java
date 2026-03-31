@@ -20,9 +20,9 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsTasksAssignedEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -394,6 +394,21 @@ public class StreamsMembershipManager implements RequestManager {
      */
     void notifyAssignmentChange(Set<TopicPartition> partitions) {
         stateUpdatesListeners.forEach(stateListener -> stateListener.onGroupAssignmentUpdated(partitions));
+    }
+
+    /**
+     * Apply the assignment update to the subscription state. This is called from the background
+     * thread when processing an ApplyAssignmentEvent that was triggered by the application
+     * thread during poll. This ensures that the assignment update happens on the background thread
+     * but is coordinated by the application thread, so consumer.assignment() only changes within
+     * a call to consumer.poll().
+     *
+     * @param assignedPartitions The full assignment to apply
+     * @param addedPartitions The newly added partitions
+     */
+    public void applyAssignment(Set<TopicPartition> assignedPartitions, Set<TopicPartition> addedPartitions) {
+        subscriptionState.assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+        notifyAssignmentChange(assignedPartitions);
     }
 
     /**
@@ -1180,14 +1195,12 @@ public class StreamsMembershipManager implements RequestManager {
         final SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned =
             partitionsToAssignNotPreviouslyOwned(partitionsToAssign, topicPartitionsForActiveTasks(ownedActiveTasks));
 
-        subscriptionState.assignFromSubscribedAwaitingCallback(
-            partitionsToAssign,
-            partitionsToAssignNotPreviouslyOwned
-        );
-        notifyAssignmentChange(partitionsToAssign);
-
-        CompletableFuture<Void> onTasksAssignedCallbackExecuted =
-            requestOnTasksAssignedCallbackInvocation(
+        // Enqueue event to app thread to apply assignment within poll() and invoke callback.
+        // The app thread will trigger ApplyAssignmentEvent to update subscription state on background thread.
+        CompletableFuture<Void> partitionsAssignedAndCallbackExecuted =
+            enqueueStreamsPartitionsAssignedEvent(
+                partitionsToAssign,
+                partitionsToAssignNotPreviouslyOwned,
                 new StreamsRebalanceData.Assignment(
                     activeTasksToAssign,
                     standbyTasksToAssign,
@@ -1195,7 +1208,7 @@ public class StreamsMembershipManager implements RequestManager {
                     isGroupReady
                 )
             );
-        onTasksAssignedCallbackExecuted.whenComplete((__, callbackError) -> {
+        partitionsAssignedAndCallbackExecuted.whenComplete((__, callbackError) -> {
             if (callbackError == null) {
                 subscriptionState.enablePartitionsAwaitingCallback(partitionsToAssign);
             } else {
@@ -1207,7 +1220,7 @@ public class StreamsMembershipManager implements RequestManager {
             }
         });
 
-        return onTasksAssignedCallbackExecuted;
+        return partitionsAssignedAndCallbackExecuted;
     }
 
     private CompletableFuture<Void> releaseLostActiveTasks() {
@@ -1281,12 +1294,6 @@ public class StreamsMembershipManager implements RequestManager {
         rejoinedWhileReconciliationInProgress = false;
     }
 
-    private CompletableFuture<Void> requestOnTasksAssignedCallbackInvocation(final StreamsRebalanceData.Assignment assignment) {
-        final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeededEvent = new StreamsOnTasksAssignedCallbackNeededEvent(assignment);
-        backgroundEventHandler.add(onTasksAssignedCallbackNeededEvent);
-        return onTasksAssignedCallbackNeededEvent.future();
-    }
-
     private CompletableFuture<Void> requestOnAllTasksLostCallbackInvocation() {
         final StreamsOnAllTasksLostCallbackNeededEvent onAllTasksLostCallbackNeededEvent = new StreamsOnAllTasksLostCallbackNeededEvent();
         backgroundEventHandler.add(onAllTasksLostCallbackNeededEvent);
@@ -1297,6 +1304,30 @@ public class StreamsMembershipManager implements RequestManager {
         final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
         backgroundEventHandler.add(onTasksRevokedCallbackNeededEvent);
         return onTasksRevokedCallbackNeededEvent.future();
+    }
+
+    /**
+     * Enqueue event to notify the app thread that new partitions have been reconciled.
+     * The app thread will trigger the assignment update (via ApplyAssignmentEvent) and invoke
+     * the onTasksAssigned callback.
+     *
+     * @param partitionsToAssign The full partition assignment to apply
+     * @param addedPartitions The newly added partitions
+     * @param assignment The task assignment for the callback
+     * @return Future that completes when the assignment is applied and the callback executed
+     */
+    private CompletableFuture<Void> enqueueStreamsPartitionsAssignedEvent(
+            final SortedSet<TopicPartition> partitionsToAssign,
+            final SortedSet<TopicPartition> addedPartitions,
+            final StreamsRebalanceData.Assignment assignment) {
+        final StreamsTasksAssignedEvent event = new StreamsTasksAssignedEvent(
+            partitionsToAssign,
+            addedPartitions,
+            assignment
+        );
+        backgroundEventHandler.add(event);
+        log.debug("Enqueued StreamsTasksAssignedEvent to apply assignment and trigger onTasksAssigned callback");
+        return event.future();
     }
 
     /**

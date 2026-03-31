@@ -712,7 +712,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     @ParameterizedTest
     @MethodSource("getKeySchemas")
-    public void shouldLoadPositionFromFile(final SegmentedBytesStore.KeySchema schema) {
+    public void shouldMigrateExistingPositionFromFile(final SegmentedBytesStore.KeySchema schema) {
         before(schema);
         final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
         final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), storeName + ".position"));
@@ -723,6 +723,47 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // store.init migrates the position from the legacy checkpoint file into the store.
         bytesStore.init(context, bytesStore);
         assertEquals(position, bytesStore.getPosition());
+    }
+
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRestoreMergedPositionFromMultipleSegmentsAfterRestart(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
+        bytesStore = getBytesStore();
+        // 0 segments initially.
+        bytesStore.init(context, bytesStore);
+
+        // Writes record to different partitions
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[2])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[3])), serializeValue(10));
+        final Position expected = Position.fromMap(mkMap(mkEntry("t1", mkMap(mkEntry(0, 2L), mkEntry(1, 3L)))));
+
+        // Each open segment should share the same position.
+        for (final S segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+
+        // Persist the merged position and simulate a full store restart.
+        bytesStore.commit(Map.of());
+        for (final S segment : bytesStore.getSegments()) {
+            segment.writePosition();
+        }
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+
+        // The store-level position should be restored from the merged position.
+        assertEquals(expected, bytesStore.getPosition());
+
+        // Restored segments should all have the same merged position.
+        for (final S segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
     }
 
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {

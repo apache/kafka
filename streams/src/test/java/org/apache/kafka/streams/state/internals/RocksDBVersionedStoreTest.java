@@ -834,7 +834,7 @@ public class RocksDBVersionedStoreTest {
     }
 
     @Test
-    public void shouldLoadPositionFromFile() {
+    public void shouldMigrateExistingPositionFromFile() {
         final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
         final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), store.name() + ".position"));
         StoreQueryUtils.checkpointPosition(positionCheckpoint, position);

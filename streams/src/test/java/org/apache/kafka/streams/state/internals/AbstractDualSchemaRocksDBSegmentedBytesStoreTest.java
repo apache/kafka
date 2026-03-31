@@ -1626,7 +1626,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldLoadPositionFromFile() {
+    public void shouldMigrateExistingPositionFromFile() {
         final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
         final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(stateDir, storeName + ".position"));
         StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
@@ -1637,6 +1637,43 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.init(context, bytesStore);
         assertEquals(position, bytesStore.getPosition());
         bytesStore.close();
+    }
+
+    @Test
+    public void shouldRestoreMergedPositionFromMultipleSegmentsAfterRestart() {
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+        // 0 segments initially.
+        bytesStore.init(context, bytesStore);
+
+        // Writes record to different partitions
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[2])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[3])), serializeValue(10));
+        final Position expected = Position.fromMap(mkMap(mkEntry("t1", mkMap(mkEntry(0, 2L), mkEntry(1, 3L)))));
+
+        // Each open segment should share the same position.
+        for (final KeyValueSegment segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+
+        // Persist the merged position and simulate a full store restart.
+        bytesStore.commit(Map.of());
+        bytesStore.segments.writePosition();
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+
+        // The store-level position should be restored from the merged position.
+        assertEquals(expected, bytesStore.getPosition());
+
+        // Restored segments should all have the same merged position.
+        for (final KeyValueSegment segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
     }
 
     private Set<String> segmentDirs() {
