@@ -1682,8 +1682,7 @@ public class AsyncKafkaConsumerTest {
     /**
      * Verifies that at most one {@link AsyncPollEvent} is in-flight at a time. When {@code poll()} runs
      * multiple loop iterations (e.g. empty fetches), it must not enqueue a new event while the previous
-     * one is still in-flight. This prevents unnecessary queueing and matches the single-instance design
-     * used in share consumer (KAFKA-20309). See KAFKA-20315.
+     * one is still in-flight. This prevents unnecessary queueing. See KAFKA-20315.
      */
     @Test
     public void testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight() {

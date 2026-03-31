@@ -845,7 +845,10 @@ public class ShareConsumerImplTest {
         ConsumerRecords<?, ?> result = consumer.poll(Duration.ofMillis(450));
         assertTrue(result.isEmpty());
 
+        // Ensure we actually exercised the "wait for fetches" path (i.e., more than a trivial single pass).
         verify(fetchBuffer, atLeastOnce()).awaitNotEmpty(any(Timer.class));
+
+        // Only one SharePollEvent must have been added despite multiple poll loop iterations.
         verify(applicationEventHandler, times(1)).add(any(SharePollEvent.class));
     }
 
