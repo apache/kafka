@@ -22,7 +22,6 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -2931,53 +2930,6 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(ControlRecordType.KRAFT_VERSION, ControlRecordType.parse(recordKey));
         KRaftVersionRecord kRaftVersionRecord = ControlRecordUtils.deserializeKRaftVersionRecord(recordValue);
         assertEquals(expectedKRaftVersion, kRaftVersionRecord.kRaftVersion());
-    }
-
-    @Test
-    void testKRaftVersion0AdvertisesStaticVotersEndpoint() throws Exception {
-        int localId = randomReplicaId();
-        ReplicaKey local = replicaKey(localId, true);
-        ReplicaKey follower = replicaKey(localId + 1, true);
-
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
-
-        // Set localListeners to a different address than what static voters have
-        // Static voters use mockAddress(localId) = localhost:9990+localId on LISTENER
-        Endpoints localListeners = Endpoints.fromInetSocketAddresses(
-            Map.of(
-                VoterSetTest.DEFAULT_LISTENER_NAME,
-                InetSocketAddress.createUnresolved("INCORRECT_LOCAL_LISTENERS", 1234)
-            )
-        );
-
-        // The leader should advertise its static voter endpoint, which is expected to be routable, and not localListeners,
-        // which may not be routable.
-        Endpoints expectedEndpoints = voters.listeners(localId);
-
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, local.directoryId().get())
-            .withStaticVoters(voters)
-            .withUnknownLeader(0)
-            .withLocalListeners(localListeners)
-            .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
-            .build();
-
-        // Transition to leader: trigger election timeout, handle pre-votes, grant votes
-        context.unattachedToCandidate();
-        int epoch = context.currentEpoch();
-        context.expectAndGrantVotes(epoch);
-
-        // Now the leader sends BeginQuorumEpoch requests — capture them
-        context.pollUntilRequest();
-        List<RaftRequest.Outbound> beginEpochRequests = context.collectBeginEpochRequests(epoch);
-        assertEquals(1, beginEpochRequests.size());
-
-        BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) beginEpochRequests.get(0).data();
-        Endpoints actualEndpoints = Endpoints.fromBeginQuorumEpochRequest(request.leaderEndpoints());
-
-        // The leader should advertise the endpoints from the static voters config,
-        // not from localListeners (advertised.listeners).
-        // This assertion will FAIL due to the bug: the leader uses localListeners instead.
-        assertEquals(expectedEndpoints, actualEndpoints);
     }
 
     private int randomReplicaId() {

@@ -707,24 +707,9 @@ public class QuorumState {
         // could address this problem by decoupling the local high watermark, but
         // we typically expect the state machine to be caught up anyway.
 
-        // KAFKA-20380: If the last KRaft version supports reconfiguration, then the
-        // leader's endpoints should be determined by the local listeners. If the last
-        // KRaft version does not support reconfiguration, then the leader's endpoints
-        // should be determined from the static voter set since the local listeners may
-        // not be a routable address for other voters in the cluster.
-        Endpoints leaderEndpoints = partitionState.lastKraftVersion().isReconfigSupported()
-            ? localListeners
-            : partitionState.lastVoterSet().listeners(localIdOrThrow());
-
-        VoterSet.VoterNode localVoterNode = VoterSet.VoterNode.of(
-            localReplicaKeyOrThrow(),
-            leaderEndpoints,
-            localSupportedKRaftVersion
-        );
-
         LeaderState<T> state = new LeaderState<>(
             time,
-            localVoterNode,
+            localVoterNodeOrThrow(),
             epoch(),
             epochStartOffset,
             partitionState.lastVoterSet(),
