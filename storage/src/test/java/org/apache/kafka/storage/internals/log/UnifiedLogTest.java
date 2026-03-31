@@ -96,6 +96,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.DigestException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -132,6 +133,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -5493,5 +5495,523 @@ public class UnifiedLogTest {
                     verificationGuard, TransactionVersion.TV_0.featureLevel());
             assertTrue(log.hasOngoingTransaction(producerId, producerEpoch));
         }
+    }
+
+    @Test
+    public void testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().build();
+        UnifiedLog log = spy(createLog(logDir, logConfig));
+
+        doThrow(new KafkaStorageException("Injected exception")).when(log).flushProducerStateSnapshot(any(Path.class));
+
+        log.appendAsLeader(singletonRecords("a".getBytes()), 0);
+        assertThrows(KafkaStorageException.class, () -> log.roll(Optional.of(1L)));
+
+        // check that the recovery point isn't incremented
+        assertEquals(0L, log.recoveryPoint());
+    }
+
+    @Test
+    public void testDeletableSegmentsFilter() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(ONE_MB).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        for (int i = 0; i <= 8; i++) {
+            MemoryRecords records = records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())));
+            log.appendAsLeader(records, 0);
+            log.roll();
+        }
+        log.maybeIncrementHighWatermark(log.logEndOffsetMetadata());
+        assertEquals(10, log.logSegments().size());
+
+        List<LogSegment> deletable = log.deletableSegments(
+                (segment, next) -> segment.baseOffset() <= 5);
+        List<LogSegment> expected = log.nonActiveLogSegmentsFrom(0L).stream()
+                .filter(segment -> segment.baseOffset() <= 5)
+                .collect(java.util.stream.Collectors.toList());
+        assertEquals(6, expected.size());
+        assertEquals(expected, deletable);
+
+        List<LogSegment> deletable1 = log.deletableSegments((segment, next) -> true);
+        List<LogSegment> expected1 = new ArrayList<>(log.nonActiveLogSegmentsFrom(0L));
+        assertEquals(9, expected1.size());
+        assertEquals(expected1, deletable1);
+
+        MemoryRecords records = records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())));
+        log.appendAsLeader(records, 0);
+        log.maybeIncrementHighWatermark(log.logEndOffsetMetadata());
+        List<LogSegment> deletable2 = log.deletableSegments((segment, next) -> true);
+        List<LogSegment> expected2 = new ArrayList<>(log.logSegments());
+        assertEquals(10, expected2.size());
+        assertEquals(expected2, deletable2);
+    }
+
+    @Test
+    public void testDeletableSegmentsIteration() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(ONE_MB).build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        for (int i = 0; i <= 8; i++) {
+            MemoryRecords records = records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())));
+            log.appendAsLeader(records, 0);
+            log.roll();
+        }
+        log.maybeIncrementHighWatermark(log.logEndOffsetMetadata());
+        assertEquals(10, log.logSegments().size());
+
+        int[] offset = {0};
+        List<LogSegment> deletableSegments = log.deletableSegments((segment, nextSegmentOpt) -> {
+            assertEquals(offset[0], segment.baseOffset());
+            LogSegments logSegments = new LogSegments(log.topicPartition());
+            log.logSegments().forEach(logSegments::add);
+            Optional<LogSegment> floorSegmentOpt = logSegments.floorSegment(offset[0]);
+            assertTrue(floorSegmentOpt.isPresent());
+            assertEquals(floorSegmentOpt.get(), segment);
+            if (offset[0] == log.logEndOffset()) {
+                assertFalse(nextSegmentOpt.isPresent());
+            } else {
+                assertTrue(nextSegmentOpt.isPresent());
+                Optional<LogSegment> higherSegmentOpt = logSegments.higherSegment(segment.baseOffset());
+                assertTrue(higherSegmentOpt.isPresent());
+                assertEquals(segment.baseOffset() + 1, higherSegmentOpt.get().baseOffset());
+                assertEquals(higherSegmentOpt.get(), nextSegmentOpt.get());
+            }
+            offset[0] += 1;
+            return true;
+        });
+        assertEquals(10L, log.logSegments().size());
+        assertEquals(log.nonActiveLogSegmentsFrom(0L).stream().collect(java.util.stream.Collectors.toList()), deletableSegments);
+    }
+
+    @Test
+    public void testActiveSegmentDeletionDueToRetentionTimeBreachWithRemoteStorage() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .segmentIndexBytes(12)
+                .retentionMs(3)
+                .localRetentionMs(1)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+
+        // Append 1 message to the active segment
+        log.appendAsLeader(records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes()))), 0);
+        // Update the highWatermark so that these segments will be eligible for deletion.
+        log.updateHighWatermark(log.logEndOffset());
+        assertEquals(1, log.logSegments().size());
+        assertEquals(0, log.activeSegment().baseOffset());
+
+        mockTime.sleep(2);
+        // It should have rolled the active segment as they are eligible for deletion
+        assertEquals(0, log.deleteOldSegments());
+        assertEquals(2, log.logSegments().size());
+        int[] idx = {0};
+        log.logSegments().forEach(segment -> assertEquals(idx[0]++, segment.baseOffset()));
+
+        // Once rolled, the segment should be uploaded to remote storage and eligible for deletion
+        log.updateHighestOffsetInRemoteStorage(1);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(1, log.logSegments().size());
+        assertEquals(1, log.logSegments().iterator().next().baseOffset());
+        assertEquals(1, log.localLogStartOffset());
+        assertEquals(1, log.logEndOffset());
+        assertEquals(0, log.logStartOffset());
+    }
+
+    @Test
+    public void testSegmentDeletionEnabledBeforeUploadToRemoteTierWhenLogStartOffsetMovedAhead() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .retentionBytes(1)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+        long pid = 1L;
+        short epoch = 0;
+
+        assertTrue(log.isEmpty());
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("a".getBytes())), pid, epoch, 0, 0L), 0);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("b".getBytes())), pid, epoch, 1, 0L), 0);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("c".getBytes())), pid, epoch, 2, 0L), 0);
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("d".getBytes())), pid, epoch, 3, 0L), 1);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("e".getBytes())), pid, epoch, 4, 0L), 2);
+        log.updateHighWatermark(log.logEndOffset());
+        assertEquals(2, log.logSegments().size());
+
+        // No segments are uploaded to remote storage, none of the local log segments should be eligible for deletion
+        log.updateHighestOffsetInRemoteStorage(-1L);
+        assertEquals(0, log.deleteOldSegments());
+        mockTime.sleep(1);
+        assertEquals(2, log.logSegments().size());
+        assertFalse(log.isEmpty());
+
+        // Update the log-start-offset from 0 to 3, then the base segment should not be eligible for deletion
+        log.updateLogStartOffsetFromRemoteTier(3L);
+        assertEquals(0, log.deleteOldSegments());
+        mockTime.sleep(1);
+        assertEquals(2, log.logSegments().size());
+        assertFalse(log.isEmpty());
+
+        // Update the log-start-offset from 3 to 4, then the base segment should be eligible for deletion now even
+        // if it is not uploaded to remote storage
+        log.updateLogStartOffsetFromRemoteTier(4L);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        mockTime.sleep(1);
+        assertEquals(1, log.logSegments().size());
+        assertFalse(log.isEmpty());
+
+        log.updateLogStartOffsetFromRemoteTier(5L);
+        assertEquals(0, log.deleteOldSegments());
+        mockTime.sleep(1);
+        assertEquals(1, log.logSegments().size());
+        assertTrue(log.isEmpty());
+    }
+
+    @Test
+    public void testRetentionOnLocalLogDeletionWhenRemoteLogCopyEnabledAndDefaultLocalRetentionBytes() throws IOException {
+        MemoryRecords createRecords = records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())));
+        int segmentBytes = createRecords.sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(segmentBytes)
+                .retentionBytes(1)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+
+        // Given 6 segments of 1 message each
+        for (int i = 0; i < 6; i++) {
+            log.appendAsLeader(records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes()))), 0);
+        }
+        assertEquals(6, log.logSegments().size());
+
+        log.updateHighWatermark(log.logEndOffset());
+        // simulate calls to upload 2 segments to remote storage
+        log.updateHighestOffsetInRemoteStorage(1);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(4, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(2, log.localLogStartOffset());
+    }
+
+    @Test
+    public void testRetentionOnLocalLogDeletionWhenRemoteLogCopyEnabledAndDefaultLocalRetentionMs() throws IOException {
+        MemoryRecords createRecords = records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())));
+        int segmentBytes = createRecords.sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(segmentBytes)
+                .retentionMs(1000)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+
+        // Given 6 segments of 1 message each
+        for (int i = 0; i < 6; i++) {
+            log.appendAsLeader(records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes()))), 0);
+        }
+        assertEquals(6, log.logSegments().size());
+
+        log.updateHighWatermark(log.logEndOffset());
+        // simulate calls to upload 2 segments to remote storage
+        log.updateHighestOffsetInRemoteStorage(1);
+
+        mockTime.sleep(1001);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(4, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(2, log.localLogStartOffset());
+    }
+
+    @Test
+    public void testRetentionOnLocalLogDeletionWhenRemoteLogCopyDisabled() throws IOException {
+        MemoryRecords createRecords = records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes())));
+        int segmentBytes = createRecords.sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(segmentBytes)
+                .localRetentionBytes(1)
+                .retentionBytes((long) segmentBytes * 5)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+
+        // Given 6 segments of 1 message each
+        for (int i = 0; i < 6; i++) {
+            log.appendAsLeader(records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes()))), 0);
+        }
+        assertEquals(6, log.logSegments().size());
+
+        log.updateHighWatermark(log.logEndOffset());
+
+        // Should not delete local log because highest remote storage offset is -1 (default value)
+        assertEquals(0, log.deleteOldSegments());
+        assertEquals(6, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(0, log.localLogStartOffset());
+
+        // simulate calls to upload 2 segments to remote storage
+        log.updateHighestOffsetInRemoteStorage(1);
+
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(4, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(2, log.localLogStartOffset());
+
+        // add remoteCopyDisabled = true
+        LogConfig copyDisabledLogConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(segmentBytes)
+                .localRetentionBytes(1)
+                .retentionBytes((long) segmentBytes * 5)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .remoteLogCopyDisable(true)
+                .build();
+        log.updateConfig(copyDisabledLogConfig);
+
+        // No local logs will be deleted even though local retention bytes is 1 because we'll adopt retention.ms/bytes
+        // when remote.log.copy.disable = true
+        assertEquals(0, log.deleteOldSegments());
+        assertEquals(4, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(2, log.localLogStartOffset());
+
+        // simulate the remote logs are all deleted due to retention policy
+        log.updateLogStartOffsetFromRemoteTier(2);
+        assertEquals(4, log.logSegments().size());
+        assertEquals(2, log.logStartOffset());
+        assertEquals(2, log.localLogStartOffset());
+
+        // produce 3 more segments
+        for (int i = 0; i < 3; i++) {
+            log.appendAsLeader(records(List.of(new SimpleRecord(mockTime.milliseconds(), "a".getBytes()))), 0);
+        }
+        assertEquals(7, log.logSegments().size());
+        log.updateHighWatermark(log.logEndOffset());
+
+        // try to delete local logs again, 2 segments will be deleted this time because we'll adopt retention.ms/bytes (retention.bytes = 5)
+        // when remote.log.copy.disable = true
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(5, log.logSegments().size());
+        assertEquals(4, log.logStartOffset());
+        assertEquals(4, log.localLogStartOffset());
+
+        // add localRetentionMs = 1, retentionMs = 1000
+        LogConfig retentionMsConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(segmentBytes)
+                .localRetentionMs(1)
+                .retentionMs(1000)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .remoteLogCopyDisable(true)
+                .build();
+        log.updateConfig(retentionMsConfig);
+
+        // Should not delete any logs because no local logs expired using retention.ms = 1000
+        mockTime.sleep(10);
+        assertEquals(0, log.deleteOldSegments());
+        assertEquals(5, log.logSegments().size());
+        assertEquals(4, log.logStartOffset());
+        assertEquals(4, log.localLogStartOffset());
+
+        // Should delete all logs because all of them are expired based on retentionMs = 1000
+        mockTime.sleep(1000);
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(1, log.logSegments().size());
+        assertEquals(9, log.logStartOffset());
+        assertEquals(9, log.localLogStartOffset());
+    }
+
+    @Test
+    public void testIncrementLocalLogStartOffsetAfterLocalLogDeletion() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .localRetentionBytes(1)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+
+        long offset;
+        for (int i = 0; i < 50; i++) {
+            MemoryRecords records = singletonRecords("test".getBytes());
+            LogAppendInfo info = log.appendAsLeader(records, 0);
+            offset = info.lastOffset();
+            if (offset != 0 && offset % 10 == 0)
+                log.roll();
+        }
+        assertEquals(5, log.logSegments().size());
+        log.updateHighWatermark(log.logEndOffset());
+        // simulate calls to upload 3 segments to remote storage
+        log.updateHighestOffsetInRemoteStorage(30);
+
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(2, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(31, log.localLogStartOffset());
+    }
+
+    @Test
+    public void testConvertToOffsetMetadataDoesNotThrowOffsetOutOfRangeError() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .localRetentionBytes(1)
+                .fileDeleteDelayMs(0)
+                .remoteLogStorageEnable(true)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+
+        long offset;
+        for (int i = 0; i < 50; i++) {
+            MemoryRecords records = singletonRecords("test".getBytes());
+            LogAppendInfo info = log.appendAsLeader(records, 0);
+            offset = info.lastOffset();
+            if (offset != 0 && offset % 10 == 0)
+                log.roll();
+        }
+        assertEquals(5, log.logSegments().size());
+        log.updateHighWatermark(log.logEndOffset());
+        // simulate calls to upload 3 segments to remote storage
+        log.updateHighestOffsetInRemoteStorage(30);
+
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(2, log.logSegments().size());
+        assertEquals(0, log.logStartOffset());
+        assertEquals(31, log.localLogStartOffset());
+
+        log.updateLogStartOffsetFromRemoteTier(15);
+        assertEquals(15, log.logStartOffset());
+
+        // case-1: offset is higher than the local-log-start-offset.
+        // log-start-offset < local-log-start-offset < offset-to-be-converted < log-end-offset
+        assertEquals(new LogOffsetMetadata(35, 31, 288), log.maybeConvertToOffsetMetadata(35));
+        // case-2: offset is less than the local-log-start-offset
+        // log-start-offset < offset-to-be-converted < local-log-start-offset < log-end-offset
+        assertEquals(new LogOffsetMetadata(29, -1L, -1), log.maybeConvertToOffsetMetadata(29));
+        // case-3: offset is higher than the log-end-offset
+        // log-start-offset < local-log-start-offset < log-end-offset < offset-to-be-converted
+        assertEquals(new LogOffsetMetadata(log.logEndOffset() + 1, -1L, -1), log.maybeConvertToOffsetMetadata(log.logEndOffset() + 1));
+        // case-4: offset is less than the log-start-offset
+        // offset-to-be-converted < log-start-offset < local-log-start-offset < log-end-offset
+        assertEquals(new LogOffsetMetadata(14, -1L, -1), log.maybeConvertToOffsetMetadata(14));
+    }
+
+    @Test
+    public void testGetFirstBatchTimestampForSegments() throws IOException {
+        UnifiedLog log = createLog(logDir, new LogTestUtils.LogConfigBuilder().build());
+
+        List<LogSegment> segments = new ArrayList<>();
+        LogSegment seg1 = LogTestUtils.createSegment(1, logDir, 10, mockTime);
+        LogSegment seg2 = LogTestUtils.createSegment(2, logDir, 10, mockTime);
+        segments.add(seg1);
+        segments.add(seg2);
+
+        List<Long> timestamps = new ArrayList<>(log.getFirstBatchTimestampForSegments(segments));
+        assertEquals(List.of(Long.MAX_VALUE, Long.MAX_VALUE), timestamps);
+
+        seg1.append(1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord(1000L, "one".getBytes())));
+        seg2.append(2, MemoryRecords.withRecords(2, Compression.NONE, new SimpleRecord(2000L, "two".getBytes())));
+
+        timestamps = new ArrayList<>(log.getFirstBatchTimestampForSegments(segments));
+        assertEquals(List.of(1000L, 2000L), timestamps);
+
+        seg1.close();
+        seg2.close();
+    }
+
+    @Test
+    public void testFetchOffsetByTimestampShouldReadOnlyLocalLogWhenLogIsEmpty() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().remoteLogStorageEnable(true).build();
+        UnifiedLog log = createLog(logDir, logConfig, true);
+        OffsetResultHolder result = log.fetchOffsetByTimestamp(mockTime.milliseconds(), Optional.empty());
+        assertEquals(new OffsetResultHolder(Optional.empty(), Optional.empty()), result);
+    }
+
+    @Test
+    public void testStaleProducerEpochReturnsRecoverableErrorForTV1Clients() throws IOException {
+        // Producer epoch gets incremented (coordinator fail over, completed transaction, etc.)
+        // and client has stale cached epoch. Fix prevents fatal InvalidTxnStateException.
+
+        ProducerStateManagerConfig psmConfig = new ProducerStateManagerConfig(86400000, true);
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig, psmConfig);
+
+        long producerId = 123L;
+        short oldEpoch = 5;
+        short newEpoch = 6;
+
+        // Step 1: Simulate a scenario where producer epoch was incremented to fence the producer
+        MemoryRecords previousRecords = MemoryRecords.withTransactionalRecords(
+                Compression.NONE, producerId, newEpoch, 0,
+                new SimpleRecord("previous-key".getBytes(), "previous-value".getBytes()));
+        VerificationGuard previousGuard = log.maybeStartTransactionVerification(producerId, 0, newEpoch, false); // TV1 = supportsEpochBump = false
+        log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), previousGuard,
+                TransactionVersion.TV_1.featureLevel());
+
+        // Complete the transaction normally (commits do update producer state with current epoch)
+        MemoryRecords commitMarker = MemoryRecords.withEndTransactionMarker(
+                producerId, newEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
+        log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL,
+                TransactionVersion.TV_1.featureLevel());
+
+        // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)
+        MemoryRecords staleEpochRecords = MemoryRecords.withTransactionalRecords(
+                Compression.NONE, producerId, oldEpoch, 0,
+                new SimpleRecord("stale-epoch-key".getBytes(), "stale-epoch-value".getBytes()));
+
+        // Step 3: Verify our fix - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
+        InvalidProducerEpochException exception = assertThrows(InvalidProducerEpochException.class, () -> {
+            VerificationGuard staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch, false);
+            log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), staleGuard,
+                    TransactionVersion.TV_1.featureLevel());
+        });
+
+        // Verify the error message indicates epoch mismatch
+        assertTrue(exception.getMessage().contains("smaller than the last seen epoch"));
+        assertTrue(exception.getMessage().contains(String.valueOf(oldEpoch)));
+        assertTrue(exception.getMessage().contains(String.valueOf(newEpoch)));
+    }
+
+    @Test
+    public void testStaleProducerEpochReturnsRecoverableErrorForTV2Clients() throws IOException {
+        // Check producer epoch FIRST - if stale, return recoverable error before verification checks.
+
+        ProducerStateManagerConfig psmConfig = new ProducerStateManagerConfig(86400000, true);
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig, psmConfig);
+
+        long producerId = 456L;
+        short originalEpoch = 3;
+        short bumpedEpoch = 4;
+
+        // Step 1: Start transaction with epoch 3 (before timeout)
+        MemoryRecords initialRecords = MemoryRecords.withTransactionalRecords(
+                Compression.NONE, producerId, originalEpoch, 0,
+                new SimpleRecord("ks-initial-key".getBytes(), "ks-initial-value".getBytes()));
+        VerificationGuard initialGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true); // TV2 = supportsEpochBump = true
+        log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), initialGuard,
+                TransactionVersion.TV_2.featureLevel());
+
+        // Step 2: Coordinator times out and aborts transaction
+        // TV2 (KIP-890): Coordinator bumps epoch from 3 -> 4 and sends abort marker with epoch 4
+        MemoryRecords abortMarker = MemoryRecords.withEndTransactionMarker(
+                producerId, bumpedEpoch, new EndTransactionMarker(ControlRecordType.ABORT, 0));
+        log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL,
+                TransactionVersion.TV_2.featureLevel());
+
+        // Step 3: TV2 transactional producer tries to append with stale epoch (timeout recovery scenario)
+        MemoryRecords staleEpochRecords = MemoryRecords.withTransactionalRecords(
+                Compression.NONE, producerId, originalEpoch, 0,
+                new SimpleRecord("ks-resume-key".getBytes(), "ks-resume-value".getBytes()));
+
+        // Step 4: Verify our fix works for TV2 - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
+        InvalidProducerEpochException exception = assertThrows(InvalidProducerEpochException.class, () -> {
+            VerificationGuard staleGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true); // TV2 = supportsEpochBump = true
+            log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), staleGuard,
+                    TransactionVersion.TV_2.featureLevel());
+        });
+
+        // Verify the error message indicates epoch mismatch (3 < 4)
+        assertTrue(exception.getMessage().contains("smaller than the last seen epoch"));
+        assertTrue(exception.getMessage().contains(String.valueOf(originalEpoch)));
+        assertTrue(exception.getMessage().contains(String.valueOf(bumpedEpoch)));
     }
 }
