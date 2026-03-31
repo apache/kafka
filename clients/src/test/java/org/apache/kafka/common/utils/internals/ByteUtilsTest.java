@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils.internals;
 
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Disabled;
@@ -57,6 +58,21 @@ public class ByteUtilsTest {
     private final byte xBF = (byte) 0xbf;
     private final byte xC0 = (byte) 0xc0;
     private final byte xFE = (byte) 0xfe;
+
+    @Test
+    public void testIncrement() {
+        byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
+        byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
+        Bytes output = ByteUtils.increment(Bytes.wrap(input));
+        assertArrayEquals(output.get(), expected);
+    }
+
+    @Test
+    public void testIncrementUpperBoundary() {
+        byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        assertThrows(IndexOutOfBoundsException.class, () -> ByteUtils.increment(Bytes.wrap(input)));
+    }
+
 
     @Test
     public void testReadUnsignedIntLEFromArray() {

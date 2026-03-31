@@ -25,26 +25,10 @@ import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BytesTest {
-
-    @Test
-    public void testIncrement() {
-        byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
-        byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
-        Bytes output = ByteUtils.increment(Bytes.wrap(input));
-        assertArrayEquals(output.get(), expected);
-    }
-
-    @Test
-    public void testIncrementUpperBoundary() {
-        byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        assertThrows(IndexOutOfBoundsException.class, () -> ByteUtils.increment(Bytes.wrap(input)));
-    }
 
     @Test
     public void testIncrementWithSubmap() {
