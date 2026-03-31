@@ -75,9 +75,10 @@ Compaction may also modify the baseTimestamp if the record batch contains record
 A control batch contains a single record called the control record. Control records should not be returned to applications. Instead, they are used by consumers to filter out aborted transactional messages, and by the KRaft implementation for its protocol metadata.
 
 The key of a control record conforms to the following schema:
+
 ```text
-    version: int16 (current version is 0)
-    type: int16 (0 indicates an abort marker, 1 indicates a commit)
+version: int16 (current version is 0)
+type: int16 (the control record types are in the table below)
 ```
 
 The following control record types are currently defined:
