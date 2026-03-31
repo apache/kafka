@@ -967,7 +967,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return candidateLogSegments;
         }
 
-        private boolean delayCopy(LogConfig logConfig, LogSegment previousSeg, long currentTimeMs, long totalLogSize, long cumulativeSize){
+        private boolean delayCopy(LogConfig logConfig, LogSegment previousSeg, long currentTimeMs, long totalLogSize, long cumulativeSize) {
             if (logConfig == null) {
                 return false;
             }
