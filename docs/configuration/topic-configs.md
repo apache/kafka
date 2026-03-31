@@ -36,7 +36,7 @@ $ bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my-topi
 Overrides can also be changed or set later using the alter configs command. This example updates the max message size for _my-topic_ : 
 
 ```bash
-$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic \
   --alter --add-config max.message.bytes=128000
 ```
 
@@ -49,7 +49,7 @@ $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --
 To remove an override you can do 
 
 ```bash
-$ bin/kafka-configs.sh --bootstrap-server localhost:9092  --entity-type topics --entity-name my-topic
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic \
   --alter --delete-config max.message.bytes
 ```
 

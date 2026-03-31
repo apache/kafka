@@ -276,7 +276,7 @@ The start offset is the earliest offset for in-flight records being evaluated fo
   * \--members: Describes active members in the share group. 
 
     ```bash
-    bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --members
+    $ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --members
     GROUP           CONSUMER-ID            HOST            CLIENT-ID              #PARTITIONS  ASSIGNMENT
     my-share-group  94wrSQNmRda9Q6sk6jMO6Q /127.0.0.1      console-share-consumer 1            topic1:0
     my-share-group  EfI0sha8QSKSrL_-I_zaTA /127.0.0.1      console-share-consumer 1            topic1:0
@@ -287,7 +287,7 @@ You can see that both members have been assigned the same partition which they a
   * \--state: Describes a summary of the state of the share group. 
 
     ```bash
-    bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --state
+    $ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group --state
     GROUP           COORDINATOR (ID)          STATE           #MEMBERS
     my-share-group  localhost:9092  (1)       Stable          2
     ```

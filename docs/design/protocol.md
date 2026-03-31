@@ -145,12 +145,11 @@ The [BNF](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form)s below give an
 ### Common Request and Response Structure
 
 All requests and responses originate from the following grammar which will be incrementally describe through the rest of this document:
-
-```text
-RequestOrResponse => Size (RequestMessage | ResponseMessage)
-  Size => int32  
-```
-
+    
+    
+    RequestOrResponse => Size (RequestMessage | ResponseMessage)
+      Size => int32  
+  
 <table>  
 <tr>  
 <th>
@@ -198,11 +197,10 @@ The following are the numeric codes that the stable ApiKey in the request can ta
 This section gives details on each of the individual API Messages, their usage, their binary format, and the meaning of their fields.
 
 The message consists of the header and body:
-
-```text
-Message => RequestOrResponseHeader Body
-```
-
+    
+    
+    Message => RequestOrResponseHeader Body
+    
 
 `RequestOrResponseHeader` is the versioned request or response header. `Body` is the message-specific body.
 

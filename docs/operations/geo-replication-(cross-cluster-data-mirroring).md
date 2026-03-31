@@ -425,8 +425,7 @@ Optionally, as described previously, you can set the parameter `--clusters` to e
 
 ```bash
 # Note: The cluster alias us-west must be defined in the configuration file
-$ bin/connect-mirror-maker.sh connect-mirror-maker.properties \
-    --clusters us-west
+$ bin/connect-mirror-maker.sh connect-mirror-maker.properties --clusters us-west
 ```
 
 _Note when testing replication of consumer groups:_ By default, MirrorMaker does not replicate consumer groups created by the kafka-console-consumer.sh tool, which you might use to test your MirrorMaker setup on the command line. If you do want to replicate these consumer groups as well, set the `groups.exclude` configuration accordingly (default: `groups.exclude = console-consumer-.*, connect-.*, __.*`). Remember to update the configuration again once you completed your testing. 
