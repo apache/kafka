@@ -917,7 +917,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
-
     @Test
     public void shouldHandleToggleOfEnablingBloomFilters() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
