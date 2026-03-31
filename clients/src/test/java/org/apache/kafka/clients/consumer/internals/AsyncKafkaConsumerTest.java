@@ -41,6 +41,7 @@ import org.apache.kafka.clients.consumer.internals.events.CommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
@@ -54,7 +55,10 @@ import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicRe2JPatternSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsTasksAssignedEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
@@ -2269,6 +2273,79 @@ public class AsyncKafkaConsumerTest {
             assertTrue(thrownException.getCause().getMessage().contains("Test streams listener exception"));
             verify(mockStreamsListener).onTasksRevoked(any());
         }
+    }
+
+    /**
+     * Tests that when the app thread fails to update the assignment as part of a reconciliation,
+     * it sends an event with error to the background thread before throwing on poll.
+     * This ensures the background reconciliation is completed exceptionally.
+     */
+    @Test
+    public void testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails() {
+        final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
+
+        consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singletonList("topic"), new CounterConsumerRebalanceListener(
+            Optional.empty(), Optional.empty(), Optional.empty()));
+
+        // Make ApplyAssignmentEvent fail
+        when(applicationEventHandler.addAndGet(any(ApplyAssignmentEvent.class)))
+            .thenThrow(applyAssignmentError);
+
+        // Add PartitionsAssignedEvent to background queue
+        backgroundEventQueue.add(new PartitionsAssignedEvent(Set.of(), new TreeSet<>()));
+
+        completeAsyncPollEventSuccessfully();
+
+        // Poll should throw because it couldn't update the assignment to run callbacks
+        assertSame(applyAssignmentError, assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO)));
+
+        // Verify that ConsumerRebalanceListenerCallbackCompletedEvent with error was sent
+        ArgumentCaptor<ConsumerRebalanceListenerCallbackCompletedEvent> eventCaptor =
+            ArgumentCaptor.forClass(ConsumerRebalanceListenerCallbackCompletedEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        assertTrue(eventCaptor.getValue().error().isPresent());
+        assertSame(applyAssignmentError, eventCaptor.getValue().error().get());
+        assertEquals(ON_PARTITIONS_ASSIGNED, eventCaptor.getValue().methodName());
+    }
+
+    /**
+     * Tests that when the app thread fails to update the assignment as part of a reconciliation,
+     * it sends an event with error to the background thread before throwing on poll.
+     * This ensures the background reconciliation is completed exceptionally.
+     */
+    @Test
+    public void testStreamsTasksAssignedEventSendsErrorWhenApplyAssignmentFails() {
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
+
+        consumer = newConsumerWithStreamRebalanceData(
+            requiredConsumerConfigAndGroupId("streamsGroup"), streamsRebalanceData);
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singletonList("topic"), mock(StreamsRebalanceListener.class));
+
+        // Make ApplyAssignmentEvent fail
+        when(applicationEventHandler.addAndGet(any(ApplyAssignmentEvent.class)))
+            .thenThrow(applyAssignmentError);
+
+        // Add StreamsTasksAssignedEvent to background queue
+        backgroundEventQueue.add(new StreamsTasksAssignedEvent(
+            new TreeSet<>(), new TreeSet<>(),
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), true)));
+
+        completeAsyncPollEventSuccessfully();
+
+        // Poll should throw because it failed to update assignment to run callbacks
+        assertSame(applyAssignmentError, assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO)));
+
+        // Verify that StreamsOnTasksAssignedCallbackCompletedEvent with error was sent
+        ArgumentCaptor<StreamsOnTasksAssignedCallbackCompletedEvent> eventCaptor =
+            ArgumentCaptor.forClass(StreamsOnTasksAssignedCallbackCompletedEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        assertTrue(eventCaptor.getValue().error().isPresent());
+        assertSame(applyAssignmentError, eventCaptor.getValue().error().get());
     }
 
     private void completeAsyncPollEventSuccessfully() {
