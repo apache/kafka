@@ -144,8 +144,8 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
-    public static final long DEFAULT_REMOTE_COPY_LAG_MS = 0;
-    public static final long DEFAULT_REMOTE_COPY_LAG_BYTES = 0;
+    public static final long DEFAULT_REMOTE_COPY_LAG_MS = -2;  // It indicates no delay check based on local retention ms
+    public static final long DEFAULT_REMOTE_COPY_LAG_BYTES = -2; // It indicates no delay check based on local retention bytes
     public static final long MAX_REMOTE_COPY_LAG_MS = -1; // It indicates the value depends on local retention ms
     public static final long MAX_REMOTE_COPY_LAG_BYTES = -1; // It indicates the value depends on local retention bytes
 
@@ -257,8 +257,8 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
-                .define(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_MS, atLeast(-1), MEDIUM, TopicConfig.REMOTE_COPY_LAG_MS_DOC)
-                .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_BYTES, atLeast(-1), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
+                .define(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_MS, atLeast(-2), MEDIUM, TopicConfig.REMOTE_COPY_LAG_MS_DOC)
+                .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_BYTES, atLeast(-2), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
@@ -413,21 +413,11 @@ public class LogConfig extends AbstractConfig {
 
 
     public long remoteCopyLagMs() {
-        if (remoteLogConfig.remoteCopyLagMs != MAX_REMOTE_COPY_LAG_MS) {
-            return remoteLogConfig.remoteCopyLagMs;
-        }
-        // MAX_REMOTE_COPY_LAG_MS (-1): use local retention; if local is to save forever (-1), return 0 (no delay check).
-        long localRetentionMs = localRetentionMs();
-        return localRetentionMs == -1 ? 0 : localRetentionMs;
+        return remoteLogConfig.remoteCopyLagMs == MAX_REMOTE_COPY_LAG_MS  ? remoteLogConfig.remoteCopyLagMs : localRetentionMs();
     }
 
     public long remoteCopyLagBytes() {
-        if (remoteLogConfig.remoteCopyLagBytes != MAX_REMOTE_COPY_LAG_BYTES) {
-            return remoteLogConfig.remoteCopyLagBytes;
-        }
-        // MAX_REMOTE_COPY_LAG_BYTES (-1): use local retention; if local is to save forever (-1), return 0 (no delay).
-        long localRetentionBytes = localRetentionBytes();
-        return localRetentionBytes == -1 ? 0 : localRetentionBytes;
+        return remoteLogConfig.remoteCopyLagBytes == MAX_REMOTE_COPY_LAG_BYTES  ? remoteLogConfig.remoteCopyLagBytes : localRetentionBytes();
     }
 
     public long localRetentionMs() {

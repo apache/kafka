@@ -61,22 +61,7 @@ import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
-import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
-import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
-import org.apache.kafka.storage.internals.log.EpochEntry;
-import org.apache.kafka.storage.internals.log.FetchDataInfo;
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
-import org.apache.kafka.storage.internals.log.LogSegment;
-import org.apache.kafka.storage.internals.log.OffsetIndex;
-import org.apache.kafka.storage.internals.log.OffsetPosition;
-import org.apache.kafka.storage.internals.log.OffsetResultHolder;
-import org.apache.kafka.storage.internals.log.RemoteIndexCache;
-import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
-import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
-import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
-import org.apache.kafka.storage.internals.log.TransactionIndex;
-import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
-import org.apache.kafka.storage.internals.log.UnifiedLog;
+import org.apache.kafka.storage.internals.log.*;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import com.yammer.metrics.core.Timer;
@@ -946,9 +931,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             List<EnrichedLogSegment> candidateLogSegments = new ArrayList<>();
             List<LogSegment> segments = log.logSegments(fromOffset, Long.MAX_VALUE);
             if (!segments.isEmpty()) {
-                long copyLagMs = log.config() != null ? log.config().remoteCopyLagMs() : 0L;
-                long copyLagBytes = log.config() != null ? log.config().remoteCopyLagBytes() : 0L;
-                
                 long currentTimeMs = time.milliseconds();
                 long totalLogSize = UnifiedLog.sizeInBytes(segments);
                 long cumulativeSize = 0;
@@ -958,9 +940,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
                         cumulativeSize += previousSeg.size();
-                        if (delayCopy(previousSeg, copyLagMs, currentTimeMs, copyLagBytes, totalLogSize, cumulativeSize))
+                        if (delayCopy(log.config(), previousSeg, currentTimeMs, totalLogSize, cumulativeSize)) {
                             break;
-
+                        }
                         candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
                     }
                 }
@@ -969,18 +951,25 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return candidateLogSegments;
         }
 
-        private boolean delayCopy(LogSegment segment, long copyLagMs, long currentTimeMs, long copyLagBytes, long totalLogSize, long cumulativeSize) {
-            if (copyLagMs > 0) {
-                if (hasExceededCopyLagTime(segment, currentTimeMs, copyLagMs)) {
-                    return false;
-                }
-                if (copyLagBytes == 0) {
-                    return true;
-                }
+        private boolean delayCopy(LogConfig logConfig, LogSegment previousSeg, long currentTimeMs, long totalLogSize, long cumulativeSize){
+            if (logConfig == null) {
+                return false;
             }
 
-            return copyLagBytes > 0 && !hasExceededCopyLagSize(segment, totalLogSize, cumulativeSize, copyLagBytes);
+            long copyLagMs = logConfig.remoteCopyLagMs();
+            long copyLagBytes = logConfig.remoteCopyLagBytes();
+
+            if (copyLagMs == 0 || copyLagBytes == 0) {
+                return false;
+            }
+
+            if (copyLagMs != -2 && ! hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs)) {
+                return false;
+            }
+
+            return copyLagBytes != -2 && ! hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
         }
+
 
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
             if (isCancelled())
