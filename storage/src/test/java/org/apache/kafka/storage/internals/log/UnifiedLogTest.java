@@ -116,6 +116,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -5527,7 +5528,7 @@ public class UnifiedLogTest {
                 (segment, next) -> segment.baseOffset() <= 5);
         List<LogSegment> expected = log.nonActiveLogSegmentsFrom(0L).stream()
                 .filter(segment -> segment.baseOffset() <= 5)
-                .collect(java.util.stream.Collectors.toList());
+                        .toList();
         assertEquals(6, expected.size());
         assertEquals(expected, deletable);
 
@@ -5557,15 +5558,15 @@ public class UnifiedLogTest {
         log.maybeIncrementHighWatermark(log.logEndOffsetMetadata());
         assertEquals(10, log.logSegments().size());
 
-        int[] offset = {0};
+        AtomicInteger offset = new AtomicInteger(0);
         List<LogSegment> deletableSegments = log.deletableSegments((segment, nextSegmentOpt) -> {
-            assertEquals(offset[0], segment.baseOffset());
+            assertEquals(offset.get(), segment.baseOffset());
             LogSegments logSegments = new LogSegments(log.topicPartition());
             log.logSegments().forEach(logSegments::add);
-            Optional<LogSegment> floorSegmentOpt = logSegments.floorSegment(offset[0]);
+            Optional<LogSegment> floorSegmentOpt = logSegments.floorSegment(offset.get());
             assertTrue(floorSegmentOpt.isPresent());
             assertEquals(floorSegmentOpt.get(), segment);
-            if (offset[0] == log.logEndOffset()) {
+            if (offset.get() == log.logEndOffset()) {
                 assertFalse(nextSegmentOpt.isPresent());
             } else {
                 assertTrue(nextSegmentOpt.isPresent());
@@ -5574,11 +5575,11 @@ public class UnifiedLogTest {
                 assertEquals(segment.baseOffset() + 1, higherSegmentOpt.get().baseOffset());
                 assertEquals(higherSegmentOpt.get(), nextSegmentOpt.get());
             }
-            offset[0] += 1;
+            offset.addAndGet(1);
             return true;
         });
         assertEquals(10L, log.logSegments().size());
-        assertEquals(log.nonActiveLogSegmentsFrom(0L).stream().collect(java.util.stream.Collectors.toList()), deletableSegments);
+        assertEquals(new ArrayList<>(log.nonActiveLogSegmentsFrom(0L)), deletableSegments);
     }
 
     @Test
