@@ -36,12 +36,22 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
@@ -50,6 +60,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOF
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
@@ -64,8 +78,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
@@ -119,6 +135,11 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Con
 
 public class OAuthCompatibilityTool {
 
+    private static final String CLIENT_CONFIG_ARG = "client-config";
+    private static final String BROKER_CONFIG_ARG = "broker-config";
+    private static final String CLIENT_ID_ARG = "client-id";
+    private static final String CLIENT_SECRET_ARG = "client-secret";
+
     public static void main(String[] args) {
         ArgsHandler argsHandler = new ArgsHandler();
         Namespace namespace;
@@ -130,24 +151,19 @@ public class OAuthCompatibilityTool {
             return;
         }
 
-        ConfigHandler configHandler = new ConfigHandler(namespace);
+        Properties clientFileProps = loadConfigFile(namespace, CLIENT_CONFIG_ARG);
+        Properties brokerFileProps = loadConfigFile(namespace, BROKER_CONFIG_ARG);
 
-        Map<String, ?> configs = configHandler.getConfigs();
-        List<AppConfigurationEntry> jaasConfigEntries = List.of(
-            new AppConfigurationEntry(
-                OAuthBearerLoginModule.class.getName(),
-                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
-                configHandler.getJaasOptions()
-            )
-        );
+        ConfigHandler clientConfigHandler = new ConfigHandler(namespace, clientFileProps);
+        ConfigHandler brokerConfigHandler = new ConfigHandler(namespace, brokerFileProps);
 
         try {
             String jwt;
 
             {
                 // Client side...
-                try (JwtRetriever retriever = createRetriever(configs, jaasConfigEntries)) {
-                    try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
+                try (JwtRetriever retriever = createRetriever(clientConfigHandler)) {
+                    try (JwtValidator validator = createValidator(clientConfigHandler)) {
                         System.out.println("PASSED 1/5: client configuration");
 
                         jwt = retriever.retrieve();
@@ -161,7 +177,7 @@ public class OAuthCompatibilityTool {
 
             {
                 // Broker side...
-                try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
+                try (JwtValidator validator = createValidator(brokerConfigHandler)) {
                     System.out.println("PASSED 4/5: broker configuration");
 
                     validator.validate(jwt);
@@ -184,27 +200,62 @@ public class OAuthCompatibilityTool {
         }
     }
 
-    private static JwtRetriever createRetriever(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
-        return getConfiguredInstance(
-            configs,
-            OAUTHBEARER_MECHANISM,
-            jaasConfigEntries,
-            SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
-            JwtRetriever.class
+    private static Properties loadConfigFile(Namespace namespace, String argName) {
+        String path = namespace.getString(argName);
+
+        if (path == null)
+            return new Properties();
+
+        Properties props = new Properties();
+
+        try (FileInputStream fis = new FileInputStream(path)) {
+            props.load(fis);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to load config file for --" + argName + ": " + path, e);
+        }
+
+        return props;
+    }
+
+    private static JwtRetriever createRetriever(ConfigHandler configHandler) {
+        return createConfiguredInstance(
+                configHandler,
+                SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+                JwtRetriever.class
         );
     }
 
-    private static JwtValidator createValidator(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
-        return getConfiguredInstance(
-            configs,
-            OAUTHBEARER_MECHANISM,
-            jaasConfigEntries,
-            SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
-            JwtValidator.class
+    private static JwtValidator createValidator(ConfigHandler configHandler) {
+        return createConfiguredInstance(
+                configHandler,
+                SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+                JwtValidator.class
         );
     }
 
-    private static class ArgsHandler {
+    private static <T> T createConfiguredInstance(
+            ConfigHandler configHandler,
+            String configKey,
+            Class<T> clazz
+    ) {
+        List<AppConfigurationEntry> jaasConfigEntries = List.of(
+                new AppConfigurationEntry(
+                        OAuthBearerLoginModule.class.getName(),
+                        AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                        configHandler.getJaasOptions()
+                )
+        );
+
+        return getConfiguredInstance(
+                configHandler.getConfigs(),
+                OAUTHBEARER_MECHANISM,
+                jaasConfigEntries,
+                configKey,
+                clazz
+        );
+    }
+
+    static class ArgsHandler {
 
         private static final String DESCRIPTION = String.format(
             "This tool is used to verify OAuth/OIDC provider compatibility.%n%n" +
@@ -214,14 +265,27 @@ public class OAuthCompatibilityTool {
 
         private final ArgumentParser parser;
 
-        private ArgsHandler() {
+        ArgsHandler() {
             this.parser = ArgumentParsers
                 .newArgumentParser("oauth-compatibility-tool")
                 .defaultHelp(true)
                 .description(DESCRIPTION);
         }
 
-        private Namespace parseArgs(String[] args) throws ArgumentParserException {
+        Namespace parseArgs(String[] args) throws ArgumentParserException {
+            // File-based config options
+            parser.addArgument("--" + CLIENT_CONFIG_ARG)
+                    .metavar("path")
+                    .dest(CLIENT_CONFIG_ARG)
+                    .help("Path to a .properties file containing the client's OAuth/SSL configuration. " +
+                            "Explicit command line options override any matching keys in this file.");
+
+            parser.addArgument("--" + BROKER_CONFIG_ARG)
+                    .metavar("path")
+                    .dest(BROKER_CONFIG_ARG)
+                    .help("Path to a .properties file containing the broker's OAuth/SSL configuration. " +
+                            "Explicit command line options override any matching keys in this file.");
+
             // SASL/OAuth
             addArgument(SASL_LOGIN_CONNECT_TIMEOUT_MS, SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC, Integer.class);
             addArgument(SASL_LOGIN_READ_TIMEOUT_MS, SASL_LOGIN_READ_TIMEOUT_MS_DOC, Integer.class);
@@ -238,6 +302,9 @@ public class OAuthCompatibilityTool {
             addArgument(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC);
             addArgument(SASL_OAUTHBEARER_SUB_CLAIM_NAME, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC);
             addArgument(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC);
+            addArgument(SASL_OAUTHBEARER_SCOPE, SASL_OAUTHBEARER_SCOPE_DOC);
+            addArgument(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC);
+            addArgument(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET_DOC);
 
             // SSL
             addArgument(SSL_CIPHER_SUITES_CONFIG, SSL_CIPHER_SUITES_DOC)
@@ -263,9 +330,16 @@ public class OAuthCompatibilityTool {
             addArgument(SSL_TRUSTSTORE_TYPE_CONFIG, SSL_TRUSTSTORE_TYPE_DOC);
 
             // JAAS options...
-            addArgument(CLIENT_ID_CONFIG, CLIENT_ID_DOC);
-            addArgument(CLIENT_SECRET_CONFIG, CLIENT_SECRET_DOC);
+            parser.addArgument("--" + CLIENT_ID_ARG)
+                    .metavar(CLIENT_ID_ARG)
+                    .dest(CLIENT_ID_CONFIG)
+                    .help(CLIENT_ID_DOC);
+            parser.addArgument("--" + CLIENT_SECRET_ARG)
+                    .metavar(CLIENT_SECRET_ARG)
+                    .dest(CLIENT_SECRET_CONFIG)
+                    .help(CLIENT_SECRET_DOC);
             addArgument(SCOPE_CONFIG, SCOPE_DOC);
+            addArgument(SASL_JAAS_CONFIG, SASL_JAAS_CONFIG_DOC);
 
             try {
                 return parser.parseArgs(args);
@@ -280,7 +354,6 @@ public class OAuthCompatibilityTool {
         }
 
         private Argument addArgument(String option, String help, Class<?> clazz) {
-            // Change foo.bar into --foo.bar.
             String name = "--" + option;
 
             return parser.addArgument(name)
@@ -292,114 +365,154 @@ public class OAuthCompatibilityTool {
 
     }
 
-    private record ConfigHandler(Namespace namespace) {
+    static class ConfigHandler {
+        private final Namespace namespace;
+        private final Properties fileProps;
 
-        private Map<String, ?> getConfigs() {
+        private final Map<String, BiConsumer<Map<String, Object>, String>> saslAdders = Map.ofEntries(
+                Map.entry(SASL_LOGIN_CONNECT_TIMEOUT_MS, this::maybeAddInt),
+                Map.entry(SASL_LOGIN_READ_TIMEOUT_MS, this::maybeAddInt),
+                Map.entry(SASL_LOGIN_RETRY_BACKOFF_MS, this::maybeAddLong),
+                Map.entry(SASL_LOGIN_RETRY_BACKOFF_MAX_MS, this::maybeAddLong),
+                Map.entry(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_SUB_CLAIM_NAME, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, this::maybeAddLong),
+                Map.entry(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, this::maybeAddLong),
+                Map.entry(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, this::maybeAddLong),
+                Map.entry(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, this::maybeAddInt),
+                Map.entry(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, this::maybeAddStringList),
+                Map.entry(SASL_OAUTHBEARER_EXPECTED_ISSUER, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_SCOPE, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, this::maybeAddString),
+                Map.entry(SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, this::maybeAddPassword)
+        );
+        private final Map<String, BiConsumer<Map<String, Object>, String>> jaasOptionAdders = Map.ofEntries(
+                // SASL/OAuth
+                Map.entry(CLIENT_ID_CONFIG, this::maybeAddStringCliOnly),
+                Map.entry(CLIENT_SECRET_CONFIG, this::maybeAddStringCliOnly),
+                Map.entry(SCOPE_CONFIG, this::maybeAddString),
+                Map.entry(SASL_JAAS_CONFIG, this::maybeAddJaasConfig),
+                // SSL
+                Map.entry(SSL_CIPHER_SUITES_CONFIG, this::maybeAddStringList),
+                Map.entry(SSL_ENABLED_PROTOCOLS_CONFIG, this::maybeAddStringList),
+                Map.entry(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, this::maybeAddString),
+                Map.entry(SSL_ENGINE_FACTORY_CLASS_CONFIG, this::maybeAddClass),
+                Map.entry(SSL_KEYMANAGER_ALGORITHM_CONFIG, this::maybeAddString),
+                Map.entry(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, this::maybeAddPassword),
+                Map.entry(SSL_KEYSTORE_KEY_CONFIG, this::maybeAddPassword),
+                Map.entry(SSL_KEYSTORE_LOCATION_CONFIG, this::maybeAddString),
+                Map.entry(SSL_KEYSTORE_PASSWORD_CONFIG, this::maybeAddPassword),
+                Map.entry(SSL_KEYSTORE_TYPE_CONFIG, this::maybeAddString),
+                Map.entry(SSL_KEY_PASSWORD_CONFIG, this::maybeAddPassword),
+                Map.entry(SSL_PROTOCOL_CONFIG, this::maybeAddString),
+                Map.entry(SSL_PROVIDER_CONFIG, this::maybeAddString),
+                Map.entry(SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, this::maybeAddString),
+                Map.entry(SSL_TRUSTMANAGER_ALGORITHM_CONFIG, this::maybeAddString),
+                Map.entry(SSL_TRUSTSTORE_CERTIFICATES_CONFIG, this::maybeAddPassword),
+                Map.entry(SSL_TRUSTSTORE_LOCATION_CONFIG, this::maybeAddString),
+                Map.entry(SSL_TRUSTSTORE_PASSWORD_CONFIG, this::maybeAddPassword),
+                Map.entry(SSL_TRUSTSTORE_TYPE_CONFIG, this::maybeAddString)
+        );
+
+        public ConfigHandler(Namespace namespace, Properties fileProps) {
+            this.namespace = namespace;
+            this.fileProps = fileProps;
+        }
+
+        Map<String, ?> getConfigs() {
             Map<String, Object> m = new HashMap<>();
 
-            // SASL/OAuth
-            maybeAddInt(m, SASL_LOGIN_CONNECT_TIMEOUT_MS);
-            maybeAddInt(m, SASL_LOGIN_READ_TIMEOUT_MS);
-            maybeAddLong(m, SASL_LOGIN_RETRY_BACKOFF_MS);
-            maybeAddLong(m, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
-            maybeAddString(m, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-            maybeAddString(m, SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-            maybeAddString(m, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-            maybeAddString(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
-            maybeAddLong(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);
-            maybeAddLong(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
-            maybeAddLong(m, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
-            maybeAddInt(m, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS);
-            maybeAddStringList(m, SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
-            maybeAddString(m, SASL_OAUTHBEARER_EXPECTED_ISSUER);
+            for (Map.Entry<String, BiConsumer<Map<String, Object>, String>> entry : saslAdders.entrySet())
+                entry.getValue().accept(m, entry.getKey());
 
-            // This here is going to fill in all the defaults for the values we don't specify...
             ConfigDef cd = new ConfigDef();
             SaslConfigs.addClientSaslSupport(cd);
             SslConfigs.addClientSslSupport(cd);
-            AbstractConfig config = new AbstractConfig(cd, m);
-            return config.values();
+
+            return new AbstractConfig(cd, m).values();
         }
 
-        private Map<String, Object> getJaasOptions() {
+        Map<String, Object> getJaasOptions() {
             Map<String, Object> m = new HashMap<>();
 
-            // SASL/OAuth
-            maybeAddString(m, CLIENT_ID_CONFIG);
-            maybeAddString(m, CLIENT_SECRET_CONFIG);
-            maybeAddString(m, SCOPE_CONFIG);
-
-            // SSL
-            maybeAddStringList(m, SSL_CIPHER_SUITES_CONFIG);
-            maybeAddStringList(m, SSL_ENABLED_PROTOCOLS_CONFIG);
-            maybeAddString(m, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-            maybeAddClass(m, SSL_ENGINE_FACTORY_CLASS_CONFIG);
-            maybeAddString(m, SSL_KEYMANAGER_ALGORITHM_CONFIG);
-            maybeAddPassword(m, SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
-            maybeAddPassword(m, SSL_KEYSTORE_KEY_CONFIG);
-            maybeAddString(m, SSL_KEYSTORE_LOCATION_CONFIG);
-            maybeAddPassword(m, SSL_KEYSTORE_PASSWORD_CONFIG);
-            maybeAddString(m, SSL_KEYSTORE_TYPE_CONFIG);
-            maybeAddPassword(m, SSL_KEY_PASSWORD_CONFIG);
-            maybeAddString(m, SSL_PROTOCOL_CONFIG);
-            maybeAddString(m, SSL_PROVIDER_CONFIG);
-            maybeAddString(m, SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
-            maybeAddString(m, SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
-            maybeAddPassword(m, SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
-            maybeAddString(m, SSL_TRUSTSTORE_LOCATION_CONFIG);
-            maybeAddPassword(m, SSL_TRUSTSTORE_PASSWORD_CONFIG);
-            maybeAddString(m, SSL_TRUSTSTORE_TYPE_CONFIG);
+            for (Map.Entry<String, BiConsumer<Map<String, Object>, String>> entry : jaasOptionAdders.entrySet())
+                entry.getValue().accept(m, entry.getKey());
 
             return m;
         }
 
-        private void maybeAddInt(Map<String, Object> m, String option) {
-            Integer value = namespace.getInt(option);
-
-            if (value != null)
-                m.put(option, value);
+        private Optional<String> resolve(String key) {
+            String value = namespace.getString(key);
+            if (value == null)
+                value = fileProps.getProperty(key);
+            return Optional.ofNullable(value);
         }
 
-        private void maybeAddLong(Map<String, Object> m, String option) {
-            Long value = namespace.getLong(option);
-
-            if (value != null)
-                m.put(option, value);
+        private void maybeAddInt(Map<String, Object> m, String key) {
+            resolve(key).map(Integer::parseInt).ifPresent(v -> m.put(key, v));
         }
 
-        private void maybeAddString(Map<String, Object> m, String option) {
-            String value = namespace.getString(option);
-
-            if (value != null)
-                m.put(option, value);
+        private void maybeAddLong(Map<String, Object> m, String key) {
+            resolve(key).map(Long::parseLong).ifPresent(v -> m.put(key, v));
         }
 
-        private void maybeAddPassword(Map<String, Object> m, String option) {
-            String value = namespace.getString(option);
+        private void maybeAddString(Map<String, Object> m, String key) {
+            resolve(key).ifPresent(v -> m.put(key, v));
+        }
 
-            if (value != null)
-                m.put(option, new Password(value));
+        private void maybeAddPassword(Map<String, Object> m, String key) {
+            resolve(key).map(Password::new).ifPresent(v -> m.put(key, v));
+        }
+
+        private void maybeAddStringCliOnly(Map<String, Object> m, String option) {
+            Optional.ofNullable(namespace.getString(option)).ifPresent(v -> m.put(option, v));
+        }
+
+        private void maybeAddJaasConfig(Map<String, Object> m, String option) {
+            String str = fileProps.getProperty(option);
+
+            if (str == null)
+                return;
+
+            Pattern pattern = Pattern.compile("(\\w+)=\"([^\"]*)\"");
+            Matcher matcher = pattern.matcher(str);
+
+            while (matcher.find()) {
+                String key = matcher.group(1);
+                String value = matcher.group(2);
+
+                if ((key.equals(CLIENT_ID_CONFIG) ||
+                        key.equals(CLIENT_SECRET_CONFIG) ||
+                        key.equals(SCOPE_CONFIG)) && !m.containsKey(key)) {
+                    m.put(key, value);
+                }
+            }
         }
 
         private void maybeAddClass(Map<String, Object> m, String option) {
-            String value = namespace.getString(option);
-
-            if (value != null) {
+            resolve(option).ifPresent(v -> {
                 try {
-                    m.put(option, Class.forName(value));
+                    m.put(option, Class.forName(v));
                 } catch (ClassNotFoundException e) {
                     throw new KafkaException("Could not find class for " + option, e);
                 }
-            }
+            });
         }
 
         private void maybeAddStringList(Map<String, Object> m, String option) {
             List<String> value = namespace.getList(option);
 
+            if (value == null) {
+                String str = fileProps.getProperty(option);
+                if (str != null)
+                    value = List.of(str.split("\\s*,\\s*"));
+            }
+
             if (value != null)
                 m.put(option, value);
         }
-
     }
 
 }
