@@ -1546,6 +1546,20 @@ public class DumpLogSegmentsTest {
     }
 
     @Test
+    public void testDumpTxnIndexCorrupt() throws Exception {
+        File txnIndexFile = new File(logDir, segmentName + ".txnindex");
+        // Write enough bytes with an invalid version to pass the iterator's hasNext() size check.
+        byte[] corruptBytes = new byte[64];
+        Arrays.fill(corruptBytes, (byte) 1);
+        Files.write(txnIndexFile.toPath(), corruptBytes);
+
+        String[] args = new String[]{"--files", txnIndexFile.getAbsolutePath()};
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Unexpected aborted transaction version"));
+    }
+
+    @Test
     public void testDumpProducerIdSnapshot() throws Exception {
         File snapshotFile = new File(logDir, segmentName + ".snapshot");
         Map<Long, ProducerStateEntry> entries = new HashMap<>();
@@ -1597,14 +1611,10 @@ public class DumpLogSegmentsTest {
         File snapshotFile = new File(logDir, segmentName + ".snapshot");
         Files.write(snapshotFile.toPath(), new byte[]{0, 1, 2, 3, 4, 5});
 
-        String errOutput = captureStandardErr(() -> {
-            try {
-                DumpLogSegments.main(new String[]{"--files", snapshotFile.getAbsolutePath()});
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        assertFalse(errOutput.isEmpty(), "Expected error output for corrupt snapshot");
+        String[] args = new String[]{"--files", snapshotFile.getAbsolutePath()};
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Snapshot failed schema validation"));
     }
 
     @Test
@@ -1644,13 +1654,14 @@ public class DumpLogSegmentsTest {
     }
 
     @Test
-    public void testInvalidDecoderClass() {
-        RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[]{
-                "--value-decoder-class", "org.apache.kafka.tools.api.NonExistentDecoder",
-                "--files", logFilePath
-            }));
-        assertTrue(thrown.getMessage().contains("Failed to load decoder class"), thrown.getMessage());
+    public void testInvalidDecoderClass() throws Exception {
+        String[] args = new String[]{
+            "--value-decoder-class", "org.apache.kafka.tools.api.NonExistentDecoder",
+            "--files", logFilePath
+        };
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Failed to load decoder class"), errOutput);
     }
 
     @Test

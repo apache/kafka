@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
@@ -63,6 +64,7 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.snapshot.SnapshotPath;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.storage.internals.log.BatchMetadata;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 import org.apache.kafka.storage.internals.log.CorruptSnapshotException;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
@@ -180,7 +182,7 @@ public class DumpLogSegments {
         }
     }
 
-    private static void dumpTxnIndex(File file) throws IOException {
+    private static void dumpTxnIndex(File file) throws Exception {
         try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
             for (AbortedTxn abortedTxn : index.allAbortedTxns()) {
                 System.out.println("version: " + AbortedTxn.HIGHEST_SUPPORTED_VERSION +
@@ -189,10 +191,12 @@ public class DumpLogSegments {
                     " lastOffset: " + abortedTxn.lastOffset() +
                     " lastStableOffset: " + abortedTxn.lastStableOffset());
             }
+        } catch (CorruptIndexException | KafkaException e) {
+            throw new TerseException(e.getMessage());
         }
     }
 
-    private static void dumpProducerIdSnapshot(File file) throws IOException {
+    private static void dumpProducerIdSnapshot(File file) throws Exception {
         try {
             List<ProducerStateEntry> entries = ProducerStateManager.readSnapshot(file);
             for (ProducerStateEntry entry : entries) {
@@ -213,7 +217,7 @@ public class DumpLogSegments {
                 System.out.println();
             }
         } catch (CorruptSnapshotException e) {
-            System.err.println(e.getMessage());
+            throw new TerseException(e.getMessage());
         }
     }
 
