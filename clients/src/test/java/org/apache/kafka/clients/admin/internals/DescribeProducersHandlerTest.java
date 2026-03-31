@@ -33,7 +33,6 @@ import org.apache.kafka.common.message.DescribeProducersResponseData.TopicRespon
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
@@ -50,7 +49,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -120,7 +118,7 @@ public class DescribeProducersHandlerTest {
         int brokerId = 3;
         DescribeProducersRequest.Builder request = handler.buildBatchedRequest(brokerId, topicPartitions);
 
-        List<DescribeProducersRequestData.TopicRequest> topics = request.data.topics();
+        DescribeProducersRequestData.TopicRequestCollection topics = request.data.topics();
 
         assertEquals(Set.of("foo", "bar"), topics.stream()
             .map(DescribeProducersRequestData.TopicRequest::name)
@@ -195,9 +193,7 @@ public class DescribeProducersHandlerTest {
         DescribeProducersHandler handler = newHandler(options);
 
         PartitionResponse partitionResponse = sampleProducerState(topicPartition);
-        DescribeProducersResponse response = describeProducersResponse(
-            singletonMap(topicPartition, partitionResponse)
-        );
+        DescribeProducersResponse response = describeProducersResponse(topicPartition, partitionResponse);
         Node node = new Node(3, "host", 1);
 
         ApiResult<TopicPartition, PartitionProducerState> result =
@@ -252,7 +248,7 @@ public class DescribeProducersHandlerTest {
         PartitionResponse partitionResponse = new PartitionResponse()
             .setPartitionIndex(topicPartition.partition())
             .setErrorCode(error.code());
-        return describeProducersResponse(singletonMap(topicPartition, partitionResponse));
+        return describeProducersResponse(topicPartition, partitionResponse);
     }
 
     private PartitionResponse sampleProducerState(TopicPartition topicPartition) {
@@ -304,27 +300,16 @@ public class DescribeProducersHandlerTest {
     }
 
     private DescribeProducersResponse describeProducersResponse(
-        Map<TopicPartition, PartitionResponse> partitionResponses
+        TopicPartition partition, PartitionResponse partitionResponse
     ) {
         DescribeProducersResponseData response = new DescribeProducersResponseData();
-        Map<String, Map<Integer, PartitionResponse>> partitionResponsesByTopic =
-            CollectionUtils.groupPartitionDataByTopic(partitionResponses);
 
-        for (Map.Entry<String, Map<Integer, PartitionResponse>> topicEntry : partitionResponsesByTopic.entrySet()) {
-            String topic = topicEntry.getKey();
-            Map<Integer, PartitionResponse> topicPartitionResponses = topicEntry.getValue();
+        TopicResponse topicResponse = new TopicResponse().setName(partition.topic());
+        int partitionId = partition.partition();
+        topicResponse.partitions().add(partitionResponse.setPartitionIndex(partitionId));
 
-            TopicResponse topicResponse = new TopicResponse().setName(topic);
-            response.topics().add(topicResponse);
-
-            for (Map.Entry<Integer, PartitionResponse> partitionEntry : topicPartitionResponses.entrySet()) {
-                Integer partitionId = partitionEntry.getKey();
-                PartitionResponse partitionResponse = partitionEntry.getValue();
-                topicResponse.partitions().add(partitionResponse.setPartitionIndex(partitionId));
-            }
-        }
+        response.topics().add(topicResponse);
 
         return new DescribeProducersResponse(response);
     }
-
 }

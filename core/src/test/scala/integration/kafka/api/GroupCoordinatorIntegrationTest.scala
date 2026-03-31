@@ -38,6 +38,7 @@ import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import scala.concurrent.ExecutionException
+import scala.jdk.OptionConverters.RichOptional
 
 @Timeout(120)
 class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
@@ -59,7 +60,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
 
       val logManager = cluster.brokers().asScala.head._2.logManager
       def getGroupMetadataLogOpt: Option[UnifiedLog] =
-        logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
+        logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)).toScala
 
       TestUtils.waitUntilTrue(() => getGroupMetadataLogOpt.exists(_.logSegments.asScala.exists(_.log.batches.asScala.nonEmpty)),
         "Commit message not appended in time")

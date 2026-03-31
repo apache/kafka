@@ -21,7 +21,6 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.log.LogManager
 import kafka.network.DataPlaneAcceptor
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
@@ -46,8 +45,9 @@ import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricCon
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, LogManager}
 
+import java.util.stream.Collectors
 import scala.util.Using
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -596,7 +596,7 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
   private def updateLogsConfig(newBrokerDefaults: Map[String, Object]): Unit = {
     logManager.brokerConfigUpdated()
-    logManager.allLogs.foreach { log =>
+    logManager.allLogs.forEach { log =>
       val props = mutable.Map.empty[Any, Any]
       props ++= newBrokerDefaults
       props ++= log.config.originals.asScala.filter { case (k, _) =>
@@ -611,14 +611,17 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
 
-    logManager.updateCordonedLogDirs(newConfig.cordonedLogDirs.asScala.toSet)
-    val newCordoned: Set[String] = newConfig.cordonedLogDirs.asScala.toSet -- oldConfig.cordonedLogDirs.asScala.toSet
-    val newUncordoned: Set[String] = oldConfig.cordonedLogDirs.asScala.toSet -- newConfig.cordonedLogDirs.asScala.toSet
-    if (newCordoned.nonEmpty) {
-      directoryEventHandler.handleCordoned(newCordoned.map(dir => logManager.directoryId(dir).get).toSet.asJava)
+    logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
+    val newCordoned = new util.HashSet[String](newConfig.cordonedLogDirs)
+    newCordoned.removeAll(oldConfig.cordonedLogDirs)
+
+    val newUncordoned = new util.HashSet[String](oldConfig.cordonedLogDirs)
+    newUncordoned.removeAll(newConfig.cordonedLogDirs)
+    if (!newCordoned.isEmpty) {
+      directoryEventHandler.handleCordoned(newCordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
     }
-    if (newUncordoned.nonEmpty) {
-      directoryEventHandler.handleUncordoned(newUncordoned.map(dir => logManager.directoryId(dir).get).toSet.asJava)
+    if (!newUncordoned.isEmpty) {
+      directoryEventHandler.handleUncordoned(newUncordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
     }
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))

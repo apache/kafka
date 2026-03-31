@@ -48,6 +48,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ConsumerGroupMemberTest {
     private static final Logger LOG = LoggerFactory.getLogger(ConsumerGroupMemberTest.class);
@@ -411,6 +412,38 @@ public class ConsumerGroupMemberTest {
             toClassicProtocolCollection("range"),
             classicProtocolListFromJoinRequestProtocolCollection(protocols)
         );
+    }
+
+    @Test
+    public void testAssignedAndPendingRevocationEpoch() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Uuid unassignedTopicId = Uuid.randomUuid();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
+            .build();
+
+        assertEquals(10, member.assignmentEpoch(topicId1, 1));
+        assertEquals(10, member.assignmentEpoch(topicId1, 2));
+        assertEquals(10, member.assignmentEpoch(topicId1, 3));
+        assertNull(member.pendingRevocationEpoch(topicId1, 1));
+        assertNull(member.pendingRevocationEpoch(topicId1, 2));
+        assertNull(member.pendingRevocationEpoch(topicId1, 3));
+
+        assertEquals(9, member.pendingRevocationEpoch(topicId2, 4));
+        assertEquals(9, member.pendingRevocationEpoch(topicId2, 5));
+        assertEquals(9, member.pendingRevocationEpoch(topicId2, 6));
+        assertNull(member.assignmentEpoch(topicId2, 4));
+        assertNull(member.assignmentEpoch(topicId2, 5));
+
+        assertNull(member.assignmentEpoch(topicId1, 10));
+        assertNull(member.pendingRevocationEpoch(topicId2, 10));
+        assertNull(member.assignmentEpoch(unassignedTopicId, 0));
+        assertNull(member.pendingRevocationEpoch(unassignedTopicId, 0));
     }
 
     private List<ConsumerGroupMemberMetadataValue.ClassicProtocol> toClassicProtocolCollection(String name) {

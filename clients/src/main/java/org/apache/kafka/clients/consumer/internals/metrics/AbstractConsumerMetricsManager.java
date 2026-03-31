@@ -14,30 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.clients.consumer.internals.metrics;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.Objects;
 
 /**
- * A scheduler implementation that uses the system clock.
- *
- * Use Scheduler.SYSTEM instead of constructing an instance of this class.
+ * Utility class that serves as a common abstraction point for consumers to create and register their
+ * metrics, and to ensure they're removed on {@link #close()} via the {@link MetricsLedger} instance.
  */
-public class SystemScheduler implements Scheduler {
-    SystemScheduler() {
+public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
+
+    protected final MetricsLedger metrics;
+
+    protected AbstractConsumerMetricsManager(MetricsLedger metrics) {
+        this.metrics = Objects.requireNonNull(metrics);
     }
 
     @Override
-    public Time time() {
-        return Time.SYSTEM;
-    }
-
-    @Override
-    public <T> Future<T> schedule(final ScheduledExecutorService executor,
-                                  final Callable<T> callable, long delayMs) {
-        return executor.schedule(callable, delayMs, TimeUnit.MILLISECONDS);
+    public void close() {
+        metrics.close();
     }
 }

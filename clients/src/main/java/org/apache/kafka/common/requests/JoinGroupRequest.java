@@ -25,7 +25,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
+import java.util.List;
+
 
 public class JoinGroupRequest extends AbstractRequest {
 
@@ -197,7 +198,7 @@ public class JoinGroupRequest extends AbstractRequest {
             .setProtocolName(UNKNOWN_PROTOCOL_NAME)
             .setLeader(UNKNOWN_MEMBER_ID)
             .setMemberId(UNKNOWN_MEMBER_ID)
-            .setMembers(Collections.emptyList());
+            .setMembers(List.of());
 
         if (version() >= 7)
             data.setProtocolName(null);

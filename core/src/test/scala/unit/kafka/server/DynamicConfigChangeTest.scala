@@ -37,6 +37,7 @@ import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
@@ -70,7 +71,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
-      assertTrue(logOpt.isDefined)
+      assertTrue(logOpt.isPresent)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
     val admin = createAdminClient()
@@ -102,7 +103,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
-      assertTrue(logOpt.isDefined)
+      assertTrue(logOpt.isPresent)
       assertEquals(oldSegmentSize, logOpt.get.config.segmentSize())
     }
 

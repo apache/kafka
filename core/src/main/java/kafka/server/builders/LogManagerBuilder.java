@@ -17,8 +17,6 @@
 
 package kafka.server.builders;
 
-import kafka.log.LogManager;
-
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -27,13 +25,13 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogCleaner;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
-
-import scala.jdk.javaapi.CollectionConverters;
 
 
 public class LogManagerBuilder {
@@ -147,7 +145,7 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManager build() {
+    public LogManager build() throws IOException {
         if (logDirs == null) throw new IllegalStateException("you must set logDirs");
         if (configRepository == null) throw new IllegalStateException("you must set configRepository");
         if (initialDefaultConfig == null) throw new IllegalStateException("you must set initialDefaultConfig");
@@ -155,8 +153,8 @@ public class LogManagerBuilder {
         if (scheduler == null) throw new IllegalStateException("you must set scheduler");
         if (brokerTopicStats == null) throw new IllegalStateException("you must set brokerTopicStats");
         if (logDirFailureChannel == null) throw new IllegalStateException("you must set logDirFailureChannel");
-        return new LogManager(CollectionConverters.asScala(logDirs).toSeq(),
-                              CollectionConverters.asScala(initialOfflineDirs).toSeq(),
+        return new LogManager(logDirs,
+                              initialOfflineDirs,
                               configRepository,
                               initialDefaultConfig,
                               cleanerConfig,

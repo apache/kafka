@@ -14,28 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
-
-import java.util.Objects;
-
-public class StreamsOnTasksAssignedCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
-
-    private final StreamsRebalanceData.Assignment assignment;
-
-    public StreamsOnTasksAssignedCallbackNeededEvent(StreamsRebalanceData.Assignment assignment) {
-        super(Type.STREAMS_ON_TASKS_ASSIGNED_CALLBACK_NEEDED, Long.MAX_VALUE);
-        this.assignment = Objects.requireNonNull(assignment);
-    }
-
-    public StreamsRebalanceData.Assignment assignment() {
-        return assignment;
-    }
+public class RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndexTest extends AbstractRocksDBWindowStoreTest {
 
     @Override
-    protected String toStringBase() {
-        return super.toStringBase() +
-            ", assignment=" + assignment;
+    StoreType storeType() {
+        return StoreType.RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndex;
     }
 }

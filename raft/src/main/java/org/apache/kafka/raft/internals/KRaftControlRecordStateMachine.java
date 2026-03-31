@@ -233,7 +233,11 @@ public final class KRaftControlRecordStateMachine {
 
     private void maybeLoadLog() {
         while (log.endOffset().offset() > nextOffset) {
-            LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
+            LogFetchInfo info = log.read(
+                nextOffset,
+                Isolation.UNCOMMITTED,
+                Integer.MAX_VALUE
+            );
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,
                     serde,

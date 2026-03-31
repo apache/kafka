@@ -40,7 +40,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
             final Windows<?> windows,
             final EmitStrategy emitStrategy
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
         this.windows = windows;
         this.emitStrategy = emitStrategy;
 
@@ -57,7 +57,6 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
             ? dslStoreSuppliers().windowStore(new DslWindowParams(
             materialized.storeName(),
@@ -66,7 +65,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
             false,
             emitStrategy,
             false,
-            storeFormat
+            dslStoreFormat()
         ))
             : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
