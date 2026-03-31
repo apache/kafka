@@ -17,7 +17,9 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.TopicPartition;
@@ -70,6 +72,7 @@ public class ConsoleConsumer {
     public static void run(ConsoleConsumerOptions opts) {
         messageCount = 0;
         Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        maybePrintConsumerProtocolMessage(opts);
         ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts, consumer);
 
         addShutdownHook(consumerWrapper, opts);
@@ -143,6 +146,16 @@ public class ConsoleConsumer {
             System.err.println("Unable to write to standard out, closing consumer.");
         }
         return gotError;
+    }
+
+    static void maybePrintConsumerProtocolMessage(ConsoleConsumerOptions opts) {
+        String protocol = (String) opts.consumerProps().get(ConsumerConfig.GROUP_PROTOCOL_CONFIG);
+        if (protocol == null || GroupProtocol.CLASSIC.name().equalsIgnoreCase(protocol)) {
+            // Only print if INFO logging is not enabled (otherwise ClassicKafkaConsumer already logs it)
+            if (!LoggerFactory.getLogger("org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer").isInfoEnabled()) {
+                System.err.println("The consumer rebalance protocol (KIP-848) is production ready! Set group.protocol=consumer to try it out. See https://kafka.apache.org/documentation/#consumer_rebalance_protocol");
+            }
+        }
     }
 
     public static class ConsumerWrapper {
