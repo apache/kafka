@@ -633,7 +633,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Needs to be called before any other methods when the {@code transactional.id} is set in the configuration.
-     *
      * This method does the following:
      * <ol>
      * <li>Ensures any transactions initiated by previous instances of the producer with the same
@@ -643,18 +642,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <li>Gets the internal producer id and epoch, used in all future transactional
      *      messages issued by the producer.</li>
      * </ol>
-     *
      * Note that this method will raise {@link TimeoutException} if the transactional state cannot
      * be initialized before expiration of {@code max.block.ms}. Additionally, it will raise {@link InterruptException}
      * if interrupted. It is safe to retry in either case, but once the transactional state has been successfully
      * initialized, this method should no longer be used.
      *
-     * @throws IllegalStateException if no {@code transactional.id} is configured
-     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not
-     *         support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         {@code transactional.id} is not authorized. See the exception for more details
-     * @throws KafkaException if the producer encounters a fatal error or any other unexpected error
+     * @throws IllegalStateException if no {@code transactional.id} has been configured
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException error indicating that the configured
+     *         transactional.id is not authorized, or the idempotent producer id is unavailable. See the exception for
+     *         more details.  User may retry this function call after fixing the permission.
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
