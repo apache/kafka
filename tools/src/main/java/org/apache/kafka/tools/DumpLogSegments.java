@@ -167,6 +167,12 @@ public class DumpLogSegments {
             System.err.println("Non-consecutive offsets in " + fileName);
             listOfNonConsecutivePairs.forEach((key, value) -> System.err.println("  " + key + " is followed by " + value));
         });
+
+        if (!misMatchesForIndexFilesMap.isEmpty()
+                || timeIndexDumpErrors.hasErrors()
+                || !nonConsecutivePairsForLogFilesMap.isEmpty()) {
+            throw new TerseException("Errors found in log segments.");
+        }
     }
 
     private static void dumpTxnIndex(File file) throws IOException {
@@ -570,6 +576,12 @@ public class DumpLogSegments {
             List<Pair<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
             shallowOffsetNotFoundSeq.add(new Pair<>(indexOffset, logOffset));
+        }
+
+        boolean hasErrors() {
+            return !misMatchesForTimeIndexFilesMap.isEmpty()
+                    || !outOfOrderTimestamp.isEmpty()
+                    || !shallowOffsetNotFound.isEmpty();
         }
 
         void printErrors() {

@@ -596,6 +596,61 @@ public class DumpLogSegmentsTest {
     }
 
     @Test
+    public void testMainNoExitReturnsOneOnNonConsecutiveOffsets() throws Exception {
+        File logFile = new File(logFilePath);
+        try (FileRecords fileRecords = FileRecords.open(logFile, true)) {
+            fileRecords.append(MemoryRecords.withRecords(0L, Compression.NONE, 0,
+                new SimpleRecord("a".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(2L, Compression.NONE, 0,
+                new SimpleRecord("b".getBytes())));
+            fileRecords.flush();
+        }
+
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--deep-iteration", "--files", logFilePath})));
+        assertTrue(errOutput.contains("Non-consecutive offsets"));
+        assertTrue(errOutput.contains("Errors found in log segments"));
+    }
+
+    @Test
+    public void testMainNoExitReturnsOneOnIndexMismatch() throws Exception {
+        log = createTestLog();
+        addSimpleRecords(log, new ArrayList<>());
+
+        // Close the log to release the memory-mapped index file before modifying it
+        Utils.closeQuietly(log, "UnifiedLog");
+        log = null;
+
+        // Corrupt the first index entry's relative offset
+        // to a value that won't match any batch offset in the log
+        File indexFile = new File(indexFilePath);
+        byte[] indexBytes = Files.readAllBytes(indexFile.toPath());
+        ByteBuffer.wrap(indexBytes).putInt(0, Integer.MAX_VALUE);
+        Files.write(indexFile.toPath(), indexBytes);
+
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--verify-index-only", "--files", indexFilePath})));
+        assertTrue(errOutput.contains("Mismatches in"));
+        assertTrue(errOutput.contains("Errors found in log segments"));
+    }
+
+    @Test
+    public void testMainNoExitIgnoresUnknownFile() throws Exception {
+        log = createTestLog();
+        File unknownFile = new File(logDir, "unknown.xyz");
+        assertTrue(unknownFile.createNewFile());
+
+        String[] args = {"--files", logFilePath + "," + unknownFile.getAbsolutePath()};
+        String errOutput = captureStandardErr(
+            () -> assertEquals(0, DumpLogSegments.mainNoExit(args)));
+        assertTrue(errOutput.contains("Ignoring unknown file"));
+        String output = captureStandardOut(() -> DumpLogSegments.mainNoExit(args));
+        assertTrue(output.contains("Dumping " + logFilePath));
+    }
+
+    @Test
     public void testDumpMetadataRecords() throws Exception {
         MockTime mockTime = new MockTime();
         LogConfig logConfig = createLogConfig(1024 * 1024);
