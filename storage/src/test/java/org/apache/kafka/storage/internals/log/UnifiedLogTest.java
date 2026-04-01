@@ -1972,21 +1972,21 @@ public class UnifiedLogTest {
         long pid = 1L;
         short epoch = 0;
 
-        int[] seq = {0};
+        AtomicInteger seq = new AtomicInteger(0);
         // Pad the beginning of the log.
         for (int i = 0; i <= 5; i++) {
             MemoryRecords record = LogTestUtils.records(
                     List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
-                    pid, epoch, seq[0], 0L);
+                    pid, epoch, seq.get(), 0L);
             log.appendAsLeader(record, 0);
-            seq[0]++;
+            seq.incrementAndGet();
         }
         // Append an entry with multiple log records.
         Supplier<MemoryRecords> createRecords = () -> LogTestUtils.records(List.of(
-                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes()),
-                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes()),
-                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes())
-        ), pid, epoch, seq[0], 0L);
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq.get()).getBytes(), ("value-" + seq.get()).getBytes()),
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq.get()).getBytes(), ("value-" + seq.get()).getBytes()),
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq.get()).getBytes(), ("value-" + seq.get()).getBytes())
+        ), pid, epoch, seq.get(), 0L);
         LogAppendInfo multiEntryAppendInfo = log.appendAsLeader(createRecords.get(), 0);
         assertEquals(3, multiEntryAppendInfo.lastOffset() - multiEntryAppendInfo.firstOffset() + 1,
                 "should have appended 3 entries");
@@ -1998,13 +1998,13 @@ public class UnifiedLogTest {
         assertEquals(multiEntryAppendInfo.lastOffset(), dupMultiEntryAppendInfo.lastOffset(),
                 "Somehow appended a duplicate entry with multiple log records to the tail");
 
-        seq[0] += 3;
+        seq.addAndGet(3);
 
         // Append a partial duplicate of the tail. This is not allowed.
         MemoryRecords partialDup = LogTestUtils.records(List.of(
-                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes()),
-                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq[0]).getBytes(), ("value-" + seq[0]).getBytes())
-        ), pid, epoch, seq[0] - 2, 0L);
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq.get()).getBytes(), ("value-" + seq.get()).getBytes()),
+                new SimpleRecord(mockTime.milliseconds(), ("key-" + seq.get()).getBytes(), ("value-" + seq.get()).getBytes())
+        ), pid, epoch, seq.get() - 2, 0L);
         assertThrows(OutOfOrderSequenceException.class, () -> log.appendAsLeader(partialDup, 0),
                 () -> "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records in the middle of the log.");
 
@@ -2025,7 +2025,7 @@ public class UnifiedLogTest {
         // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
         Supplier<MemoryRecords> createRecordsWithDuplicate = () -> LogTestUtils.records(
                 List.of(new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())),
-                pid, epoch, seq[0], 0L);
+                pid, epoch, seq.get(), 0L);
         LogAppendInfo origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate.get(), 0);
         LogAppendInfo newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate.get(), 0);
         assertEquals(origAppendInfo.firstOffset(), newAppendInfo.firstOffset(), "Inserted a duplicate records into the log");
@@ -5002,15 +5002,15 @@ public class UnifiedLogTest {
     }
 
     private BiConsumer<Long, Integer> appendTransactionalToBuffer(ByteBuffer buffer, long producerId, short producerEpoch, int leaderEpoch) {
-        int[] sequence = {0};
+        AtomicInteger sequence = new AtomicInteger(0);
         return (offset, numRecords) -> {
-            int baseSequence = sequence[0];
+            int baseSequence = sequence.get();
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME,
                 offset, mockTime.milliseconds(), producerId, producerEpoch, baseSequence, true, leaderEpoch);
             for (int seq = baseSequence; seq < baseSequence + numRecords; seq++) {
                 builder.append(new SimpleRecord(String.valueOf(seq).getBytes()));
             }
-            sequence[0] += numRecords;
+            sequence.addAndGet(numRecords);
             builder.close();
         };
     }
@@ -5605,8 +5605,8 @@ public class UnifiedLogTest {
         // It should have rolled the active segment as they are eligible for deletion
         assertEquals(0, log.deleteOldSegments());
         assertEquals(2, log.logSegments().size());
-        int[] idx = {0};
-        log.logSegments().forEach(segment -> assertEquals(idx[0]++, segment.baseOffset()));
+        AtomicInteger idx = new AtomicInteger(0);
+        log.logSegments().forEach(segment -> assertEquals(idx.getAndAdd(1), segment.baseOffset()));
 
         // Once rolled, the segment should be uploaded to remote storage and eligible for deletion
         log.updateHighestOffsetInRemoteStorage(1);
