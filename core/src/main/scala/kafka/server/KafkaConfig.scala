@@ -451,7 +451,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     } else {
       Seq.empty
     }
-    val controllerQuorumVotersEndpoint = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
+    val controllerQuorumVotersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.asScala.flatMap { name =>
@@ -467,8 +467,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
           // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
           controllerListenersValue
             .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-            .map(endpoint => if (controllerQuorumVotersEndpoint.isDefined) {
-              new Endpoint(endpoint.listener, endpoint.securityProtocol, controllerQuorumVotersEndpoint.get.getHostName, controllerQuorumVotersEndpoint.get.getPort)
+            .map(endpoint => if (controllerQuorumVotersAddress.isDefined) {
+              new Endpoint(endpoint.listener, endpoint.securityProtocol, controllerQuorumVotersAddress.get.getHostName, controllerQuorumVotersAddress.get.getPort)
             } else if (endpoint.host == "0.0.0.0") {
               new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
             }
