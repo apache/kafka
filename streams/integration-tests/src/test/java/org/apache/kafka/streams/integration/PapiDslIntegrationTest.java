@@ -26,10 +26,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -93,7 +91,7 @@ public class PapiDslIntegrationTest {
     public void processorShouldAccessFilteredKTableStoreAsTimestampedStore() {
         verify(builder
             .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
-            .filter((k,v) -> true, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
+            .filter((k, v) -> true, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
         );
     }
 
