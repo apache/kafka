@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.GroupCreationTimeUnknownException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
@@ -52,6 +53,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.function.LongSupplier;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -511,6 +513,57 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.emptySet());
         requestManager.resetPositionsIfNeeded();
         assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
+    public void testByStartTimeStrategyThrowsWhenGroupCreationTimeUnknown() {
+        // groupCreationTimeMsSupplier returns -1, meaning creation time is unavailable
+        OffsetsRequestManager rm = createRequestManagerWithGroupCreationTimeSupplier(() -> -1L);
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds()))
+                .thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.resetStrategy(any())).thenReturn(AutoOffsetResetStrategy.BY_START_TIME);
+
+        assertThrows(GroupCreationTimeUnknownException.class, rm::resetPositionsIfNeeded);
+    }
+
+    @Test
+    public void testByStartTimeStrategyUsesGroupCreationTimeAsTimestamp() {
+        long groupCreationTimeMs = 1700000000000L;
+        OffsetsRequestManager rm = createRequestManagerWithGroupCreationTimeSupplier(() -> groupCreationTimeMs);
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds()))
+                .thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.resetStrategy(any())).thenReturn(AutoOffsetResetStrategy.BY_START_TIME);
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+
+        rm.resetPositionsIfNeeded();
+        assertEquals(1, rm.requestsToSend());
+
+        // Verify the ListOffsets request uses the group creation timestamp
+        NetworkClientDelegate.PollResult pollResult = rm.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        AbstractRequest.Builder<?> requestBuilder = pollResult.unsentRequests.get(0).requestBuilder();
+        ListOffsetsRequest listOffsetsRequest = (ListOffsetsRequest) requestBuilder.build();
+        long actualTimestamp = listOffsetsRequest.data().topics().get(0).partitions().get(0).timestamp();
+        assertEquals(groupCreationTimeMs, actualTimestamp);
+    }
+
+    private OffsetsRequestManager createRequestManagerWithGroupCreationTimeSupplier(LongSupplier supplier) {
+        LogContext logContext = new LogContext();
+        return new OffsetsRequestManager(
+                subscriptionState,
+                metadata,
+                DEFAULT_ISOLATION_LEVEL,
+                time,
+                RETRY_BACKOFF_MS,
+                REQUEST_TIMEOUT_MS,
+                DEFAULT_API_TIMEOUT_MS,
+                apiVersions,
+                mock(NetworkClientDelegate.class),
+                commitRequestManager,
+                new PositionsValidator(logContext, time, subscriptionState, metadata),
+                logContext,
+                supplier
+        );
     }
 
     @Test

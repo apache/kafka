@@ -152,6 +152,78 @@ public class DescribeConsumerGroupsHandlerTest {
     }
 
     @Test
+    public void testSuccessfulHandleConsumerGroupResponseWithGroupCreationTimeMs() {
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
+        long expectedCreationTimeMs = 1700000000000L;
+        ConsumerGroupDescription expected = new ConsumerGroupDescription(
+            groupId1,
+            false,
+            Collections.emptyList(),
+            "range",
+            GroupType.CONSUMER,
+            GroupState.STABLE,
+            coordinator,
+            null,  // authorizedOperations is null when omitted in the response
+            Optional.of(5),
+            Optional.of(5),
+            Optional.of(expectedCreationTimeMs)
+        );
+        AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> result = handler.handleResponse(
+            coordinator,
+            Collections.singleton(CoordinatorKey.byGroupId(groupId1)),
+            new ConsumerGroupDescribeResponse(
+                new ConsumerGroupDescribeResponseData()
+                    .setGroups(Collections.singletonList(
+                        new ConsumerGroupDescribeResponseData.DescribedGroup()
+                            .setGroupId(groupId1)
+                            .setGroupState("Stable")
+                            .setGroupEpoch(5)
+                            .setAssignmentEpoch(5)
+                            .setAssignorName("range")
+                            .setGroupCreationTimeMs(expectedCreationTimeMs)
+                    ))
+            )
+        );
+        assertCompleted(result, expected);
+    }
+
+    @Test
+    public void testHandleConsumerGroupResponseWithUnknownGroupCreationTimeMs() {
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
+        // -1 in the response means unknown, should map to Optional.empty()
+        ConsumerGroupDescription expected = new ConsumerGroupDescription(
+            groupId1,
+            false,
+            Collections.emptyList(),
+            "range",
+            GroupType.CONSUMER,
+            GroupState.STABLE,
+            coordinator,
+            null,  // authorizedOperations is null when omitted in the response
+            Optional.of(5),
+            Optional.of(5),
+            Optional.empty()
+        );
+        AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> result = handler.handleResponse(
+            coordinator,
+            Collections.singleton(CoordinatorKey.byGroupId(groupId1)),
+            new ConsumerGroupDescribeResponse(
+                new ConsumerGroupDescribeResponseData()
+                    .setGroups(Collections.singletonList(
+                        new ConsumerGroupDescribeResponseData.DescribedGroup()
+                            .setGroupId(groupId1)
+                            .setGroupState("Stable")
+                            .setGroupEpoch(5)
+                            .setAssignmentEpoch(5)
+                            .setAssignorName("range")
+                            .setGroupCreationTimeMs(-1L)
+                    ))
+            )
+        );
+        assertCompleted(result, expected);
+    }
+
+    @Test
     public void testSuccessfulHandleConsumerGroupResponse() {
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
         Collection<MemberDescription> members = List.of(

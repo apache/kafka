@@ -45,4 +45,40 @@ public class ConsumerGroupDescriptionTest {
             assertEquals(groupState, description.groupState());
         }
     }
+
+    @Test
+    public void testGroupCreationTimeMsAbsentWhenUsingTenArgConstructor() {
+        ConsumerGroupDescription description = new ConsumerGroupDescription(
+            "groupId",
+            false,
+            Set.of(),
+            "assignor",
+            GroupType.CONSUMER,
+            GroupState.STABLE,
+            null,
+            Set.of(),
+            Optional.empty(),
+            Optional.empty()
+        );
+        assertEquals(Optional.empty(), description.groupCreationTimeMs());
+    }
+
+    @Test
+    public void testGroupCreationTimeMsPresentWhenUsingElevenArgConstructor() {
+        long expectedCreationTimeMs = 123456789L;
+        ConsumerGroupDescription description = new ConsumerGroupDescription(
+            "groupId",
+            false,
+            Set.of(),
+            "assignor",
+            GroupType.CONSUMER,
+            GroupState.STABLE,
+            null,
+            Set.of(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(expectedCreationTimeMs)
+        );
+        assertEquals(Optional.of(expectedCreationTimeMs), description.groupCreationTimeMs());
+    }
 }

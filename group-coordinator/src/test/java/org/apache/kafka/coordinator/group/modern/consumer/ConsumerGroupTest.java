@@ -2301,6 +2301,32 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testAsDescribedGroupIncludesCreationTimeMs() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1");
+        long creationTimeMs = 1700000000000L;
+        group.setCreationTimeMs(creationTimeMs);
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(0, "",
+            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
+
+        assertEquals(creationTimeMs, actual.groupCreationTimeMs());
+    }
+
+    @Test
+    public void testAsDescribedGroupHasUnknownCreationTimeMsByDefault() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(0, "",
+            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
+
+        assertEquals(-1L, actual.groupCreationTimeMs());
+    }
+
+    @Test
     public void testCreationTimeMsDefaultsToUnknown() {
         ConsumerGroup group = createConsumerGroup("foo");
         assertEquals(-1L, group.creationTimeMs());
