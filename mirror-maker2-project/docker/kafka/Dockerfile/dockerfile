@@ -1,0 +1,21 @@
+FROM apache/kafka:4.0.0
+
+ENV KAFKA_HOME=/opt/kafka
+ENV PATH=$KAFKA_HOME/bin:$PATH
+
+
+RUN mkdir -p /opt/kafka/libs
+
+RUN rm /opt/kafka/libs/connect-mirror-4.0.0.jar
+# Copy your custom MM2 jar
+COPY kafka/connect/mirror/build/libs/connect-mirror-4.0.0.jar /opt/kafka/libs/
+
+COPY config/mm2.properties /opt/kafka/config/mm2.properties
+
+WORKDIR /opt/kafka
+
+CMD ["sh", "-c", "\
+echo 'Waiting for Kafka...' && \
+sleep 20 && \
+echo 'Starting MM2...' && \
+connect-mirror-maker.sh config/mm2.properties"]
