@@ -28,13 +28,14 @@ type: docs
 
 ## Overview
 
-Starting from Apache Kafka 4.0, the Next Generation of the Consumer Rebalance Protocol ([KIP-848](https://cwiki.apache.org/confluence/x/HhD1D)) is Generally Available (GA). It improves the scalability of consumer groups while simplifying consumers. It also decreases rebalance times, thanks to its fully incremental design, which no longer relies on a global synchronization barrier.
+Starting from Apache Kafka 4.0, the Next Generation of the Consumer Rebalance Protocol ([KIP-848](https://cwiki.apache.org/confluence/x/HhD1D)) is Generally Available (GA), ready for production workloads. 
+It improves the scalability of consumer groups while simplifying consumers. It also decreases rebalance times, thanks to its fully incremental design, which no longer relies on a global synchronization barrier.
 
 Consumer Groups using the new protocol are now referred to as `Consumer` groups, while groups using the old protocol are referred to as `Classic` groups. Note that Classic groups can still be used to form consumer groups using the old protocol.
 
 ## Server
 
-The new consumer protocol is automatically enabled on the server since Apache Kafka 4.0. Enabling and disabling the protocol is controlled by the `group.version` feature flag.
+The new consumer protocol is automatically enabled on the server since Apache Kafka 4.0. Enabling and disabling the protocol on the server side is controlled by the `group.version` feature flag.
 
 The consumer heartbeat interval and the session timeout are controlled by the server now with the following configs:
 
@@ -43,13 +44,26 @@ The consumer heartbeat interval and the session timeout are controlled by the se
 
 
 
-The assignment strategy is also controlled by the server. The `group.consumer.assignors` configuration can be used to specify the list of available assignors for `Consumer` groups. By default, the `uniform` assignor and the `range` assignor are configured. The first assignor in the list is used by default unless the Consumer selects a different one. It is also possible to implement custom assignment strategies on the server side by implementing the `ConsumerGroupPartitionAssignor` interface and specifying the full class name in the configuration.
+The assignment strategy is also controlled by the server. The `group.consumer.assignors` configuration can be used to specify the list of available assignors for `Consumer` groups. 
+* `uniform` and `range` assignors are provided by default
+* `uniform` is the default one (first assignor in the list of `group.consumer.assignors`) unless the Consumer selects a different one (via the client config `group.remote.assignor`)
+* it is possible to implement custom assignment strategies on the server side, by implementing the `ConsumerGroupPartitionAssignor` interface and specifying the full class name in the configuration.
+
+### Migrating from Client-side Assignors
+
+The following table shows the mapping from client-side assignors to the new broker-side assignors:
+
+| Client-side Assignor      | Broker-side Assignor |
+|---------------------------|----------------------|
+| RangeAssignor             | range                |
+| CooperativeStickyAssignor | uniform              |
+| StickyAssignor            | uniform              |
+| RoundRobinAssignor        | uniform              |
+
 
 ## Consumer
 
-Since Apache Kafka 4.0, the Consumer supports the new consumer rebalance protocol. However, the protocol is not enabled by default. The `group.protocol` configuration must be set to `consumer` to enable it. When enabled, the new consumer protocol is used alongside an improved threading model.
-
-The `group.remote.assignor` configuration is introduced as an optional configuration to overwrite the default assignment strategy configured on the server side.
+Since Apache Kafka 4.0, the Consumer fully supports the new consumer rebalance protocol. However, the protocol is not enabled by default. The `group.protocol` configuration must be set to `consumer` to enable it. When enabled, the new consumer protocol is used alongside an improved threading model.
 
 The `subscribe(SubscriptionPattern)` and `subscribe(SubscriptionPattern, ConsumerRebalanceListener)` methods have been added to subscribe to a regular expression with the new consumer rebalance protocol. With these methods, the regular expression uses the RE2J format and is now evaluated on the server side.
 
@@ -76,11 +90,16 @@ Consumer groups can be upgraded without downtime by rolling out the consumer wit
 
 Consumer groups can be downgraded using the opposite process. In this case, the group is converted from `Consumer` to `Classic` when the last consumer using the new consumer rebalance protocol leaves the group.
 
+## Evolution Timeline
+
+  * **Apache Kafka 3.7**: The next-generation `Consumer` rebalance protocol is released for Early Access
+  * **Apache Kafka 4.0**: `Consumer` rebalance protocol becomes GA (production-ready).
+  * **Apache Kafka 5.0**: `KafkaConsumer` expected to use the `Consumer` protocol by default, while still allowing to configure it for `Classic` (see [KIP-1274](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1274%3A+Deprecate+and+remove+support+for+Classic+rebalance+protocol+in+KafkaConsumer)) 
+  * **Apache Kafka 6.0**: `KafkaConsumer` expected to only support the `Consumer` rebalance protocol (see [KIP-1274](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1274%3A+Deprecate+and+remove+support+for+Classic+rebalance+protocol+in+KafkaConsumer))
+
 ## Limitations
 
-While the new consumer rebalance protocol works for most use cases, it is still important to be aware of the following limitations:
-
-  * Client-side assignors are not supported. (see [KAFKA-18327](https://issues.apache.org/jira/browse/KAFKA-18327))
-  * Rack-aware assignment strategies are not fully supported. (see [KAFKA-17747](https://issues.apache.org/jira/browse/KAFKA-17747))
+  * Client-side assignors are not supported. Use [KAFKA-18327](https://issues.apache.org/jira/browse/KAFKA-18327) to provide feedback if you have custom assignment strategies that may not be covered.
+  * Rack-aware assignment strategies are not fully supported yet (work is in progress, see [KAFKA-19387](https://issues.apache.org/jira/browse/KAFKA-19387)).
 
 
