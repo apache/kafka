@@ -78,7 +78,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private long commitCount = 0L;
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
-    /** Exception to throw when {@link #initTransactions(boolean)} is called */
+    /** Exception to throw when {@link #initTransactions()} is called */
     public RuntimeException initTransactionException = null;
     /** Exception to throw when {@link #beginTransaction()} is called */
     public RuntimeException beginTransactionException = null;
@@ -153,7 +153,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void initTransactions(boolean keepPreparedTxn) {
+    public void initTransactions() {
         verifyNotClosed();
         verifyNotFenced();
         if (this.transactionInitialized) {
@@ -212,18 +212,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public PreparedTxnState prepareTransaction() throws ProducerFencedException {
-        verifyNotClosed();
-        verifyNotFenced();
-        verifyTransactionsInitialized();
-        verifyTransactionInFlight();
-        
-        // Return a new PreparedTxnState with mock values for producerId and epoch
-        // Using 1000L and (short)1 as arbitrary values for a valid PreparedTxnState
-        return new PreparedTxnState(1000L, (short) 1);
-    }
-
-    @Override
     public void commitTransaction() throws ProducerFencedException {
         verifyNotClosed();
         verifyNotFenced();
@@ -266,27 +254,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionCommitted = false;
         this.transactionAborted = true;
         this.transactionInFlight = false;
-    }
-
-    @Override
-    public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
-        verifyNotClosed();
-        verifyNotFenced();
-        verifyTransactionsInitialized();
-        
-        if (!this.transactionInFlight) {
-            throw new IllegalStateException("There is no prepared transaction to complete.");
-        }
-
-        // For testing purposes, we'll consider a prepared state with producerId=1000L and epoch=1 as valid
-        // This should match what's returned in prepareTransaction()
-        PreparedTxnState currentState = new PreparedTxnState(1000L, (short) 1);
-        
-        if (currentState.equals(preparedTxnState)) {
-            commitTransaction();
-        } else {
-            abortTransaction();
-        }
     }
 
     private synchronized void verifyNotClosed() {
