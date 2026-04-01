@@ -243,7 +243,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("public %s(Iterable<%s> iterable) {%n",
             FieldSpec.collectionType(className), className);
         buffer.incrementIndent();
-        buffer.printf("super(iterable);%n");
+        buffer.printf("super(iterable.iterator());%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
