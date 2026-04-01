@@ -176,9 +176,10 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .define(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+        .defineInternal(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
+            null,
             MEDIUM,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(SHARE_SESSION_TIMEOUT_MS_CONFIG,
@@ -234,9 +235,10 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .define(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+        .defineInternal(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
+            null,
             MEDIUM,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
@@ -269,9 +271,10 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .define(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+        .defineInternal(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
+            null,
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
