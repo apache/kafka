@@ -138,12 +138,12 @@ public class WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter<K,
 
     @Override
     public WindowStoreIterator<ValueTimestampHeaders<V>> backwardFetch(final K key, final long timeFrom, final long timeTo) {
-        return new WindowStoreIteratorAdapter(wrapped().fetch(key, timeFrom, timeTo));
+        return new WindowStoreIteratorAdapter(wrapped().backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<ValueTimestampHeaders<V>> backwardFetch(final K key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new WindowStoreIteratorAdapter(wrapped().fetch(key, timeFrom, timeTo));
+        return new WindowStoreIteratorAdapter(wrapped().backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
