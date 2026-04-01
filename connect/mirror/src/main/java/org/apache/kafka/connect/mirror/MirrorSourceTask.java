@@ -19,9 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
@@ -36,6 +38,9 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -56,68 +61,74 @@ public class MirrorSourceTask extends SourceTask {
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
 
-    public MirrorSourceTask() {}
+    // ===== Enhancement State =====
+    private final Map<TopicPartition, Long> lastSeenOffsets = new HashMap<>();
+    private Set<TopicPartition> previousAssignment = new HashSet<>();
 
-    // for testing
-    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
+    public MirrorSourceTask() {
+    }
+
+    // REQUIRED for Kafka tests (do not remove)
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer,
+                     MirrorSourceMetrics metrics,
+                     String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
         this.consumer = consumer;
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
-        consumerAccess = new Semaphore(1);
         this.offsetSyncWriter = offsetSyncWriter;
+        this.consumerAccess = new Semaphore(1);
     }
 
     @Override
     public void start(Map<String, String> props) {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
-        consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
+        consumerAccess = new Semaphore(1);
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
+
         if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
+
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
 
-        log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
-            taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
+        log.info("{} replicating {} topic-partitions {}->{}: {}.",
+                Thread.currentThread().getName(),
+                taskTopicPartitions.size(),
+                sourceClusterAlias,
+                config.targetClusterAlias(),
+                taskTopicPartitions);
     }
 
     @Override
     public void commit() {
-        // Handle delayed and pending offset syncs only when offsetSyncWriter is available
         if (offsetSyncWriter != null) {
-            // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
-            // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
             offsetSyncWriter.promoteDelayedOffsetSyncs();
-            // Publish any offset syncs that we've queued up, but have not yet been able to publish
-            // (likely because we previously reached our limit for number of outstanding syncs)
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
 
     @Override
     public void stop() {
-        long start = System.currentTimeMillis();
         stopping = true;
         consumer.wakeup();
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+            log.warn("Interrupted while stopping", e);
         }
-        Utils.closeQuietly(consumer, "source consumer");
+        Utils.closeQuietly(consumer, "consumer");
         Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
         Utils.closeQuietly(metrics, "metrics");
-        log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-   
+
     @Override
     public String version() {
         return new MirrorSourceConnector().version();
@@ -131,105 +142,222 @@ public class MirrorSourceTask extends SourceTask {
         if (stopping) {
             return null;
         }
+
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            Set<TopicPartition> assignment = consumer.assignment();
+
+            detectLogTruncation(assignment);
+            handleTopicRecreation(assignment);
+
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
+
             for (ConsumerRecord<byte[], byte[]> record : records) {
+
+                detectTopicReset(record);
+
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
-                TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
+
+                TopicPartition topicPartition =
+                        new TopicPartition(converted.topic(), converted.kafkaPartition());
+
+                metrics.recordAge(topicPartition,
+                        System.currentTimeMillis() - record.timestamp());
+
                 metrics.recordBytes(topicPartition, byteSize(record.value()));
             }
+
             if (sourceRecords.isEmpty()) {
-                // WorkerSourceTasks expects non-zero batch size
                 return null;
-            } else {
-                log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
-                return sourceRecords;
             }
+
+            log.trace("Polled {} records from {}.",
+                    sourceRecords.size(),
+                    records.partitions());
+
+            return sourceRecords;
+
+        } catch (OffsetOutOfRangeException e) {
+            log.warn("[MM2-FIX] OffsetOutOfRange detected, recovering", e);
+            recoverFromTruncation();
+            return Collections.emptyList();
+
         } catch (WakeupException e) {
             return null;
+
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
-        } catch (Throwable e)  {
+
+        } catch (Throwable e) {
             log.error("Failure during poll.", e);
-            // allow Connect to deal with the exception
             throw e;
+
         } finally {
             consumerAccess.release();
         }
     }
- 
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
             return;
         }
-        if (metadata == null) {
-            log.debug("No RecordMetadata (source record was probably filtered out during transformation) -- can't sync offsets for {}.", record.topic());
+        if (metadata == null || !metadata.hasOffset()) {
             return;
         }
-        if (!metadata.hasOffset()) {
-            log.error("RecordMetadata has no offset -- can't sync offsets for {}.", record.topic());
-            return;
-        }
-        TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
+
+        TopicPartition topicPartition =
+                new TopicPartition(record.topic(), record.kafkaPartition());
+
         long latency = System.currentTimeMillis() - record.timestamp();
         metrics.countRecord(topicPartition);
         metrics.replicationLatency(topicPartition, latency);
-        // Queue offset syncs only when offsetWriter is available
+
         if (offsetSyncWriter != null) {
-            TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
+            TopicPartition sourceTopicPartition =
+                    MirrorUtils.unwrapPartition(record.sourcePartition());
+
             long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
             long downstreamOffset = metadata.offset();
-            offsetSyncWriter.maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
-            // We may be able to immediately publish an offset sync that we've queued up here
+
+            offsetSyncWriter.maybeQueueOffsetSyncs(
+                    sourceTopicPartition,
+                    upstreamOffset,
+                    downstreamOffset);
+
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
- 
+
+    // ================= FIX: LOG TRUNCATION =================
+    private void detectLogTruncation(Set<TopicPartition> assignments) {
+        for (TopicPartition tp : assignments) {
+            try {
+                Map<TopicPartition, OffsetAndMetadata> committedOffsets =
+                        consumer.committed(Collections.singleton(tp));
+
+                OffsetAndMetadata committed =
+                        committedOffsets != null ? committedOffsets.get(tp) : null;
+
+                if (committed == null) {
+                    continue;
+                }
+
+                Map<TopicPartition, Long> beginningOffsets =
+                        consumer.beginningOffsets(Collections.singleton(tp));
+
+                Long beginning =
+                        beginningOffsets != null ? beginningOffsets.get(tp) : null;
+
+                if (beginning != null && committed.offset() < beginning) {
+                    log.error("[MM2-FIX][TRUNCATION] topic={}, partition={}",
+                            tp.topic(),
+                            tp.partition());
+
+                    consumer.seek(tp, beginning);
+                }
+
+            } catch (Exception e) {
+                log.debug("Skipping truncation check for {}", tp, e);
+            }
+        }
+    }
+
+    // ================= FIX: TOPIC RESET =================
+    private void detectTopicReset(ConsumerRecord<byte[], byte[]> record) {
+        TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+
+        long currentOffset = record.offset();
+        Long previousOffset = lastSeenOffsets.get(tp);
+
+        if (previousOffset != null && currentOffset < previousOffset) {
+            log.error("[MM2-FIX][TOPIC-RESET] topic={}, partition={}",
+                    tp.topic(),
+                    tp.partition());
+
+            try {
+                consumer.seekToBeginning(Collections.singleton(tp));
+            } catch (Exception e) {
+                log.error("[MM2-FIX][RESET-FAILED]", e);
+            }
+        }
+
+        lastSeenOffsets.put(tp, currentOffset);
+    }
+
+    private void recoverFromTruncation() {
+        Set<TopicPartition> assignments = consumer.assignment();
+
+        if (assignments == null || assignments.isEmpty()) {
+            return;
+        }
+
+        try {
+            consumer.seekToBeginning(assignments);
+            log.warn("[MM2-FIX][RECOVERY]");
+        } catch (Exception e) {
+            log.error("[MM2-FIX][RECOVERY-FAILED]", e);
+        }
+    }
+
+    private void handleTopicRecreation(Set<TopicPartition> currentAssignment) {
+        if (previousAssignment.isEmpty() && !currentAssignment.isEmpty()) {
+            try {
+                consumer.seekToBeginning(currentAssignment);
+                log.info("[MM2-FIX][TOPIC-RECREATED]");
+            } catch (Exception e) {
+                log.error("[MM2-FIX][RECREATION-FAILED]", e);
+            }
+        }
+
+        previousAssignment = new HashSet<>(currentAssignment);
+    }
+
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
-        return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
+        return topicPartitions.stream()
+                .collect(Collectors.toMap(x -> x, this::loadOffset));
     }
 
     private Long loadOffset(TopicPartition topicPartition) {
-        Map<String, Object> wrappedPartition = MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
-        Map<String, Object> wrappedOffset = context.offsetStorageReader().offset(wrappedPartition);
+        Map<String, Object> wrappedPartition =
+                MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
+
+        Map<String, Object> wrappedOffset =
+                context.offsetStorageReader().offset(wrappedPartition);
+
         return MirrorUtils.unwrapOffset(wrappedOffset);
     }
 
-    // visible for testing
     void initializeConsumer(Set<TopicPartition> taskTopicPartitions) {
-        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
-        consumer.assign(topicPartitionOffsets.keySet());
-        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
-                .filter(this::isUncommitted).count());
+        Map<TopicPartition, Long> offsets = loadOffsets(taskTopicPartitions);
+        consumer.assign(offsets.keySet());
 
-        topicPartitionOffsets.forEach((topicPartition, offset) -> {
-            // Do not call seek on partitions that don't have an existing offset committed.
-            if (isUncommitted(offset)) {
-                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
-                return;
+        offsets.forEach((tp, offset) -> {
+            if (offset != null && offset >= 0) {
+                consumer.seek(tp, offset + 1);
             }
-            long nextOffsetToCommittedOffset = offset + 1L;
-            log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
-            consumer.seek(topicPartition, nextOffsetToCommittedOffset);
         });
     }
 
-    // visible for testing 
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
         Headers headers = convertHeaders(record);
+
         return new SourceRecord(
-                MirrorUtils.wrapPartition(new TopicPartition(record.topic(), record.partition()), sourceClusterAlias),
+                MirrorUtils.wrapPartition(
+                        new TopicPartition(record.topic(), record.partition()),
+                        sourceClusterAlias),
                 MirrorUtils.wrapOffset(record.offset()),
-                targetTopic, record.partition(),
-                Schema.OPTIONAL_BYTES_SCHEMA, record.key(),
-                Schema.BYTES_SCHEMA, record.value(),
-                record.timestamp(), headers);
+                targetTopic,
+                record.partition(),
+                Schema.OPTIONAL_BYTES_SCHEMA,
+                record.key(),
+                Schema.BYTES_SCHEMA,
+                record.value(),
+                record.timestamp(),
+                headers);
     }
 
     private Headers convertHeaders(ConsumerRecord<byte[], byte[]> record) {
@@ -245,14 +373,6 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     private static int byteSize(byte[] bytes) {
-        if (bytes == null) {
-            return 0;
-        } else {
-            return bytes.length;
-        }
-    }
-
-    private boolean isUncommitted(Long offset) {
-        return offset == null || offset < 0;
+        return bytes == null ? 0 : bytes.length;
     }
 }
