@@ -83,3 +83,4 @@ task removeWindowsScript(type: Delete) {
     delete "$rootDir/gradlew.bat"
 }
 wrapper.finalizedBy removeWindowsScript
+// Test
