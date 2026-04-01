@@ -632,7 +632,7 @@ public class KafkaConsumerTest {
             appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
             assertTrue(
-                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production-ready!")),
                     "Log message about consumer protocol not showing as expected when starting a consumer using the classic protocol"
             );
         }
@@ -649,7 +649,7 @@ public class KafkaConsumerTest {
             appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
             assertFalse(
-                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production-ready!")),
                     "Should not log recommendation when already using consumer protocol"
             );
         }
@@ -665,7 +665,7 @@ public class KafkaConsumerTest {
             appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
             assertTrue(
-                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production-ready!")),
                     "Log message about consumer protocol not showing as expected when starting a consumer using the default (classic) protocol"
             );
         }

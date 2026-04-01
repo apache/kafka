@@ -157,7 +157,7 @@ public class ConsoleConsumer {
         if (protocol == null || GroupProtocol.CLASSIC.name().equalsIgnoreCase(protocol)) {
             // Only print if INFO logging is not enabled (otherwise ClassicKafkaConsumer already logs it)
             if (!LoggerFactory.getLogger("org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer").isInfoEnabled()) {
-                System.err.println("The consumer rebalance protocol (KIP-848) is production ready! Set group.protocol=consumer to try it out. See https://kafka.apache.org/documentation/#consumer_rebalance_protocol");
+                System.err.println("The consumer rebalance protocol (KIP-848) is production-ready! Set group.protocol=consumer to try it out. See https://kafka.apache.org/documentation/#consumer_rebalance_protocol");
             }
         }
     }

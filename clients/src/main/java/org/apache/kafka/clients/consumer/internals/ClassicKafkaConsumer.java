@@ -221,7 +221,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 if (!isStreamsConsumer) {
                     log.info("\n" +
                             "****************************************************************\n" +
-                            "* The consumer rebalance protocol (KIP-848) is production ready!\n" +
+                            "* The consumer rebalance protocol (KIP-848) is production-ready!\n" +
                             "* Set the consumer configuration {}={} to try it out.\n" +
                             "* See https://kafka.apache.org/documentation/#consumer_rebalance_protocol\n" +
                             "****************************************************************",
