@@ -287,7 +287,8 @@ public class KeyValueStoreMaterializerTest {
 
     @SuppressWarnings("unchecked")
     private VersionedKeyValueStore<String, String> getVersionedStore(
-        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
+        final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized
+    ) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         materializer.configure(streamsConfig);
         return (VersionedKeyValueStore<String, String>) materializer.builder().build();

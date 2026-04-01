@@ -17,15 +17,16 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
-public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSupplier {
+public class RocksDbSessionHeadersBytesStoreSupplier implements SessionBytesStoreSupplier, HeadersBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
 
-    public RocksDbSessionBytesStoreSupplier(final String name,
-                                            final long retentionPeriod) {
+    public RocksDbSessionHeadersBytesStoreSupplier(final String name,
+                                                   final long retentionPeriod) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
     }
@@ -37,8 +38,8 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
 
     @Override
     public SessionStore<Bytes, byte[]> get() {
-        return new RocksDBSessionStore(
-            new RocksDBSegmentedBytesStore(
+        return new RocksDBSessionStoreWithHeaders(
+            new SessionRocksDBSegmentedBytesStoreWithHeaders(
                 name,
                 metricsScope(),
                 retentionPeriod,
