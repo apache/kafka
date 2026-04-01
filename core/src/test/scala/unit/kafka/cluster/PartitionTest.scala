@@ -2600,10 +2600,9 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testPartitionShouldRetryAlterPartitionRequest(): Unit = {
     val mockChannelManager = mock(classOf[NodeToControllerChannelManager])
-    val alterPartitionManager = DefaultAlterPartitionManager.create(
+    val alterPartitionManager = new DefaultAlterPartitionManager(
       mockChannelManager,
       mock(classOf[KafkaScheduler]),
-      time,
       brokerId,
       () => 0
     )

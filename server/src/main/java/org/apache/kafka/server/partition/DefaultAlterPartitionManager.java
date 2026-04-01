@@ -43,7 +43,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,16 +63,11 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
     // Used to allow only one in-flight request at a time
     private final AtomicBoolean inflightRequest = new AtomicBoolean(false);
 
-    private DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier) {
+    public DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier) {
         this.controllerChannelManager = controllerChannelManager;
         this.scheduler = scheduler;
         this.brokerId = brokerId;
         this.brokerEpochSupplier = brokerEpochSupplier;
-    }
-
-    // For testing
-    public static DefaultAlterPartitionManager create(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, Time time, int brokerId, Supplier<Long> brokerEpochSupplier) {
-        return new DefaultAlterPartitionManager(controllerChannelManager, scheduler, brokerId, brokerEpochSupplier);
     }
 
     public static DefaultAlterPartitionManager create(AbstractKafkaConfig config,
@@ -172,7 +166,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                         }
 
                         // check if we need to send another request right away
-                        if (Objects.requireNonNull(error) == Errors.NONE) {
+                        if (error == Errors.NONE) {
                             // In the normal case, check for pending updates to send immediately
                             maybePropagateIsrChanges();
                         } else {
@@ -232,8 +226,8 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                                                 long sentBrokerEpoch,
                                                 List<AlterPartitionItem> inflightAlterPartitionItems) {
         AlterPartitionResponseData data = alterPartitionResponse.data();
-        Errors e = Errors.forCode(data.errorCode());
-        switch (e) {
+        Errors error = Errors.forCode(data.errorCode());
+        switch (error) {
             case STALE_BROKER_EPOCH -> log.warn("Broker had a stale broker epoch ({}), retrying.", sentBrokerEpoch);
             case CLUSTER_AUTHORIZATION_FAILED -> log.error("Broker is not authorized to send AlterPartition to controller",
                     Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"));
@@ -270,12 +264,12 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                 // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
                 // the leaderIsrUpdateLock write lock in Partition#sendAlterPartitionRequest
                 inflightAlterPartitionItems.forEach(inflightAlterPartition -> {
-                    if (successResponses.get(inflightAlterPartition.topicIdPartition()) != null) {
+                    if (successResponses.containsKey(inflightAlterPartition.topicIdPartition())) {
                         // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further
                         // updates. We clear it now to allow the callback to submit a new update if needed.
                         unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition());
                         inflightAlterPartition.future().complete(successResponses.get(inflightAlterPartition.topicIdPartition()));
-                    } else if (errorResponses.get(inflightAlterPartition.topicIdPartition()) != null) {
+                    } else if (errorResponses.containsKey(inflightAlterPartition.topicIdPartition())) {
                         unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition());
                         inflightAlterPartition.future().completeExceptionally(errorResponses.get(inflightAlterPartition.topicIdPartition()).exception());
                     } else {
@@ -284,10 +278,10 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                     }
                 });
             }
-            default -> log.warn("Controller returned an unexpected top-level error when handling AlterPartition request: {}", e);
+            default -> log.warn("Controller returned an unexpected top-level error when handling AlterPartition request: {}", error);
         }
 
-        return e;
+        return error;
     }
 
 }

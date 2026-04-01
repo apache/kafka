@@ -87,7 +87,7 @@ public class AlterPartitionManagerTest {
     @Test
     public void testBasic() {
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
         alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10));
         verify(brokerToController).start();
@@ -97,7 +97,7 @@ public class AlterPartitionManagerTest {
     @Test
     public void testBasicWithBrokerEpoch() {
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 101L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 101L);
         alterPartitionManager.start();
         ArrayList<BrokerState> isrWithBrokerEpoch = new ArrayList<>();
         for (int i = 1; i <= 3; i++) {
@@ -136,7 +136,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<AbstractRequest.Builder<AlterPartitionRequest>> requestCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
         alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List.of(1), leaderRecoveryState, 10));
         verify(brokerToController).start();
@@ -152,7 +152,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
 
         // Only send one ISR update for a given topic+partition
@@ -193,7 +193,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
 
         // First request will send batch of one
@@ -238,7 +238,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
         var future = alterPartitionManager.submit(tp0, leaderAndIsr);
         var finalFuture = new CompletableFuture<LeaderAndIsr>();
@@ -313,7 +313,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
         alterPartitionManager.submit(tp0, leaderAndIsr);
 
@@ -371,7 +371,7 @@ public class AlterPartitionManagerTest {
         reset(brokerToController);
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
 
         var future = alterPartitionManager.submit(tp, new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10));
@@ -393,7 +393,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
 
         // First submit will send the request
@@ -422,7 +422,7 @@ public class AlterPartitionManagerTest {
         var expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion();
         var leaderAndIsr = new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10);
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = DefaultAlterPartitionManager.create(brokerToController, scheduler, time, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
         alterPartitionManager.start();
 
         // The first `submit` will send the `AlterIsr` request
