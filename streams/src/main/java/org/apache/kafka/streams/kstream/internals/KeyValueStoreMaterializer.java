@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.state.DslKeyValueParams;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -55,11 +56,16 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     (VersionedBytesStoreSupplier) supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-        } else {
+        } else if (supplier instanceof HeadersBytesStoreSupplier) {
             builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
+        } else {
+            builder = Stores.timestampedKeyValueStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         }
 
         if (materialized.loggingEnabled()) {

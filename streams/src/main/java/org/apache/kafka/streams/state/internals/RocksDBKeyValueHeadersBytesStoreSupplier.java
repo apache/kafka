@@ -17,18 +17,16 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
+public class RocksDBKeyValueHeadersBytesStoreSupplier implements KeyValueBytesStoreSupplier, HeadersBytesStoreSupplier {
 
     private final String name;
-    private final boolean returnTimestampedStore;
 
-    public RocksDBKeyValueBytesStoreSupplier(final String name,
-                                             final boolean returnTimestampedStore) {
+    public RocksDBKeyValueHeadersBytesStoreSupplier(final String name) {
         this.name = name;
-        this.returnTimestampedStore = returnTimestampedStore;
     }
 
     @Override
@@ -38,10 +36,7 @@ public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        if (returnTimestampedStore) {
-            return new RocksDBTimestampedStore(name, metricsScope());
-        }
-        return new RocksDBStore(name, metricsScope());
+        return new RocksDBTimestampedStoreWithHeaders(name, metricsScope());
     }
 
     @Override

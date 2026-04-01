@@ -1694,9 +1694,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
             if (changeLog) {
-                return WindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+                return WindowKeySchema.toStoreKeyBinary(key, seq, new RecordHeaders(), stateSerdes);
             }
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, new RecordHeaders(), stateSerdes);
         } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
             if (changeLog) {
                 return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
@@ -1710,7 +1710,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     private Bytes serializeKeyForIndex(final Windowed<String> key) {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getIndexSchema() instanceof KeyFirstWindowKeySchema) {
-            return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+            return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, new RecordHeaders(), stateSerdes);
         } else if (getIndexSchema() instanceof KeyFirstSessionKeySchema) {
             return Bytes.wrap(KeyFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else {

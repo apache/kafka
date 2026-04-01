@@ -928,7 +928,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         if (schema instanceof SessionKeySchema) {
             return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else if (schema instanceof WindowKeySchema) {
-            return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+            return WindowKeySchema.toStoreKeyBinary(key, 0, new RecordHeaders(), stateSerdes);
         } else {
             throw new IllegalStateException("Unrecognized serde schema");
         }

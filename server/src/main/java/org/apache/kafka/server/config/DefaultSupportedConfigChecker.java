@@ -65,7 +65,7 @@ public final class DefaultSupportedConfigChecker implements SupportedConfigCheck
             ConfigResource.Type.TOPIC, new SetContainsPredicate(new HashSet<>(LogConfig.configNames())),
             ConfigResource.Type.BROKER, ignore -> true,
             ConfigResource.Type.CLIENT_METRICS, new SetContainsPredicate(ClientMetricsConfigs.configDef().names()),
-            ConfigResource.Type.GROUP, new SetContainsPredicate(GroupConfig.configDef().names())
+            ConfigResource.Type.GROUP, new SetContainsPredicate(GroupConfig.CONFIG_DEF.names())
         );
     }
 

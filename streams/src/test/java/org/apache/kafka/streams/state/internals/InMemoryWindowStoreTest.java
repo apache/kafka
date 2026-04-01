@@ -143,10 +143,10 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
 
         restorableEntries
-            .add(new KeyValue<>(toStoreKeyBinary(1, 0L, 0, serdes).get(), serdes.rawValue("one")));
-        restorableEntries.add(new KeyValue<>(toStoreKeyBinary(2, WINDOW_SIZE, 0, serdes).get(),
+            .add(new KeyValue<>(toStoreKeyBinary(1, 0L, 0, new RecordHeaders(), serdes).get(), serdes.rawValue("one")));
+        restorableEntries.add(new KeyValue<>(toStoreKeyBinary(2, WINDOW_SIZE, 0, new RecordHeaders(), serdes).get(),
             serdes.rawValue("two")));
-        restorableEntries.add(new KeyValue<>(toStoreKeyBinary(3, 2 * WINDOW_SIZE, 0, serdes).get(),
+        restorableEntries.add(new KeyValue<>(toStoreKeyBinary(3, 2 * WINDOW_SIZE, 0, new RecordHeaders(), serdes).get(),
             serdes.rawValue("three")));
 
         context.restore(STORE_NAME, restorableEntries);
