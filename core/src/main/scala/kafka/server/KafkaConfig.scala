@@ -451,21 +451,28 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     } else {
       Seq.empty
     }
+    val controllerQuorumVotersEndpoint = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.asScala.flatMap { name =>
       controllerAdvertisedListeners
         .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
         .orElse(
-          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
-          // which match listener names in controller.listener.names.
+          // If users don't define advertised.listeners, the advertised controller listeners will first try to use
+          // the endpoint defined by the controller.quorum.voters config and inherit from listeners configuration which
+          // match listeners names in controller.listener.names. If that config is not present, the advertised
+          // controller listeners will inherit from listeners configuration which match listener names in controller.listener.names.
+
           // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
           // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
           controllerListenersValue
             .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-            .map(endpoint => if (endpoint.host == "0.0.0.0") {
+            .map(endpoint => if (controllerQuorumVotersEndpoint.isDefined) {
+              new Endpoint(endpoint.listener, endpoint.securityProtocol, controllerQuorumVotersEndpoint.get.getHostName, controllerQuorumVotersEndpoint.get.getPort)
+            } else if (endpoint.host == "0.0.0.0") {
               new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
-            } else {
+            }
+            else {
               endpoint
             })
         )
