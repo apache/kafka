@@ -1,0 +1,12 @@
+FROM eclipse-temurin:17-jdk
+
+# Set working directory inside container
+WORKDIR /app
+
+# Copy your fat jar (must include all dependencies)
+COPY build/libs/*.jar /app/app.jar
+
+# Run the jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
+CMD ["--count", "20"]
