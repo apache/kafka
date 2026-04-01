@@ -279,8 +279,7 @@ public class PapiDslIntegrationTest {
             .reduce(
                 (value, aggregate) -> value,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            ),
-            true
+            )
         );
     }
 
