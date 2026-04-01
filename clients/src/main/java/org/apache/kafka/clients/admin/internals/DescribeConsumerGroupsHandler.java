@@ -229,6 +229,9 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 ))
             );
 
+            final Optional<Long> groupCreationTimeMs = describedGroup.groupCreationTimeMs() == -1L
+                ? Optional.empty()
+                : Optional.of(describedGroup.groupCreationTimeMs());
             final ConsumerGroupDescription consumerGroupDescription =
                 new ConsumerGroupDescription(
                     groupIdKey.idValue,
@@ -240,7 +243,8 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     coordinator,
                     authorizedOperations,
                     Optional.of(describedGroup.groupEpoch()),
-                    Optional.of(describedGroup.assignmentEpoch())
+                    Optional.of(describedGroup.assignmentEpoch()),
+                    groupCreationTimeMs
                 );
             completed.put(groupIdKey, consumerGroupDescription);
         }

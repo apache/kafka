@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.consumer.GroupCreationTimeUnknownException;
 import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -29,7 +30,6 @@ import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffset
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -680,7 +680,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private long resolveResetTimestamp(TopicPartition tp) {
         long groupTs = groupCreationTimeMsSupplier.getAsLong();
         if (groupTs <= 0) {
-            throw new KafkaException("Cannot reset offset for " + tp +
+            throw new GroupCreationTimeUnknownException("Cannot reset offset for " + tp +
                 " using by_start_time: group creation time is unavailable" +
                 " (requires subscribe() with the KIP-848 group protocol)");
         }

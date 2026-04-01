@@ -45,6 +45,7 @@ public class ConsumerGroupDescription {
     private final Set<AclOperation> authorizedOperations;
     private final Optional<Integer> groupEpoch;
     private final Optional<Integer> targetAssignmentEpoch;
+    private final Optional<Long> groupCreationTimeMs;
 
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
@@ -98,6 +99,7 @@ public class ConsumerGroupDescription {
         this.authorizedOperations = authorizedOperations;
         this.groupEpoch = Optional.empty();
         this.targetAssignmentEpoch = Optional.empty();
+        this.groupCreationTimeMs = Optional.empty();
     }
 
     public ConsumerGroupDescription(String groupId,
@@ -110,6 +112,21 @@ public class ConsumerGroupDescription {
                                     Set<AclOperation> authorizedOperations,
                                     Optional<Integer> groupEpoch,
                                     Optional<Integer> targetAssignmentEpoch) {
+        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, type, groupState, coordinator,
+            authorizedOperations, groupEpoch, targetAssignmentEpoch, Optional.empty());
+    }
+
+    public ConsumerGroupDescription(String groupId,
+                                    boolean isSimpleConsumerGroup,
+                                    Collection<MemberDescription> members,
+                                    String partitionAssignor,
+                                    GroupType type,
+                                    GroupState groupState,
+                                    Node coordinator,
+                                    Set<AclOperation> authorizedOperations,
+                                    Optional<Integer> groupEpoch,
+                                    Optional<Integer> targetAssignmentEpoch,
+                                    Optional<Long> groupCreationTimeMs) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
@@ -120,6 +137,7 @@ public class ConsumerGroupDescription {
         this.authorizedOperations = authorizedOperations;
         this.groupEpoch = groupEpoch;
         this.targetAssignmentEpoch = targetAssignmentEpoch;
+        this.groupCreationTimeMs = groupCreationTimeMs;
     }
 
     @Override
@@ -136,13 +154,14 @@ public class ConsumerGroupDescription {
             Objects.equals(coordinator, that.coordinator) &&
             Objects.equals(authorizedOperations, that.authorizedOperations) &&
             Objects.equals(groupEpoch, that.groupEpoch) &&
-            Objects.equals(targetAssignmentEpoch, that.targetAssignmentEpoch);
+            Objects.equals(targetAssignmentEpoch, that.targetAssignmentEpoch) &&
+            Objects.equals(groupCreationTimeMs, that.groupCreationTimeMs);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, type, groupState, coordinator,
-            authorizedOperations, groupEpoch, targetAssignmentEpoch);
+            authorizedOperations, groupEpoch, targetAssignmentEpoch, groupCreationTimeMs);
     }
 
     /**
@@ -230,6 +249,14 @@ public class ConsumerGroupDescription {
         return targetAssignmentEpoch;
     }
 
+    /**
+     * The epoch-milliseconds when this consumer group was first created on the broker, or empty if
+     * the broker does not support KIP-1282 or the group predates the feature.
+     */
+    public Optional<Long> groupCreationTimeMs() {
+        return groupCreationTimeMs;
+    }
+
     @Override
     public String toString() {
         return "(groupId=" + groupId +
@@ -242,6 +269,7 @@ public class ConsumerGroupDescription {
             ", authorizedOperations=" + authorizedOperations +
             ", groupEpoch=" + groupEpoch.orElse(null) +
             ", targetAssignmentEpoch=" + targetAssignmentEpoch.orElse(null) +
+            ", groupCreationTimeMs=" + groupCreationTimeMs.orElse(null) +
             ")";
     }
 }

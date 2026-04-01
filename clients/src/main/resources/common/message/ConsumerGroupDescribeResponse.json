@@ -75,6 +75,9 @@
             { "name": "MemberType", "type": "int8", "versions": "1+", "default": "-1", "ignorable": true,
               "about": "-1 for unknown. 0 for classic member. +1 for consumer member." }
           ]},
+        { "name": "GroupCreationTimeMs", "type": "int64", "versions": "0+", "default": "-1",
+          "taggedVersions": "0+", "tag": 0,
+          "about": "Epoch-ms when this consumer group was first created on the broker. -1 if unknown." },
         { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
           "about": "32-bit bitfield to represent authorized operations for this group." }
       ]
