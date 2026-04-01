@@ -99,7 +99,7 @@ Consumer groups can be downgraded using the opposite process. In this case, the 
 
 ## Limitations
 
-  * Client-side assignors are not supported. Use [KAFKA-18327](https://issues.apache.org/jira/browse/KAFKA-18327) to provide feedback if you have custom assignment strategies that may not be covered.
+  * Client-side assignors are not supported and not in scope at the moment. Use [KAFKA-18327](https://issues.apache.org/jira/browse/KAFKA-18327) to provide feedback if you have custom assignment strategies that may not be covered.
   * Rack-aware assignment strategies are not fully supported yet (work is in progress, see [KAFKA-19387](https://issues.apache.org/jira/browse/KAFKA-19387)).
 
 
