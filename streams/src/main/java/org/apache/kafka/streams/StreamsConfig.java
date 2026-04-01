@@ -173,6 +173,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final int DUMMY_THREAD_INDEX = 1;
 
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
+    public static final long STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED = -1;
 
     // We impose these limitations because client tags are encoded into the subscription info,
     // which is part of the group metadata message that is persisted into the internal topic.
@@ -767,6 +768,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
     private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated. Only state directories that have not been modified for at least <code>state.cleanup.delay.ms</code> will be removed";
 
+    /** {@code state.cleanup.dir.max.age} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG = "state.cleanup.dir.max.age.ms";
+    private static final String STATE_CLEANUP_DIR_MAX_AGE_MS_DOC = "Time-based threshold for purging local state directories and checkpoint files during application startup. State directories that have not been modified for at least <code>" + STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG + "</code> will be removed.";
+
     /** {@code state.dir} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
@@ -861,6 +867,16 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
         };
+    /**
+     * {@code processing.exception.handler.global.enabled}
+     * @deprecated Since 4.3. Default will change to {@code true} when removed.
+     */
+    @Deprecated
+    @SuppressWarnings("WeakerAccess")
+    public static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG = "processing.exception.handler.global.enabled";
+    private static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC =
+            "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
+                    "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
     static {
         CONFIG = new ConfigDef()
@@ -882,6 +898,11 @@ public class StreamsConfig extends AbstractConfig {
                     0,
                     Importance.HIGH,
                     NUM_STANDBY_REPLICAS_DOC)
+            .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.HIGH,
+                    PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -1251,6 +1272,11 @@ public class StreamsConfig extends AbstractConfig {
                     10 * 60 * 1000L,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
+            .define(STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG,
+                    Type.LONG,
+                    STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED,
+                    Importance.LOW,
+                    STATE_CLEANUP_DIR_MAX_AGE_MS_DOC)
             .define(UPGRADE_FROM_CONFIG,
                     Type.STRING,
                     null,
@@ -1521,6 +1547,12 @@ public class StreamsConfig extends AbstractConfig {
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
         verifyStreamsProtocolCompatibility(doLog);
+        if (!getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG)) {
+            log.warn("Processing exception handler is not enabled for the GlobalThread. " +
+                "It's recommended to set `" + StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG + "` to true to enable it. " +
+                "Enabling the processing exception handler for global state/KTable processing now, ensures future backward compatibility. " +
+                "The processing exception handler will get enabled by default with Apache Kafka 5.0 release.");
+        }
     }
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
@@ -1632,29 +1664,61 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, String> clientTags = getClientTags();
 
         if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
-            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
-                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+            throw new ConfigException(
+                String.format(
+                    "At most %s client tags can be specified using %s prefix.",
+                    MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                    CLIENT_TAG_PREFIX
+                )
+            );
         }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
+            if (rackAwareAssignmentTag.isEmpty()) {
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    "Contains invalid value []. Tag key cannot be empty."
+                );
+            }
             if (!clientTags.containsKey(rackAwareAssignmentTag)) {
-                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                                          rackAwareAssignmentTags,
-                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
-                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    String.format(
+                        "Contains invalid value [%s] which doesn't have corresponding tag set via [%s] prefix.",
+                        rackAwareAssignmentTag,
+                        CLIENT_TAG_PREFIX
+                    )
+                );
             }
         }
 
         clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.trim().isEmpty()) {
+                throw new ConfigException("Invalid config `client.tag.` (missing client tag key).");
+            }
+            if (tagValue.trim().isEmpty()) {
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    "[]",
+                    "Tag value cannot be empty."
+                );
+            }
             if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagKey,
-                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagKey,
+                    "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + "."
+                );
             }
             if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagValue,
-                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagValue,
+                    "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + "."
+                );
             }
         });
     }

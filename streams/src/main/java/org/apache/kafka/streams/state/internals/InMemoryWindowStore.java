@@ -59,7 +59,7 @@ import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractSt
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
 
 
-public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
+public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRetentionPeriod {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryWindowStore.class);
     private static final int SEQNUM_SIZE = 4;
@@ -93,6 +93,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.retainDuplicates = retainDuplicates;
         this.metricScope = metricScope;
         this.position = Position.emptyPosition();
+    }
+
+    @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
     }
 
     @Override
@@ -401,6 +406,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         segmentMap.clear();
         open = false;
+    }
+
+    long numEntries() {
+        return segmentMap.values().stream()
+            .mapToLong(Map::size)
+            .sum();
     }
 
     private void removeExpiredSegments() {

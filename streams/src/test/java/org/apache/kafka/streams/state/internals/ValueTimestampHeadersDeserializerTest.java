@@ -28,8 +28,12 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -202,24 +206,30 @@ public class ValueTimestampHeadersDeserializerTest {
         assertNull(value);
     }
 
-    @Test
-    public void shouldExtractTimestamp() {
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes());
+    @ParameterizedTest
+    @MethodSource("headers")
+    public void shouldExtractTimestamp(final Headers headers) {
         final ValueTimestampHeaders<String> original =
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final long timestamp = ValueTimestampHeadersDeserializer.timestamp(serialized);
+        final long timestamp = Utils.timestamp(serialized);
 
         assertEquals(123456789L, timestamp);
+    }
+
+    private static Stream<Arguments> headers() {
+        return Stream.of(
+                new RecordHeaders().add("key1", "value1".getBytes()),
+                new RecordHeaders()
+            ).map(Arguments::of);
     }
 
     @Test
     public void shouldThrowExceptionWhenExtractingTimestampFromNull() {
         // ByteBuffer.wrap() throws NullPointerException for null input
         assertThrows(NullPointerException.class, () ->
-            ValueTimestampHeadersDeserializer.timestamp(null)
+            Utils.timestamp(null)
         );
     }
 
@@ -232,7 +242,7 @@ public class ValueTimestampHeadersDeserializerTest {
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final Headers extractedHeaders = ValueTimestampHeadersDeserializer.headers(serialized);
+        final Headers extractedHeaders = Utils.headers(serialized);
 
         assertNotNull(extractedHeaders);
         assertEquals(2, extractedHeaders.toArray().length);
@@ -247,7 +257,7 @@ public class ValueTimestampHeadersDeserializerTest {
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final Headers extractedHeaders = ValueTimestampHeadersDeserializer.headers(serialized);
+        final Headers extractedHeaders = Utils.headers(serialized);
 
         assertNotNull(extractedHeaders);
         assertEquals(0, extractedHeaders.toArray().length);
@@ -255,7 +265,7 @@ public class ValueTimestampHeadersDeserializerTest {
 
     @Test
     public void shouldReturnNullWhenExtractingHeadersFromNull() {
-        final Headers headers = ValueTimestampHeadersDeserializer.headers(null);
+        final Headers headers = Utils.headers(null);
         assertNull(headers);
     }
 

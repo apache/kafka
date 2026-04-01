@@ -16,7 +16,6 @@
   */
 package kafka.cluster
 
-import kafka.log.LogManager
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
@@ -28,7 +27,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.partition.AlterPartitionListener
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
@@ -36,6 +35,7 @@ import org.mockito.Mockito.{mock, when}
 
 import java.io.File
 import java.lang.{Long => JLong}
+import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -76,7 +76,7 @@ class AbstractPartitionTest {
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
       new CleanerConfig(false), time, transactionVerificationEnabled = true)
-    logManager.startup(Set.empty)
+    logManager.startup(util.Set.of)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()
     alterPartitionListener = createIsrChangeListener()

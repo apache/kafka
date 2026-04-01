@@ -16,10 +16,8 @@
   */
 package kafka.server
 
-import java.io.File
 import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
-import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
@@ -30,9 +28,10 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState}
 import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogManager, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -292,8 +291,8 @@ class ReplicaManagerQuotasTest {
     val logManager: LogManager = mock(classOf[LogManager])
 
     //Return the same log for each partition as it doesn't matter
-    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Some(log))
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Optional.of(log))
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 

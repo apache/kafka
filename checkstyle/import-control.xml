@@ -137,6 +137,9 @@
         <allow pkg="com.fasterxml.jackson.databind" />
         <allow pkg="org.jose4j" />
         <allow pkg="javax.crypto"/>
+        <allow pkg="org.testcontainers" />
+        <allow pkg="org.keycloak" />
+        <allow pkg="dasniko.testcontainers" />
       </subpackage>
     </subpackage>
 
@@ -196,6 +199,7 @@
     <subpackage name="serialization">
       <allow pkg="org.apache.kafka.clients" />
       <allow class="org.apache.kafka.common.header.Headers" />
+      <allow class="org.apache.kafka.common.header.internals.RecordHeaders" />
     </subpackage>
 
     <subpackage name="utils">
@@ -271,6 +275,7 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.shell"/>

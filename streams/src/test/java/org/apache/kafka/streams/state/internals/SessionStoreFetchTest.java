@@ -161,7 +161,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
@@ -172,7 +172,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
     }
 
@@ -185,7 +185,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
@@ -196,7 +196,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
     }
 

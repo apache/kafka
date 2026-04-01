@@ -40,14 +40,13 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     public KeyValueStoreMaterializer(
             final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
     }
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
+                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), dslStoreFormat()))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
@@ -57,17 +56,10 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     materialized.keySerde(),
                     materialized.valueSerde());
         } else {
-            if (storeFormat == DslStoreFormat.HEADERS) {
-                builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-            } else {
-                builder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-            }
         }
 
         if (materialized.loggingEnabled()) {

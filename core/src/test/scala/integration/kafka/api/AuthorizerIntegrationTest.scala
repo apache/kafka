@@ -648,11 +648,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   private def describeProducersRequest: DescribeProducersRequest = new DescribeProducersRequest.Builder(
     new DescribeProducersRequestData()
-      .setTopics(java.util.List.of(
+      .setTopics(new DescribeProducersRequestData.TopicRequestCollection(java.util.List.of(
         new DescribeProducersRequestData.TopicRequest()
           .setName(tp.topic)
           .setPartitionIndexes(java.util.List.of(Int.box(tp.partition)))
-      ))
+      ).iterator()))
   ).build()
 
   private def describeTransactionsRequest: DescribeTransactionsRequest = new DescribeTransactionsRequest.Builder(
@@ -3904,6 +3904,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     streamsConsumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = createStreamsConsumer(streamsRebalanceData = new StreamsRebalanceData(
       UUID.randomUUID(),
+      Optional.empty(),
       Optional.empty(),
       util.Map.of(
         "subtopology-0", new StreamsRebalanceData.Subtopology(

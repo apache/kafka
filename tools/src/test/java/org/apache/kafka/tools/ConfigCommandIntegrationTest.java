@@ -59,6 +59,7 @@ import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
@@ -295,6 +296,75 @@ public class ConfigCommandIntegrationTest {
         assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:streams.heartbeat.interval.ms=5000}"));
         assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:streams.num.standby.replicas=0}"));
         assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:streams.session.timeout.ms=45000}"));
+        assertTrue(message.contains("streams.task.offset.interval.ms=60000 sensitive=false synonyms={DEFAULT_CONFIG:streams.task.offset.interval.ms=60000}"));
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupSessionTimeout() {
+        // verify session.timeout.ms
+
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.session.timeout.ms=45000"));
+
+        // Should fail to set below min
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.session.timeout.ms=1"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be greater than or equal to group.streams.min.session.timeout.ms"));
+
+        // Should fail to set above max
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.session.timeout.ms=100000"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be less than or equal to group.streams.max.session.timeout.ms"));
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, value = "55000"),
+    })
+    public void testAlterStreamsGroupHeartbeatInterval() {
+        // verify heartbeat.interval.ms
+
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.heartbeat.interval.ms=5000"));
+
+        // Should fail to set below min
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.heartbeat.interval.ms=1"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be greater than or equal to group.streams.min.heartbeat.interval.ms"));
+
+        // Should fail to set above max
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.heartbeat.interval.ms=100000"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be less than or equal to group.streams.max.heartbeat.interval.ms"));
+
+        // Should fail to set above session timeout
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.heartbeat.interval.ms=50000"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be greater than streams.heartbeat.interval.ms"));
     }
 
     @ClusterTest
@@ -322,6 +392,49 @@ public class ConfigCommandIntegrationTest {
             "--describe"));
         message = captureStandardOut(run(command));
         assertTrue(message.contains("streams.num.standby.replicas=1"));
+
+        // Should fail to set above max timeout
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.standby.replicas=3"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to group.streams.max.standby.replicas"));
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupTaskOffsetInterval() {
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.task.offset.interval.ms=60000"));
+
+        // Alter task offset interval
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.task.offset.interval.ms=45000"));
+        message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for group group.", message);
+
+        // Verify the updated config
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.task.offset.interval.ms=45000"));
+
+        // Should fail to set below min interval
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.task.offset.interval.ms=1"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to group.streams.min.task.offset.interval.ms"));
+
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {

@@ -50,4 +50,9 @@ public class NoDefaultConstructorOverridePolicy implements ConnectorClientConfig
     public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
         return null;
     }
+
+    @Override
+    public String version() {
+        return "1.0.0";
+    }
 }
