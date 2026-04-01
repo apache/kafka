@@ -548,10 +548,6 @@ rm -rf /tmp/kraft-combined-logs
 📄 [EVENT] Checking truncation detection...
 ❌ TEST 2 FAILED
 
-📄 [MM2 LOG]
-[MM2-FIX][TRUNCATION] Detected log truncation on topic commit-log partition 0
-[MM2-FIX][TRUNCATION] Source offset moved backward. Triggering corrective action.
-
 ===============================
 🔥 Scenario 3: Topic Reset
 ==========================
