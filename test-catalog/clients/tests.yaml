@@ -425,6 +425,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testOffsetCommitNumRetries
 - testOffsetCommitRetryBackoff
 - testOffsetCommitWithMultipleErrors
+- testOutOfMemoryErrorPropagation
 - testParseDescribeClusterResponseWithError
 - testParseDescribeClusterResponseWithUnexpectedEndpointType
 - testParseSuccessfulDescribeClusterResponse
@@ -809,6 +810,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testBeginningOffsetsAuthenticationFailure
 - testBeginningOffsetsTimeout
 - testChangingRegexSubscription
+- testClassicProtocolLogsRecommendationToTryConsumerProtocol
 - testClientInstanceId
 - testClientInstanceIdInvalidTimeout
 - testClientInstanceIdNoTelemetryReporterRegistered
@@ -826,10 +828,12 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testConstructorFailsOnNetworkClientConstructorFailure
 - testConstructorInvalidMetricReporters
 - testConsumerJmxPrefix
+- testConsumerProtocolDoesNotLogRecommendation
 - testCurrentLag
 - testCurrentLagClearsFlagOnFatalPartitionError
 - testCurrentLagClearsFlagOnRetriablePartitionError
 - testCurrentLagPreventsMultipleInFlightRequests
+- testDefaultProtocolLogsRecommendationToTryConsumerProtocol
 - testDisableJmxAndClientTelemetryReporter
 - testEmptyGroupId
 - testEndOffsetsAuthenticationFailure
@@ -865,6 +869,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testMissingOffsetNoResetPolicy
 - testMonitorablePlugins
 - testNoCommittedOffsets
+- testNoGroupIdDoesNotLogGroupProtocolMessage
 - testOffsetIsValidAfterSeek
 - testOffsetOfPausedPartitions
 - testOffsetsForTimesAuthenticationFailure
