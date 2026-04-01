@@ -63,7 +63,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             store = headersStore;
             return;
         } catch (final ClassCastException e) {
-            // not headers store, try versioned
+            // not timestamped store, try headers
         }
 
         // Try headers-aware timestamped store

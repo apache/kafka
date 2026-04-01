@@ -37,6 +37,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Adaptor store for the Kafka Streams DSL to bridge between "headers" store and "ts-store".
+ *
+ * <p> With KIP-1285 we did rewrite the DLS Processor code to work against "header store" interface to allow users
+ * to plugin "header stores", but by default the underlying store is still a "ts-store". To avoid "if-then-else"
+ * code across the entire DSL Processor code base, we use this adaptor to wrap a "ts-store" and make it look like
+ * a "header store".
+ *
+ * <p> On any write operation, provided {@link org.apache.kafka.common.header.Headers} will just be dropped,
+ * and {@link ValueTimestampHeaders} type is translated into {@link ValueAndTimestamp} type. Similarly for
+ * any read operation, the underlying {@link ValueAndTimestamp} type is translated into a {@link ValueTimestampHeaders}
+ * type with an empty {@link org.apache.kafka.common.header.Headers} object.
+ */
 public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter<K, V>
     extends WrappedStateStore<TimestampedKeyValueStore<K, V>, K, V>
     implements TimestampedKeyValueStoreWithHeaders<K, V> {
@@ -153,31 +166,60 @@ public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from, final K to) {
-        return null;
+        return new KeyValueIteratorAdapter(wrapped().range(from, to));
     }
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from, final K to) {
-        return null;
+        return new KeyValueIteratorAdapter(wrapped().reverseRange(from, to));
     }
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> all() {
-        return null;
+        return new KeyValueIteratorAdapter(wrapped().all());
     }
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseAll() {
-        return null;
+        return new KeyValueIteratorAdapter(wrapped().reverseAll());
     }
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(final P prefix, final PS prefixKeySerializer) {
-        return null;
+        return new KeyValueIteratorAdapter(wrapped().prefixScan(prefix, prefixKeySerializer));
     }
 
     @Override
     public long approximateNumEntries() {
         return wrapped().approximateNumEntries();
+    }
+
+    private final class KeyValueIteratorAdapter implements KeyValueIterator<K, ValueTimestampHeaders<V>> {
+        private final KeyValueIterator<K, ValueAndTimestamp<V>> innerIterator;
+
+        private KeyValueIteratorAdapter(final KeyValueIterator<K, ValueAndTimestamp<V>> innerIterator) {
+            this.innerIterator = innerIterator;
+        }
+
+        @Override
+        public void close() {
+            innerIterator.close();
+        }
+
+        @Override
+        public K peekNextKey() {
+            return innerIterator.peekNextKey();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return innerIterator.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, ValueTimestampHeaders<V>> next() {
+            final KeyValue<K, ValueAndTimestamp<V>> next = innerIterator.next();
+            return KeyValue.pair(next.key, ValueTimestampHeaders.make(next.value.value(), next.value.timestamp(), new RecordHeaders()));
+        }
     }
 }

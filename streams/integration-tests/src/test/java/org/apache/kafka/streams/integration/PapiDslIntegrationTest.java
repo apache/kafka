@@ -43,8 +43,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 public class PapiDslIntegrationTest {
@@ -76,7 +75,7 @@ public class PapiDslIntegrationTest {
 
             inputTopic.pipeInput("key1", "value1");
 
-            assertThat(outputTopic.readKeyValue(), equalTo(KeyValue.pair("key1", "value1")));
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
         }
     }
 
@@ -110,7 +109,7 @@ public class PapiDslIntegrationTest {
 
             inputTopic.pipeInput("key1", "value1");
 
-            assertThat(outputTopic.readKeyValue(), equalTo(KeyValue.pair("key1", "value1")));
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
         }
     }
 
@@ -142,8 +141,7 @@ public class PapiDslIntegrationTest {
 
             inputTopic.pipeInput("key1", "value1");
 
-            assertThat(outputTopic.readKeyValue(), equalTo(KeyValue.pair("key1", "value1")));
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
         }
     }
-
 }
