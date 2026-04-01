@@ -7,39 +7,44 @@ This project implements critical enhancements to Apache Kafka MirrorMaker 2 (MM2
 ## Project Structure
 
 ```text
-KafkaMirrorMakerImprovement/
+kafka/
 |
-|-- Kafka/                              # Apache Kafka source fork
-|   `-- kafka/
-|       |-- connect/mirror/             # MirrorMaker 2 source code
-|       |   `-- src/main/java/...
-|       |-- core/                       # Kafka core modules
-|       |-- clients/                    # Kafka clients
-|       `-- build.gradle                # Kafka build configuration
-|
-|-- Producer/                           # Test producer application
-|   |-- ProducerApp.java                # Java producer for generating test messages
-|   |-- build.gradle                    # Producer build configuration
-|   |-- Dockerfile/                     # Docker image for producer
-|   `-- build/                          # Producer build artifacts
-|
-|-- config/                             # Configuration files
-|   `-- mm2.properties                  # MirrorMaker 2 configuration
-|
-|-- docker/                             # Docker setup
-|   `-- kafka/
-|       `-- Dockerfile/
-|           `-- dockerfile              # Dockerfile for custom MM2 image
-|
-|-- docker-compose.yml                  # Docker Compose orchestration
-|-- run_challenge.sh                    # Test scenario runner script
-`-- README.md                           # This file
+|-- connect/mirror/                     # MirrorMaker 2 source code
+|   `-- src/main/java/...
+|-- core/                               # Kafka core modules
+|-- clients/                            # Kafka clients
+|-- build.gradle                        # Kafka build configuration
+`-- mirror-maker2-project/              # Validation assets packaged in this branch
+      |-- README.md                       # Project documentation
+      |-- Test.md                         # Captured test output notes
+      |-- docker-compose.yml              # Docker Compose orchestration
+      |-- run_challenge.sh                # Test scenario runner script
+      |-- config/
+      |   `-- mm2.properties              # MirrorMaker 2 configuration
+      |-- docker/
+      |   `-- kafka/
+      |       `-- Dockerfile/
+      |           `-- dockerfile          # Dockerfile for custom MM2 image
+      `-- Producer/                       # Test producer application
+            |-- src/main/java/ProducerApp.java
+            |-- build.gradle
+            |-- settings.gradle
+            |-- gradle.properties
+            |-- gradlew
+            |-- gradlew.bat
+            |-- gradle/
+            |   |-- libs.versions.toml
+            |   `-- wrapper/
+            |       |-- gradle-wrapper.jar
+            |       `-- gradle-wrapper.properties
+            `-- Dockerfile/
+                  `-- dockerfile
 ```
 
 ## 1) Repository Links
 
 - Kafka Fork: Apache Kafka - Main Fork
-- Location in this project: `./Kafka/kafka/`
+- Location in this project: `./kafka/`
 - Pull Request: MirrorMaker 2 Enhancement PR
 - Baseline: Apache Kafka main branch
 - Modifications: `connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorSourceTask.java`
