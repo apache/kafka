@@ -149,6 +149,10 @@ public class ConsoleConsumer {
     }
 
     static void maybePrintConsumerProtocolMessage(ConsoleConsumerOptions opts) {
+        // Skip if using manual partition assignment used (--partition)
+        if (opts.partitionArg().isPresent()) {
+            return;
+        }
         String protocol = (String) opts.consumerProps().get(ConsumerConfig.GROUP_PROTOCOL_CONFIG);
         if (protocol == null || GroupProtocol.CLASSIC.name().equalsIgnoreCase(protocol)) {
             // Only print if INFO logging is not enabled (otherwise ClassicKafkaConsumer already logs it)
