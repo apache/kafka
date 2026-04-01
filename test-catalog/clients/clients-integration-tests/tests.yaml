@@ -71,6 +71,10 @@ org.apache.kafka.clients.admin.DescribeProducersWithBrokerIdTest:
 - testDescribeProducersDefaultRoutesToLeader
 - testDescribeProducersFromFollower
 - testDescribeProducersWithInvalidBrokerId
+org.apache.kafka.clients.admin.DynamicGroupConfigIntegrationTest:
+- testDescribeGroupConfigSynonymsWithBrokerSynonym
+- testDescribeGroupConfigSynonymsWithStaticBrokerConfig
+- testDescribeGroupConfigSynonymsWithoutBrokerSynonym
 org.apache.kafka.clients.admin.ListOffsetsIntegrationTest:
 - testListMaxTimestampWithEmptyLog
 - testThreeCompressedRecordsInOneBatch

@@ -6,6 +6,7 @@ org.apache.kafka.coordinator.group.GroupConfigManagerTest:
 - testUpdateConfigWithNullGroupId
 - testUpdateGroupConfig
 org.apache.kafka.coordinator.group.GroupConfigTest:
+- testAllGroupConfigSynonyms
 - testAssignmentIntervalMsAbsentWhenNotConfigured
 - testAssignmentIntervalMsNotValidatedWhenNotConfigured
 - testAssignorOffloadEnableAbsentWhenNotConfigured
