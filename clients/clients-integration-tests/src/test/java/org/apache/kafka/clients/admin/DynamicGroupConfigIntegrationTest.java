@@ -33,11 +33,11 @@ public class DynamicGroupConfigIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT})
     public void testDescribeGroupConfigSynonymsWithBrokerSynonym(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            String group = "synonym-test-group";
-            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, group);
-            ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-            ConfigResource brokerDefaultResource = new ConfigResource(ConfigResource.Type.BROKER, "");
+        try (var admin = cluster.admin()) {
+            var group = "synonym-test-group";
+            var groupResource = new ConfigResource(ConfigResource.Type.GROUP, group);
+            var brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+            var brokerDefaultResource = new ConfigResource(ConfigResource.Type.BROKER, "");
 
             // Verify default config only.
             // Expected synonym chain: DEFAULT_CONFIG
@@ -54,12 +54,7 @@ public class DynamicGroupConfigIntegrationTest {
 
             // Set per-broker dynamic config.
             // Expected synonym chain: DYNAMIC_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(brokerResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "1500"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, brokerResource, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "1500");
 
             assertGroupConfig(
                 admin,
@@ -76,12 +71,7 @@ public class DynamicGroupConfigIntegrationTest {
 
             // Set dynamic default broker config; per-broker config still takes precedence.
             // Expected synonym chain: DYNAMIC_BROKER_CONFIG -> DYNAMIC_DEFAULT_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(brokerDefaultResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "2000"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, brokerDefaultResource, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "2000");
 
             assertGroupConfig(
                 admin,
@@ -101,12 +91,7 @@ public class DynamicGroupConfigIntegrationTest {
             // Set group override; it takes precedence over all broker configs.
             // Expected synonym chain: DYNAMIC_GROUP_CONFIG -> DYNAMIC_BROKER_CONFIG
             // -> DYNAMIC_DEFAULT_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(groupResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "3000"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, groupResource, GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "3000");
 
             assertGroupConfig(
                 admin,
@@ -129,9 +114,9 @@ public class DynamicGroupConfigIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT})
     public void testDescribeGroupConfigSynonymsWithoutBrokerSynonym(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            String group = "synonym-no-broker-test-group";
-            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, group);
+        try (var admin = cluster.admin()) {
+            var group = "synonym-no-broker-test-group";
+            var groupResource = new ConfigResource(ConfigResource.Type.GROUP, group);
 
             // Verify default config for a config with no broker synonym.
             // Expected synonym chain: DEFAULT_CONFIG
@@ -148,12 +133,7 @@ public class DynamicGroupConfigIntegrationTest {
 
             // Set group override; synonyms use group config name since there is no broker synonym.
             // Expected synonym chain: DYNAMIC_GROUP_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(groupResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, groupResource, GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "earliest");
 
             assertGroupConfig(
                 admin,
@@ -172,15 +152,14 @@ public class DynamicGroupConfigIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT},
         serverProperties = {
-            @ClusterConfigProperty(
-                key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "2000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "2000")
         })
     public void testDescribeGroupConfigSynonymsWithStaticBrokerConfig(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            String group = "synonym-static-test-group";
-            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, group);
-            ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-            ConfigResource brokerDefaultResource = new ConfigResource(ConfigResource.Type.BROKER, "");
+        try (var admin = cluster.admin()) {
+            var group = "synonym-static-test-group";
+            var groupResource = new ConfigResource(ConfigResource.Type.GROUP, group);
+            var brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+            var brokerDefaultResource = new ConfigResource(ConfigResource.Type.BROKER, "");
 
             // Verify static broker config is reflected in synonyms.
             // Expected synonym chain: STATIC_BROKER_CONFIG -> DEFAULT_CONFIG
@@ -199,12 +178,7 @@ public class DynamicGroupConfigIntegrationTest {
 
             // Set group override; it takes precedence over static broker config.
             // Expected synonym chain: DYNAMIC_GROUP_CONFIG -> STATIC_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(groupResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "3000"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, groupResource, GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "3000");
 
             assertGroupConfig(
                 admin,
@@ -224,12 +198,7 @@ public class DynamicGroupConfigIntegrationTest {
             // Add dynamic default broker config.
             // Expected synonym chain: DYNAMIC_GROUP_CONFIG -> DYNAMIC_DEFAULT_BROKER_CONFIG
             // -> STATIC_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(brokerDefaultResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "4000"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, brokerDefaultResource, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "4000");
 
             assertGroupConfig(
                 admin,
@@ -250,12 +219,7 @@ public class DynamicGroupConfigIntegrationTest {
             // Add per-broker dynamic config to complete the full 5-layer synonym chain.
             // Expected synonym chain: DYNAMIC_GROUP_CONFIG -> DYNAMIC_BROKER_CONFIG -> DYNAMIC_DEFAULT_BROKER_CONFIG
             // -> STATIC_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(brokerResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "5000"),
-                    AlterConfigOp.OpType.SET)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            alterConfig(admin, cluster, brokerResource, GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "5000");
 
             assertGroupConfig(
                 admin,
@@ -279,12 +243,7 @@ public class DynamicGroupConfigIntegrationTest {
             // Delete group override; value falls back to per-broker dynamic config.
             // Expected synonym chain: DYNAMIC_BROKER_CONFIG -> DYNAMIC_DEFAULT_BROKER_CONFIG
             // -> STATIC_BROKER_CONFIG -> DEFAULT_CONFIG
-            admin.incrementalAlterConfigs(Map.of(groupResource, List.of(
-                new AlterConfigOp(new ConfigEntry(
-                    GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, ""),
-                    AlterConfigOp.OpType.DELETE)
-            ))).all().get();
-            cluster.ensureConsistentMetadata();
+            deleteConfig(admin, cluster, groupResource, GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG);
 
             assertGroupConfig(
                 admin,
@@ -304,7 +263,32 @@ public class DynamicGroupConfigIntegrationTest {
         }
     }
 
-    private void assertGroupConfig(
+    private static void alterConfig(
+        Admin admin,
+        ClusterInstance cluster,
+        ConfigResource resource,
+        String key,
+        String value
+    ) throws Exception {
+        admin.incrementalAlterConfigs(Map.of(resource, List.of(
+            new AlterConfigOp(new ConfigEntry(key, value), AlterConfigOp.OpType.SET)
+        ))).all().get();
+        cluster.ensureConsistentMetadata();
+    }
+
+    private static void deleteConfig(
+        Admin admin,
+        ClusterInstance cluster,
+        ConfigResource resource,
+        String key
+    ) throws Exception {
+        admin.incrementalAlterConfigs(Map.of(resource, List.of(
+            new AlterConfigOp(new ConfigEntry(key, ""), AlterConfigOp.OpType.DELETE)
+        ))).all().get();
+        cluster.ensureConsistentMetadata();
+    }
+
+    private static void assertGroupConfig(
         Admin admin,
         ConfigResource groupResource,
         String configKey,

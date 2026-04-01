@@ -314,6 +314,14 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG))
     );
 
+    /**
+     * Returns the broker-level synonym config name for the given group config name,
+     * or {@code Optional.empty()} if no broker-level synonym exists.
+     */
+    public static Optional<String> brokerSynonym(String groupConfigName) {
+        return ALL_GROUP_CONFIG_SYNONYMS.getOrDefault(groupConfigName, Optional.empty());
+    }
+
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG_DEF, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);

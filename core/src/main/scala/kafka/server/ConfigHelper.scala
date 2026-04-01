@@ -165,17 +165,18 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
-      val brokerConfigName = GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.get(name)
-      val list = if (brokerConfigName != null && brokerConfigName.isPresent)
-        configSynonyms(brokerConfigName.get, brokerSynonyms(brokerConfigName.get), isSensitive)
-      else
-        // No broker synonym, fall back to GroupConfig defaults
-        Option(GroupConfig.CONFIG_DEF.defaultValues().get(name))
-          .map(v => List(new DescribeConfigsResponseData.DescribeConfigsSynonym()
-            .setName(name)
-            .setValue(if (isSensitive) null else ConfigDef.convertToString(v, configEntryType.orNull))
-            .setSource(ConfigSource.DEFAULT_CONFIG.id)))
-          .getOrElse(List.empty)
+      val list = GroupConfig.brokerSynonym(name).toScala match {
+        case Some(brokerName) =>
+          configSynonyms(brokerName, brokerSynonyms(brokerName), isSensitive)
+        case None =>
+          // No broker synonym, fall back to GroupConfig defaults
+          Option(GroupConfig.CONFIG_DEF.defaultValues().get(name))
+            .map(v => List(new DescribeConfigsResponseData.DescribeConfigsSynonym()
+              .setName(name)
+              .setValue(if (isSensitive) null else ConfigDef.convertToString(v, configEntryType.orNull))
+              .setSource(ConfigSource.DEFAULT_CONFIG.id)))
+            .getOrElse(List.empty)
+      }
       if (!groupProps.containsKey(name))
         list
       else
