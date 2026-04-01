@@ -1194,6 +1194,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testOffsetsForTimesOnNullPartitions
 - testOffsetsForTimesTimeoutException
 - testOffsetsForTimesWithZeroTimeout
+- testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollThrowsInterruptExceptionIfInterrupted
 - testProcessBackgroundEventsTimesOut
@@ -1208,6 +1209,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testSeekToEnd
 - testSeekToEndWithException
 - testStreamRebalanceData
+- testStreamsTasksAssignedEventSendsErrorWhenApplyAssignmentFails
 - testSubscribeGeneratesEvent
 - testSubscribePatternAgainstBrokerNotSupportingRegex
 - testSubscribePatternGeneratesEvent
