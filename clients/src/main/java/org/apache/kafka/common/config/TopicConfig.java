@@ -107,7 +107,7 @@ public class TopicConfig {
             "When set to 0, segments are uploaded as soon as they are eligible without delay. " +
             "When set to a positive value (ms), a segment can't become eligible for upload util the time since the latest record in the segment reaches the value. " +
             "The value should not exceed the real local retention ms except the latter is save forever. " +
-            "When set to -1, resolves to the real local retention ms (maximum delay, or no delay check when the retention is save forever). " +
+            "When set to -1, resolves to the real local retention ms as maximum delay. " +
             "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
@@ -116,7 +116,7 @@ public class TopicConfig {
             "When set to 0, segments are uploaded as soon as they are eligible without delay. " +
             "When set to a positive value (bytes), a segment can't become eligible for upload util the total bytes of log data after the segment reach the value. " +
             "The value should not exceed the real local retention bytes except the latter is save forever. " +
-            "When set to -1, resolves to the real local retention bytes (maximum delay, or no delay check when the retention is save forever). " +
+            "When set to -1, resolves to the real local retention bytes as maximum delay. " +
             "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
