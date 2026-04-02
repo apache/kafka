@@ -648,4 +648,92 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         // Clean up — set streams to instance 1 so tearDown handles it
         streams = streams1Restart;
     }
+
+    /**
+     * Regression test for KAFKA-19712 (PR #21884): after completely deleting local state
+     * and restarting, standby tasks should not get TaskCorruptedException during rebalance.
+     *
+     * The bug: KIP-1035 removed the OFFSET_UNKNOWN sentinel, so stores closed with null
+     * offsets when offsets were never initialized. On the next rebalance, initializeStoreOffsets()
+     * found null committed offset + non-empty state dir under EOS, and threw TaskCorruptedException.
+     *
+     * The fix: re-introduced OFFSET_UNKNOWN (-4L) as a sentinel in commit(), and translates
+     * it back to null in initializeStoreOffsets().
+     */
+    @Test
+    public void shouldNotThrowTaskCorruptedOnStandbyAfterStateWipe() throws Exception {
+        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        streamsConfig.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+
+        final File stateDir1 = TestUtils.tempDirectory();
+        final File stateDir2 = TestUtils.tempDirectory();
+
+        final Properties config1 = new Properties();
+        config1.putAll(streamsConfig);
+        config1.put(StreamsConfig.STATE_DIR_CONFIG, stateDir1.getPath());
+
+        final Properties config2 = new Properties();
+        config2.putAll(streamsConfig);
+        config2.put(StreamsConfig.STATE_DIR_CONFIG, stateDir2.getPath());
+
+        // Phase 1: start two instances, produce data, let both process and replicate
+        final StreamsBuilder builder1 = buildCountTopology();
+        final StreamsBuilder builder2 = buildCountTopology();
+
+        final KafkaStreams streams1 = new KafkaStreams(builder1.build(), config1);
+        final KafkaStreams streams2 = new KafkaStreams(builder2.build(), config2);
+        streams1.cleanUp();
+        streams2.cleanUp();
+        streams1.start();
+        streams2.start();
+
+        waitForRunning(streams1);
+        waitForRunning(streams2);
+
+        final List<KeyValue<String, String>> initialRecords = Arrays.asList(
+            new KeyValue<>("A", "v1"),
+            new KeyValue<>("B", "v1"),
+            new KeyValue<>("A", "v2")
+        );
+        produceRecords(initialRecords);
+        waitForOutput(initialRecords.size());
+
+        // Phase 2: shut down instance 1, wipe its entire state, then restart.
+        // This simulates the LittleHorse scenario: complete state deletion followed by
+        // changelog restoration. The standby tasks on this instance will have stores
+        // that were never initialized with offsets.
+        streams1.close(Duration.ofSeconds(30));
+        streams1.cleanUp();
+
+        final StreamsBuilder builder1Restart = buildCountTopology();
+        final KafkaStreams streams1Restart = new KafkaStreams(builder1Restart.build(), config1);
+        streams1Restart.start();
+        waitForRunning(streams1Restart);
+
+        // Phase 3: trigger a rebalance by shutting down instance 2 and restarting it.
+        // Before the fix, the standby tasks on instance 1 would throw
+        // TaskCorruptedException during the rebalance when re-initializing store offsets.
+        streams2.close(Duration.ofSeconds(30));
+
+        final StreamsBuilder builder2Restart = buildCountTopology();
+        final KafkaStreams streams2Restart = new KafkaStreams(builder2Restart.build(), config2);
+        streams2Restart.start();
+
+        // Both instances should reach RUNNING without TaskCorruptedException
+        waitForRunning(streams1Restart);
+        waitForRunning(streams2Restart);
+
+        // Phase 4: verify processing still works after rebalance
+        final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
+            new KeyValue<>("A", "v3"),
+            new KeyValue<>("C", "v1")
+        );
+        produceRecords(additionalRecords);
+        waitForOutput(initialRecords.size() + additionalRecords.size());
+
+        // Clean up
+        streams2Restart.close(Duration.ofSeconds(30));
+        streams = streams1Restart;
+    }
 }
