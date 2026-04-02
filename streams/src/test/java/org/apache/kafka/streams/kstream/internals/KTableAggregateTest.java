@@ -109,7 +109,6 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            //inputTopic.pipeInput("A", "1", 10L, new RecordHeaders());
             final Headers headers = new RecordHeaders();
             headers.add(new RecordHeader("header-key",  "header-value".getBytes(StandardCharsets.UTF_8)));
             inputTopic.pipeInput(new TestRecord<>("A", "1", headers, 10L));
