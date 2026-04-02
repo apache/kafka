@@ -176,7 +176,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
 
     private class KTableMapValuesValueGetter implements KTableValueGetter<KIn, VOut> {
         private final KTableValueGetter<KIn, VIn> parentGetter;
-        private Headers contextHeaders;
+        private InternalProcessorContext<?, ?> context;
 
         KTableMapValuesValueGetter(final KTableValueGetter<KIn, VIn> parentGetter) {
             this.parentGetter = parentGetter;
@@ -185,17 +185,17 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             parentGetter.init(context);
-            contextHeaders = ((InternalProcessorContext<?, ?>) context).headers();
+            this.context = (InternalProcessorContext<?, ?>) context;
         }
 
         @Override
         public ValueTimestampHeaders<VOut> get(final KIn key) {
-            return computeValueAndTimestamp(key, parentGetter.get(key), contextHeaders);
+            return computeValueAndTimestamp(key, parentGetter.get(key), context.headers());
         }
 
         @Override
         public ValueTimestampHeaders<VOut> get(final KIn key, final long asOfTimestamp) {
-            return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp), contextHeaders);
+            return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp), context.headers());
         }
 
         @Override
