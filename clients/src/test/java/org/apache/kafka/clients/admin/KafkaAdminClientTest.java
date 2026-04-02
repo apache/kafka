@@ -11787,4 +11787,30 @@ public class KafkaAdminClientTest {
             assertTrue(duration >= 150L && duration < 30000);
         }
     }
+
+    /**
+     * Test that OutOfMemoryError is properly propagated and not masked as TimeoutException.
+     * This test simulates an OOM error during response processing and verifies it propagates
+     * without being wrapped. This is a regression test for KAFKA-19932.
+     */
+    @Test
+    public void testOutOfMemoryErrorPropagation() throws Exception {
+        MockTime time = new MockTime();
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(1, 0),
+                AdminClientConfig.RETRIES_CONFIG, "2",
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "100")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            OutOfMemoryError oomError = new OutOfMemoryError("Simulated OOM during response handling");
+            MetadataResponse mockResponse = mock(MetadataResponse.class);
+            doThrow(oomError).when(mockResponse).topicMetadata();
+
+            env.kafkaClient().prepareResponse(mockResponse);
+
+            // Make the listTopics call - this will internally trigger a metadata request
+            ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(10000));
+
+            TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
+        }
+    }
 }

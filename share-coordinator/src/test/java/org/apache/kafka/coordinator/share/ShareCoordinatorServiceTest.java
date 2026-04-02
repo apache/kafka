@@ -2125,7 +2125,9 @@ class ShareCoordinatorServiceTest {
             .build();
 
         // Create a delta that deletes the topic.
-        MetadataDelta delta = new MetadataDelta(initialImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(initialImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(topicId));
         MetadataImage newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 
@@ -2172,7 +2174,9 @@ class ShareCoordinatorServiceTest {
         MetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
-        MetadataDelta delta = new MetadataDelta(image);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
 
         assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
 
@@ -2245,7 +2249,9 @@ class ShareCoordinatorServiceTest {
             .build();
 
         // Create a delta that deletes the topic.
-        MetadataDelta delta = new MetadataDelta(initialImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(initialImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(topicId));
         MetadataImage newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 

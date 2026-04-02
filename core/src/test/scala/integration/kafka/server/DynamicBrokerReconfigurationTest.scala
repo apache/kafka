@@ -576,7 +576,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     def getLogOrThrow(tp: TopicPartition): UnifiedLog = {
       var (logOpt, found) = TestUtils.computeUntilTrue {
         servers.head.logManager.getLog(tp)
-      }(_.isDefined)
+      }(_.isPresent)
       assertTrue(found, "Log not found")
       logOpt.get
     }
@@ -654,7 +654,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.waitUntilTrue(() => servers.head.logManager.currentDefaultConfig == newLogConfig,
       "Config not updated in LogManager")
 
-    val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).orElseThrow(() => new IllegalStateException("Log not found"))
     TestUtils.waitUntilTrue(() => log.config.segmentSize() == 1048576, "Existing topic config using defaults not updated")
     val KafkaConfigToLogConfigName: Map[String, String] =
       ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
@@ -671,7 +671,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that overridden topic configs are not updated when broker default is updated
     val log2 = servers.head.logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
-      .getOrElse(throw new IllegalStateException("Log not found"))
+      .orElseThrow(() => new IllegalStateException("Log not found"))
     assertFalse(log2.config.delete, "Overridden clean up policy should not be updated")
     assertEquals(BrokerCompressionType.PRODUCER, log2.config.compressionType)
 
@@ -723,7 +723,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       waitForConfigOnServer(server, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
     }
     servers.foreach { server =>
-      val log = server.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+      val log = server.logManager.getLog(new TopicPartition(topic, 0)).orElseThrow(() => new IllegalStateException("Log not found"))
       // Verify default values for these two configurations are restored on all brokers
       TestUtils.waitUntilTrue(() => log.config.maxIndexSize == ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT && log.config.retentionMs == 1680000000L,
         "Existing topic config using defaults not updated")
