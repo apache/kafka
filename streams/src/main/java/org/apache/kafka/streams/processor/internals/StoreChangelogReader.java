@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -970,6 +971,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                    final Set<ChangelogMetadata> newPartitionsToRestore) {
         // separate those who do not have the current offset loaded from checkpoint
         final Set<TopicPartition> newPartitionsWithoutStartOffset = new HashSet<>();
+        final Map<TopicPartition, Long> newPartitionsWithTimestampSeek = new HashMap<>();
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -986,18 +988,22 @@ public class StoreChangelogReader implements ChangelogReader {
                 log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
-                log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
-                    "since we cannot find current offset.", partition, recordEndOffset(endOffset));
-
-                newPartitionsWithoutStartOffset.add(partition);
+                final long retentionPeriod = storeMetadata.retentionPeriod();
+                final long seekTimestamp = retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE
+                    ? time.milliseconds() - retentionPeriod : -1L;
+                if (seekTimestamp > 0) {
+                    newPartitionsWithTimestampSeek.put(partition, seekTimestamp);
+                    log.debug("Start restoring windowed changelog partition {} from timestamp {} to end offset {}.",
+                        partition, seekTimestamp, recordEndOffset(endOffset));
+                } else {
+                    log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
+                        "since we cannot find current offset.", partition, recordEndOffset(endOffset));
+                    newPartitionsWithoutStartOffset.add(partition);
+                }
             }
         }
 
-        // optimization: batch all seek-to-beginning offsets in a single request
-        //               seek is not a blocking call so there's nothing to capture
-        if (!newPartitionsWithoutStartOffset.isEmpty()) {
-            restoreConsumer.seekToBeginning(newPartitionsWithoutStartOffset);
-        }
+        seekToTimestampOrBeginning(newPartitionsWithTimestampSeek, newPartitionsWithoutStartOffset);
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -1036,6 +1042,29 @@ public class StoreChangelogReader implements ChangelogReader {
                     throw new StreamsException("Standby updater listener failed on update start");
                 }
             }
+        }
+    }
+
+    private void seekToTimestampOrBeginning(final Map<TopicPartition, Long> partitionsWithTimestampSeek,
+                                            final Set<TopicPartition> partitionsWithoutStartOffset) {
+        // optimization: seek windowed stores by timestamp to skip expired data
+        if (!partitionsWithTimestampSeek.isEmpty()) {
+            final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
+                restoreConsumer.offsetsForTimes(partitionsWithTimestampSeek);
+            offsetsByTimestamp.forEach((key, value) -> {
+                if (value != null) {
+                    restoreConsumer.seek(key, value.offset());
+                } else {
+                    // no offset found for the timestamp, fall back to seeking to the beginning
+                    partitionsWithoutStartOffset.add(key);
+                }
+            });
+        }
+
+        // optimization: batch all seek-to-beginning offsets in a single request
+        //               seek is not a blocking call so there's nothing to capture
+        if (!partitionsWithoutStartOffset.isEmpty()) {
+            restoreConsumer.seekToBeginning(partitionsWithoutStartOffset);
         }
     }
 

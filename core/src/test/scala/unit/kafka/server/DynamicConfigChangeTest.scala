@@ -71,7 +71,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
-      assertTrue(logOpt.isDefined)
+      assertTrue(logOpt.isPresent)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
     val admin = createAdminClient()
@@ -103,7 +103,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
-      assertTrue(logOpt.isDefined)
+      assertTrue(logOpt.isPresent)
       assertEquals(oldSegmentSize, logOpt.get.config.segmentSize())
     }
 

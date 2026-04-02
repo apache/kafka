@@ -2781,7 +2781,7 @@ public class UnifiedLog implements AutoCloseable {
         return LogSegments.sizeInBytes(segments);
     }
 
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         return LocalLog.parseTopicPartitionName(dir);
     }
 }

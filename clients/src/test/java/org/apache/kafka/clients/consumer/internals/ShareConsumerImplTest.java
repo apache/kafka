@@ -104,6 +104,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
@@ -824,6 +825,37 @@ public class ShareConsumerImplTest {
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
+    }
+
+    @Test
+    public void testPollDoesNotAddNewSharePollEventWhenOneIsAlreadyInFlight() {
+        ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit");
+
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(Collections.singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Keep pollForFetches from spinning by making it "wait" and advance MockTime.
+        doReturn(100L).when(applicationEventHandler).maximumTimeToWait();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            ((MockTime) time).sleep(pollTimer.remainingMs());
+            return null;
+        }).when(fetchBuffer).awaitNotEmpty(any(Timer.class));
+
+        // Always empty fetch: forces multiple loop iterations until the overall poll timeout expires.
+        doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ofMillis(450));
+        assertTrue(result.isEmpty());
+
+        // Ensure we actually exercised the "wait for fetches" path (i.e., more than a trivial single pass).
+        verify(fetchBuffer, atLeastOnce()).awaitNotEmpty(any(Timer.class));
+
+        // Only one SharePollEvent must have been added despite multiple poll loop iterations.
+        verify(applicationEventHandler, times(1)).add(any(SharePollEvent.class));
     }
 
     @ParameterizedTest

@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -53,6 +54,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -100,6 +102,23 @@ public class TimeOrderedSessionStoreUpgradeTest {
             } catch (final Exception e) {
                 // Ignore
             }
+        }
+    }
+
+    private static byte[] serializeValueWithHeaders(final byte[] value, final Headers headers) {
+        if (value == null) {
+            return null;
+        }
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
+
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             final DataOutputStream out = new DataOutputStream(baos)) {
+            ByteUtils.writeVarint(rawHeaders.length, out);
+            out.write(rawHeaders);
+            out.write(value);
+            return baos.toByteArray();
+        } catch (final IOException e) {
+            throw new RuntimeException("Failed to serialize value with headers", e);
         }
     }
 

@@ -116,13 +116,18 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     headersCf,
                     HeadersBytesStore::convertFromPlainToHeaderFormat,
                     this,
-                        open
+                    open
                 );
             } else {
                 log.info("Opening store {} in regular headers-aware mode", name);
                 cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
                 defaultCf.close();
             }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
+            }
+            throw e;
         }
     }
 
@@ -137,53 +142,55 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
 
-        // verify and close empty Default ColumnFamily
-        try (final RocksIterator defaultIter = db.newIterator(columnFamilies.get(0))) {
-            defaultIter.seekToFirst();
-            if (defaultIter.isValid()) {
-                // Close all column family handles before throwing
-                columnFamilies.get(0).close();
-                columnFamilies.get(1).close();
-                columnFamilies.get(2).close();
-                throw new ProcessorStateException(
-                    "Inconsistent store state for " + name + ". " +
-                        "Cannot have both plain (DEFAULT) and timestamped data simultaneously. " +
-                        "Headers store can upgrade from either plain or timestamped format, but not both."
-                );
+        try {
+            // verify and close empty Default ColumnFamily
+            try (final RocksIterator defaultIter = db.newIterator(columnFamilies.get(0))) {
+                defaultIter.seekToFirst();
+                if (defaultIter.isValid()) {
+                    throw new ProcessorStateException(
+                        "Inconsistent store state for " + name + ". " +
+                            "Cannot have both plain (DEFAULT) and timestamped data simultaneously. " +
+                            "Headers store can upgrade from either plain or timestamped format, but not both."
+                    );
+                }
             }
             // close default column family handle
             columnFamilies.get(0).close();
-        }
 
-        final ColumnFamilyHandle legacyTimestampedCf = columnFamilies.get(1);
-        final ColumnFamilyHandle headersCf = columnFamilies.get(2);
-        final ColumnFamilyHandle offsetsCf = columnFamilies.get(3);
+            final ColumnFamilyHandle legacyTimestampedCf = columnFamilies.get(1);
+            final ColumnFamilyHandle headersCf = columnFamilies.get(2);
+            final ColumnFamilyHandle offsetsCf = columnFamilies.get(3);
 
-
-        // Check if legacy timestamped CF has data
-        try (final RocksIterator legacyIter = db.newIterator(legacyTimestampedCf)) {
-            legacyIter.seekToFirst();
-            if (legacyIter.isValid()) {
-                log.info("Opening store {} in upgrade mode from timestamped store", name);
-                cfAccessor = new DualColumnFamilyAccessor(
-                    offsetsCf,
-                    legacyTimestampedCf,
-                    headersCf,
-                    HeadersBytesStore::convertToHeaderFormat,
-                    this,
-                        open
-                );
-            } else {
-                log.info("Opening store {} in regular headers-aware mode", name);
-                cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
-                try {
-                    db.dropColumnFamily(legacyTimestampedCf);
-                } catch (final RocksDBException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    legacyTimestampedCf.close();
+            // Check if legacy timestamped CF has data
+            try (final RocksIterator legacyIter = db.newIterator(legacyTimestampedCf)) {
+                legacyIter.seekToFirst();
+                if (legacyIter.isValid()) {
+                    log.info("Opening store {} in upgrade mode from timestamped store", name);
+                    cfAccessor = new DualColumnFamilyAccessor(
+                        offsetsCf,
+                        legacyTimestampedCf,
+                        headersCf,
+                        HeadersBytesStore::convertToHeaderFormat,
+                        this,
+                            open
+                    );
+                } else {
+                    log.info("Opening store {} in regular headers-aware mode", name);
+                    cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
+                    try {
+                        db.dropColumnFamily(legacyTimestampedCf);
+                    } catch (final RocksDBException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        legacyTimestampedCf.close();
+                    }
                 }
             }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
+            }
+            throw e;
         }
     }
 

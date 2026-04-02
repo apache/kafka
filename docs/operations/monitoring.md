@@ -3884,9 +3884,10 @@ A Kafka Streams instance contains all the producer and consumer metrics as well 
 Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started Kafka Streams client. Each client has stream threads, with their own metrics. Each stream thread has tasks, with their own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores and record caches, all with their own metrics. 
 
 Use the following configuration option to specify which metrics you want collected: 
-    
-    
-    metrics.recording.level="info"
+
+```properties
+metrics.recording.level="info"
+```
 
 ### Client Metrics
 

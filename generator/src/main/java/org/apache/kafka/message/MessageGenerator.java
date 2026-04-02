@@ -84,10 +84,10 @@ public final class MessageGenerator {
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
 
     static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
+        "org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection";
 
     static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
+        "org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollection";
 
     static final String UNSUPPORTED_VERSION_EXCEPTION_CLASS =
         "org.apache.kafka.common.errors.UnsupportedVersionException";
@@ -120,7 +120,7 @@ public final class MessageGenerator {
 
     static final String RESPONSE_SUFFIX = "Response";
 
-    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.internals.ByteUtils";
 
     static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
 

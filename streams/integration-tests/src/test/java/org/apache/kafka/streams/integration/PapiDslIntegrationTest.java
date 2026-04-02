@@ -1,0 +1,296 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.integration;
+
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
+
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@Tag("integration")
+public class PapiDslIntegrationTest {
+    final StreamsBuilder builder = new StreamsBuilder();
+
+    private void verify(final KTable<String, String> table) {
+        table.toStream()
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final TimestampedKeyValueStore<String, String> store = context().getStateStore("table-store");
+
+                    try (final KeyValueIterator<String, ValueAndTimestamp<String>> it = store.all()) {
+                        while (it.hasNext()) {
+                            final KeyValue<String, ValueAndTimestamp<String>> row = it.next();
+                            context().forward(new Record<>(row.key, row.value.value(), row.value.timestamp()));
+                        }
+                    }
+                }
+            }, "table-store")
+            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
+            final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
+
+            inputTopic.pipeInput("key1", "value1");
+
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
+        }
+    }
+
+    @Test
+    public void processorShouldAccessSourceKTableStoreAsTimestampedStore() {
+        verify(builder.table("input-topic", Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())));
+    }
+
+    @Test
+    public void processorShouldAccessFilteredKTableStoreAsTimestampedStore() {
+        verify(builder
+            .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .filter((k, v) -> true, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
+        );
+    }
+
+    @Test
+    public void processorShouldAccessMappedKTableStoreAsTimestampedStore() {
+        verify(builder
+            .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .mapValues(v -> v, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
+        );
+    }
+
+    @Test
+    public void processorShouldAccessTransformedKTableStoreAsTimestampedStore() {
+        verify(builder
+            .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .transformValues(() -> new ValueTransformerWithKey<String, String, String>() {
+                @Override
+                public void init(final ProcessorContext context) { }
+
+                @Override
+                public String transform(final String readOnlyKey, final String value) {
+                    return value;
+                }
+
+                @Override
+                public void close() { }
+            }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
+        );
+    }
+
+    @Test
+    public void processorShouldAccessReducedKTableStoreAsTimestampedStore() {
+        verify(builder
+            .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupBy((KeyValueMapper<String, String, KeyValue<String, String>>) KeyValue::pair, Grouped.with(Serdes.String(), Serdes.String()))
+            .reduce(
+                (value, aggregate) -> value,
+                (value, aggregate) -> aggregate,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessAggregatedKTableStoreAsTimestampedStore() {
+        verify(builder
+            .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupBy((KeyValueMapper<String, String, KeyValue<String, String>>) KeyValue::pair, Grouped.with(Serdes.String(), Serdes.String()))
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                (key, value, aggregate) -> aggregate,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    private void verifyJoin(final KTable<String, String> table) {
+        table.toStream()
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final TimestampedKeyValueStore<String, String> store = context().getStateStore("table-store");
+
+                    try (final KeyValueIterator<String, ValueAndTimestamp<String>> it = store.all()) {
+                        while (it.hasNext()) {
+                            final KeyValue<String, ValueAndTimestamp<String>> row = it.next();
+                            context().forward(new Record<>(row.key, row.value.value(), row.value.timestamp()));
+                        }
+                    }
+                }
+            }, "table-store")
+            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
+            final TestInputTopic<String, String> leftInputTopic = testDriver.createInputTopic("left-input-topic", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> rightInputTopic = testDriver.createInputTopic("right-input-topic", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
+
+            leftInputTopic.pipeInput("key1", "left");
+            rightInputTopic.pipeInput("key1", "right");
+
+            assertEquals(KeyValue.pair("key1", "left-right"), outputTopic.readKeyValue());
+        }
+    }
+
+    @Test
+    public void processorShouldAccessJoinedKTableStoreAsTimestampedStore() {
+        verifyJoin(builder
+            .table("left-input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .join(
+                builder.table("right-input-topic", Consumed.with(Serdes.String(), Serdes.String())),
+                (left, right) -> left + "-" + right,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessFKJoinedKTableStoreAsTimestampedStore() {
+        verifyJoin(builder
+            .table("left-input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .join(
+                builder.table("right-input-topic", Consumed.with(Serdes.String(), Serdes.String())),
+                (key, value) -> key,
+                (left, right) -> left + "-" + right,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamReducedKTableStoreAsTimestampedStore() {
+        verify(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .reduce(
+                (value, aggregate) -> value,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamAggregatedKTableStoreAsTimestampedStore() {
+        verify(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKTableStoreAsHeadersStoreViaConfig() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.table("input-topic", Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
+            .toStream()
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final TimestampedKeyValueStoreWithHeaders<String, String> store = context().getStateStore("table-store");
+
+                    try (final KeyValueIterator<String, ValueTimestampHeaders<String>> it = store.all()) {
+                        while (it.hasNext()) {
+                            final KeyValue<String, ValueTimestampHeaders<String>> row = it.next();
+                            context().forward(new Record<>(row.key, row.value.value(), row.value.timestamp()));
+                        }
+                    }
+                }
+            }, "table-store")
+            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        final Properties props = new Properties();
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
+
+            inputTopic.pipeInput("key1", "value1");
+
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
+        }
+    }
+
+    @Test
+    public void processorShouldAccessKTableStoreAsHeadersStoreViaSupplier() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.as(Stores.persistentTimestampedKeyValueStoreWithHeaders("table-store"));
+        builder.table("input-topic", materialized.withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
+            .toStream()
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final TimestampedKeyValueStoreWithHeaders<String, String> store = context().getStateStore("table-store");
+
+                    try (final KeyValueIterator<String, ValueTimestampHeaders<String>> it = store.all()) {
+                        while (it.hasNext()) {
+                            final KeyValue<String, ValueTimestampHeaders<String>> row = it.next();
+                            context().forward(new Record<>(row.key, row.value.value(), row.value.timestamp()));
+                        }
+                    }
+                }
+            }, "table-store")
+            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
+            final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
+
+            inputTopic.pipeInput("key1", "value1");
+
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
+        }
+    }
+}
