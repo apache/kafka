@@ -929,7 +929,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 long currentTimeMs = time.milliseconds();
                 long totalLogSize = UnifiedLog.sizeInBytes(segments);
                 long cumulativeSize = 0;
-
                 for (int idx = 1; idx < segments.size(); idx++) {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
