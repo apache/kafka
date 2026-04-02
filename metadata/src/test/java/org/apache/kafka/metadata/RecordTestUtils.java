@@ -262,7 +262,7 @@ public class RecordTestUtils {
                         setHost("localhost").
                         setPort(9000 + id).
                         setSecurityProtocol(SecurityProtocol.SSL.id)
-                ).iterator()
+                )
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
                 List.of(
@@ -270,7 +270,7 @@ public class RecordTestUtils {
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
-                ).iterator()
+                )
             ));
     }
 }

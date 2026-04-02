@@ -1123,8 +1123,7 @@ public class QuorumControllerTest {
                                     setBrokerIds(List.of(0, 1, 2)),
                                     new CreatableReplicaAssignment().
                                         setPartitionIndex(1).
-                                        setBrokerIds(List.of(1, 2, 0))).
-                                            iterator()))))),
+                                        setBrokerIds(List.of(1, 2, 0)))))))),
                 Set.of("foo")).get();
             fooId = fooData.topics().find("foo").topicId();
             active.allocateProducerIds(ANONYMOUS_CONTEXT,
@@ -1379,7 +1378,7 @@ public class QuorumControllerTest {
                 setTopics(new CreatableTopicCollection(Set.of(
                     new CreatableTopic().setName("foo").
                         setReplicationFactor((short) 3).
-                        setNumPartitions(1)).iterator())),
+                        setNumPartitions(1)))),
                 Set.of("foo")).get();
             ConfigResourceExistenceChecker checker =
                 active.new ConfigResourceExistenceChecker();

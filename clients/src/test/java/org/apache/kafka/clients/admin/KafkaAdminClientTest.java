@@ -622,7 +622,7 @@ public class KafkaAdminClientTest {
     public static CreateTopicsResponse prepareCreateTopicsResponse(int throttleTimeMs, CreatableTopicResult... topics) {
         CreateTopicsResponseData data = new CreateTopicsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setTopics(new CreatableTopicResultCollection(Arrays.stream(topics).iterator()));
+            .setTopics(new CreatableTopicResultCollection(Arrays.asList(topics)));
         return new CreateTopicsResponse(data);
     }
 
@@ -635,7 +635,7 @@ public class KafkaAdminClientTest {
     public static DeleteTopicsResponse prepareDeleteTopicsResponse(int throttleTimeMs, DeletableTopicResult... topics) {
         DeleteTopicsResponseData data = new DeleteTopicsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setResponses(new DeletableTopicResultCollection(Arrays.stream(topics).iterator()));
+            .setResponses(new DeletableTopicResultCollection(Arrays.asList(topics)));
         return new DeleteTopicsResponse(data);
     }
 
@@ -11479,7 +11479,7 @@ public class KafkaAdminClientTest {
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0),
                         new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()).setErrorMessage("Topic authorization failed."))),
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
-                ).iterator())
+                ))
             );
 
             TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
