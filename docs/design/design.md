@@ -436,13 +436,15 @@ Log compaction is handled by the log cleaner, a pool of background threads that 
 
 ### Configuring The Log Cleaner
 
-The log cleaner is enabled by default. This will start the pool of cleaner threads. To enable log cleaning on a particular topic, add the log-specific property 
+The log cleaner is enabled by default. This will start the pool of cleaner threads. To enable log cleaning on a particular topic, add the topic-level property
 
 ```properties
-log.cleanup.policy=compact
+cleanup.policy=compact
 ```
 
-The `log.cleanup.policy` property is a broker configuration setting defined in the broker's `server.properties` file; it affects all of the topics in the cluster that do not have a configuration override in place as documented [here](/documentation.html#brokerconfigs). The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag. 
+This can be set when creating a topic or altered later using the `kafka-configs.sh` tool.
+
+The corresponding broker-level configuration is [`log.cleanup.policy`](/{version}/configuration/broker-configs#brokerconfigs_log.cleanup.policy), defined in the broker's `server.properties` file. It sets the default cleanup policy for all topics in the cluster that do not have a topic-level override. The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag. 
 
 ```properties
 log.cleaner.min.compaction.lag.ms
@@ -456,7 +458,7 @@ log.cleaner.max.compaction.lag.ms
 
 This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted. Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
 
-Further cleaner configurations are described [here](/documentation.html#brokerconfigs). 
+Further cleaner configurations are described in the [broker configuration](/{version}/configuration/broker-configs) documentation. 
 
 ## Quotas
 
