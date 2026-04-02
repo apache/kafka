@@ -50,6 +50,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -59,6 +60,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -521,17 +527,26 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
             .withLoggingDisabled()
-            .withCachingDisabled()
+            .withCachingEnabled()
             .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
+        final InternalMockProcessorContext<String, String> context = spy(new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props)
-        );
+        ));
+
+        // Mock the cache hit
+        final ThreadCache cache = mock(ThreadCache.class);
+        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
+        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
+        when(entry.value()).thenReturn(entryValue);
+        when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
+        doReturn(cache).when(context).cache();
+
         store.init(context, store);
 
         try {
@@ -570,17 +585,26 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
             .withLoggingDisabled()
-            .withCachingDisabled()
+            .withCachingEnabled()
             .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
+        final InternalMockProcessorContext<String, String> context = spy(new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props)
-        );
+        ));
+
+        // Mock the cache hit
+        final ThreadCache cache = mock(ThreadCache.class);
+        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
+        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
+        lenient().when(entry.value()).thenReturn(entryValue);
+        lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
+        lenient().doReturn(cache).when(context).cache();
+
         store.init(context, store);
 
         try {
