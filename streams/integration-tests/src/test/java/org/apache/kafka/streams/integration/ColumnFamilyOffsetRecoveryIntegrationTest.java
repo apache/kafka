@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,7 +34,9 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.internals.RocksDBStoreCorruptionUtils;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -71,9 +73,9 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
     private static final String STORE_NAME = "counts-store";
     private static final String STORE_NAME_2 = "counts-store-2";
     private static final long COMMIT_INTERVAL_MS = 100L;
+    private static final Duration STREAMS_CLOSE_TIMEOUT = Duration.ofSeconds(5);
 
-    private final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final MockTime mockTime = cluster.time;
+    private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private int consumerGroupCounter = 0;
 
@@ -81,19 +83,29 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
     private KafkaStreams streams;
     private File stateDir;
 
+    @BeforeAll
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+    }
+
+    @AfterAll
+    public static void stopCluster() {
+        CLUSTER.stop();
+    }
+
     @BeforeEach
     public void setUp(final TestInfo testInfo) throws InterruptedException {
-        cluster.start();
-        cluster.createTopic(INPUT_TOPIC, NUM_PARTITIONS, 1);
-        cluster.createTopic(OUTPUT_TOPIC, NUM_PARTITIONS, 1);
-        cluster.createTopic(OUTPUT_TOPIC_2, NUM_PARTITIONS, 1);
+        CLUSTER.deleteAllTopics();
+        CLUSTER.createTopic(INPUT_TOPIC, NUM_PARTITIONS, 1);
+        CLUSTER.createTopic(OUTPUT_TOPIC, NUM_PARTITIONS, 1);
+        CLUSTER.createTopic(OUTPUT_TOPIC_2, NUM_PARTITIONS, 1);
 
         stateDir = TestUtils.tempDirectory();
         final String safeTestName = safeUniqueTestName(testInfo);
 
         streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
-        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
@@ -105,10 +117,9 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
     @AfterEach
     public void tearDown() {
         if (streams != null) {
-            streams.close(Duration.ofSeconds(30));
+            streams.close(STREAMS_CLOSE_TIMEOUT);
             streams.cleanUp();
         }
-        cluster.stop();
     }
 
     // -----------------------------------------------------------
@@ -174,15 +185,6 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         }
     }
 
-    /**
-     * Locates the RocksDB store directory under the state directory.
-     * The path is: {stateDir}/{applicationId}/{taskId}/rocksdb/{storeName}
-     */
-    private File findStoreDir(final String storeName) {
-        final List<File> dirs = findAllStoreDirs(storeName);
-        return dirs.get(0);
-    }
-
     private List<File> findAllStoreDirs(final String storeName) {
         final String appId = streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
         final File appDir = new File(stateDir, appId);
@@ -234,7 +236,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
 
     private Properties producerConfig() {
         final Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         return props;
@@ -242,7 +244,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
 
     private Properties readCommittedConsumerConfig() {
         final Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "verify-consumer-" + consumerGroupCounter++);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
@@ -256,7 +258,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
             INPUT_TOPIC,
             records,
             producerConfig(),
-            mockTime
+            CLUSTER.time
         );
     }
 
@@ -292,7 +294,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then corrupt store status
-        streams.close(Duration.ofSeconds(30));
+        streams.close(STREAMS_CLOSE_TIMEOUT);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -341,7 +343,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then corrupt store status to simulate unclean shutdown
-        streams.close(Duration.ofSeconds(30));
+        streams.close(STREAMS_CLOSE_TIMEOUT);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -385,7 +387,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then delete offset entries (keep status=closed)
-        streams.close(Duration.ofSeconds(30));
+        streams.close(STREAMS_CLOSE_TIMEOUT);
         streams = null;
 
         deleteAllOffsets(STORE_NAME);
@@ -429,7 +431,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then corrupt BOTH status and offsets
-        streams.close(Duration.ofSeconds(30));
+        streams.close(STREAMS_CLOSE_TIMEOUT);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -473,7 +475,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(batch1.size());
 
         // Phase 2: clean shutdown, corrupt store status
-        streams.close(Duration.ofSeconds(30));
+        streams.close(STREAMS_CLOSE_TIMEOUT);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -540,7 +542,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, corrupt ONLY store 1 (leave store 2 clean)
-        streams.close(Duration.ofSeconds(30));
+        streams.close(STREAMS_CLOSE_TIMEOUT);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -611,7 +613,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 3: shut down instance 1, corrupt its store status
-        streams1.close(Duration.ofSeconds(30));
+        streams1.close(STREAMS_CLOSE_TIMEOUT);
 
         // Corrupt all store dirs under instance 1's state directory
         final String appId = streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -634,7 +636,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForRunning(streams1Restart);
 
         // Phase 5: shut down instance 2, verify instance 1 takes over
-        streams2.close(Duration.ofSeconds(30));
+        streams2.close(STREAMS_CLOSE_TIMEOUT);
 
         // Produce more records and verify instance 1 processes them as active
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -703,7 +705,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         // This simulates the LittleHorse scenario: complete state deletion followed by
         // changelog restoration. The standby tasks on this instance will have stores
         // that were never initialized with offsets.
-        streams1.close(Duration.ofSeconds(30));
+        streams1.close(STREAMS_CLOSE_TIMEOUT);
         streams1.cleanUp();
 
         final StreamsBuilder builder1Restart = buildCountTopology();
@@ -714,7 +716,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         // Phase 3: trigger a rebalance by shutting down instance 2 and restarting it.
         // Before the fix, the standby tasks on instance 1 would throw
         // TaskCorruptedException during the rebalance when re-initializing store offsets.
-        streams2.close(Duration.ofSeconds(30));
+        streams2.close(STREAMS_CLOSE_TIMEOUT);
 
         final StreamsBuilder builder2Restart = buildCountTopology();
         final KafkaStreams streams2Restart = new KafkaStreams(builder2Restart.build(), config2);
@@ -733,7 +735,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size() + additionalRecords.size());
 
         // Clean up
-        streams2Restart.close(Duration.ofSeconds(30));
+        streams2Restart.close(STREAMS_CLOSE_TIMEOUT);
         streams = streams1Restart;
     }
 }
