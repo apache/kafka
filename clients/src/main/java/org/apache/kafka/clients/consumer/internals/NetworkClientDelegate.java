@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -157,7 +158,12 @@ public class NetworkClientDelegate implements AutoCloseable {
      * @param onClose       True when the network thread is closing.
      */
     public void poll(final long timeoutMs, final long currentTimeMs, boolean onClose) {
-        trySend(currentTimeMs);
+        try {
+            trySend(currentTimeMs);
+        } catch (BootstrapResolutionException e) {
+            // Bootstrap DNS resolution timeout - propagate to app thread
+            backgroundEventHandler.add(new ErrorEvent(e));
+        }
 
         long pollTimeoutMs = timeoutMs;
         if (!unsentRequests.isEmpty()) {

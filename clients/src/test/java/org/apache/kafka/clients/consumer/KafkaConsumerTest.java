@@ -42,6 +42,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -4132,6 +4133,45 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         assertNotNull(cause);
         assertInstanceOf(LoginException.class, cause);
         assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+    }
+
+    @Test
+    public void testAsyncConsumerBootstrapResolutionExceptionPropagatedToPoll() throws InterruptedException {
+        // Use an invalid hostname that will fail DNS resolution
+        String invalidHost = "invalid-host-that-does-not-exist-12345.example.com:9092";
+
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            // Set a short bootstrap timeout so the test doesn't take too long
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer",
+            ConsumerConfig.GROUP_ID_CONFIG, "test-group"
+        );
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(configs)) {
+            // Subscribe to a topic to trigger metadata fetch
+            consumer.subscribe(Set.of("test-topic"));
+
+            // Poll continuously until we get the BootstrapResolutionException
+            // The exception should be thrown after bootstrap.resolve.timeout.ms expires
+            BootstrapResolutionException exception =
+                assertThrows(BootstrapResolutionException.class, () -> {
+                    long startTime = System.currentTimeMillis();
+                    long maxWaitTime = 15000; // 15 seconds max to prevent test hanging
+
+                    while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                        consumer.poll(Duration.ofMillis(100));
+                    }
+                    fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+                });
+
+            // Verify the exception message contains information about DNS resolution failure
+            assertTrue(exception.getMessage().contains("Failed to resolve bootstrap servers") ||
+                       exception.getMessage().contains("DNS resolution"),
+                       "Exception message should mention DNS resolution failure: " + exception.getMessage());
+        }
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {
