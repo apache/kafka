@@ -1646,12 +1646,16 @@ public class GroupMetadataManagerTest {
         ));
 
         // Remove foo topic from metadata image.
-        MetadataDelta delta = new MetadataDelta(metadataImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(metadataImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
         MetadataImage newMetadataImage = delta.apply(MetadataProvenance.EMPTY);
 
         context.groupMetadataManager.onMetadataUpdate(
-            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newMetadataImage)), new KRaftCoordinatorMetadataImage(newMetadataImage)
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta.Builder()
+                .setImage(newMetadataImage)
+                .build()), new KRaftCoordinatorMetadataImage(newMetadataImage)
         );
         // If a topic is removed, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -4161,7 +4165,9 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new MockPartitionAssignor("range")))
             .build();
 
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
         context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
@@ -4218,7 +4224,9 @@ public class GroupMetadataManagerTest {
         Uuid topicE = Uuid.randomUuid();
 
         // Create a first base image with topic a, b, c and d.
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord().setTopicId(topicA).setName("a"));
         delta.replay(new PartitionRecord().setTopicId(topicA).setPartitionId(0));
         delta.replay(new TopicRecord().setTopicId(topicB).setName("b"));
@@ -4230,7 +4238,9 @@ public class GroupMetadataManagerTest {
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
         // Create a delta which updates topic B, deletes topic D and creates topic E.
-        delta = new MetadataDelta(image);
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(2));
         delta.replay(new RemoveTopicRecord().setTopicId(topicD));
         delta.replay(new TopicRecord().setTopicId(topicE).setName("e"));
@@ -20374,7 +20384,9 @@ public class GroupMetadataManagerTest {
         Uuid topicE = Uuid.randomUuid();
 
         // Create a first base image with topic a, b, c and d.
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord().setTopicId(topicA).setName("a"));
         delta.replay(new PartitionRecord().setTopicId(topicA).setPartitionId(0));
         delta.replay(new TopicRecord().setTopicId(topicB).setName("b"));
@@ -20386,7 +20398,9 @@ public class GroupMetadataManagerTest {
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
         // Create a delta which updates topic B, deletes topic D and creates topic E.
-        delta = new MetadataDelta(image);
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
         delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(2));
         delta.replay(new RemoveTopicRecord().setTopicId(topicD));
         delta.replay(new TopicRecord().setTopicId(topicE).setName("e"));
@@ -23424,7 +23438,9 @@ public class GroupMetadataManagerTest {
             .build(2L);
 
         context.groupMetadataManager.onMetadataUpdate(
-            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newImage)), new KRaftCoordinatorMetadataImage(newImage)
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta.Builder()
+                .setImage(newImage)
+                .build()), new KRaftCoordinatorMetadataImage(newImage)
         );
 
         // A member heartbeats.

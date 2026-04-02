@@ -92,7 +92,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store.store(),
                 context,
-                new TimestampedCacheFlushListenerWithHeaders<>(context),
+                store.isHeadersStore() ? new TimestampedCacheFlushListenerWithHeaders<>(context) : new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
         }
 

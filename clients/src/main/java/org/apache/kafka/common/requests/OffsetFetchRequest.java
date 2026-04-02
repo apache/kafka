@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -228,7 +227,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 );
             }
 
-            return Collections.singletonList(group);
+            return List.of(group);
         }
     }
 

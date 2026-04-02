@@ -121,6 +121,7 @@ public final class RaftClientTestContext {
     final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
+    final int fetchMaxBytes;
 
     private int electionTimeoutMs;
     private int requestTimeoutMs;
@@ -185,6 +186,8 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
+        private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
+        private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
         public Builder(int localId, Set<Integer> staticVoters) {
             this(OptionalInt.of(localId), staticVoters);
@@ -392,6 +395,16 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withFetchSnapshotMaxBytes(int fetchSnapshotMaxSizeBytes) {
+            this.fetchSnapshotMaxBytes = fetchSnapshotMaxSizeBytes;
+            return this;
+        }
+
+        Builder withFetchMaxBytes(int fetchMaxBytes) {
+            this.fetchMaxBytes = fetchMaxBytes;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -428,6 +441,8 @@ public final class RaftClientTestContext {
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
             configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, autoJoin);
+            configMap.put(QuorumConfig.QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG, fetchSnapshotMaxBytes);
+            configMap.put(QuorumConfig.QUORUM_FETCH_MAX_BYTES_CONFIG, fetchMaxBytes);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
@@ -494,7 +509,8 @@ public final class RaftClientTestContext {
                 canBecomeVoter,
                 metrics,
                 externalKRaftMetrics,
-                listener
+                listener,
+                fetchMaxBytes
             );
 
             context.electionTimeoutMs = electionTimeoutMs;
@@ -523,7 +539,8 @@ public final class RaftClientTestContext {
         boolean canBecomeVoter,
         Metrics metrics,
         ExternalKRaftMetrics externalKRaftMetrics,
-        MockListener listener
+        MockListener listener,
+        int fetchMaxBytes
     ) {
         this.clusterId = clusterId;
         this.localId = localId;
@@ -542,6 +559,7 @@ public final class RaftClientTestContext {
         this.metrics = metrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
+        this.fetchMaxBytes = fetchMaxBytes;
     }
 
     int electionTimeoutMs() {
@@ -1336,7 +1354,7 @@ public final class RaftClientTestContext {
         assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
         assertEquals(replicaKey.directoryId().get(), addRaftVoterRequestData.voterDirectoryId());
         assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
-        assertEquals(false, addRaftVoterRequestData.ackWhenCommitted());
+        assertFalse(addRaftVoterRequestData.ackWhenCommitted());
 
         return request;
     }
@@ -1798,7 +1816,6 @@ public final class RaftClientTestContext {
             message.data(),
             "unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
-        assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
 
         assertEquals(1, request.topics().size());
@@ -1893,6 +1910,7 @@ public final class RaftClientTestContext {
         return request
             .setMaxWaitMs(maxWaitTimeMs)
             .setClusterId(clusterId)
+            .setMaxBytes(fetchMaxBytes)
             .setReplicaState(
                 new FetchRequestData.ReplicaState().setReplicaId(replicaKey.id())
             );
@@ -2319,7 +2337,7 @@ public final class RaftClientTestContext {
         }
 
         void readBatch(BatchReader<String> reader) {
-            try {
+            try (reader) {
                 while (reader.hasNext()) {
                     long nextOffset = lastCommitOffset().isPresent() ?
                         lastCommitOffset().getAsLong() + 1 : 0L;
@@ -2331,8 +2349,6 @@ public final class RaftClientTestContext {
                             ". We expected an offset at least as large as " + nextOffset);
                     commits.add(batch);
                 }
-            } finally {
-                reader.close();
             }
         }
 
@@ -2406,10 +2422,6 @@ public final class RaftClientTestContext {
         KIP_1166_PROTOCOL,
         // autoJoin support
         KIP_1186_PROTOCOL;
-
-        boolean isKRaftSupported() {
-            return isAtLeast(KIP_595_PROTOCOL);
-        }
 
         boolean isReconfigSupported() {
             return isAtLeast(KIP_853_PROTOCOL);

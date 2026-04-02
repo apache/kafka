@@ -648,11 +648,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   private def describeProducersRequest: DescribeProducersRequest = new DescribeProducersRequest.Builder(
     new DescribeProducersRequestData()
-      .setTopics(java.util.List.of(
+      .setTopics(new DescribeProducersRequestData.TopicRequestCollection(java.util.List.of(
         new DescribeProducersRequestData.TopicRequest()
           .setName(tp.topic)
           .setPartitionIndexes(java.util.List.of(Int.box(tp.partition)))
-      ))
+      ).iterator()))
   ).build()
 
   private def describeTransactionsRequest: DescribeTransactionsRequest = new DescribeTransactionsRequest.Builder(

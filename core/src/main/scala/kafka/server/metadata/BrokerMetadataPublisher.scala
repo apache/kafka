@@ -19,10 +19,10 @@ package kafka.server.metadata
 
 import java.util.OptionalInt
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.LogManager
 import kafka.server.share.SharePartitionManager
 import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Logging
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
@@ -36,10 +36,9 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.storage.internals.log.{LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{UnifiedLog, LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
-import scala.jdk.CollectionConverters._
 
 
 object BrokerMetadataPublisher extends Logging {
@@ -68,7 +67,7 @@ object BrokerMetadataPublisher extends Logging {
 class BrokerMetadataPublisher(
   config: KafkaConfig,
   metadataCache: KRaftMetadataCache,
-  logManager: LogManager,
+  logManager: JLogManager,
   replicaManager: ReplicaManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
@@ -312,8 +311,9 @@ class BrokerMetadataPublisher(
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
-        metadataCache.getAllTopics().asScala,
-        isStray = log => {
+        metadataCache.getAllTopics,
+        (log: UnifiedLog) => {
+
           if (log.topicId().isEmpty) {
             // Missing topic ID could result from storage failure or unclean shutdown after topic creation but before flushing
             // data to the `partition.metadata` file. And before appending data to the log, the `partition.metadata` is always
@@ -334,7 +334,9 @@ class BrokerMetadataPublisher(
       // updated in the controller but before the future replica could be
       // promoted.
       // See KAFKA-16082 for details.
-      logManager.recoverAbandonedFutureLogs(brokerId, newImage.topics())
+      logManager.recoverAbandonedFutureLogs(brokerId, (topicId: Uuid, partition: Int, brokerId: Int) =>
+        newImage.topics().getPartition(topicId, partition).directory(brokerId)
+      )
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if

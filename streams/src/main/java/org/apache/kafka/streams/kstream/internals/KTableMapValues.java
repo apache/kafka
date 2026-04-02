@@ -139,7 +139,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store.store(),
                     context,
-                    new TimestampedCacheFlushListenerWithHeaders<>(context),
+                    store.isHeadersStore() ? new TimestampedCacheFlushListenerWithHeaders<>(context) : new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }

@@ -14,28 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
+package org.apache.kafka.server.util;
 
-import java.util.Objects;
+import org.apache.kafka.common.KafkaException;
 
-public class StreamsOnTasksAssignedCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
-
-    private final StreamsRebalanceData.Assignment assignment;
-
-    public StreamsOnTasksAssignedCallbackNeededEvent(StreamsRebalanceData.Assignment assignment) {
-        super(Type.STREAMS_ON_TASKS_ASSIGNED_CALLBACK_NEEDED, Long.MAX_VALUE);
-        this.assignment = Objects.requireNonNull(assignment);
+/**
+ * An exception thrown to indicate that the command has failed, but we don't want to
+ * print a stack trace.
+ */
+public class TerseFailure extends KafkaException {
+    public TerseFailure(String message) {
+        super(message);
     }
 
-    public StreamsRebalanceData.Assignment assignment() {
-        return assignment;
-    }
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() +
-            ", assignment=" + assignment;
+    /**
+     * @param message     The message to print out before exiting.  A stack trace will not
+     *                    be printed.
+     * @param cause       The exception's cause
+     */
+    public TerseFailure(String message, Throwable cause) {
+        super(message, cause);
     }
 }

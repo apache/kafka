@@ -3121,7 +3121,9 @@ public class GroupCoordinatorServiceTest {
         var image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
-        var delta = new MetadataDelta(image);
+        var delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
 
         assertThrows(CoordinatorNotAvailableException.class,
             () -> service.onMetadataUpdate(delta, image));
@@ -3142,7 +3144,9 @@ public class GroupCoordinatorServiceTest {
             .build();
 
         // Create a delta that deletes the topic.
-        var delta = new MetadataDelta(initialImage);
+        var delta = new MetadataDelta.Builder()
+            .setImage(initialImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(topicId));
         var newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 
@@ -3203,7 +3207,9 @@ public class GroupCoordinatorServiceTest {
         var image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
-        var delta = new MetadataDelta(image);
+        var delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
 
         assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
 
@@ -3233,7 +3239,9 @@ public class GroupCoordinatorServiceTest {
             .build();
 
         // Create a delta that deletes the topic.
-        var delta = new MetadataDelta(initialImage);
+        var delta = new MetadataDelta.Builder()
+            .setImage(initialImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(topicId));
         var newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 
@@ -4057,7 +4065,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         int partition = 1;
 
@@ -4183,7 +4193,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         int partition = 1;
 
@@ -4254,7 +4266,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         int partition = 1;
 
@@ -4290,7 +4304,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         int partition = 1;
 
@@ -4327,7 +4343,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         int partition = 1;
 
@@ -5469,7 +5487,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5634,7 +5654,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 3)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5845,7 +5867,9 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 1)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        service.onMetadataUpdate(new MetadataDelta.Builder()
+            .setImage(image)
+            .build(), image);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5914,7 +5938,9 @@ public class GroupCoordinatorServiceTest {
 
             if (serviceStartup) {
                 service.startup(() -> 1);
-                service.onMetadataUpdate(new MetadataDelta(metadataImage), metadataImage);
+                service.onMetadataUpdate(new MetadataDelta.Builder()
+                    .setImage(metadataImage)
+                    .build(), metadataImage);
             }
 
             return service;

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
@@ -97,7 +98,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, false, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, false);
     }
 
     /**
@@ -116,7 +117,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, true, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, true);
     }
 
     /**
@@ -142,7 +143,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStoreWithHeaders(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, true, true);
+        return new RocksDBKeyValueHeadersBytesStoreSupplier(name);
     }
 
     /**
@@ -299,7 +300,7 @@ public final class Stores {
                                                                  final Duration retentionPeriod,
                                                                  final Duration windowSize,
                                                                  final boolean retainDuplicates) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, false);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.DEFAULT_WINDOW_STORE);
     }
 
     /**
@@ -331,7 +332,7 @@ public final class Stores {
                                                                             final Duration retentionPeriod,
                                                                             final Duration windowSize,
                                                                             final boolean retainDuplicates) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE);
     }
 
     /**
@@ -348,28 +349,14 @@ public final class Stores {
                                                                                        final Duration retentionPeriod,
                                                                                        final Duration windowSize,
                                                                                        final boolean retainDuplicates) throws IllegalArgumentException {
-        Objects.requireNonNull(name, "name cannot be null");
-        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
-        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
-
-        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
-
-        return new RocksDbWindowBytesStoreSupplier(
-            name,
-            retentionMs,
-            defaultSegmentInterval,
-            windowSizeMs,
-            retainDuplicates,
-            RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
     }
 
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                   final Duration retentionPeriod,
                                                                   final Duration windowSize,
                                                                   final boolean retainDuplicates,
-                                                                  final boolean timestampedStore) {
+                                                                  final RocksDbWindowBytesStoreSupplier.WindowStoreTypes storeType) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -378,26 +365,13 @@ public final class Stores {
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
-        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval, timestampedStore);
-    }
-
-    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                  final long retentionPeriod,
-                                                                  final long windowSize,
-                                                                  final boolean retainDuplicates,
-                                                                  final long segmentInterval,
-                                                                  final boolean timestampedStore) {
-        Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0L) {
+        if (retentionMs < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        if (windowSize < 0L) {
+        if (windowSizeMs < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
-        if (segmentInterval < 1L) {
-            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
-        }
-        if (windowSize > retentionPeriod) {
+        if (windowSizeMs > retentionMs) {
             throw new IllegalArgumentException("The retention period of the window store "
                 + name + " must be no smaller than its window size. Got size=["
                 + windowSize + "], retention=[" + retentionPeriod + "]");
@@ -405,11 +379,12 @@ public final class Stores {
 
         return new RocksDbWindowBytesStoreSupplier(
             name,
-            retentionPeriod,
-            segmentInterval,
-            windowSize,
+            retentionMs,
+            defaultSegmentInterval,
+            windowSizeMs,
             retainDuplicates,
-            timestampedStore);
+            storeType
+        );
     }
 
     /**
