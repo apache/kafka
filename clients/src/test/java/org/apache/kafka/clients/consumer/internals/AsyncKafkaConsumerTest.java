@@ -573,7 +573,7 @@ public class AsyncKafkaConsumerTest {
         AtomicReference<AsyncPollEvent> capturedEvent = new AtomicReference<>();
         doAnswer(invocation -> {
             AsyncPollEvent event = invocation.getArgument(0);
-            capturedEvent.set(event);
+            assertTrue(capturedEvent.compareAndSet(null, event));
             // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));

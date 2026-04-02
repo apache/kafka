@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This class represents the non-blocking event that executes logic functionally equivalent to the following:
@@ -47,7 +48,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     private volatile KafkaException error;
     private volatile boolean isComplete;
     private volatile boolean isValidatePositionsComplete;
-    private volatile boolean isReconciliationCheckComplete;
+    private final CompletableFuture<Void> reconciliationCheckFuture = new CompletableFuture<>();
 
     /**
      * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
@@ -87,13 +88,21 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     }
 
     /**
-     *
+     * @return the future that completes when the background thread has checked any pending reconciliation
+     * for this poll event. Once complete, revocations have been handled (commit triggered and partitions
+     * marked as pending revocation), so the app thread can safely proceed to fetch/collect records.
+     */
+    public CompletableFuture<Void> reconciliationCheckFuture() {
+        return reconciliationCheckFuture;
+    }
+
+    /**
      * @return true if the background already checked any pending reconciliation when processing this poll event.
-     * If it completed the check, we know that revocations where handled (commit triggered and partitions marked as pending revocation),
-     * so the app thread can safely process to fetch/collect records.
+     * If it completed the check, we know that revocations were handled (commit triggered and partitions marked as pending revocation),
+     * so the app thread can safely proceed to fetch/collect records.
      */
     public boolean isReconciliationCheckComplete() {
-        return isReconciliationCheckComplete;
+        return reconciliationCheckFuture.isDone();
     }
 
     /**
@@ -102,7 +111,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
      * (triggered commits, and marked partitions as pending revocation if needed)
      */
     public void markReconciliationCheckComplete() {
-        this.isReconciliationCheckComplete = true;
+        reconciliationCheckFuture.complete(null);
     }
 
     public boolean isComplete() {
@@ -110,10 +119,14 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     }
 
     public void completeSuccessfully() {
+        // Complete reconciliation future as safety net in case it wasn't already marked complete
+        reconciliationCheckFuture.complete(null);
         isComplete = true;
     }
 
     public void completeExceptionally(KafkaException e) {
+        // Complete reconciliation future exceptionally so callers don't block on a failed event
+        reconciliationCheckFuture.completeExceptionally(e);
         error = e;
         isComplete = true;
     }
@@ -131,6 +144,6 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
             ", error=" + error +
             ", isComplete=" + isComplete +
             ", isValidatePositionsComplete=" + isValidatePositionsComplete +
-            ", isReconciliationCheckComplete=" + isReconciliationCheckComplete;
+            ", isReconciliationCheckComplete=" + isReconciliationCheckComplete();
     }
 }
