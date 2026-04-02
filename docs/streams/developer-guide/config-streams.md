@@ -610,7 +610,7 @@ Low
 </td>  
 <td>
 
-Controls whether DSL operators materialize headers-aware state stores. The value `default` keeps existing timestamped or plain store variants per operator. The value `headers` selects headers-aware stores (where supported) so that Kafka record headers are stored and propagated with state updates alongside values and timestamps. Case-insensitive.
+Controls whether DSL operators materialize headers-aware state stores. The value `default` keeps existing timestamped or plain store variants per operator and does not persist record headers in state, so storage and changelog footprint stay in line with releases before KIP-1271. The value `headers` selects headers-aware stores (where supported) so that Kafka record headers are stored and propagated with state updates alongside values and timestamps; changelog payloads and local RocksDB state are larger than under `default`, and workloads may see extra I/O or CPU when headers are large or frequent. Case-insensitive.
 </td>  
 <td>
 
