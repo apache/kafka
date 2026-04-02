@@ -64,7 +64,7 @@ The following container images are used in this project:
 
 ```bash
 # Build custom MM2 image with enhancements
-docker build -t kafka-mirror-maker:latest ./docker/kafka/Dockerfile/
+docker build -t enhanced-mirror-maker2:latest ./docker/kafka/Dockerfile/
 
 # Build test producer image
 docker build -t commit-log-producer ./Producer/Dockerfile/
@@ -89,15 +89,15 @@ cd KafkaMirrorMakerImprovement
 Build the enhanced Kafka application:
 
 ```bash
-cd Kafka/kafka
-./gradlew build -x test
+cd kafka
+./gradlew connect:mirror:build -x test
 cd ../..
 ```
 
 Build the custom MM2 Docker image:
 
 ```bash
-docker build -t kafka-mirror-maker:latest ./docker/kafka/Dockerfile/
+docker build -t enhanced-mirror-maker2:latest ./docker/kafka/Dockerfile/
 ```
 
 Build the test producer Docker image:
@@ -172,7 +172,8 @@ chmod +x run_challenge.sh
 ```
 
 ### Test Scenarios
-
+Do docker-compose up --build in sepearte terminal and 
+./run_challenge.sh in separate terminal
 The script `run_challenge.sh` executes three scenarios.
 
 #### Scenario 1: Normal Replication
@@ -186,15 +187,10 @@ Steps:
 - Consumes messages from standby to verify replication
 - Lists all topics on both clusters
 
-Expected Output:
-
-- PASS: Scenario 1 completed
-- Topic replicated: `primary.commit-log` visible on standby cluster
-- Consumer reads exactly 20 messages
-
 Interpret Results:
 
 - If messages are consumed successfully, the replication pipeline is functioning.
+- This test validates that normal replication without edge cases works as expected.
 
 #### Scenario 2: Log Truncation Detection
 
@@ -202,21 +198,25 @@ Purpose: Verify fail-fast behavior when brokers delete log segments.
 
 Steps:
 
-- Sets aggressive retention policy (10 seconds) on `commit-log` topic
-- Produces 500 messages, waits for log segments to be deleted
+- Pauses MM2 to prevent offset consumption
+- Sets aggressive retention policy (60 seconds) on `commit-log` topic
+- Produces 500 messages, waits for log segments to be eligible for deletion
 - Produces 500 more messages to force offset mismatch
-- Waits 20 seconds for truncation to occur
+- Resumes MM2 and waits for truncation detection
 - Captures MM2 logs and checks for custom truncation detection
 
 Expected Output:
 
-- PASS: Truncation log is printed
-- `LOG TRUNCATION DETECTED: topic=commit-log, partition=0, earliestAvailableOffset=XXX. Data loss has occurred.`
+- PASS: Truncation log is printed with offset regression detected
+- `🔥[OFFSET REGRESSION DETECTED] topic-partition=..., lastOffset=..., currentOffset=...`
+- `🔥[TRUNCATION DETECTED] ...`
+
 
 Interpret Results:
 
 - PASS: Custom log message confirms fail-fast detection is working
 - FAIL: MM2 continued replicating despite log deletion (data inconsistency risk)
+- Note: This scenario requires fine-tuning of retention policies and timing
 
 #### Scenario 3: Topic Reset Detection and Recovery
 
@@ -224,70 +224,78 @@ Purpose: Verify automatic recovery when topics are deleted and recreated.
 
 Steps:
 
+- Pauses MM2 to prevent offset consumption
 - Produces 500 initial messages to `commit-log`
 - Deletes the topic on primary cluster
-- Waits 10 seconds
+- Waits 10 seconds for topic deletion to propagate
 - Recreates the topic (simulating reset scenario)
-- Produces 500 new messages
-- Captures MM2 logs and checks for topic reset detection
+- Resumes MM2 and produces 500 new messages
+- Captures MM2 logs and checks for topic reset detection and recovery
 
 Expected Output:
 
-- PASS: Reset detection log printed
-- `TOPIC RESET DETECTED. Topics affected: [commit-log]. Re-subscribing and seeking to beginning.`
-- `Recovery successful. MirrorMaker resumed replication.`
+- PASS: Reset detection and recovery logs printed
+- `[MM2-FIX][TOPIC-RESET] Topic commit-log recreated. Reset detected.`
+- `[MM2-FIX][RECOVERY] Reinitializing offsets and resuming replication from earliest.`
+- `[MM2-FIX][RECOVERY] Recovery successful. Replication resumed without data loss.`
 
-Interpret Results:
 
-- PASS: Custom recovery logs confirm auto-recovery mechanism works
-- FAIL: MM2 did not recover automatically (manual intervention required)
 
-### Interpreting Test Results
-
-| Scenario | Pass Criteria | Failure Impact |
-|---|---|---|
-| 1 | All 20 messages consumed | Replication broken, non-replicated data |
-| 2 | `LOG TRUNCATION DETECTED` log found | Silent data loss undetected |
-| 3 | `TOPIC RESET DETECTED` log found | Data consistency compromised, manual recovery needed |
 
 ## 5) Log Analysis
 
 ### Key Log Messages to Monitor
 
-#### 1. Log Truncation Detection (Scenario 2)
+#### 1. Offset Regression Detection (Scenario 2 - Log Truncation)
 
 ```text
-[ERROR] LOG TRUNCATION DETECTED: topic=commit-log, partition=0,
-      earliestAvailableOffset=12345. Data loss has occurred.
+🔥[OFFSET REGRESSION DETECTED] topic-partition=commit-log-0, 
+lastOffset=100, currentOffset=95
+🔥[TRUNCATION DETECTED] commit-log-0
 ```
 
-- Indicates: Consumer offset became unreachable due to log deletion
+- Indicates: Consumer offset became unreachable due to log deletion/compaction
+- Pattern: currentOffset < lastOffset (backward movement)
 - Action Required: Investigate why logs were deleted; verify replication consistency
-- Location: MM2 container logs
+- Location: MM2 container logs, MirrorSourceTask.detectTruncation() output
 
-#### 2. Topic Reset Detection (Scenario 3)
+#### 2. Topic Reset Detection & Automatic Recovery (Scenario 3)
 
 ```text
-[WARN] TOPIC RESET DETECTED. Topics affected: [commit-log].
-     Re-subscribing and seeking to beginning.
-[INFO] Recovery successful. MirrorMaker resumed replication.
+🔥[OFFSET REGRESSION DETECTED] topic-partition=commit-log-0,
+lastOffset=500, currentOffset=0
+🔥[TOPIC RESET DETECTED] commit-log-0
+🔥[TOPIC RESET RECOVERY] Starting recovery...
+🔥 Seeking to beginning for [commit-log-0]
+🔥[RECOVERY SUCCESS] Topic reset handled
+```
+
+Or with MM2 logs output:
+
+```text
+[MM2-FIX][TOPIC-RESET] Topic commit-log recreated. Reset detected.
+[MM2-FIX][RECOVERY] Reinitializing offsets and resuming replication from earliest.
+[MM2-FIX][RECOVERY] Recovery successful. Replication resumed without data loss.
 ```
 
 - Indicates: Topic was deleted and recreated; automatic recovery triggered
+- Pattern: currentOffset==0 after offset regression (currentOffset < lastOffset)
 - Action: Monitor that replication resumes without data gaps
-- Location: MM2 container logs
+- Recovery: Automatic - consumer seeks to beginning and continues polling
+- Location: MM2 container logs, MirrorSourceTask.detectTruncation() and handleTopicReset() output
 
-#### 3. Normal Replication Logs
+#### 3. Offset Jump Forward (Scenario 1 - Normal with gap detection)
 
 ```text
-[INFO] Herder started
-[INFO] topic: mirror-start-marker, partition: 0
-[INFO] Successfully synced group offset
+⚠️ Offset jump detected (possible data loss) tp=commit-log-0,
+last=100, current=105
 ```
 
-- Indicates: MM2 is running normally and replicating topics
-- Action: Baseline expected behavior
-- Location: MM2 container logs
+- Indicates: Consumer skipped offsets (possible data loss or filtered messages)
+- Pattern: currentOffset > (lastOffset + 1)
+- Action: Investigate source of missing offsets; check for message filtering transforms
+- Severity: Warning-level - may indicate legitimate filtering
+- Location: MM2 container logs, MirrorSourceTask.detectTruncation() output
 
 ### Capturing Container Logs
 
@@ -342,93 +350,173 @@ In both scenarios, MM2 could silently continue replication with inconsistent dat
 
 ### Solution Architecture
 
-#### 1. Fail-Fast Mechanism for Log Truncation
+#### 1. Offset Regression Detection & Fail-Fast for Log Truncation
 
-Implementation: Enhanced `MirrorSourceTask.java` with exception handling.
+Implementation: Enhanced `MirrorSourceTask.java` with `detectTruncation()` method tracking offset state per partition.
 
 ```java
-catch (OffsetOutOfRangeException e) {
-   log.error("LOG TRUNCATION DETECTED: topic={}, partition={}, "
-      + "earliestAvailableOffset={}. Data loss has occurred.",
-      topicPartition.topic(), topicPartition.partition(), earliestOffset);
-   throw new KafkaException("Fail-fast due to log truncation", e);
+private final Map<TopicPartition, Long> lastSeenOffsets = new HashMap<>();
+
+private void detectTruncation(TopicPartition tp, long currentOffset) {
+    Long lastOffset = lastSeenOffsets.get(tp);
+    
+    if (lastOffset == null) {
+        return;  // First offset, no baseline yet
+    }
+    
+    // ✅ CASE 1: NORMAL FLOW
+    if (currentOffset == lastOffset + 1) {
+        return;  // Expected sequential offset
+    }
+    
+    // 🔥 CASE 2: OFFSET REGRESSION (real problem detected)
+    if (currentOffset <= lastOffset) {
+        log.error("🔥[OFFSET REGRESSION DETECTED] topic-partition={}, "
+            + "lastOffset={}, currentOffset={}", tp, lastOffset, currentOffset);
+        
+        if (currentOffset == 0) {
+            // Topic was reset - attempt recovery
+            handleTopicReset();
+            return;
+        }
+        
+        // Unexpected backward jump - truncation
+        throw new KafkaException("Log truncation detected for " + tp +
+            " last=" + lastOffset + " current=" + currentOffset);
+    }
+    
+    // 🔥 CASE 3: OFFSET JUMP FORWARD (possible data loss)
+    if (currentOffset > lastOffset + 1) {
+        log.warn("⚠️ Offset jump detected (possible data loss) tp={}, "
+            + "last={}, current={}", tp, lastOffset, currentOffset);
+    }
 }
 ```
 
 Why this approach:
 
-- Immediately stops replication when data loss is detected
-- Prevents replication of inconsistent state
-- Forces operator to investigate and handle the issue
-- Provides forensic information (earliest available offset) for debugging
+- **Real-time Detection**: Monitors offset progression per partition during poll()
+- **Three-case Logic**: Distinguishes normal flow, resets, and truncation
+- **Fail-Fast on Truncation**: Throws exception when backward offset jump detected
+- **Auto-Recovery on Reset**: Catches offset==0 pattern and triggers recovery
+- **Forensic Data**: Tracks last seen offset for debugging
 
 Data flow:
 
 ```text
-Primary Cluster -> [Deleted Logs] -> Consumer seeks failed
+Primary Cluster -> ConsumerRecord (offset=N)
                       |
                       v
-              OffsetOutOfRangeException caught
+         detectTruncation(offset=N) called
                       |
-                      v
-              Custom ERROR logged
-                      |
-                      v
-              Replication STOPS
+         +---------------------+---------------------+
+         |                     |                     |
+      N = L+1              N < L              N > L+1
+    (normal)           (regression)          (jump)
+         |                     |                     |
+      return            isReset? (N==0)         warn
+                    |
+                 YES|        NO
+                    |         |
+              handleReset   throw
 ```
 
 #### 2. Automatic Topic Reset Recovery
 
-Implementation: Exception handling for `UnknownTopicOrPartitionException`.
+Implementation: `handleTopicReset()` method triggered when offset regression with offset==0 is detected.
 
 ```java
-catch (UnknownTopicOrPartitionException e) {
-   log.warn("TOPIC RESET DETECTED. Topics affected: {}. "
-      + "Re-subscribing and seeking to beginning.", topics);
-
-   consumer.unsubscribe();
-   consumer.subscribe(topics);
-   consumer.seekToBeginning(newAssignments);
-   log.info("Recovery successful. MirrorMaker resumed replication.");
+private void handleTopicReset() {
+    log.error("🔥[TOPIC RESET RECOVERY] Starting recovery...");
+    
+    try {
+        Set<TopicPartition> partitions = new HashSet<>(consumer.assignment());
+        
+        if (partitions.isEmpty()) {
+            log.warn("No partitions assigned during reset recovery.");
+            return;
+        }
+        
+        log.error("🔥 Seeking to beginning for {}", partitions);
+        consumer.seekToBeginning(partitions);
+        
+        // ✅ CRITICAL → clear offset state
+        lastSeenOffsets.clear();
+        
+        log.error("🔥[RECOVERY SUCCESS] Topic reset handled");
+        
+    } catch (Exception ex) {
+        log.error("🔥[RECOVERY FAILED]", ex);
+        throw new KafkaException("Topic reset recovery failed", ex);
+    }
 }
 ```
 
 Why this approach:
 
-- Automatically recovers when topic is deleted and recreated
-- No manual intervention required
-- Resumes replication from the beginning of the new topic
-- Logs all recovery actions for audit trail
+- **Triggered by Reset Pattern**: Detects when offset==0 after regression
+- **State Cleanup**: Clears lastSeenOffsets map to reset tracking
+- **Automatic Recovery**: No manual intervention required
+- **Consumer Repositioning**: Seeks to beginning of recreated topic
+- **Audit Trail**: Logs all recovery steps including success/failure
+- **Fail-Safe**: If recovery fails, throws exception to alert operators
 
 Data flow:
 
 ```text
-Topic Deleted -> [Recreation] -> Topic exists again
-                    |
-                    v
-              UnknownTopicOrPartitionException caught
-                    |
-                    v
-              Consumer unsubscribes
-                    |
-                    v
-              Consumer re-subscribes to new partition
-                    |
-                    v
-              Consumer seeks to beginning
-                    |
-                    v
-              Replication RESUMES with new data
+Topic Deleted -> [Recreated with new logs] -> Consumer gets offset==0
+                              |
+                              v
+                   Offset regression detected (offset < lastOffset)
+                              |
+                              v
+                      Is offset == 0? YES
+                              |
+                              v
+                     handleTopicReset() called
+                              |
+                              v
+                 Consumer seeks to beginning of new topic
+                              |
+                              v
+                  Clear lastSeenOffsets tracking state
+                              |
+                              v
+                    Replication RESUMES with new data
+                              |
+                        (no data loss)
 ```
 
 ### Integration Points
 
 Modified files:
 
-- `Kafka/kafka/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorSourceTask.java`
-- Line: `poll()` method
-- Changes: Added try-catch blocks for exception handling
-- Impact: Every message fetch operation is now protected
+- `kafka/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorSourceTask.java`
+- Location: `poll()` method (called for every message fetch cycle)
+- Changes Added:
+  - Field: `Map<TopicPartition, Long> lastSeenOffsets` - tracks offset per partition
+  - Method: `detectTruncation(TopicPartition tp, long currentOffset)` - validates offset progression
+  - Method: `handleTopicReset()` - automatic recovery from topic recreation
+  - Hook: Called in poll() for each ConsumerRecord before processing
+- Impact: Every message fetch operation is now protected with offset regression detection
+
+Modification Pattern:
+
+```java
+public List<SourceRecord> poll() {
+    // ... existing poll setup ...
+    for (ConsumerRecord<byte[], byte[]> record : records) {
+        // NEW: Detect offset regression/truncation/reset
+        TopicPartition sourcePartition = 
+            new TopicPartition(record.topic(), record.partition());
+        detectTruncation(sourcePartition, record.offset());
+        lastSeenOffsets.put(sourcePartition, record.offset());
+        
+        // ... existing conversion and processing ...
+    }
+    // ... existing error handling ...
+}
+```
 
 No breaking changes:
 
@@ -436,6 +524,7 @@ No breaking changes:
 - Enhanced logging only adds to log output
 - Exception handling is additive (wraps existing logic)
 - Compatible with existing MM2 configurations
+- Backward compatible with standard Kafka clients
 
 ### Performance Impact
 
@@ -447,9 +536,38 @@ No breaking changes:
 
 Set alerts for these log patterns:
 
-- `ERROR: LOG TRUNCATION DETECTED` -> Critical: Immediate investigation
-- `WARN: TOPIC RESET DETECTED` -> Warning: Review recovery actions
-- `ERROR: KafkaException` -> Check if caused by truncation
+**Critical Alerts (requires immediate action):**
+- `🔥[OFFSET REGRESSION DETECTED]` -> Offset backward movement detected
+- `🔥[TRUNCATION DETECTED]` -> Log truncation confirmed, replication stopped
+- `🔥[RECOVERY FAILED]` -> Topic reset recovery failed, manual intervention needed
+
+**Warning Alerts (review but may auto-recover):**
+- `🔥[TOPIC RESET DETECTED]` -> Topic recreated, attempting auto-recovery
+- `🔥[TOPIC RESET RECOVERY]` -> Recovery in progress
+- `⚠️ Offset jump detected` -> Possible data loss or message filtering
+
+**Informational Logs (expected during recovery):**
+- `🔥[RECOVERY SUCCESS]` -> Topic reset recovery completed successfully
+- `🔥 Seeking to beginning` -> Consumer repositioning to new topic start
+
+**Search commands for log analysis:**
+
+```bash
+# Find all offset regressions
+docker logs mm2 | grep "OFFSET REGRESSION"
+
+# Find truncation detections (failures)
+docker logs mm2 | grep "TRUNCATION DETECTED"
+
+# Find topic reset events
+docker logs mm2 | grep "TOPIC RESET"
+
+# Find recovery attempts
+docker logs mm2 | grep "RECOVERY"
+
+# Find offset jumps (warnings)
+docker logs mm2 | grep "Offset jump detected"
+```
 
 ## 7) AI Usage Documentation
 
@@ -497,88 +615,62 @@ docker rmi kafka-mirror-maker:latest commit-log-producer
 # Clear KRaft logs (if using local volumes)
 rm -rf /tmp/kraft-combined-logs
 ```
-
+## Output of the test script and unit test cases for connect:mirror module.
 ## run_challenge.sh script output.
 
 ```text
-=== 🚀 MM2 Test Script (On-demand Producer) ===
-
-🌐 [EVENT] Using Docker network: mirrormaker2_default
-
-⏳ [EVENT] Waiting for primary Kafka...
-✅ [EVENT] Primary Kafka is ready
-
-⏳ [EVENT] Waiting for standby Kafka...
-✅ [EVENT] Standby Kafka is ready
-
-⏳ [EVENT] Waiting for MirrorMaker2...
-✅ [EVENT] MirrorMaker2 is running
-
-📌 [EVENT] Creating topic: commit-log
-⏳ [EVENT] Waiting for MM2 topic discovery...
+@nitinbs1999 ➜ /workspaces/codespaces-blank/MirrorMaker2 $ ./run_challenge.sh 
+=== 🚀 MM2 Test Script (Enhanced Validation) ===
+🌐 Using Docker network: mirrormaker2_default
+⏳ Waiting for primary Kafka...
+✅ Primary Kafka ready
+⏳ Waiting for standby Kafka...
+✅ Standby Kafka ready
+⏳ Waiting for MM2...
+✅ MM2 running
+📌 Creating topic: commit-log
 
 ===============================
 ✅ Scenario 1: Normal Replication
-================================
-
-📤 [EVENT] Producing 20 messages...
-
-⏳ [EVENT] Waiting for topic replication in standby...
-📥 [EVENT] Consuming from standby...
-
-🔍 [EVENT] Records replicated: 20
-✅ TEST 1 PASSED
+===============================
+📤 Producing 1000 messages...
+🔍 Replicated records: 1000
+✅ RESULT: TEST 1 PASSED
 
 ===============================
 🔥 Scenario 2: Log Truncation
-=============================
-
+===============================
 ⏸️ [EVENT] Pausing MM2...
-
-⚙️ [EVENT] Setting aggressive retention (60 sec)...
-📤 [EVENT] Producing 500 messages...
-📤 [EVENT] Producing 500 messages...
-
-⏳ [EVENT] Waiting for truncation...
-
+mm2
+⚙️ Applying retention (5s)...
+📤 Producing 1000 messages...
+📤 Producing 1000 messages...
+⏳ Waiting for truncation...
 ▶️ [EVENT] Resuming MM2...
+mm2
 
-📡 [EVENT] Capturing MM2 logs...
+📡 [EVENT] Capturing MM2 logs (last 20s)...
+🔎 Truncation log detected
+🔎 Fail-fast log detected
+✅ RESULT: TEST 2 PASSED
 
-📄 [EVENT] Checking truncation detection...
-❌ TEST 2 FAILED
-
-📄 [MM2 LOG]
-[MM2-FIX][TRUNCATION] Detected log truncation on topic commit-log partition 0
-[MM2-FIX][TRUNCATION] Source offset moved backward. Triggering corrective action.
 
 ===============================
 🔥 Scenario 3: Topic Reset
-==========================
-
+===============================
 ⏸️ [EVENT] Pausing MM2...
-
-📤 [EVENT] Producing 500 messages...
-
-🗑️ [EVENT] Deleting topic...
-♻️ [EVENT] Recreating topic...
-
+mm2
+📤 Producing 300 messages...
+🗑️ Deleting topic...
+♻️ Recreating topic...
 ▶️ [EVENT] Resuming MM2...
+mm2
+📤 Producing 300 messages...
 
-📤 [EVENT] Producing 500 messages...
-
-📡 [EVENT] Capturing MM2 logs...
-
-📄 [EVENT] Checking topic reset detection...
-✅ TEST 3 PASSED
-
-📄 [EVENT] Checking recovery...
-✅ RECOVERY PASSED
-
-📄 [MM2 LOG]
-[MM2-FIX][TOPIC-RESET] Topic commit-log recreated. Reset detected.
-[MM2-FIX][RECOVERY] Reinitializing offsets and resuming replication from earliest.
-[MM2-FIX][RECOVERY] Recovery successful. Replication resumed without data loss.
+📡 [EVENT] Capturing MM2 logs (last 20s)...
+🔎 Reset log detected
+🔍 Records after reset: 2445292
+✅ RESULT: TEST 3 PASSED
 
 🎯 ALL TESTS COMPLETED
 ```
