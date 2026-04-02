@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.net.SocketTimeoutException
+import java.util
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -27,8 +28,6 @@ import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpda
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.server.network.BrokerEndPoint
-
-import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 
@@ -74,7 +73,12 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       metrics,
       time,
       "replica-fetcher",
-      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
+      {
+        val m = new util.LinkedHashMap[String, String]()
+        m.put("broker-id", sourceBroker.id.toString)
+        m.put("fetcher-id", fetcherId.toString)
+        m
+      },
       false,
       channelBuilder,
       logContext

@@ -131,7 +131,12 @@ object Partition {
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
-    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString).asJava
+    val tags = {
+      val m = new util.LinkedHashMap[String, String]()
+      m.put("topic", topicPartition.topic)
+      m.put("partition", topicPartition.partition.toString)
+      m
+    }
     metricsGroup.removeMetric("UnderReplicated", tags)
     metricsGroup.removeMetric("UnderMinIsr", tags)
     metricsGroup.removeMetric("InSyncReplicasCount", tags)
@@ -215,7 +220,12 @@ class Partition(val topicPartition: TopicPartition,
 
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
-  private val tags = Map("topic" -> topic, "partition" -> partitionId.toString).asJava
+  private val tags = {
+    val m = new util.LinkedHashMap[String, String]()
+    m.put("topic", topic)
+    m.put("partition", partitionId.toString)
+    m
+  }
 
   metricsGroup.newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
   metricsGroup.newGauge("InSyncReplicasCount", () => if (isLeader) partitionState.isr.size else 0, tags)

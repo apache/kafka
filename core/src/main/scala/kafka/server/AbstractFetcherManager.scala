@@ -24,8 +24,9 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.PartitionFetchState
 
+import java.util
+
 import scala.collection.{Map, Set, mutable}
-import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
@@ -43,7 +44,11 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  private val tags = Map("clientId" -> clientId).asJava
+  private val tags = {
+    val m = new util.LinkedHashMap[String, String]()
+    m.put("clientId", clientId)
+    m
+  }
 
   metricsGroup.newGauge("MaxLag", () => {
     // current max lag across all fetchers/topics/partitions
