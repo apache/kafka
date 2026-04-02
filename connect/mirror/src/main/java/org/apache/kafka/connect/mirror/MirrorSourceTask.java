@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -60,6 +59,7 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    private final Map<TopicPartition, Long> lastSeenOffsets = new HashMap<>();
 
     // ===== Enhancement State =====
     private final Map<TopicPartition, Long> lastSeenOffsets = new HashMap<>();
@@ -153,9 +153,9 @@ public class MirrorSourceTask extends SourceTask {
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
 
             for (ConsumerRecord<byte[], byte[]> record : records) {
-
-                detectTopicReset(record);
-
+                TopicPartition sourcePartition = new TopicPartition(record.topic(), record.partition());
+                detectTruncation(sourcePartition, record.offset());
+                lastSeenOffsets.put(sourcePartition, record.offset());
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
 
@@ -187,10 +187,9 @@ public class MirrorSourceTask extends SourceTask {
             return null;
 
         } catch (KafkaException e) {
-            log.warn("Failure during poll.", e);
-            return null;
-
-        } catch (Throwable e) {
+            log.error("[FAIL-FAST] Stopping MM2 due to critical issue", e);
+            throw e;
+        } catch (Throwable e)  {
             log.error("Failure during poll.", e);
             throw e;
 
@@ -199,6 +198,78 @@ public class MirrorSourceTask extends SourceTask {
         }
     }
 
+    private void detectTruncation(TopicPartition tp, long currentOffset) {
+        Long lastOffset = lastSeenOffsets.get(tp);
+
+        if (lastOffset == null) {
+            return;
+        }
+
+        // ✅ CASE 1: NORMAL FLOW
+        if (currentOffset == lastOffset + 1) {
+            return;
+        }
+
+        // 🔥 CASE 2: OFFSET REGRESSION → REAL PROBLEM
+        if (currentOffset <= lastOffset) {
+
+            log.error("[OFFSET REGRESSION DETECTED] topic-partition={}, lastOffset={}, currentOffset={}",
+                    tp, lastOffset, currentOffset);
+
+            // 👉 Decide scenario based on offset pattern
+
+            // ✅ RESET (offset restarted from 0)
+            if (currentOffset == 0) {
+                log.error("[TOPIC RESET DETECTED] {}", tp);
+                handleTopicReset();
+                return; // ✅ recovery, don't fail
+            }
+
+            // ❌ TRUNCATION (unexpected backward jump)
+            log.error("[TRUNCATION DETECTED] {}", tp);
+            throw new KafkaException("Backward truncation detected for " + tp);
+        }
+
+        // 🔥 CASE 3: OFFSET JUMP FORWARD (rare but possible)
+        if (currentOffset > lastOffset + 1) {
+            log.error("[TRUNCATION DETECTED] topic-partition={}, lastOffset={}, currentOffset={}",
+                    tp, lastOffset, currentOffset);
+            throw new KafkaException(
+                    "Data loss detected (offset jump) for " + tp +
+                    " last=" + lastOffset + " current=" + currentOffset
+            );
+        }
+    }
+
+    private void handleTopicReset() {
+
+        log.error("🔥[TOPIC RESET RECOVERY] Starting recovery...");
+
+        try {
+            Set<TopicPartition> partitions = new HashSet<>(consumer.assignment());
+
+            if (partitions.isEmpty()) {
+                log.warn("No partitions assigned during reset recovery.");
+                return;
+            }
+
+            log.error("🔥 Seeking to beginning for {}", partitions);
+
+            consumer.seekToBeginning(partitions);
+
+            // ✅ CRITICAL → reset state
+            lastSeenOffsets.clear();
+
+            log.error("🔥[RECOVERY SUCCESS] Topic reset handled");
+
+        } catch (Exception ex) {
+            log.error("🔥[RECOVERY FAILED]", ex);
+
+            // ❌ Recovery failed → now fail MM2
+            throw new KafkaException("Topic reset recovery failed", ex);
+        }
+    }
+ 
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
