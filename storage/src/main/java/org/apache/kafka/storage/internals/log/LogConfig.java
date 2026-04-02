@@ -413,11 +413,11 @@ public class LogConfig extends AbstractConfig {
 
 
     public long remoteCopyLagMs() {
-        return remoteLogConfig.remoteCopyLagMs == MAX_REMOTE_COPY_LAG_MS  ? remoteLogConfig.remoteCopyLagMs : localRetentionMs();
+        return remoteLogConfig.remoteCopyLagMs == MAX_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs;
     }
 
     public long remoteCopyLagBytes() {
-        return remoteLogConfig.remoteCopyLagBytes == MAX_REMOTE_COPY_LAG_BYTES  ? remoteLogConfig.remoteCopyLagBytes : localRetentionBytes();
+        return remoteLogConfig.remoteCopyLagBytes == MAX_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes;
     }
 
     public long localRetentionMs() {
