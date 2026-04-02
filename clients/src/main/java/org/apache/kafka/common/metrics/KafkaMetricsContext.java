@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -27,7 +28,7 @@ public class KafkaMetricsContext implements MetricsContext {
     /**
      * Client or Service's contextLabels map.
      */
-    private final Map<String, String> contextLabels = new HashMap<>();
+    private final Map<String, String> contextLabels = new LinkedHashMap<>();
 
     /**
      * Create a MetricsContext with namespace, no service or client properties

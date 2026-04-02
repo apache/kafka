@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -33,7 +34,7 @@ class FetchMetricsAggregator {
     private final FetchMetricsManager metricsManager;
     private final Set<TopicPartition> unrecordedPartitions;
     private final FetchMetrics fetchFetchMetrics = new FetchMetrics();
-    private final Map<String, FetchMetrics> perTopicFetchMetrics = new HashMap<>();
+    private final Map<String, FetchMetrics> perTopicFetchMetrics = new LinkedHashMap<>();
 
     FetchMetricsAggregator(FetchMetricsManager metricsManager, Set<TopicPartition> partitions) {
         this.metricsManager = metricsManager;

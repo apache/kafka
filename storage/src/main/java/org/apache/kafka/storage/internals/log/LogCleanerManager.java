@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -99,7 +100,7 @@ public class LogCleanerManager {
      */
     private final Condition pausedCleaningCond = lock.newCondition();
 
-    private final Map<String, List<Map<String, String>>> gaugeMetricNameWithTag = new HashMap<>();
+    private final Map<String, List<Map<String, String>>> gaugeMetricNameWithTag = new LinkedHashMap<>();
 
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
 

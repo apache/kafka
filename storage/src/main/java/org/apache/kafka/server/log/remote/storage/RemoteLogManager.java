@@ -100,6 +100,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -1142,7 +1143,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private final Logger logger;
         private volatile boolean isAllSegmentsValid = false;
         private volatile boolean metricsRegistered = false;
-        private final Map<String, String> metricTags = new HashMap<>();
+        private final Map<String, String> metricTags = new LinkedHashMap<>();
         private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
         private final AtomicInteger localRetentionSizeInPercentValue = new AtomicInteger(0);
 
