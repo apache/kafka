@@ -341,7 +341,7 @@ public class PapiDslIntegrationTest {
                 public void process(final Record<String, String> record) {
                     final SessionStore<String, String> store = context().getStateStore("table-store");
 
-                    try (final KeyValueIterator<Windowed<String>, String> it = store.findSessions("a", "z", 0L, Long.MAX_VALUE)) {
+                    try (final KeyValueIterator<Windowed<String>, String> it = store.findSessions("key1", 0L, Long.MAX_VALUE)) {
                         while (it.hasNext()) {
                             final KeyValue<Windowed<String>, String> row = it.next();
                             context().forward(new Record<>(row.key.key(), row.value, record.timestamp()));
@@ -376,6 +376,59 @@ public class PapiDslIntegrationTest {
             .reduce(
                 (value, aggregate) -> value,
                 Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionReducedOnWindowCloseKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .emitStrategy(EmitStrategy.onWindowClose())
+            .reduce(
+                (value, aggregate) -> value,
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String())
+                    .withRetention(Duration.ofHours(10L))
+            ),
+            true
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionAggregateKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                (key, left, right) -> "",
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionAggregateOnWindowCloseKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .emitStrategy(EmitStrategy.onWindowClose())
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                (key, left, right) -> "",
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String())
+                    .withRetention(Duration.ofHours(10L))
+            ),
+            true
         );
     }
 

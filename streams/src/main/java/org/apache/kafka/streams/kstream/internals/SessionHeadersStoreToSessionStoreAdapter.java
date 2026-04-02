@@ -33,6 +33,9 @@ public class SessionHeadersStoreToSessionStoreAdapter<K, V>
 
     public SessionHeadersStoreToSessionStoreAdapter(final SessionStore<K, V> sessionStore) {
         super(sessionStore);
+        if (sessionStore instanceof SessionStoreWithHeaders) {
+            throw new ClassCastException();
+        }
     }
 
     @Override

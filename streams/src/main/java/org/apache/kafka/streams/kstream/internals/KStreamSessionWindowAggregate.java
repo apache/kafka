@@ -405,7 +405,21 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            store = context.getStateStore(storeName);
+            try {
+                store = new SessionHeadersStoreToSessionStoreAdapter<>(context.getStateStore(storeName));
+            } catch (final ClassCastException swallow) {
+                // not plain session store
+
+                // Try headers-aware sessopm store
+                try {
+                    store = context.getStateStore(storeName);
+                } catch (final ClassCastException fatal) {
+                    final StateStore store = context.getStateStore(storeName);
+                    final String storeType = store == null ? "null" : store.getClass().getName();
+                    throw new InvalidStateStoreException("Session-KTable state store must implement either "
+                        + "SessionStore, or SessionStoreWithHeaders. Got: " + storeType);
+                }
+            }
         }
 
         @Override
