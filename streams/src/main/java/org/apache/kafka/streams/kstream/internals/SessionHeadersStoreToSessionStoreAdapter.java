@@ -27,6 +27,19 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.time.Instant;
 
+/**
+ * Adaptor store for the Kafka Streams DSL to bridge between "headers" store and "plain store".
+ *
+ * <p> With KIP-1285 we did rewrite the DLS Processor code to work against "header store" interface to allow users
+ * to plugin "header stores", but by default the underlying (session) store is still a "plain store". To avoid "if-then-else"
+ * code across the entire DSL Processor code base, we use this adaptor to wrap a "plain store" and make it look like
+ * a "header store".
+ *
+ * <p> On any write operation, provided {@link org.apache.kafka.common.header.Headers} will just be dropped,
+ * and {@link AggregationWithHeaders} type is translated into plain value-type (of the aggregation result). Similarly
+ * for any read operation, the underlying value-type (of the aggregation result) is translated into a
+ * {@link AggregationWithHeaders} type with an empty {@link org.apache.kafka.common.header.Headers} object.
+ */
 public class SessionHeadersStoreToSessionStoreAdapter<K, V>
     extends WrappedStateStore<SessionStore<K, V>, K, V>
     implements SessionStoreWithHeaders<K, V> {
@@ -97,7 +110,7 @@ public class SessionHeadersStoreToSessionStoreAdapter<K, V>
 
     @Override
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<V>> fetch(final K key) {
-        return null;
+        return new KeyValueIteratorAdapter(wrapped().fetch(key));
     }
 
     @Override

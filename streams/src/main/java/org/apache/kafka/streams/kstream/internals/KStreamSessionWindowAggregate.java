@@ -139,7 +139,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             } catch (final ClassCastException swallow) {
                 // not plain session store
 
-                // Try headers-aware sessopm store
+                // Try headers-aware session store
                 try {
                     store = context.getStateStore(storeName);
                     isHeadersStore = true;
@@ -386,7 +386,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
     @Override
     public KTableValueGetterSupplier<Windowed<KIn>, VAgg> view() {
-        return new KTableValueGetterSupplier<Windowed<KIn>, VAgg>() {
+        return new KTableValueGetterSupplier<>() {
             @Override
             public KTableValueGetter<Windowed<KIn>, VAgg> get() {
                 return new KTableSessionWindowValueGetter();
@@ -410,7 +410,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             } catch (final ClassCastException swallow) {
                 // not plain session store
 
-                // Try headers-aware sessopm store
+                // Try headers-aware session store
                 try {
                     store = context.getStateStore(storeName);
                 } catch (final ClassCastException fatal) {
