@@ -37,11 +37,11 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -51,6 +51,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.junit.RaftClusterInvocationContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
@@ -67,90 +68,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 
 public interface ClusterInstance {
-
-    /* A consistent random number generator to make tests repeatable */
-    Random SEEDED_RANDOM = new Random(192348092834L);
-    String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    String DIGITS = "0123456789";
-    String LETTERS_AND_DIGITS = LETTERS + DIGITS;
-
-    long DEFAULT_POLL_INTERVAL_MS = 100;
-    long DEFAULT_MAX_WAIT_MS = 15_000;
-
-    /**
-     * Generate a random string of letters and digits of the given length
-     *
-     * @param len The length of the string
-     * @return The random string
-     */
-    static String randomString(final int len) {
-        final StringBuilder b = new StringBuilder();
-        for (int i = 0; i < len; i++)
-            b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
-        return b.toString();
-    }
-
-    /**
-     * uses default value of 15 seconds for timeout
-     */
-    static void waitForCondition(final Supplier<Boolean> testCondition, final String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
-    }
-
-    /**
-     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
-     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
-     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
-     * avoid transient failures due to slow or overloaded machines.
-     */
-    static void waitForCondition(final Supplier<Boolean> testCondition,
-                                 final long maxWaitMs,
-                                 final Supplier<String> conditionDetails) throws InterruptedException {
-        final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
-
-        while (true) {
-            try {
-                if (testCondition.get()) {
-                    return;
-                }
-                String conditionDetail = conditionDetails.get() == null ? "" : conditionDetails.get();
-                throw new TimeoutException("Condition not met: " + conditionDetail);
-            } catch (final AssertionError t) {
-                if (expectedEnd <= System.currentTimeMillis()) {
-                    throw t;
-                }
-            } catch (final Exception e) {
-                if (expectedEnd <= System.currentTimeMillis()) {
-                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", maxWaitMs), e);
-                }
-            }
-            Thread.sleep(Math.min(DEFAULT_POLL_INTERVAL_MS, maxWaitMs));
-        }
-    }
-
-    /**
-     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
-     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
-     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
-     * avoid transient failures due to slow or overloaded machines.
-     */
-    static void waitForCondition(final Supplier<Boolean> testCondition,
-                                 final long maxWaitMs,
-                                 String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
-    }
 
     Type type();
 
@@ -237,7 +164,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + randomString(5));
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString());
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaConsumer<>(setClientSaslConfig(props));
     }
@@ -262,7 +189,7 @@ public interface ClusterInstance {
         if (valueDeserializer == null) {
             props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         }
-        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + randomString(5));
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString());
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaShareConsumer<>(setClientSaslConfig(props), keyDeserializer, valueDeserializer);
     }
@@ -341,7 +268,7 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
-        waitForCondition(
+        RaftClusterInvocationContext.waitForCondition(
             () -> brokers.stream().allMatch(
                 broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
                 60000L, topic + " metadata not propagated after 60000 ms");
@@ -351,17 +278,17 @@ public interface ClusterInstance {
         TopicPartition topicPartition = new TopicPartition(topic, 0);
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
-        waitForCondition(() -> brokers.stream().allMatch(broker ->
+        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.replicaManager().onlinePartition(topicPartition).isEmpty()
         ), "Replica manager's should have deleted all of this topic's partitions");
 
         // Ensure that logs from all replicas are deleted
-        waitForCondition(() -> brokers.stream().allMatch(broker ->
+        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.logManager().getLog(topicPartition, false).isEmpty()
         ), "Replica logs not deleted after delete topic is complete");
 
         // Ensure that the topic is removed from all cleaner offsets
-        waitForCondition(() -> brokers.stream().allMatch(broker -> {
+        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker -> {
             Collection<File> liveLogDirs = broker.logManager().liveLogDirs();
             return liveLogDirs.stream().allMatch(logDir -> {
                 OffsetCheckpointFile checkpointFile;
@@ -375,13 +302,13 @@ public interface ClusterInstance {
         }), "Cleaner offset for deleted partition should have been removed");
 
         // Ensure that the topic directories are soft-deleted
-        waitForCondition(() -> brokers.stream().allMatch(broker ->
+        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.config().logDirs().stream().allMatch(logDir ->
                     !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
         ), "Failed to soft-delete the data to a delete directory");
 
         // Ensure that the topic directories are hard-deleted
-        waitForCondition(() -> brokers.stream().allMatch(broker ->
+        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.config().logDirs().stream().allMatch(logDir ->
                     Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                         partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
@@ -430,7 +357,7 @@ public interface ClusterInstance {
 
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
-        waitForCondition(
+        RaftClusterInvocationContext.waitForCondition(
             () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
@@ -444,7 +371,7 @@ public interface ClusterInstance {
     default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
         for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
-            waitForCondition(
+            RaftClusterInvocationContext.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
@@ -464,7 +391,7 @@ public interface ClusterInstance {
     default void waitAcls(AclBindingFilter filter, Collection<AccessControlEntry> entries) throws InterruptedException {
         for (Authorizer authorizer : authorizers()) {
             AtomicReference<Set<AccessControlEntry>> actualEntries = new AtomicReference<>(new HashSet<>());
-            waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 Set<AccessControlEntry> accessControlEntrySet = new HashSet<>();
                 authorizer.acls(filter).forEach(aclBinding -> accessControlEntrySet.add(aclBinding.entry()));
                 actualEntries.set(accessControlEntrySet);

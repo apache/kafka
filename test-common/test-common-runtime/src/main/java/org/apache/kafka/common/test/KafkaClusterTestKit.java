@@ -35,6 +35,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.api.TestKitDefaults;
+import org.apache.kafka.common.test.junit.RaftClusterInvocationContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -555,7 +556,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         controller.waitForReadyBrokers(brokers.size()).get();
 
         // make sure metadata cache in each broker server is up-to-date
-        ClusterInstance.waitForCondition(() ->
+        RaftClusterInvocationContext.waitForCondition(() ->
                 brokers.values().stream().map(BrokerServer::metadataCache)
                     .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
@@ -655,7 +656,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Controller waitForActiveController() throws InterruptedException {
         AtomicReference<Controller> active = new AtomicReference<>(null);
-        ClusterInstance.waitForCondition(() -> {
+        RaftClusterInvocationContext.waitForCondition(() -> {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
                     active.set(controllerServer.controller());
@@ -747,7 +748,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     private void waitForAllThreads() throws InterruptedException {
-        ClusterInstance.waitForCondition(() -> Thread.getAllStackTraces().keySet()
+        RaftClusterInvocationContext.waitForCondition(() -> Thread.getAllStackTraces().keySet()
                     .stream().noneMatch(t -> threadFactory.getThreadIds().contains(t.getId())),
                 "Failed to wait for all threads to shut down.");
     }

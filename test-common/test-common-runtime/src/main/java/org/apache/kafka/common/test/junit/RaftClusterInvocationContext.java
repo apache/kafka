@@ -75,27 +75,28 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+    public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
                                         final String conditionDetails) throws InterruptedException {
-        var maxWaitMs = 15_000L;
-        long endTime = System.currentTimeMillis() + maxWaitMs;
+        waitForCondition(testCondition, 15_000L, conditionDetails);
+    }
 
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     */
+    public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+                                        final long maxWaitMs,
+                                        final String conditionDetails) throws InterruptedException {
+        long endTime = System.currentTimeMillis() + maxWaitMs;
         while (System.currentTimeMillis() < endTime) {
             try {
-                if (testCondition.get()) {
-                    return;
-                }
-            } catch (Exception e) {
-                if (System.currentTimeMillis() >= endTime) {
-                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", maxWaitMs), e);
-                }
-            }
+                if (testCondition.get()) return;
+            } catch (Exception ignored) { }
 
             if (System.currentTimeMillis() < endTime) {
                 TimeUnit.MILLISECONDS.sleep(100);
             }
         }
-        throw new AssertionError("Condition not met: " + conditionDetails);
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails);
     }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
