@@ -38,6 +38,8 @@ import java.util.Objects;
  *   <li>Old format (DEFAULT CF): {@code [value]}</li>
  *   <li>New format (HEADERS CF): {@code [headersSize(varint)][headersBytes][value]}</li>
  * </ul>
+ * TODO: Current format is {@code [headersSize(varint)][headersBytes][timestamp(8)][value]}.
+ *       The new format will be introduced in KAFKA-20334.
  */
 class WindowSegmentWithHeaders extends RocksDBMigratingWindowStoreWithHeaders implements Segment {
 
