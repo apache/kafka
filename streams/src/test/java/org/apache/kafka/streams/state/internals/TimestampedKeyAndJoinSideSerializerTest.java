@@ -38,6 +38,7 @@ import static org.mockito.Mockito.when;
 
 public class TimestampedKeyAndJoinSideSerializerTest {
     private static final String TOPIC = "some-topic";
+    private static final Headers HEADERS = new RecordHeaders();
 
     private static final TimestampedKeyAndJoinSideSerde<String> STRING_SERDE = new TimestampedKeyAndJoinSideSerde<>(Serdes.String());
 
@@ -47,11 +48,11 @@ public class TimestampedKeyAndJoinSideSerializerTest {
 
         final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.makeLeft(value, 10);
 
-        final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
+        final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, HEADERS, timestampedKeyAndJoinSide);
 
         assertThat(serialized, is(notNullValue()));
 
-        final TimestampedKeyAndJoinSide<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, serialized);
+        final TimestampedKeyAndJoinSide<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
         assertThat(deserialized, is(timestampedKeyAndJoinSide));
     }
@@ -62,11 +63,11 @@ public class TimestampedKeyAndJoinSideSerializerTest {
 
         final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.makeRight(value, 20);
 
-        final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
+        final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, HEADERS, timestampedKeyAndJoinSide);
 
         assertThat(serialized, is(notNullValue()));
 
-        final TimestampedKeyAndJoinSide<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, serialized);
+        final TimestampedKeyAndJoinSide<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
         assertThat(deserialized, is(timestampedKeyAndJoinSide));
     }
@@ -74,7 +75,7 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     @Test
     public void shouldThrowIfSerializeNullData() {
         assertThrows(NullPointerException.class,
-            () -> STRING_SERDE.serializer().serialize(TOPIC, TimestampedKeyAndJoinSide.makeLeft(null, 0)));
+            () -> STRING_SERDE.serializer().serialize(TOPIC, HEADERS, TimestampedKeyAndJoinSide.makeLeft(null, 0)));
     }
 
     @Test

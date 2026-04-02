@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -63,7 +62,7 @@ public class LeftOrRightValueSerializer<V1, V2> implements WrappingNullableSeria
 
     @Override
     public byte[] serialize(final String topic, final LeftOrRightValue<V1, V2> data) {
-        return serialize(topic, new RecordHeaders(), data);
+        throw new UnsupportedOperationException("LeftOrRightValueSerializer requires the headers-aware version of serialize");
     }
 
     @Override

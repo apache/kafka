@@ -66,7 +66,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
 
         @Override
         public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
-            return serialize(topic, new RecordHeaders(), data);
+            throw new UnsupportedOperationException("SubscriptionResponseWrapperSerializer requires the headers-aware version of serialize");
         }
 
         @Override

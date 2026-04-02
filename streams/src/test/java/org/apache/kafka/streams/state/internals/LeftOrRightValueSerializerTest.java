@@ -34,6 +34,7 @@ import static org.mockito.Mockito.verify;
 
 public class LeftOrRightValueSerializerTest {
     private static final String TOPIC = "some-topic";
+    private static final Headers HEADERS = new RecordHeaders();
 
     private static final LeftOrRightValueSerde<String, Integer> STRING_OR_INTEGER_SERDE = new LeftOrRightValueSerde<>(Serdes.String(), Serdes.Integer());
 
@@ -43,11 +44,11 @@ public class LeftOrRightValueSerializerTest {
 
         final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeLeftValue(value);
 
-        final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
+        final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, HEADERS, leftOrRightValue);
 
         assertThat(serialized, is(notNullValue()));
 
-        final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
+        final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
         assertThat(deserialized, is(leftOrRightValue));
     }
@@ -58,11 +59,11 @@ public class LeftOrRightValueSerializerTest {
 
         final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeRightValue(value);
 
-        final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
+        final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, HEADERS, leftOrRightValue);
 
         assertThat(serialized, is(notNullValue()));
 
-        final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
+        final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
         assertThat(deserialized, is(leftOrRightValue));
     }
@@ -70,13 +71,13 @@ public class LeftOrRightValueSerializerTest {
     @Test
     public void shouldThrowIfSerializeValueAsNull() {
         assertThrows(NullPointerException.class,
-            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeLeftValue(null)));
+            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, HEADERS, LeftOrRightValue.makeLeftValue(null)));
     }
 
     @Test
     public void shouldThrowIfSerializeOtherValueAsNull() {
         assertThrows(NullPointerException.class,
-            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeRightValue(null)));
+            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, HEADERS, LeftOrRightValue.makeRightValue(null)));
     }
 
     @Test

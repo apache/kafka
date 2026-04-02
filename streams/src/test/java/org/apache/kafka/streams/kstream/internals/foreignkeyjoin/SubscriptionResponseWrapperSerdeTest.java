@@ -76,14 +76,16 @@ public class SubscriptionResponseWrapperSerdeTest {
         }
     }
 
+    private static final Headers HEADERS = new RecordHeaders();
+
     @Test
-    public void ShouldSerdeWithNonNullsTest() {
+    public void shouldSerdeWithNonNullsTest() {
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final String foreignValue = "foreignValue";
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue, 1);
         try (final SubscriptionResponseWrapperSerde<String> srwSerde = new SubscriptionResponseWrapperSerde<>(new NonNullableSerde<>(Serdes.String()))) {
-            final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
+            final byte[] serResponse = srwSerde.serializer().serialize(null, HEADERS, srw);
+            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, HEADERS, serResponse);
 
             assertArrayEquals(hashedValue, result.originalValueHash());
             assertEquals(foreignValue, result.foreignValue());
@@ -96,8 +98,8 @@ public class SubscriptionResponseWrapperSerdeTest {
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, null, 1);
         try (final SubscriptionResponseWrapperSerde<String> srwSerde = new SubscriptionResponseWrapperSerde<>(new NonNullableSerde<>(Serdes.String()))) {
-            final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
+            final byte[] serResponse = srwSerde.serializer().serialize(null, HEADERS, srw);
+            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, HEADERS, serResponse);
 
             assertArrayEquals(hashedValue, result.originalValueHash());
             assertNull(result.foreignValue());
@@ -111,8 +113,8 @@ public class SubscriptionResponseWrapperSerdeTest {
         final String foreignValue = "foreignValue";
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue, 1);
         try (final SubscriptionResponseWrapperSerde<String> srwSerde = new SubscriptionResponseWrapperSerde<>(new NonNullableSerde<>(Serdes.String()))) {
-            final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
+            final byte[] serResponse = srwSerde.serializer().serialize(null, HEADERS, srw);
+            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, HEADERS, serResponse);
 
             assertArrayEquals(hashedValue, result.originalValueHash());
             assertEquals(foreignValue, result.foreignValue());
@@ -126,8 +128,8 @@ public class SubscriptionResponseWrapperSerdeTest {
         final String foreignValue = null;
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue, 1);
         try (final SubscriptionResponseWrapperSerde<String> srwSerde = new SubscriptionResponseWrapperSerde<>(new NonNullableSerde<>(Serdes.String()))) {
-            final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
+            final byte[] serResponse = srwSerde.serializer().serialize(null, HEADERS, srw);
+            final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, HEADERS, serResponse);
 
             assertArrayEquals(hashedValue, result.originalValueHash());
             assertEquals(foreignValue, result.foreignValue());
@@ -150,7 +152,7 @@ public class SubscriptionResponseWrapperSerdeTest {
         try (final SubscriptionResponseWrapperSerde<String> srwSerde = new SubscriptionResponseWrapperSerde<>(null)) {
             assertThrows(
                 UnsupportedVersionException.class,
-                () -> srwSerde.serializer().serialize(null, srw)
+                () -> srwSerde.serializer().serialize(null, HEADERS, srw)
             );
         }
     }

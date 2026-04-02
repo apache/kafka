@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
@@ -58,7 +57,7 @@ public class TimestampedKeyAndJoinSideDeserializer<K> implements WrappingNullabl
 
     @Override
     public TimestampedKeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
-        return deserialize(topic, new RecordHeaders(), data);
+        throw new UnsupportedOperationException("TimestampedKeyAndJoinSideDeserializer requires the headers-aware version of deserialize");
     }
 
     @Override
