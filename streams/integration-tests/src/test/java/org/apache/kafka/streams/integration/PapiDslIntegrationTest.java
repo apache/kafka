@@ -366,7 +366,6 @@ public class PapiDslIntegrationTest {
         }
     }
 
-
     @Test
     public void processorShouldAccessKStreamSessionReducedKTableStoreAsTimestampedStore() {
         verifySession(builder
@@ -376,6 +375,7 @@ public class PapiDslIntegrationTest {
             .reduce(
                 (value, aggregate) -> value,
                 Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
         );
     }
 
