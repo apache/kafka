@@ -125,8 +125,9 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     }
 
     public void completeExceptionally(KafkaException e) {
-        // Complete reconciliation future exceptionally so callers don't block on a failed event
-        reconciliationCheckFuture.completeExceptionally(e);
+        // Complete reconciliation future to unblock any waiters - the error will be surfaced
+        // through the normal checkInflightPoll() mechanism via the error field
+        reconciliationCheckFuture.complete(null);
         error = e;
         isComplete = true;
     }
