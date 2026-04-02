@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -118,7 +117,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
 
         @Override
         public SubscriptionResponseWrapper<V> deserialize(final String topic, final byte[] data) {
-            return deserialize(topic, new RecordHeaders(), data);
+            throw new UnsupportedOperationException("SubscriptionResponseWrapperSerializer requires the headers-aware version of deserialize");
         }
 
         @Override
