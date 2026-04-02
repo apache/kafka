@@ -112,12 +112,14 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 3000);
     }
 
     @AfterEach
     public void tearDown() {
         if (streams != null) {
-            streams.close(STREAMS_CLOSE_TIMEOUT);
+            closeStreams(streams);
             streams.cleanUp();
         }
     }
@@ -213,6 +215,10 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
     // Streams lifecycle helpers
     // -----------------------------------------------------------
 
+    private void closeStreams(final KafkaStreams kafkaStreams) {
+        kafkaStreams.close(STREAMS_CLOSE_TIMEOUT);
+    }
+
     private KafkaStreams startStreams() throws Exception {
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
@@ -294,7 +300,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then corrupt store status
-        streams.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -343,7 +349,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then corrupt store status to simulate unclean shutdown
-        streams.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -387,7 +393,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then delete offset entries (keep status=closed)
-        streams.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams);
         streams = null;
 
         deleteAllOffsets(STORE_NAME);
@@ -431,7 +437,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, then corrupt BOTH status and offsets
-        streams.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -475,7 +481,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(batch1.size());
 
         // Phase 2: clean shutdown, corrupt store status
-        streams.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -542,7 +548,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: clean shutdown, corrupt ONLY store 1 (leave store 2 clean)
-        streams.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams);
         streams = null;
 
         setAllStoreStatusesToOpen(STORE_NAME);
@@ -613,7 +619,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 3: shut down instance 1, corrupt its store status
-        streams1.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams1);
 
         // Corrupt all store dirs under instance 1's state directory
         final String appId = streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -636,7 +642,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForRunning(streams1Restart);
 
         // Phase 5: shut down instance 2, verify instance 1 takes over
-        streams2.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams2);
 
         // Produce more records and verify instance 1 processes them as active
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -705,7 +711,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         // This simulates the LittleHorse scenario: complete state deletion followed by
         // changelog restoration. The standby tasks on this instance will have stores
         // that were never initialized with offsets.
-        streams1.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams1);
         streams1.cleanUp();
 
         final StreamsBuilder builder1Restart = buildCountTopology();
@@ -716,7 +722,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         // Phase 3: trigger a rebalance by shutting down instance 2 and restarting it.
         // Before the fix, the standby tasks on instance 1 would throw
         // TaskCorruptedException during the rebalance when re-initializing store offsets.
-        streams2.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams2);
 
         final StreamsBuilder builder2Restart = buildCountTopology();
         final KafkaStreams streams2Restart = new KafkaStreams(builder2Restart.build(), config2);
@@ -735,7 +741,7 @@ public class ColumnFamilyOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size() + additionalRecords.size());
 
         // Clean up
-        streams2Restart.close(STREAMS_CLOSE_TIMEOUT);
+        closeStreams(streams2Restart);
         streams = streams1Restart;
     }
 }
