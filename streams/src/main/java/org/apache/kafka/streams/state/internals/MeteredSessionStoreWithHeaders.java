@@ -309,7 +309,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                     byteArray -> {
                         final ValueWithHeaders<AGG> awh =
                             serdes.valueDeserializer().deserialize(serdes.topic(), byteArray);
-                        return awh == null ? null : awh.aggregation();
+                        return awh == null ? null : awh.value();
                     },
                     time,
                     numOpenIterators,

@@ -1844,7 +1844,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
                             final ValueWithHeaders<String> result = kv.value;
                             assertNotNull(result, "Result should not be null");
-                            assertEquals(value, result.aggregation(), "Value should match");
+                            assertEquals(value, result.value(), "Value should match");
 
                             // Verify headers exist but are empty (migrated from plain session store)
                             assertNotNull(result.headers(), "Headers should not be null for migrated data");
@@ -1898,7 +1898,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
                             final ValueWithHeaders<String> result = kv.value;
                             return result != null
-                                && result.aggregation().equals(value)
+                                && result.value().equals(value)
                                 && result.headers().equals(expectedHeaders);
                         }
                     }

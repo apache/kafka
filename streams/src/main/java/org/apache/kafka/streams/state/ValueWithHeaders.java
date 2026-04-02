@@ -21,10 +21,10 @@ import org.apache.kafka.common.header.Headers;
 import java.util.Objects;
 
 /**
- * Combines an aggregated value with its associated record headers.
- * This is used by SessionStoreWithHeaders to store session aggregations along with headers.
+ * Combines a value with its associated record headers.
+ * This is used by SessionStoreWithHeaders and WindowStoreWithHeaders to store values along with headers.
  *
- * @param <V> the aggregation type
+ * @param <V> the value type
  */
 public final class ValueWithHeaders<V> {
 
@@ -38,47 +38,47 @@ public final class ValueWithHeaders<V> {
     }
 
     /**
-     * Create a new {@link ValueWithHeaders} instance if the provided {@code aggregation} is not {@code null}.
+     * Create a new {@link ValueWithHeaders} instance if the provided {@code value} is not {@code null}.
      *
-     * @param aggregation the aggregation
-     * @param headers     the headers (may be {@code null}, treated as empty)
-     * @param <AGG>       the type of the aggregation
-     * @return a new {@link ValueWithHeaders} instance if the provided {@code aggregation} is not {@code null};
+     * @param value   the value
+     * @param headers the headers (may be {@code null}, treated as empty)
+     * @param <V>     the type of the value
+     * @return a new {@link ValueWithHeaders} instance if the provided {@code value} is not {@code null};
      * otherwise {@code null} is returned
      */
-    public static <AGG> ValueWithHeaders<AGG> make(final AGG aggregation, final Headers headers) {
-        if (aggregation == null) {
+    public static <V> ValueWithHeaders<V> make(final V value, final Headers headers) {
+        if (value == null) {
             return null;
         }
-        return new ValueWithHeaders<>(aggregation, headers);
+        return new ValueWithHeaders<>(value, headers);
     }
 
     /**
      * Create a new {@link ValueWithHeaders} instance.
-     * The provided {@code aggregation} may be {@code null}.
+     * The provided {@code value} may be {@code null}.
      *
-     * @param aggregation the aggregation (may be {@code null})
-     * @param headers     the headers (may be {@code null}, treated as empty)
-     * @param <AGG>       the type of the aggregation
+     * @param value   the value (may be {@code null})
+     * @param headers the headers (may be {@code null}, treated as empty)
+     * @param <V>     the type of the value
      * @return a new {@link ValueWithHeaders} instance
      */
-    public static <AGG> ValueWithHeaders<AGG> makeAllowNullable(final AGG aggregation, final Headers headers) {
-        return new ValueWithHeaders<>(aggregation, headers);
+    public static <V> ValueWithHeaders<V> makeAllowNullable(final V value, final Headers headers) {
+        return new ValueWithHeaders<>(value, headers);
     }
 
     /**
-     * Return the wrapped {@code aggregation} of the given {@code valueWithHeaders} parameter
+     * Return the wrapped {@code value} of the given {@code valueWithHeaders} parameter
      * if the parameter is not {@code null}.
      *
      * @param valueWithHeaders an {@link ValueWithHeaders} instance; can be {@code null}
-     * @param <AGG>                  the type of the aggregation
-     * @return the wrapped {@code aggregation} of {@code valueWithHeaders} if not {@code null}; otherwise {@code null}
+     * @param <V>              the type of the value
+     * @return the wrapped {@code value} of {@code valueWithHeaders} if not {@code null}; otherwise {@code null}
      */
-    public static <AGG> AGG getValueOrNull(final ValueWithHeaders<AGG> valueWithHeaders) {
+    public static <V> V getValueOrNull(final ValueWithHeaders<V> valueWithHeaders) {
         return valueWithHeaders == null ? null : valueWithHeaders.value;
     }
 
-    public V aggregation() {
+    public V value() {
         return value;
     }
 
@@ -107,7 +107,7 @@ public final class ValueWithHeaders<V> {
     @Override
     public String toString() {
         return "ValueWithHeaders{" +
-            "aggregation=" + value +
+            "value=" + value +
             ", headers=" + headers +
             '}';
     }

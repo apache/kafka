@@ -50,7 +50,7 @@ public class ValueWithHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldDeserializeAggregationWithEmptyHeaders() {
+    public void shouldDeserializeValueWithEmptyHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
@@ -61,7 +61,7 @@ public class ValueWithHeadersDeserializerTest {
         final ValueWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
 
         assertNotNull(result);
-        assertEquals(aggregation, result.aggregation());
+        assertEquals(aggregation, result.value());
         assertNotNull(result.headers());
     }
 
@@ -79,7 +79,7 @@ public class ValueWithHeadersDeserializerTest {
         final ValueWithHeaders<Long> result = deserializer.deserialize("topic", serialized);
 
         assertNotNull(result);
-        assertEquals(aggregation, result.aggregation());
+        assertEquals(aggregation, result.value());
         assertNotNull(result.headers());
 
         final Iterator<Header> iterator = result.headers().iterator();

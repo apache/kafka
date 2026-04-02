@@ -526,7 +526,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
     private void assertValueWithHeaders(final byte[] value, final String expectedAggregation, final Headers expectedHeaders) {
         final ValueWithHeaders<String> deserialized = aggDeserializer.deserialize(null, value);
-        assertEquals(expectedAggregation, deserialized.aggregation());
+        assertEquals(expectedAggregation, deserialized.value());
         for (final Header header : expectedHeaders) {
             assertArrayEquals(
                 header.value(),

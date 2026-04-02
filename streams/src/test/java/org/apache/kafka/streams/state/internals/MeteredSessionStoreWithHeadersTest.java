@@ -224,7 +224,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final ValueWithHeadersDeserializer<String> deserializer = new ValueWithHeadersDeserializer<>(Serdes.String().deserializer());
         final ValueWithHeaders<String> deserialized = deserializer.deserialize(CHANGELOG_TOPIC, byteCaptor.getValue());
-        assertEquals(VALUE, deserialized.aggregation());
+        assertEquals(VALUE, deserialized.value());
         assertNotNull(deserialized.headers());
         assertEquals("value1", new String(deserialized.headers().lastHeader("key1").value()));
 
@@ -250,7 +250,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final ValueWithHeaders<String> result = store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
 
         assertNotNull(result);
-        assertEquals(VALUE, result.aggregation());
+        assertEquals(VALUE, result.value());
         assertNotNull(result.headers());
         assertEquals("value1", new String(result.headers().lastHeader("key1").value()));
 
@@ -278,7 +278,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -308,7 +308,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -338,7 +338,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -383,7 +383,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -413,7 +413,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -443,7 +443,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -531,7 +531,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
@@ -561,7 +561,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(iterator.hasNext());
         final KeyValue<Windowed<String>, ValueWithHeaders<String>> next = iterator.next();
-        assertEquals(VALUE, next.value.aggregation());
+        assertEquals(VALUE, next.value.value());
         assertNotNull(next.value.headers());
         assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());

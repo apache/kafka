@@ -62,7 +62,7 @@ class ValueWithHeadersSerializer<V> implements WrappingNullableSerializer<ValueW
         if (valueWithHeaders == null) {
             return null;
         }
-        return serialize(topic, valueWithHeaders.aggregation(), valueWithHeaders.headers());
+        return serialize(topic, valueWithHeaders.value(), valueWithHeaders.headers());
     }
 
     private byte[] serialize(final String topic, final V plainValue, final Headers headers) {

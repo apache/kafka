@@ -32,75 +32,75 @@ public class ValueWithHeadersTest {
 
     @Test
     public void shouldCreateValueWithHeaders() {
-        final Long aggregation = 100L;
+        final Long value = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
 
-        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
+        final ValueWithHeaders<Long> valueWithHeaders = ValueWithHeaders.make(value, headers);
 
-        assertNotNull(aggregationWithHeaders);
-        assertEquals(aggregation, aggregationWithHeaders.aggregation());
-        assertEquals(headers, aggregationWithHeaders.headers());
+        assertNotNull(valueWithHeaders);
+        assertEquals(value, valueWithHeaders.value());
+        assertEquals(headers, valueWithHeaders.headers());
     }
 
     @Test
-    public void shouldReturnNullForNullAggregation() {
-        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(null, new RecordHeaders());
-        assertNull(aggregationWithHeaders);
+    public void shouldReturnNullForNullValue() {
+        final ValueWithHeaders<Long> valueWithHeaders = ValueWithHeaders.make(null, new RecordHeaders());
+        assertNull(valueWithHeaders);
     }
 
     @Test
     public void shouldNotCreateWithNullHeaders() {
-        final Long aggregation = 100L;
-        assertThrows(NullPointerException.class, () -> ValueWithHeaders.make(aggregation, null));
+        final Long value = 100L;
+        assertThrows(NullPointerException.class, () -> ValueWithHeaders.make(value, null));
     }
 
     @Test
-    public void shouldAllowNullableAggregation() {
-        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.makeAllowNullable(null, new RecordHeaders());
+    public void shouldAllowNullableValue() {
+        final ValueWithHeaders<Long> valueWithHeaders = ValueWithHeaders.makeAllowNullable(null, new RecordHeaders());
 
-        assertNotNull(aggregationWithHeaders);
-        assertNull(aggregationWithHeaders.aggregation());
+        assertNotNull(valueWithHeaders);
+        assertNull(valueWithHeaders.value());
     }
 
     @Test
     public void shouldGetValueOrNull() {
-        final Long aggregation = 100L;
-        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, new RecordHeaders());
+        final Long value = 100L;
+        final ValueWithHeaders<Long> valueWithHeaders = ValueWithHeaders.make(value, new RecordHeaders());
 
-        assertEquals(aggregation, ValueWithHeaders.getValueOrNull(aggregationWithHeaders));
+        assertEquals(value, ValueWithHeaders.getValueOrNull(valueWithHeaders));
         assertNull(ValueWithHeaders.getValueOrNull(null));
     }
 
     @Test
     public void shouldImplementEquals() {
-        final Long aggregation = 100L;
+        final Long value = 100L;
         final Headers headers1 = new RecordHeaders();
         headers1.add("key1", "value1".getBytes());
 
         final Headers headers2 = new RecordHeaders();
         headers2.add("key1", "value1".getBytes());
 
-        final ValueWithHeaders<Long> aggregationWithHeaders1 = ValueWithHeaders.make(aggregation, headers1);
-        final ValueWithHeaders<Long> aggregationWithHeaders2 = ValueWithHeaders.make(aggregation, headers2);
+        final ValueWithHeaders<Long> valueWithHeaders1 = ValueWithHeaders.make(value, headers1);
+        final ValueWithHeaders<Long> valueWithHeaders2 = ValueWithHeaders.make(value, headers2);
 
-        assertEquals(aggregationWithHeaders1, aggregationWithHeaders2);
-        assertEquals(aggregationWithHeaders1.hashCode(), aggregationWithHeaders2.hashCode());
+        assertEquals(valueWithHeaders1, valueWithHeaders2);
+        assertEquals(valueWithHeaders1.hashCode(), valueWithHeaders2.hashCode());
     }
 
     @Test
-    public void shouldNotBeEqualWithDifferentAggregations() {
+    public void shouldNotBeEqualWithDifferentValues() {
         final Headers headers = new RecordHeaders();
 
-        final ValueWithHeaders<Long> aggregationWithHeaders1 = ValueWithHeaders.make(100L, headers);
-        final ValueWithHeaders<Long> aggregationWithHeaders2 = ValueWithHeaders.make(200L, headers);
+        final ValueWithHeaders<Long> valueWithHeaders1 = ValueWithHeaders.make(100L, headers);
+        final ValueWithHeaders<Long> valueWithHeaders2 = ValueWithHeaders.make(200L, headers);
 
-        assertNotEquals(aggregationWithHeaders1, aggregationWithHeaders2);
+        assertNotEquals(valueWithHeaders1, valueWithHeaders2);
     }
 
     @Test
     public void shouldNotBeEqualWithDifferentHeaders() {
-        final Long aggregation = 100L;
+        final Long value = 100L;
 
         final Headers headers1 = new RecordHeaders();
         headers1.add("key1", "value1".getBytes());
@@ -108,23 +108,23 @@ public class ValueWithHeadersTest {
         final Headers headers2 = new RecordHeaders();
         headers2.add("key2", "value2".getBytes());
 
-        final ValueWithHeaders<Long> aggregationWithHeaders1 = ValueWithHeaders.make(aggregation, headers1);
-        final ValueWithHeaders<Long> aggregationWithHeaders2 = ValueWithHeaders.make(aggregation, headers2);
+        final ValueWithHeaders<Long> valueWithHeaders1 = ValueWithHeaders.make(value, headers1);
+        final ValueWithHeaders<Long> valueWithHeaders2 = ValueWithHeaders.make(value, headers2);
 
-        assertNotEquals(aggregationWithHeaders1, aggregationWithHeaders2);
+        assertNotEquals(valueWithHeaders1, valueWithHeaders2);
     }
 
     @Test
     public void shouldImplementToString() {
-        final Long aggregation = 100L;
+        final Long value = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
 
-        final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
-        final String toString = aggregationWithHeaders.toString();
+        final ValueWithHeaders<Long> valueWithHeaders = ValueWithHeaders.make(value, headers);
+        final String toString = valueWithHeaders.toString();
 
         assertNotNull(toString);
-        assertTrue(toString.contains("aggregation=100"));
+        assertTrue(toString.contains("value=100"));
         assertTrue(toString.contains("headers="));
     }
 }

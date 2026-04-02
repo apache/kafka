@@ -41,7 +41,7 @@ public class ValueWithHeadersSerializerTest {
     }
 
     @Test
-    public void shouldSerializeAggregationWithEmptyHeaders() {
+    public void shouldSerializeValueWithEmptyHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.make(aggregation, headers);
@@ -79,12 +79,12 @@ public class ValueWithHeadersSerializerTest {
         final ValueWithHeaders<Long> deserialized = deserializer.deserialize("topic", serialized);
 
         assertNotNull(deserialized);
-        assertEquals(aggregation, deserialized.aggregation());
+        assertEquals(aggregation, deserialized.value());
         assertNotNull(deserialized.headers());
     }
 
     @Test
-    public void shouldHandleNullAggregationInValueWithHeaders() {
+    public void shouldHandleNullValueInValueWithHeaders() {
         final ValueWithHeaders<Long> aggregationWithHeaders = ValueWithHeaders.makeAllowNullable(null, new RecordHeaders());
         final byte[] result = serializer.serialize("topic", aggregationWithHeaders);
 
