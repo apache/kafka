@@ -47,7 +47,7 @@ class WindowSegmentsWithHeaders extends AbstractSegments<WindowSegmentWithHeader
 
     @Override
     protected void openSegmentDB(final WindowSegmentWithHeaders segment, final StateStoreContext context) {
-        segment.openDB(context.appConfigs(), context.stateDir());
+        segment.openDB(context.appConfigs(), context.stateDir(), context.taskId());
     }
 
     @Override

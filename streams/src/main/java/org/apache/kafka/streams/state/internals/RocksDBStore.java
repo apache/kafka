@@ -28,8 +28,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
@@ -167,7 +169,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                      final StateStore root) {
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
-        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
+        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir(), stateStoreContext.taskId());
         StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), position);
 
         // value getter should always read directly from rocksDB
@@ -185,7 +187,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @SuppressWarnings("unchecked")
-    void openDB(final Map<String, Object> configs, final File stateDir) {
+    void openDB(final Map<String, Object> configs, final File stateDir, final TaskId taskId) {
         final boolean eosEnabled = Objects.equals(configs.get(PROCESSING_GUARANTEE_CONFIG), EXACTLY_ONCE_V2);
         // initialize the default rocksdb options
         final DBOptions dbOptions = new DBOptions();
@@ -256,11 +258,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
                     position.merge(existingPositionOrEmpty);
                 }
-            } catch (final StreamsException fatal) {
+            } catch (final ProcessorStateException fatal) {
                 final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
-                throw new ProcessorStateException(fatalMessage, fatal);
+                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(fatalMessage, fatal));
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error opening store " + name, e);
+                final String fatalMessage = "Error opening store " + name;
+                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(fatalMessage));
             }
         } catch (final RuntimeException e) {
             closeNativeResources();
