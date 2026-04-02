@@ -1037,9 +1037,10 @@ public class LocalLog {
         // delete the old files
         List<LogSegment> deletedNotReplaced = new ArrayList<>();
         for (LogSegment segment : sortedOldSegments) {
-            // remove the index entry
-            if (segment.baseOffset() != sortedNewSegments.get(0).baseOffset()) {
+            // remove the index entry; skip removal for base offsets that a new segment is replacing in-place
+            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
                 existingSegments.remove(segment.baseOffset());
+                deletedNotReplaced.add(segment);
             }
             deleteSegmentFiles(
                     List.of(segment),
@@ -1050,9 +1051,6 @@ public class LocalLog {
                     scheduler,
                     logDirFailureChannel,
                     logPrefix);
-            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
-                deletedNotReplaced.add(segment);
-            }
         }
 
         // okay we are safe now, remove the swap suffix

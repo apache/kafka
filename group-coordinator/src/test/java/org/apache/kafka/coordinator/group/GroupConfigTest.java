@@ -28,9 +28,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT;
@@ -635,6 +637,34 @@ public class GroupConfigTest {
         Properties result = GroupConfig.evaluate(props, "test-group",
             GroupCoordinatorConfig.fromProps(new HashMap<>()), ShareGroupConfig.fromProps(new HashMap<>()));
         assertEquals(expectedMin, result.get(key));
+    }
+
+    @Test
+    public void testAllGroupConfigSynonyms() {
+        // Every GroupConfig entry should have an entry in ALL_GROUP_CONFIG_SYNONYMS.
+        for (String groupConfigName : GroupConfig.CONFIG_DEF.names()) {
+            assertTrue(GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.containsKey(groupConfigName),
+                "GroupConfig entry '" + groupConfigName + "' is not in ALL_GROUP_CONFIG_SYNONYMS. " +
+                    "Add it with Optional.of(brokerConfigName) or Optional.empty() if it has no broker synonym.");
+        }
+
+        // Every key in ALL_GROUP_CONFIG_SYNONYMS should be a valid GroupConfig entry.
+        for (String key : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.keySet()) {
+            assertTrue(GroupConfig.CONFIG_DEF.names().contains(key),
+                "ALL_GROUP_CONFIG_SYNONYMS contains '" + key + "' which is not a valid GroupConfig entry.");
+        }
+
+        // Every present synonym mapping should point to a valid broker config.
+        Set<String> brokerConfigNames = new HashSet<>();
+        brokerConfigNames.addAll(GroupCoordinatorConfig.CONFIG_DEF.names());
+        brokerConfigNames.addAll(ShareGroupConfig.CONFIG_DEF.names());
+
+        for (Map.Entry<String, Optional<String>> entry : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.entrySet()) {
+            entry.getValue().ifPresent(brokerConfigName ->
+                assertTrue(brokerConfigNames.contains(brokerConfigName),
+                    "ALL_GROUP_CONFIG_SYNONYMS maps '" + entry.getKey() + "' to '" +
+                        brokerConfigName + "' but this broker config does not exist."));
+        }
     }
 
     private Map<String, String> createValidGroupConfig() {

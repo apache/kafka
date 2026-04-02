@@ -18,19 +18,44 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.errors.RetriableException;
 
+/**
+ * Exception thrown when an offset commit fails with a retriable error.
+ * This exception is generated on the client side upon receiving retriable error codes
+ * from the Group Coordinator in a commit response.
+ * <p>
+ * Unlike {@link CommitFailedException}, this exception indicates that the commit
+ * can be retried. The consumer should attempt to commit the offsets again.
+ * </p>
+ */
 public class RetriableCommitFailedException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new RetriableCommitFailedException with the specified cause.
+     *
+     * @param t The cause of the exception
+     */
     public RetriableCommitFailedException(Throwable t) {
         super("Offset commit failed with a retriable exception. You should retry committing " +
                 "the latest consumed offsets.", t);
     }
 
+    /**
+     * Constructs a new RetriableCommitFailedException with the specified detail message.
+     *
+     * @param message The detail message
+     */
     public RetriableCommitFailedException(String message) {
         super(message);
     }
 
+    /**
+     * Constructs a new RetriableCommitFailedException with the specified detail message and cause.
+     *
+     * @param message The detail message
+     * @param t The cause of the exception
+     */
     public RetriableCommitFailedException(String message, Throwable t) {
         super(message, t);
     }

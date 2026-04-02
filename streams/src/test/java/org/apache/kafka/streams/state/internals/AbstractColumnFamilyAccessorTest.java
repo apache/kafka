@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.Position;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,18 +29,21 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 abstract class AbstractColumnFamilyAccessorTest {
@@ -67,41 +71,75 @@ abstract class AbstractColumnFamilyAccessorTest {
 
     @Test
     public void shouldOpenClean() throws RocksDBException {
-        when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(closedValue);
-
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         // Open the ColumnFamily
         accessor.open(dbAccessor, false);
-        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(openValue));
+        assertArrayEquals(openValue, dbAccessor.get(offsetsCF, toBytes("status")));
 
         // Now close the ColumnFamily
         accessor.close(dbAccessor);
-        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(closedValue));
+        assertArrayEquals(closedValue, dbAccessor.get(offsetsCF, toBytes("status")));
+
+        // Open clean again
+        accessor.open(dbAccessor, false);
+        assertArrayEquals(openValue, dbAccessor.get(offsetsCF, toBytes("status")));
     }
 
     @Test
     public void shouldThrowOnOpenAfterAUncleanClose() throws RocksDBException {
-        when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(openValue);
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        // First, open clean
+        accessor.open(dbAccessor, false);
+
+        // Try to open again, with ignoreUncleanClose=false, which should throw since the store is already open
         final ProcessorStateException thrown = assertThrowsExactly(ProcessorStateException.class, () -> accessor.open(dbAccessor, false));
         assertEquals("Invalid state during store open. Expected state to be either empty or closed", thrown.getMessage());
     }
 
     @Test
     public void shouldIgnoreExceptionAfterUncleanClose() throws RocksDBException {
-        when(dbAccessor.get(offsetsCF, toBytes("status"))).thenReturn(openValue);
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        // First, open clean
+        accessor.open(dbAccessor, false);
+        // Now reopen in an invalid state
         accessor.open(dbAccessor, true);
         assertTrue(storeOpen.get());
-        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes("status")), eq(openValue));
+        assertArrayEquals(openValue, dbAccessor.get(offsetsCF, toBytes("status")));
     }
 
     @Test
     public void shouldCommitOffsets() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
         accessor.commit(dbAccessor, changelogOffsets);
-        verify(dbAccessor).flush(any(ColumnFamilyHandle[].class));
-        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes(tp0.toString())), eq(toBytes(10L)));
-        verify(dbAccessor).put(eq(offsetsCF), eq(toBytes(tp1.toString())), eq(toBytes(20L)));
+        assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
+        assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
+    }
+
+    @Test
+    public void shouldCommitPosition() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final String topic = "testTopic";
+        final TopicPartition tp0 = new TopicPartition(topic, 0);
+        final TopicPartition tp1 = new TopicPartition(topic, 1);
+        final Position positionToStore = Position.fromMap(mkMap(mkEntry(topic, mkMap(mkEntry(tp0.partition(), 10L), mkEntry(tp1.partition(), 20L)))));
+        accessor.commit(dbAccessor, positionToStore);
+        assertEquals(positionToStore, PositionSerde.deserialize(ByteBuffer.wrap(dbAccessor.get(offsetsCF, toBytes("position")))));
+    }
+
+    @Test
+    public void shouldWipeCommittedOffsetsOnEmptyCommit() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final TopicPartition tp0 = new TopicPartition("testTopic", 0);
+        final TopicPartition tp1 = new TopicPartition("testTopic", 1);
+        accessor.commit(dbAccessor, Map.of(tp0, 10L, tp1, 20L));
+        assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
+        assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
+        accessor.commit(dbAccessor, Map.of());
+        assertNull(accessor.getCommittedOffset(dbAccessor, tp0));
+        assertNull(accessor.getCommittedOffset(dbAccessor, tp1));
     }
 
     private byte[] toBytes(final String s) {

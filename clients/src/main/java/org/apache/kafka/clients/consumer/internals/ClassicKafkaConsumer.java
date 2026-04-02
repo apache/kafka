@@ -71,6 +71,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -208,6 +209,22 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
+
+            // If the classic rebalance protocol is used, log message to guide users towards upgrading to the
+            // next-generation consumer rebalance protocol
+            if (groupId.isPresent()) {
+                boolean isStreamsConsumer = assignors.stream()
+                        .anyMatch(a -> a.getClass().getName().contains("StreamsPartitionAssignor"));
+                if (!isStreamsConsumer) {
+                    log.info("\n" +
+                            "****************************************************************\n" +
+                            "* The consumer rebalance protocol (KIP-848) is production-ready!\n" +
+                            "* Set the consumer configuration {}={} to try it out.\n" +
+                            "* See https://kafka.apache.org/documentation/#consumer_rebalance_protocol\n" +
+                            "****************************************************************",
+                            ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+                }
+            }
 
             // no coordinator will be constructed for the default (null) group id
             if (groupId.isEmpty()) {

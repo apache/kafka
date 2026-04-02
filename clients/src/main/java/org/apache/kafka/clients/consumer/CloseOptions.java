@@ -22,6 +22,13 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * Options for controlling the consumer close behavior.
+ * <p>
+ * This class allows customization of the close timeout and group membership operation
+ * when a consumer is being shut down.
+ * </p>
+ */
 public class CloseOptions {
     /**
      * Enum to specify the group membership operation upon leaving group.
@@ -62,8 +69,8 @@ public class CloseOptions {
     /**
      * Static method to create a {@code CloseOptions} with a custom timeout.
      *
-     * @param timeout the maximum time to wait for the consumer to close.
-     * @return a new {@code CloseOptions} instance with the specified timeout.
+     * @param timeout The maximum time to wait for the consumer to close.
+     * @return A new {@code CloseOptions} instance with the specified timeout.
      */
     public static CloseOptions timeout(final Duration timeout) {
         return new CloseOptions().withTimeout(timeout);
@@ -72,9 +79,9 @@ public class CloseOptions {
     /**
      * Static method to create a {@code CloseOptions} with a specified group membership operation.
      *
-     * @param operation the group membership operation to apply. Must be one of {@code LEAVE_GROUP}, {@code REMAIN_IN_GROUP},
+     * @param operation The group membership operation to apply. Must be one of {@code LEAVE_GROUP}, {@code REMAIN_IN_GROUP},
      *                  or {@code DEFAULT}.
-     * @return a new {@code CloseOptions} instance with the specified group membership operation.
+     * @return A new {@code CloseOptions} instance with the specified group membership operation.
      */
     public static CloseOptions groupMembershipOperation(final GroupMembershipOperation operation) {
         return new CloseOptions().withGroupMembershipOperation(operation);
@@ -83,8 +90,8 @@ public class CloseOptions {
     /**
      * Fluent method to set the timeout for the close process.
      *
-     * @param timeout the maximum time to wait for the consumer to close. If {@code null}, the default timeout will be used.
-     * @return this {@code CloseOptions} instance.
+     * @param timeout The maximum time to wait for the consumer to close. If {@code null}, the default timeout will be used.
+     * @return This {@code CloseOptions} instance.
      */
     public CloseOptions withTimeout(final Duration timeout) {
         this.timeout = Optional.ofNullable(timeout);
@@ -94,18 +101,28 @@ public class CloseOptions {
     /**
      * Fluent method to set the group membership operation upon shutdown.
      *
-     * @param operation the group membership operation to apply. Must be one of {@code LEAVE_GROUP}, {@code REMAIN_IN_GROUP}, or {@code DEFAULT}.
-     * @return this {@code CloseOptions} instance.
+     * @param operation The group membership operation to apply. Must be one of {@code LEAVE_GROUP}, {@code REMAIN_IN_GROUP}, or {@code DEFAULT}.
+     * @return This {@code CloseOptions} instance.
      */
     public CloseOptions withGroupMembershipOperation(final GroupMembershipOperation operation) {
         this.operation = Objects.requireNonNull(operation, "operation should not be null");
         return this;
     }
 
+    /**
+     * Returns the group membership operation configured for this close.
+     *
+     * @return The group membership operation
+     */
     public GroupMembershipOperation groupMembershipOperation() {
         return operation;
     }
 
+    /**
+     * Returns the timeout configured for this close.
+     *
+     * @return The timeout, or empty if using the default timeout
+     */
     public Optional<Duration> timeout() {
         return timeout;
     }

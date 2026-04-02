@@ -1275,11 +1275,11 @@ public class StreamsGroup implements Group {
 
             // Search for the partition in assigned tasks, then in tasks pending revocation
             Integer assignmentEpoch = assignedTasks.activeTasksWithEpochs()
-                .getOrDefault(subtopologyId, Collections.emptyMap())
+                .getOrDefault(subtopologyId, Map.of())
                 .get(partitionId);
             if (assignmentEpoch == null) {
                 assignmentEpoch = tasksPendingRevocation.activeTasksWithEpochs()
-                    .getOrDefault(subtopologyId, Collections.emptyMap())
+                    .getOrDefault(subtopologyId, Map.of())
                     .get(partitionId);
             }
 

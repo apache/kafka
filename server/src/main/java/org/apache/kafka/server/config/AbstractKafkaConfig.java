@@ -627,4 +627,12 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
         return millis < 0 ? Long.valueOf(-1) : millis;
     }
+
+    public Map<String, Object> extractGroupConfigMap() {
+        Map<String, Object> defaults = new HashMap<>();
+        GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.forEach((groupConfigName, brokerConfigName) ->
+            brokerConfigName.ifPresent(name -> defaults.put(groupConfigName, get(name)))
+        );
+        return defaults;
+    }
 }

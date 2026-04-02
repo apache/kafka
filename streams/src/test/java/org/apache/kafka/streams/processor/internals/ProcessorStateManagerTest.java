@@ -45,7 +45,6 @@ import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,6 +80,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -574,7 +574,7 @@ public class ProcessorStateManagerTest {
             assertTrue(nonPersistentStore.committed);
 
             // make sure that flush is called in the proper order
-            assertThat(persistentStore.getLastCommitCount(), Matchers.lessThan(nonPersistentStore.getLastCommitCount()));
+            assertThat(persistentStore.getLastCommitCount(), lessThan(nonPersistentStore.getLastCommitCount()));
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
             stateMgr.commit();
@@ -590,6 +590,57 @@ public class ProcessorStateManagerTest {
 
             assertTrue(persistentStore.closed);
             assertTrue(nonPersistentStore.closed);
+        }
+    }
+
+    @Test
+    public void shouldCommitAndCloseLegacyStoresWithUnknownOffsetPositions() throws Exception {
+        checkpoint.write(emptyMap());
+
+        final File storeCheckpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME + "_" + persistentStore.name());
+
+        // set up ack'ed offsets
+        final HashMap<TopicPartition, Long> ackedOffsets = new HashMap<>();
+        ackedOffsets.put(persistentStorePartition, null);
+        ackedOffsets.put(nonPersistentStorePartition, 456L);
+        ackedOffsets.put(new TopicPartition("nonRegisteredTopic", 1), 789L);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        contextRegistersStateStore(stateMgr);
+        try {
+            // make sure the checkpoint file is not written yet
+            assertFalse(storeCheckpointFile.exists());
+
+            stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
+        } finally {
+            stateMgr.commit();
+
+            assertTrue(persistentStore.committed);
+            assertTrue(nonPersistentStore.committed);
+
+            // make sure that flush is called in the proper order
+            assertThat(persistentStore.getLastCommitCount(), lessThan(nonPersistentStore.getLastCommitCount()));
+
+            stateMgr.updateChangelogOffsets(ackedOffsets);
+            stateMgr.commit();
+            stateMgr.close();
+            assertTrue(persistentStore.closed);
+            assertTrue(nonPersistentStore.closed);
+
+            assertTrue(storeCheckpointFile.exists());
+
+            // the checkpoint file should contain an offset from the persistent store only.
+            final OffsetCheckpoint storeCheckpoint = new OffsetCheckpoint(storeCheckpointFile);
+            final Map<TopicPartition, Long> checkpointedOffsets = storeCheckpoint.read();
+            assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), -4L)));
+
+            try {
+                // Reopen to verify null commited offset
+                stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
+                assertNull(stateMgr.storeMetadata(persistentStorePartition).offset());
+            } finally {
+                stateMgr.close();
+            }
         }
     }
 
