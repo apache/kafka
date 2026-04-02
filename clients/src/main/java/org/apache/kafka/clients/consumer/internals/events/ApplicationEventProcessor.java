@@ -289,8 +289,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
-        future.whenComplete(complete(event.future()));
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
+        future.whenComplete((result, error) -> {
+            if (error != null) {
+                event.future().completeExceptionally(error);
+            } else {
+                Map<TopicPartition, OffsetAndMetadata> offsetMap = result.toOffsetMapWithNulls();
+                event.future().complete(offsetMap);
+            }
+        });
     }
 
     /**
