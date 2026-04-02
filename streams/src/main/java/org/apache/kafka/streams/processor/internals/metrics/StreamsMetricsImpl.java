@@ -38,7 +38,6 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
