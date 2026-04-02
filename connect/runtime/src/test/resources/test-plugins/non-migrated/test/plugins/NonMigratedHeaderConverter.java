@@ -54,4 +54,9 @@ public class NonMigratedHeaderConverter implements HeaderConverter {
   @Override
   public void configure(Map<String, ?> configs) {
   }
+
+    @Override
+    public String version() {
+        return "1.0.0";
+    }
 }

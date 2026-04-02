@@ -38,6 +38,8 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -65,6 +67,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -75,7 +78,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
 /**
@@ -124,6 +126,7 @@ public class StateDirectory implements AutoCloseable {
 
     private final StreamsConfig config;
     private final Set<TaskId> tasksInLocalState = new ConcurrentSkipListSet<>();
+    private final Map<TaskId, Long> taskOffsetSums = new ConcurrentHashMap<>();
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -260,7 +263,7 @@ public class StateDirectory implements AutoCloseable {
                     try {
                         // We only handle TaskCorruptedException at this point. Any other exception is considered fatal.
                         StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, temporaryStateManager, this, initContext);
-                        temporaryStateManager.checkpoint();
+                        temporaryStateManager.commit();
                     } catch (final TaskCorruptedException tce) {
                         // At this point, we only log a warning and continue with the startup store initialization.
                         // The task-corrupted exception will be handled in the first Task assignment phase.
@@ -293,6 +296,44 @@ public class StateDirectory implements AutoCloseable {
         for (final TaskId task : tasksInLocalState) {
             unlock(task);
         }
+    }
+
+    public Map<TaskId, Long> taskOffsetSums(final Set<TaskId> tasks) {
+        return taskOffsetSums.entrySet().stream()
+                .filter(e -> tasks.contains(e.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
+        if (!changelogOffsets.isEmpty()) {
+            taskOffsetSums.put(taskId, sumOfChangelogOffsets(taskId, changelogOffsets));
+        }
+    }
+
+    public void removeTaskOffsets(final TaskId taskId) {
+        taskOffsetSums.remove(taskId);
+    }
+
+    private long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
+        long offsetSum = 0L;
+        for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
+            final long offset = changelogEntry.getValue();
+
+            if (offset != OffsetCheckpoint.OFFSET_UNKNOWN) {
+                if (offset < 0) {
+                    throw new StreamsException(
+                            new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
+                            taskId);
+                }
+                offsetSum += offset;
+                if (offsetSum < 0) {
+                    log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", taskId);
+                    return Long.MAX_VALUE;
+                }
+            }
+        }
+
+        return offsetSum;
     }
 
     public UUID initializeProcessId() {
@@ -386,13 +427,6 @@ public class StateDirectory implements AutoCloseable {
     }
 
     /**
-     * @return The File handle for the checkpoint in the given task's directory
-     */
-    File checkpointFileFor(final TaskId taskId) {
-        return new File(getOrCreateDirectoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME);
-    }
-
-    /**
      * Decide if the directory of the task is empty or not
      */
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
@@ -403,7 +437,7 @@ public class StateDirectory implements AutoCloseable {
 
     private boolean taskDirIsEmpty(final File taskDir) {
         final File[] storeDirs = taskDir.listFiles(pathname ->
-                !pathname.getName().equals(CHECKPOINT_FILE_NAME));
+                !pathname.getName().startsWith(LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME));
 
         boolean taskDirEmpty = true;
 
@@ -433,7 +467,7 @@ public class StateDirectory implements AutoCloseable {
      * @return directory for the global stores
      * @throws ProcessorStateException if the global store directory does not exists and could not be created
      */
-    File globalStateDir() {
+    public File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (hasPersistentStores) {
             if (!dir.exists() && !dir.mkdir()) {
@@ -502,6 +536,7 @@ public class StateDirectory implements AutoCloseable {
     public void close() {
         if (hasPersistentStores) {
             unlockStartupStores();
+            taskOffsetSums.clear();
             try {
                 stateDirLock.release();
                 stateDirLockChannel.close();
@@ -582,6 +617,7 @@ public class StateDirectory implements AutoCloseable {
                         final long now = time.milliseconds();
                         final long lastModifiedMs = taskDir.file().lastModified();
                         if (now - cleanupDelayMs > lastModifiedMs) {
+                            removeTaskOffsets(id);
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                                 logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
                             removeStartupState(id);
@@ -604,6 +640,46 @@ public class StateDirectory implements AutoCloseable {
     }
 
     /**
+     * Purges local state directories and checkpoint files during application startup.
+     *
+     * @param dirMaxAgeMs the time-based threshold in milliseconds. Only state directories
+     * and checkpoint files that have not been modified for at least
+     * this amount of time (corresponding to the
+     * {@code state.cleanup.dir.max.age.ms} property) will be removed.
+     */
+    public synchronized void cleanOutdatedDirsOnStartup(final long dirMaxAgeMs) {
+        try {
+            cleanStateAndTaskDirectoriesOnStartup(dirMaxAgeMs);
+        } catch (final Exception e) {
+            throw new StreamsException(e);
+        }
+    }
+
+    private void cleanStateAndTaskDirectoriesOnStartup(final long dirMaxAgeMs) throws Exception {
+        final AtomicReference<Exception> firstException = new AtomicReference<>();
+        for (final TaskDirectory taskDir : listAllTaskDirectories()) {
+            final String dirName = taskDir.file().getName();
+            try {
+                final long now = time.milliseconds();
+                final long lastModifiedMs = taskDir.file().lastModified();
+                if (now - dirMaxAgeMs > lastModifiedMs) {
+                    log.info("Deleting outdated state directory {} as {}ms has elapsed from last update (max directory age is {}ms).",
+                            dirName, now - lastModifiedMs, dirMaxAgeMs);
+                    Utils.delete(taskDir.file());
+                }
+            } catch (final IOException exception) {
+                log.error("Failed to delete task directory {} with exception:", dirName, exception);
+                firstException.compareAndSet(null, exception);
+            }
+        }
+
+        final Exception exception = firstException.get();
+        if (exception != null) {
+            throw exception;
+        }
+    }
+
+    /**
      * Cleans up any leftover named topology directories that are empty, if any exist
      * @param logExceptionAsWarn if true, an exception will be logged as a warning
      *                       if false, an exception will be logged as error
@@ -620,6 +696,9 @@ public class StateDirectory implements AutoCloseable {
         );
         if (namedTopologyDirs != null) {
             for (final File namedTopologyDir : namedTopologyDirs) {
+                final String topologyName = parseNamedTopologyFromDirectory(namedTopologyDir.getName());
+                final Set<TaskId> taskKeys = taskOffsetSums.keySet();
+                taskKeys.removeIf(taskId -> taskId.topologyName().equals(topologyName));
                 final File[] contents = namedTopologyDir.listFiles();
                 if (contents != null && contents.length == 0) {
                     try {
@@ -657,6 +736,8 @@ public class StateDirectory implements AutoCloseable {
             log.debug("Tried to clear out the local state for NamedTopology {} but none was found", topologyName);
         }
         try {
+            final Set<TaskId> taskKeys = taskOffsetSums.keySet();
+            taskKeys.removeIf(taskId -> taskId.topologyName().equals(topologyName));
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
             log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
@@ -670,6 +751,7 @@ public class StateDirectory implements AutoCloseable {
             log.warn("Found some still-locked task directories when user requested to cleaning up the state, "
                 + "since Streams is not running any more these will be ignored to complete the cleanup");
         }
+        taskOffsetSums.clear();
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.file().getName();

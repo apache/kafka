@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -108,6 +109,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics coordinatorMetrics;
+    private final RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
@@ -272,11 +274,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
+        this.rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix);
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
+            rebalanceCallbackMetricsManager
         );
         this.metadata.requestUpdate(true);
     }
@@ -1026,6 +1029,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } finally {
             super.close(timer, membershipOperation);
+            Utils.closeQuietly(coordinatorMetrics, "consumer coordinator metrics");
+            Utils.closeQuietly(rebalanceCallbackMetricsManager, "consumer rebalance callback metrics");
         }
     }
 
@@ -1623,10 +1628,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private class ConsumerCoordinatorMetrics {
+    private class ConsumerCoordinatorMetrics extends AbstractCoordinatorMetrics {
         private final Sensor commitSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this(new MetricsLedger(metrics), metricGrpPrefix);
+        }
+
+        private ConsumerCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
+            super(metrics);
             String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
 
             this.commitSensor = metrics.sensor("commit-latency");
@@ -1636,7 +1646,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.commitSensor.add(metrics.metricName("commit-latency-max",
                 metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+            this.commitSensor.add(createMeter(metricGrpName, "commit", "commit calls"));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",

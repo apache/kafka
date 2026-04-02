@@ -17,7 +17,6 @@
 
 package kafka.server.builders;
 
-import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory.QuotaManagers;
@@ -30,6 +29,7 @@ import org.apache.kafka.server.DelayedActionQueue;
 import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Map;

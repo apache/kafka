@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.internals.RocksDBStore.DBAccessor;
@@ -30,9 +30,9 @@ import org.rocksdb.WriteBatchInterface;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
@@ -48,7 +48,7 @@ import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWit
  * When reading, it first checks the new column family, then falls back to the old column family
  * and converts values on-the-fly using the provided conversion function.
  */
-class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
+class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     private final ColumnFamilyHandle oldColumnFamily;
     private final ColumnFamilyHandle newColumnFamily;
@@ -58,15 +58,19 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
     /**
      * Constructs a DualColumnFamilyAccessor.
      *
+     * @param offsetColumnFamily the column family for the managed offsets
      * @param oldColumnFamily the column family containing legacy data
      * @param newColumnFamily the column family for new format data
      * @param valueConverter  function to convert old format values to new format
      * @param store           the RocksDBStore instance (for accessing position, context, and name)
      */
-    DualColumnFamilyAccessor(final ColumnFamilyHandle oldColumnFamily,
+    DualColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamily,
+                             final ColumnFamilyHandle oldColumnFamily,
                              final ColumnFamilyHandle newColumnFamily,
                              final Function<byte[], byte[]> valueConverter,
-                             final RocksDBStore store) {
+                             final RocksDBStore store,
+                             final AtomicBoolean storeOpen) {
+        super(offsetColumnFamily, storeOpen);
         this.oldColumnFamily = oldColumnFamily;
         this.newColumnFamily = newColumnFamily;
         this.valueConverter = valueConverter;
@@ -236,12 +240,6 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
     }
 
     @Override
-    public void commit(final DBAccessor accessor,
-                       final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
-        accessor.flush(oldColumnFamily, newColumnFamily);
-    }
-
-    @Override
     public void addToBatch(final byte[] key,
                            final byte[] value,
                            final WriteBatchInterface batch) throws RocksDBException {
@@ -255,7 +253,8 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
     }
 
     @Override
-    public void close() {
+    public void close(final DBAccessor accessor) throws RocksDBException {
+        super.close(accessor);
         oldColumnFamily.close();
         newColumnFamily.close();
     }
@@ -267,7 +266,7 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
 
         private final String storeName;
         private final RocksIterator iterNewFormat;
@@ -397,7 +396,7 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
     // RocksDB's JNI interface does not expose getters/setters that allow the
     // comparator to be pluggable, and the default is lexicographic, so it's
     // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
         private final byte[] rawLastKey;
         private final boolean forward;
         private final boolean toInclusive;

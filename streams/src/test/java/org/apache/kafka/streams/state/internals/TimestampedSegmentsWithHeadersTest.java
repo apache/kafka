@@ -177,9 +177,9 @@ public class TimestampedSegmentsWithHeadersTest {
 
         final List<TimestampedSegmentWithHeaders> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
-        assertEquals(0, segments.get(0).id);
-        assertEquals(1, segments.get(1).id);
-        assertEquals(2, segments.get(2).id);
+        assertEquals(0, segments.get(0).id());
+        assertEquals(1, segments.get(1).id());
+        assertEquals(2, segments.get(2).id());
     }
 
     @Test

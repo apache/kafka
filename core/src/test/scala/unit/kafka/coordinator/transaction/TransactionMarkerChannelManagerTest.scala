@@ -25,13 +25,14 @@ import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
-import org.apache.kafka.server.util.RequestAndCompletionHandler
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -625,6 +626,35 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, metrics.count { case (k, _) =>
       k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize"
     })
+  }
+
+  @Test
+  def shouldEnableApiVersionDiscoveryInFactoryMethod(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val metrics = new Metrics()
+    val logContext = new LogContext()
+    try {
+      val channelManager = TransactionMarkerChannelManager(
+        config,
+        metrics,
+        metadataCache,
+        txnStateManager,
+        time,
+        logContext
+      )
+      try {
+        val field = classOf[InterBrokerSendThread].getDeclaredField("networkClient")
+        field.setAccessible(true)
+        val client = field.get(channelManager).asInstanceOf[NetworkClient]
+        assertTrue(client.discoverBrokerVersions(),
+          "TransactionMarkerChannelManager should enable API version discovery to " +
+            "ensure compatibility during rolling upgrades")
+      } finally {
+        channelManager.shutdown()
+      }
+    } finally {
+      metrics.close()
+    }
   }
 
   /**

@@ -18,7 +18,6 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -32,7 +31,7 @@ import java.util.Map;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
-public abstract class ExtractField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public abstract class ExtractField<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
             "Extract the specified field from a Struct when schema present, or a Map in the case of schemaless data. "
