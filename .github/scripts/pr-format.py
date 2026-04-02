@@ -109,7 +109,7 @@ def resolve_reviewer(login: str) -> tuple:
 
     Tries the repo commit history first, then falls back to the GitHub user profile.
     If the display name is unavailable, the login is used as the name.
-    If the email is unavailable, '{login}-email-not-found' is used as a placeholder.
+    If the email is unavailable, '{login}@email-not-found' is used as a placeholder.
     """
     name = None
     email = None
@@ -145,7 +145,7 @@ def resolve_reviewer(login: str) -> tuple:
         name = login
 
     if not email:
-        email = f"{login}-email-not-found"
+        email = f"{login}@email-not-found"
 
     return (name, email)
 
