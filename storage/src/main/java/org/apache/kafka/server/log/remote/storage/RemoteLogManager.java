@@ -952,6 +952,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             long copyLagMs = logConfig.remoteCopyLagMs();
             long copyLagBytes = logConfig.remoteCopyLagBytes();
+            logger.debug("delayCopy check for segment {}: copyLagMs={}, copyLagBytes={}, currentTimeMs={}, totalLogSize={}, cumulativeSize={}, sizeLagBytes={}",
+                    previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
 
             if (copyLagMs == 0 || copyLagBytes == 0) {
                 return false;
