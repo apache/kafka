@@ -59,7 +59,7 @@ public class KafkaMetricsGroup {
 
     private static MetricName explicitMetricName(String group, String typeName,
                                                 String name, Map<String, String> tags) {
-        if (!(tags instanceof LinkedHashMap<String, String>))
+        if (tags.size() > 1 && !(tags instanceof LinkedHashMap<String, String>))
             throw new RuntimeException("Tags must be of type LinkedHashMap. tags: " + tags + " type: " + tags.getClass().getName());
         StringBuilder nameBuilder = new StringBuilder(100);
         nameBuilder.append(group);
