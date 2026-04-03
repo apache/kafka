@@ -21,7 +21,7 @@ FROM docker.io/library/eclipse-temurin:21-jre-alpine AS build-jsa
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url
+ARG kafka_url=""
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 COPY server.properties /etc/kafka/docker/server.properties
@@ -57,7 +57,7 @@ EXPOSE 9092
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url
+ARG kafka_url=""
 ARG build_date
 
 COPY *kafka.tgz kafka.tgz
