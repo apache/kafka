@@ -31,6 +31,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import java.util.Optional
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.metadata.MetadataCache
@@ -419,7 +420,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val groupConfig = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId).get()
-    assertEquals(newSessionTimeoutMs, groupConfig.consumerSessionTimeoutMs())
+    assertEquals(Optional.of(newSessionTimeoutMs), groupConfig.consumerSessionTimeoutMs())
   }
 
   @Test
@@ -445,7 +446,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val groupConfig = brokerServers.head.groupCoordinator.groupConfig(shareGroupId).get()
-    assertEquals(newRecordLockDurationMs, groupConfig.shareRecordLockDurationMs)
+    assertEquals(Optional.of(newRecordLockDurationMs), groupConfig.shareRecordLockDurationMs)
   }
 
   @Test
