@@ -32,6 +32,7 @@ import org.apache.kafka.common.{ClientIdAndBroker, InvalidRecordException, Topic
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState, ReplicaState, ResultWithPartitions}
 import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{LockUtils, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.LogAppendInfo
@@ -930,13 +931,7 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private[this] val lagVal = new AtomicLong(-1L)
-  private[this] val tags = {
-    val m = new util.LinkedHashMap[String, String]()
-    m.put("clientId", metricId.clientId)
-    m.put("topic", metricId.topicPartition.topic)
-    m.put("partition", metricId.topicPartition.partition.toString)
-    m
-  }
+  private[this] val tags = MetricsUtils.getTags("clientId", metricId.clientId, "topic", metricId.topicPartition.topic, "partition", metricId.topicPartition.partition.toString)
 
   metricsGroup.newGauge(FetcherMetrics.ConsumerLag, () => lagVal.get, tags)
 
@@ -974,13 +969,7 @@ class FetcherStats(metricId: ClientIdAndBroker) {
   private val metricsClassName = "FetcherStats"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
-  val tags: util.Map[String, String] = {
-    val m = new util.LinkedHashMap[String, String]()
-    m.put("clientId", metricId.clientId)
-    m.put("brokerHost", metricId.brokerHost)
-    m.put("brokerPort", metricId.brokerPort.toString)
-    m
-  }
+  val tags: util.Map[String, String] = MetricsUtils.getTags("clientId", metricId.clientId, "brokerHost", metricId.brokerHost, "brokerPort", metricId.brokerPort.toString)
 
   val requestRate: Meter = metricsGroup.newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
 

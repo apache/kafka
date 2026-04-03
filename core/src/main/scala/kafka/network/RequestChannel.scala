@@ -18,7 +18,6 @@
 package kafka.network
 
 import java.nio.ByteBuffer
-import java.util
 import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
@@ -33,6 +32,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.network.{RequestConvertToJson, Session}
 import org.apache.kafka.server.config.AbstractKafkaConfig
@@ -367,20 +367,14 @@ class RequestChannel(val queueSize: Int,
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    metricsGroup.newGauge(ResponseQueueSizeMetric, () => processor.responseQueueSize, {
-      val m = new util.LinkedHashMap[String, String]()
-      m.put(ProcessorMetricTag, processor.id.toString)
-      m
-    })
+    metricsGroup.newGauge(ResponseQueueSizeMetric, () => processor.responseQueueSize,
+      MetricsUtils.getTags(ProcessorMetricTag, processor.id.toString))
   }
 
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
-    metricsGroup.removeMetric(ResponseQueueSizeMetric, {
-      val m = new util.LinkedHashMap[String, String]()
-      m.put(ProcessorMetricTag, processorId.toString)
-      m
-    })
+    metricsGroup.removeMetric(ResponseQueueSizeMetric,
+      MetricsUtils.getTags(ProcessorMetricTag, processorId.toString))
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */

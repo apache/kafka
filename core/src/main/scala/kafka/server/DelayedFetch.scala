@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.quota.ReplicaQuota
@@ -183,15 +184,7 @@ object DelayedFetchMetrics {
   private val metricsClassName = "DelayedFetchMetrics"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private val FetcherTypeKey = "fetcherType"
-  val followerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, {
-    val m = new util.LinkedHashMap[String, String]()
-    m.put(FetcherTypeKey, "follower")
-    m
-  })
-  val consumerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, {
-    val m = new util.LinkedHashMap[String, String]()
-    m.put(FetcherTypeKey, "consumer")
-    m
-  })
+  val followerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, MetricsUtils.getTags(FetcherTypeKey, "follower"))
+  val consumerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, MetricsUtils.getTags(FetcherTypeKey, "consumer"))
 }
 

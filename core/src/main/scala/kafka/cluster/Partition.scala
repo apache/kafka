@@ -41,6 +41,7 @@ import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogManager, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.partition.{AlterPartitionListener, AssignmentState, CommittedPartitionState, OngoingReassignmentState, PartitionListener, PartitionState, PendingExpandIsr, PendingPartitionChange, PendingShrinkIsr, SimpleAssignmentState}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
@@ -131,12 +132,7 @@ object Partition {
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
-    val tags = {
-      val m = new util.LinkedHashMap[String, String]()
-      m.put("topic", topicPartition.topic)
-      m.put("partition", topicPartition.partition.toString)
-      m
-    }
+    val tags = MetricsUtils.getTags("topic", topicPartition.topic, "partition", topicPartition.partition.toString)
     metricsGroup.removeMetric("UnderReplicated", tags)
     metricsGroup.removeMetric("UnderMinIsr", tags)
     metricsGroup.removeMetric("InSyncReplicasCount", tags)
@@ -220,12 +216,7 @@ class Partition(val topicPartition: TopicPartition,
 
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
-  private val tags = {
-    val m = new util.LinkedHashMap[String, String]()
-    m.put("topic", topic)
-    m.put("partition", partitionId.toString)
-    m
-  }
+  private val tags = MetricsUtils.getTags("topic", topic, "partition", partitionId.toString)
 
   metricsGroup.newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
   metricsGroup.newGauge("InSyncReplicasCount", () => if (isLeader) partitionState.isr.size else 0, tags)
