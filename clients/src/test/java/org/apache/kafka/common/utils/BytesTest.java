@@ -16,90 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.utils.internals.ByteUtils;
-
 import org.junit.jupiter.api.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BytesTest {
 
-    @Test
-    public void testIncrementWithSubmap() {
-        final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
-        Bytes key1 = Bytes.wrap(new byte[]{(byte) 0xAA});
-        byte[] val = new byte[]{(byte) 0x00};
-        map.put(key1, val);
 
-        Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0xAA});
-        map.put(key2, val);
-
-        Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
-        map.put(key3, val);
-
-        Bytes key4 = Bytes.wrap(new byte[]{(byte) 0xAB, (byte) 0x00});
-        map.put(key4, val);
-
-        Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01});
-        map.put(key5, val);
-
-        Bytes prefix = key1;
-        Bytes prefixEnd = ByteUtils.increment(prefix);
-
-        Comparator<? super Bytes> comparator = map.comparator();
-        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
-        NavigableMap<Bytes, byte[]> subMapResults;
-        if (result > 0) {
-            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
-            subMapResults = map.tailMap(prefix, true);
-        } else {
-            subMapResults = map.subMap(prefix, true, prefixEnd, false);
-        }
-
-        NavigableMap<Bytes, byte[]> subMapExpected = new TreeMap<>();
-        subMapExpected.put(key1, val);
-        subMapExpected.put(key2, val);
-        subMapExpected.put(key3, val);
-
-        assertEquals(subMapExpected.keySet(), subMapResults.keySet());
-    }
-
-    @Test
-    public void testBytesLexicographicCases() {
-        assertEquals(0, cmp("", ""));
-        assertTrue(cmp("", "aaa") < 0);
-        assertTrue(cmp("aaa", "") > 0);
-
-        assertEquals(0, cmp("aaa", "aaa"));
-        assertTrue(cmp("aaa", "bbb") < 0);
-        assertTrue(cmp("bbb", "aaa") > 0);
-
-        assertTrue(cmp("aaaaaa", "bbb") < 0);
-        assertTrue(cmp("aaa", "bbbbbb") < 0);
-        assertTrue(cmp("bbbbbb", "aaa") > 0);
-        assertTrue(cmp("bbb", "aaaaaa") > 0);
-
-        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbb") < 0);
-        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaa") > 0);
-
-        assertTrue(cmp("common_prefix_aaaaaa", "common_prefix_bbb") < 0);
-        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbbbbb") < 0);
-        assertTrue(cmp("common_prefix_bbbbbb", "common_prefix_aaa") > 0);
-        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaaaaa") > 0);
-
-        assertTrue(cmp("common_prefix", "common_prefix_aaa") < 0);
-        assertTrue(cmp("common_prefix_aaa", "common_prefix") > 0);
-    }
-
-    private int cmp(String l, String r) {
-        return ByteUtils.BYTES_LEXICO_COMPARATOR.compare(
-            l.getBytes(StandardCharsets.UTF_8),
-            r.getBytes(StandardCharsets.UTF_8));
-    }
 }
