@@ -521,7 +521,7 @@ class UnifiedLogTest {
   @Test
   def testTimeBasedLogRollDuringAppend(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
+    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, liMinSegmentRollMs = 0L)
 
     // create a log
     val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60, false))
@@ -1483,7 +1483,7 @@ class UnifiedLogTest {
     var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
     val maxJitter = 20 * 60L
     // create a log
-    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter)
+    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter, liMinSegmentRollMs = 0L)
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
     log.appendAsLeader(set, leaderEpoch = 0)
@@ -1498,6 +1498,38 @@ class UnifiedLogTest {
     log.appendAsLeader(set, leaderEpoch = 0)
     assertEquals(2, log.numberOfSegments,
       "Log should roll after segmentMs adjusted by random jitter")
+  }
+
+  /**
+   * Test for jitter s for time based log roll with liMinSegmentRollMs not 0
+   */
+  @Test
+  def testTimeBasedLogRollJitterWithMinSegmentRollMs(): Unit = {
+    var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    val maxJitter = 20 * 60L
+    // create a log
+    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter,
+      liMinSegmentRollMs = 10 * 60 * 60L)
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
+    log.appendAsLeader(set, leaderEpoch = 0)
+
+    mockTime.sleep(log.config.segmentMs - maxJitter)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(set, leaderEpoch = 0)
+    assertEquals(1, log.numberOfSegments,
+      "Log does not roll on this append because it occurs earlier than max jitter")
+    mockTime.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(set, leaderEpoch = 0)
+    assertEquals(1, log.numberOfSegments,
+      "Log should not roll before liMinSegmentRollMs")
+
+    mockTime.sleep(log.config.liMinSegmentRollMs)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(set, leaderEpoch = 0)
+    assertEquals(2, log.numberOfSegments,
+      "Log should roll as it passes liMinSegmentRollMs")
   }
 
   /**
@@ -1574,6 +1606,60 @@ class UnifiedLogTest {
       assertEquals(messageIds(idx), read.offset, "Offset read should match message id.")
       assertEquals(records(idx), new SimpleRecord(read), "Message should match appended.")
     }
+  }
+
+  /**
+    * This test generates a single record set that is a concatenation of many valid record sets,
+    * and appends them to a log.  Verifies decompression was not performed by checking the size
+    * of buffer used to validate batch header.
+    */
+  @Test
+  def testAvoidDecompression() {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 5000, producerBatchDecompressionEnable = false)
+    val log = createLog(TestUtils.randomPartitionLogDir(tmpDir), logConfig, logStartOffset = 1000)
+    val values = (0 until 5).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    val builder = MemoryRecords.builder(recordBuffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, TimestampType.CREATE_TIME,
+      0, System.currentTimeMillis, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE)
+    for(value <- values) {
+      builder.append(new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value))
+    }
+
+    val records = builder.build()
+    val logAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
+
+    assertEquals(
+      DefaultRecordBatch.RECORD_BATCH_OVERHEAD, logAppendInfo.recordConversionStats.temporaryMemoryBytes,
+      "Size of buffer used to validate batch should be equal to the size of record format version V2 batch header."
+    )
+  }
+
+  /**
+    * This test generates a single record set that is a concatenation of many valid record sets,
+    * with non-monotonically increasing relative offset and appends them to a log.
+    */
+  @Test
+  def testAppendBatchWithoutMonotonicallyIncreasingRelativeOffset() {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 5000, producerBatchDecompressionEnable = false)
+    val log = createLog(TestUtils.randomPartitionLogDir(tmpDir), logConfig)
+    val values = (0 until 5).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    val builder = MemoryRecords.builder(recordBuffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, TimestampType.CREATE_TIME,
+      10, System.currentTimeMillis, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE)
+    var count = 0
+    for(value <- values) {
+      builder.appendWithOffset(10 + (count * 2), new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value))
+      count = count + 1
+    }
+
+    val records = builder.build()
+    assertThrows(classOf[InvalidRecordException], ()=> log.appendAsLeader(records, leaderEpoch = 0))
   }
 
   /**

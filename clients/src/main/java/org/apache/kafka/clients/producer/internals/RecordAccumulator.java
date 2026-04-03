@@ -39,6 +39,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
@@ -54,6 +56,7 @@ import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
+
 
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}
@@ -1018,6 +1021,13 @@ public class RecordAccumulator {
      */
     boolean flushInProgress() {
         return flushesInProgress.get() > 0;
+    }
+
+    /**
+     * This method should be used only for testing.
+     */
+    IncompleteBatches incompleteBatches() {
+        return incomplete;
     }
 
     /**

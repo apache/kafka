@@ -22,6 +22,7 @@ import scala.collection.compat._
 import scala.jdk.CollectionConverters._
 
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
+import scala.language.higherKinds
 
 /**
  * A type class for parsing JSON. This should typically be used via `JsonValue.apply`.

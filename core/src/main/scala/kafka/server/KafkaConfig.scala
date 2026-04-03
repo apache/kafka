@@ -135,6 +135,7 @@ object Defaults {
   val ControllerSocketTimeoutMs = RequestTimeoutMs
   val DefaultReplicationFactor = 1
   val ReplicaLagTimeMaxMs = 30000L
+  val ReplicaRequestTimeoutMs = 30 * 1000
   val ReplicaSocketTimeoutMs = 30 * 1000
   val ReplicaSocketReceiveBufferBytes = 64 * 1024
   val ReplicaFetchMaxBytes = 1024 * 1024
@@ -211,6 +212,8 @@ object Defaults {
   val FetchMaxBytes = 55 * 1024 * 1024
 
   /** ********* Quota Configuration ***********/
+  val ProducerQuotaBytesPerSecondDefault = Long.MaxValue
+  val ConsumerQuotaBytesPerSecondDefault = Long.MaxValue
   val NumQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val QuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
   val NumReplicationQuotaSamples: Int = ReplicationQuotaManagerConfig.DefaultNumQuotaSamples
@@ -234,6 +237,7 @@ object Defaults {
 
   /** ********* SSL configuration ***********/
   val SslProtocol = SslConfigs.DEFAULT_SSL_PROTOCOL
+  val SslContextProviderClass = SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS
   val SslEnabledProtocols = SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS
   val SslKeystoreType = SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE
   val SslTruststoreType = SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE
@@ -288,6 +292,43 @@ object Defaults {
   val QuorumLingerMs = RaftConfig.DEFAULT_QUORUM_LINGER_MS
   val QuorumRequestTimeoutMs = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS
   val QuorumRetryBackoffMs = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS
+
+  /** ********* LinkedIn-specific Configuration ***********/
+  val LiMinPreferredControllerCount = 0
+  val UnofficialClientLoggingEnable = false
+  val UnofficialClientCacheTtl = 1
+  val ObserverClassName = "kafka.server.NoOpObserver"
+  val ObserverShutdownTimeoutMs = 2000
+  val LiMinSegmentRollMs = 15 * 60 * 1000L
+  val OffsetsTopicMinInSyncReplicas = 1
+  val InactiveSensorExpirationTimeSeconds = 3600
+  val MetricReplaceOnDuplicate = false
+  val LiCombinedControlRequestEnabled = false
+  val LiUpdateMetadataDelayMs = 0
+  val LiDropFetchFollowerEnable = false
+  val LiDenyAlterIsr = false
+  val LiAsyncFetcherEnabled = false
+  val LiNumControllerInitThreads = 1
+  val LiLogCleanerFineGrainedLockEnabled = true
+  val LiDropCorruptedFilesEnabled = false
+  val LiConsumerFetchSampleRatio = 0.01
+  val LiLeaderElectionOnCorruptionWaitMs = 0L
+  val LiZookeeperPaginationEnable = false
+  val LiLongTailProduceRequestLogThresholdMs = 2 * ReplicaLagTimeMaxMs
+  val LiLongTailProduceRequestLogRatio = 0.0
+  val LiMinOriginalAliveReplicas = 1
+  val ControlledShutdownSafetyCheckEnable = false
+  val ControlledShutdownSafetyCheckRedundancyFactor = 0
+  val PreferredController = false
+  val AllowPreferredControllerFallback = true
+  val RequestMaxLocalTimeMs = Long.MaxValue
+  val HeapDumpTimeout = 120000L
+  val QuotaV2HandlerClassName = ""
+  val QuotaV2HandlerShutdownTimeoutMs = 2000
+  val SocketRequestCommonBytes = 0
+  val SocketRequestBufferCacheSize = 0
+  val ProducerBatchDecompressionEnable = false
+  val ControlledShutdownPartitionBatchSize = 100
 }
 
 object KafkaConfig {
@@ -483,6 +524,7 @@ object KafkaConfig {
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
   val ReplicaLagTimeMaxMsProp = "replica.lag.time.max.ms"
+  val ReplicaRequestTimeoutMsProp = "replica.request.timeout.ms"
   val ReplicaSocketTimeoutMsProp = "replica.socket.timeout.ms"
   val ReplicaSocketReceiveBufferBytesProp = "replica.socket.receive.buffer.bytes"
   val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
@@ -561,6 +603,8 @@ object KafkaConfig {
   val FetchMaxBytes = "fetch.max.bytes"
 
   /** ********* Quota Configuration ***********/
+  val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
+  val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
   val NumQuotaSamplesProp = "quota.window.num"
   val NumReplicationQuotaSamplesProp = "replication.quota.window.num"
   val NumAlterLogDirsReplicationQuotaSamplesProp = "alter.log.dirs.replication.quota.window.num"
@@ -595,6 +639,7 @@ object KafkaConfig {
   /** ********* SSL Configuration ****************/
   val SslProtocolProp = SslConfigs.SSL_PROTOCOL_CONFIG
   val SslProviderProp = SslConfigs.SSL_PROVIDER_CONFIG
+  val SslContextProviderClassProp = SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG
   val SslCipherSuitesProp = SslConfigs.SSL_CIPHER_SUITES_CONFIG
   val SslEnabledProtocolsProp = SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG
   val SslKeystoreTypeProp = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG
@@ -946,6 +991,9 @@ object KafkaConfig {
   val DefaultReplicationFactorDoc = "The default replication factors for automatically created topics."
   val ReplicaLagTimeMaxMsDoc = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leaders log end offset for at least this time," +
   " the leader will remove the follower from isr"
+  val ReplicaRequestTimeoutMsDoc = "The configuration controls the maximum amount of time a follower will wait " +
+    "for the response of a fetch request from the leader. If the response is not received before the timeout " +
+    "elapses the follower will back off and retry fetching for the affected partitions"
   val ReplicaSocketTimeoutMsDoc = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms"
   val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests to the leader for replicating data"
   val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch for each partition. This is not an absolute maximum, " +
@@ -1050,6 +1098,10 @@ object KafkaConfig {
   val FetchMaxBytesDoc = "The maximum number of bytes we will return for a fetch request. Must be at least 1024."
 
   /** ********* Quota Configuration ***********/
+  val ProducerQuotaBytesPerSecondDefaultDoc = "DEPRECATED: Used only when dynamic default quotas are not configured for <user>, <client-id> or <user, client-id> in Zookeeper. " +
+  "Any producer distinguished by clientId will get throttled if it produces more bytes than this value per-second"
+  val ConsumerQuotaBytesPerSecondDefaultDoc = "DEPRECATED: Used only when dynamic default quotas are not configured for <user, <client-id> or <user, client-id> in Zookeeper. " +
+  "Any consumer distinguished by clientId/consumer group will get throttled if it fetches more bytes than this value per-second"
   val NumQuotaSamplesDoc = "The number of samples to retain in memory for client quotas"
   val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
   val NumAlterLogDirsReplicationQuotaSamplesDoc = "The number of samples to retain in memory for alter log dirs replication quotas"
@@ -1096,6 +1148,7 @@ object KafkaConfig {
   /** ********* SSL Configuration ****************/
   val SslProtocolDoc = SslConfigs.SSL_PROTOCOL_DOC
   val SslProviderDoc = SslConfigs.SSL_PROVIDER_DOC
+  val SslContextProviderClassDoc = SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_DOC
   val SslCipherSuitesDoc = SslConfigs.SSL_CIPHER_SUITES_DOC
   val SslEnabledProtocolsDoc = SslConfigs.SSL_ENABLED_PROTOCOLS_DOC
   val SslKeystoreTypeDoc = SslConfigs.SSL_KEYSTORE_TYPE_DOC
@@ -1169,6 +1222,48 @@ object KafkaConfig {
   val PasswordEncoderCipherAlgorithmDoc = "The Cipher algorithm used for encoding dynamically configured passwords."
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
+
+  /** ********* LinkedIn-specific Prop Constants ***********/
+  val HeapDumpFolderProp = "heap.dump.folder"
+  val HeapDumpTimeoutProp = "heap.dump.timeout"
+  val ProducerBatchDecompressionEnableProp = "producer.batch.decompression.enable"
+  val PreferredControllerProp = "preferred.controller"
+  val LiMinPreferredControllerCountProp = "li.min.preferred.controller.count"
+  val LiAsyncFetcherEnableProp = "li.async.fetcher.enable"
+  val LiCombinedControlRequestEnableProp = "li.combined.control.request.enable"
+  val LiUpdateMetadataDelayMsProp = "li.update.metadata.delay.ms"
+  val LiDropFetchFollowerEnableProp = "li.stop.replication.enable"
+  val LiDenyAlterIsrProp = "li.deny.alter.isr"
+  val LiNumControllerInitThreadsProp = "li.num.controller.init.threads"
+  val LiLogCleanerFineGrainedLockEnableProp = "li.log.cleaner.fine.grained.lock.enable"
+  val LiDropCorruptedFilesEnableProp = "li.drop.corrupted.files.enable"
+  val LiConsumerFetchSampleRatioProp = "li.consumer.fetch.sample.ratio"
+  val LiLeaderElectionOnCorruptionWaitMsProp = "li.leader.election.on.corruption.wait.ms"
+  val LiZookeeperPaginationEnableProp = "li.zookeeper.pagination.enable"
+  val LiRackIdMapperClassNameForRackAwareReplicaAssignmentProp = "li.rack.aware.assignment.rack.id.mapper.class"
+  val LiLongTailProduceRequestLogThresholdMsProp = "li.instrumentation.requests.produce.long.tail.log.threshold.ms"
+  val LiLongTailProduceRequestLogRatioProp = "li.instrumentation.requests.produce.long.tail.log.ratio"
+  val AllowPreferredControllerFallbackProp = "allow.preferred.controller.fallback"
+  val UnofficialClientLoggingEnableProp = "unofficial.client.logging.enable"
+  val UnofficialClientCacheTtlProp = "unofficial.client.cache.ttl"
+  val ExpectedClientSoftwareNamesProp = "expected.client.software.names"
+  val ObserverClassNameProp = "observer.class.name"
+  val ObserverShutdownTimeoutMsProp = "observer.shutdown.timeout"
+  val QuotaV2HandlerClassNameProp = "quotav2handler.class.name"
+  val QuotaV2HandlerShutdownTimeoutMsProp = "quotav2handler.shutdown.timeout"
+  val RequestMaxLocalTimeMsProp = "request.max.local.time.ms"
+  val SocketRequestCommonBytesProp = "socket.request.common.bytes"
+  val SocketRequestBufferCacheSizeProp = "socket.request.buffer.cache.size"
+  val LiMinLogRollTimeMillisProp = "li.min.log.roll.ms"
+  val LiMinOriginalAliveReplicasProp = "li.min.original.alive.replicas"
+  val ControlledShutdownSafetyCheckEnableProp = "controlled.shutdown.safety.check.enable"
+  val ControlledShutdownSafetyCheckRedundancyFactorProp = "controlled.shutdown.safety.check.redundancy.factor"
+  val ControlledShutdownPartitionBatchSizeProp = "controlled.shutdown.partition.batch.size"
+  val OffsetsTopicMaxMessageBytesProp = "offsets.topic.max.message.bytes"
+  val OffsetsTopicMinInSyncReplicasProp = "offsets.topic.min.insync.replicas"
+  val OffsetsTopicMinCompactionLagMsProp = "offsets.topic.min.compaction.lag.ms"
+  val InactiveSensorExpirationTimeSecondsProp = "inactive.sensor.expiration.time.seconds"
+  val MetricReplaceOnDuplicateProp = "metric.replace.on.duplicate"
 
   @nowarn("cat=deprecation")
   val configDef = {
@@ -1315,6 +1410,7 @@ object KafkaConfig {
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
       .define(DefaultReplicationFactorProp, INT, Defaults.DefaultReplicationFactor, MEDIUM, DefaultReplicationFactorDoc)
       .define(ReplicaLagTimeMaxMsProp, LONG, Defaults.ReplicaLagTimeMaxMs, HIGH, ReplicaLagTimeMaxMsDoc)
+      .define(ReplicaRequestTimeoutMsProp, INT, Defaults.ReplicaRequestTimeoutMs, HIGH, ReplicaRequestTimeoutMsDoc)
       .define(ReplicaSocketTimeoutMsProp, INT, Defaults.ReplicaSocketTimeoutMs, HIGH, ReplicaSocketTimeoutMsDoc)
       .define(ReplicaSocketReceiveBufferBytesProp, INT, Defaults.ReplicaSocketReceiveBufferBytes, HIGH, ReplicaSocketReceiveBufferBytesDoc)
       .define(ReplicaFetchMaxBytesProp, INT, Defaults.ReplicaFetchMaxBytes, atLeast(0), MEDIUM, ReplicaFetchMaxBytesDoc)
@@ -1412,6 +1508,8 @@ object KafkaConfig {
       .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
 
       /** ********* Quota configuration ***********/
+      .define(ProducerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ProducerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ProducerQuotaBytesPerSecondDefaultDoc)
+      .define(ConsumerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ConsumerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ConsumerQuotaBytesPerSecondDefaultDoc)
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
       .define(NumReplicationQuotaSamplesProp, INT, Defaults.NumReplicationQuotaSamples, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
       .define(NumAlterLogDirsReplicationQuotaSamplesProp, INT, Defaults.NumAlterLogDirsReplicationQuotaSamples, atLeast(1), LOW, NumAlterLogDirsReplicationQuotaSamplesDoc)
@@ -1431,6 +1529,7 @@ object KafkaConfig {
       .define(PrincipalBuilderClassProp, CLASS, Defaults.DefaultPrincipalBuilder, MEDIUM, PrincipalBuilderClassDoc)
       .define(SslProtocolProp, STRING, Defaults.SslProtocol, MEDIUM, SslProtocolDoc)
       .define(SslProviderProp, STRING, null, MEDIUM, SslProviderDoc)
+      .define(SslContextProviderClassProp, STRING, Defaults.SslContextProviderClass, MEDIUM, SslContextProviderClassDoc)
       .define(SslEnabledProtocolsProp, LIST, Defaults.SslEnabledProtocols, MEDIUM, SslEnabledProtocolsDoc)
       .define(SslKeystoreTypeProp, STRING, Defaults.SslKeystoreType, MEDIUM, SslKeystoreTypeDoc)
       .define(SslKeystoreLocationProp, STRING, null, MEDIUM, SslKeystoreLocationDoc)
@@ -1507,6 +1606,43 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
       .define(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
+
+      /** ********* LinkedIn-specific Configuration ***********/
+      .define(HeapDumpFolderProp, STRING, null, LOW, "Folder for heap dumps")
+      .define(HeapDumpTimeoutProp, LONG, Defaults.HeapDumpTimeout, LOW, "Timeout for heap dump in ms")
+      .define(ProducerBatchDecompressionEnableProp, BOOLEAN, Defaults.ProducerBatchDecompressionEnable, LOW, "Enable producer batch decompression")
+      .define(PreferredControllerProp, BOOLEAN, Defaults.PreferredController, HIGH, "Whether this broker is a preferred controller")
+      .define(LiMinPreferredControllerCountProp, INT, Defaults.LiMinPreferredControllerCount, atLeast(0), HIGH, "Minimum preferred controller count")
+      .define(LiAsyncFetcherEnableProp, BOOLEAN, Defaults.LiAsyncFetcherEnabled, HIGH, "Enable async fetcher")
+      .define(LiCombinedControlRequestEnableProp, BOOLEAN, Defaults.LiCombinedControlRequestEnabled, HIGH, "Enable combined control requests")
+      .define(LiUpdateMetadataDelayMsProp, LONG, Defaults.LiUpdateMetadataDelayMs, atLeast(0), LOW, "Delay for UpdateMetadata in ms")
+      .define(LiDropFetchFollowerEnableProp, BOOLEAN, Defaults.LiDropFetchFollowerEnable, LOW, "Enable dropping fetch follower")
+      .define(LiDenyAlterIsrProp, BOOLEAN, Defaults.LiDenyAlterIsr, HIGH, "Deny AlterISR requests")
+      .define(LiNumControllerInitThreadsProp, INT, Defaults.LiNumControllerInitThreads, atLeast(1), LOW, "Number of controller init threads")
+      .define(LiLogCleanerFineGrainedLockEnableProp, BOOLEAN, Defaults.LiLogCleanerFineGrainedLockEnabled, LOW, "Enable fine-grained log cleaner locking")
+      .define(LiDropCorruptedFilesEnableProp, BOOLEAN, Defaults.LiDropCorruptedFilesEnabled, HIGH, "Enable dropping corrupted log files")
+      .define(LiConsumerFetchSampleRatioProp, DOUBLE, Defaults.LiConsumerFetchSampleRatio, between(0.0, 1.0), LOW, "Consumer fetch sample ratio")
+      .define(LiLeaderElectionOnCorruptionWaitMsProp, LONG, Defaults.LiLeaderElectionOnCorruptionWaitMs, atLeast(0), HIGH, "Wait time before leader election on corruption")
+      .define(LiZookeeperPaginationEnableProp, BOOLEAN, Defaults.LiZookeeperPaginationEnable, LOW, "Enable ZK pagination")
+      .define(LiLongTailProduceRequestLogThresholdMsProp, LONG, Defaults.LiLongTailProduceRequestLogThresholdMs, atLeast(0), MEDIUM, "Long tail produce request log threshold in ms")
+      .define(LiLongTailProduceRequestLogRatioProp, DOUBLE, Defaults.LiLongTailProduceRequestLogRatio, between(0, 1), MEDIUM, "Long tail produce request log ratio")
+      .define(AllowPreferredControllerFallbackProp, BOOLEAN, Defaults.AllowPreferredControllerFallback, HIGH, "Allow fallback from preferred controller")
+      .define(UnofficialClientLoggingEnableProp, BOOLEAN, Defaults.UnofficialClientLoggingEnable, LOW, "Enable unofficial client logging")
+      .define(UnofficialClientCacheTtlProp, LONG, Defaults.UnofficialClientCacheTtl, LOW, "Unofficial client cache TTL")
+      .define(ObserverClassNameProp, STRING, Defaults.ObserverClassName, MEDIUM, "Observer class name")
+      .define(ObserverShutdownTimeoutMsProp, LONG, Defaults.ObserverShutdownTimeoutMs, atLeast(1), MEDIUM, "Observer shutdown timeout in ms")
+      .define(QuotaV2HandlerClassNameProp, STRING, Defaults.QuotaV2HandlerClassName, MEDIUM, "QuotaV2 handler class name")
+      .define(QuotaV2HandlerShutdownTimeoutMsProp, LONG, Defaults.QuotaV2HandlerShutdownTimeoutMs, atLeast(1), MEDIUM, "QuotaV2 handler shutdown timeout in ms")
+      .define(RequestMaxLocalTimeMsProp, LONG, Defaults.RequestMaxLocalTimeMs, atLeast(1), MEDIUM, "Max local time for request processing in ms")
+      .define(SocketRequestCommonBytesProp, INT, Defaults.SocketRequestCommonBytes, MEDIUM, "Common bytes in socket request")
+      .define(SocketRequestBufferCacheSizeProp, INT, Defaults.SocketRequestBufferCacheSize, atLeast(0), MEDIUM, "Socket request buffer cache size")
+      .define(LiMinOriginalAliveReplicasProp, INT, Defaults.LiMinOriginalAliveReplicas, LOW, "Minimum original alive replicas")
+      .define(ControlledShutdownSafetyCheckEnableProp, BOOLEAN, Defaults.ControlledShutdownSafetyCheckEnable, MEDIUM, "Enable controlled shutdown safety check")
+      .define(ControlledShutdownSafetyCheckRedundancyFactorProp, INT, Defaults.ControlledShutdownSafetyCheckRedundancyFactor, MEDIUM, "Controlled shutdown safety check redundancy factor")
+      .define(ControlledShutdownPartitionBatchSizeProp, INT, Defaults.ControlledShutdownPartitionBatchSize, MEDIUM, "Controlled shutdown partition batch size")
+      .define(ProducerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ProducerQuotaBytesPerSecondDefault, atLeast(1), HIGH, "Default producer quota in bytes per second")
+      .define(ConsumerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ConsumerQuotaBytesPerSecondDefault, atLeast(1), HIGH, "Default consumer quota in bytes per second")
+      .define(InactiveSensorExpirationTimeSecondsProp, INT, Defaults.InactiveSensorExpirationTimeSeconds, LOW, "Inactive sensor expiration time in seconds")
 
       /** Internal Configurations **/
       // This indicates whether unreleased APIs should be advertised by this broker.
@@ -1777,6 +1913,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def numIoThreads = getInt(KafkaConfig.NumIoThreadsProp)
   def messageMaxBytes = getInt(KafkaConfig.MessageMaxBytesProp)
   val requestTimeoutMs = getInt(KafkaConfig.RequestTimeoutMsProp)
+  val replicaRequestTimeoutMs = getInt(KafkaConfig.ReplicaRequestTimeoutMsProp)
   val connectionSetupTimeoutMs = getLong(KafkaConfig.ConnectionSetupTimeoutMsProp)
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
 
@@ -1838,7 +1975,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val replicaSelectorClassName = Option(getString(KafkaConfig.ReplicaSelectorClassProp))
 
   /** ********* Log Configuration ***********/
-  val autoCreateTopicsEnable = getBoolean(KafkaConfig.AutoCreateTopicsEnableProp)
+  def autoCreateTopicsEnable: java.lang.Boolean = getBoolean(KafkaConfig.AutoCreateTopicsEnableProp)
   val numPartitions = getInt(KafkaConfig.NumPartitionsProp)
   val logDirs = CoreUtils.parseCsvList(Option(getString(KafkaConfig.LogDirsProp)).getOrElse(getString(KafkaConfig.LogDirProp)))
   def logSegmentBytes = getInt(KafkaConfig.LogSegmentBytesProp)
@@ -2057,6 +2194,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
 
   /** ********* Quota Configuration **************/
+  val producerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp)
+  val consumerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp)
   val numQuotaSamples = getInt(KafkaConfig.NumQuotaSamplesProp)
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
   val numReplicationQuotaSamples = getInt(KafkaConfig.NumReplicationQuotaSamplesProp)
@@ -2081,6 +2220,46 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
   val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
   val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
+
+  /** ********* LinkedIn-specific Accessors ***********/
+  val heapDumpFolder = Option(getString(KafkaConfig.HeapDumpFolderProp)).map(new java.io.File(_)).orNull
+  val heapDumpTimeout = getLong(KafkaConfig.HeapDumpTimeoutProp)
+  val producerBatchDecompressionEnable = getBoolean(KafkaConfig.ProducerBatchDecompressionEnableProp)
+  def preferredController: Boolean = getBoolean(KafkaConfig.PreferredControllerProp)
+  def allowPreferredControllerFallback: Boolean = getBoolean(KafkaConfig.AllowPreferredControllerFallbackProp)
+  val liAsyncFetcherEnable = getBoolean(KafkaConfig.LiAsyncFetcherEnableProp)
+  def liCombinedControlRequestEnable = getBoolean(KafkaConfig.LiCombinedControlRequestEnableProp)
+  def liUpdateMetadataDelayMs = getLong(KafkaConfig.LiUpdateMetadataDelayMsProp)
+  def liDropFetchFollowerEnable = getBoolean(KafkaConfig.LiDropFetchFollowerEnableProp)
+  def liDenyAlterIsr = getBoolean(KafkaConfig.LiDenyAlterIsrProp)
+  def liNumControllerInitThreads = getInt(KafkaConfig.LiNumControllerInitThreadsProp)
+  def liLogCleanerFineGrainedLockEnable = getBoolean(KafkaConfig.LiLogCleanerFineGrainedLockEnableProp)
+  val liDropCorruptedFilesEnable = getBoolean(KafkaConfig.LiDropCorruptedFilesEnableProp)
+  val liConsumerFetchSampleRatio = getDouble(KafkaConfig.LiConsumerFetchSampleRatioProp)
+  val liLeaderElectionOnCorruptionWaitMs = getLong(KafkaConfig.LiLeaderElectionOnCorruptionWaitMsProp)
+  def liZookeeperPaginationEnable = getBoolean(KafkaConfig.LiZookeeperPaginationEnableProp)
+  def unofficialClientLoggingEnable = getBoolean(KafkaConfig.UnofficialClientLoggingEnableProp)
+  def unofficialClientCacheTtl = getLong(KafkaConfig.UnofficialClientCacheTtlProp)
+  def expectedClientSoftwareNames = getList(KafkaConfig.ExpectedClientSoftwareNamesProp)
+  val liMinPreferredControllerCount = getInt(KafkaConfig.LiMinPreferredControllerCountProp)
+  val observerClassName = getString(KafkaConfig.ObserverClassNameProp)
+  val observerShutdownTimeoutMs = getLong(KafkaConfig.ObserverShutdownTimeoutMsProp)
+  val quotaV2HandlerClassName = getString(KafkaConfig.QuotaV2HandlerClassNameProp)
+  val quotaV2HandlerShutdownTimeoutMs = getLong(KafkaConfig.QuotaV2HandlerShutdownTimeoutMsProp)
+  val requestMaxLocalTimeMs = getLong(KafkaConfig.RequestMaxLocalTimeMsProp)
+  val socketRequestCommonBytes = getInt(KafkaConfig.SocketRequestCommonBytesProp)
+  val socketRequestBufferCacheSize = getInt(KafkaConfig.SocketRequestBufferCacheSizeProp)
+  val liMinOriginalAliveReplicas = getInt(KafkaConfig.LiMinOriginalAliveReplicasProp)
+  val controlledShutdownSafetyCheckEnable = getBoolean(KafkaConfig.ControlledShutdownSafetyCheckEnableProp)
+  val controlledShutdownSafetyCheckRedundancyFactor = getInt(KafkaConfig.ControlledShutdownSafetyCheckRedundancyFactorProp)
+  val controlledShutdownPartitionBatchSize = getInt(KafkaConfig.ControlledShutdownPartitionBatchSizeProp)
+  val metricReplaceOnDuplicate = false
+  val inactiveSensorExpirationTimeSeconds = getInt(KafkaConfig.InactiveSensorExpirationTimeSecondsProp)
+  val longTailProduceRequestLogThresholdMs = getLong(KafkaConfig.LiLongTailProduceRequestLogThresholdMsProp)
+  val longTailProduceRequestLogRatio = getDouble(KafkaConfig.LiLongTailProduceRequestLogRatioProp)
+  val liMinLogRollMs = getLong(KafkaConfig.LiMinLogRollTimeMillisProp)
+
+  def getMaintenanceBrokerList: Seq[Int] = Seq.empty // LI stub
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
@@ -2296,7 +2475,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
       require(voterAddressSpecsByNodeId.containsKey(nodeId),
-        s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
+        s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala}")
     }
     def validateControllerListenerExistsForKRaftController(): Unit = {
       require(controllerListeners.nonEmpty,
@@ -2319,7 +2498,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
       require(!voterAddressSpecsByNodeId.containsKey(nodeId),
-        s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
+        s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala}")
       // controller.listener.names must be non-empty...
       require(controllerListenerNames.nonEmpty,
         s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")

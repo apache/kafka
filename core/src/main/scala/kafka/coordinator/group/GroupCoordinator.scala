@@ -1445,10 +1445,9 @@ private[group] class GroupCoordinator(
     else
       new DelayedJoin(this, group, group.rebalanceTimeoutMs)
 
-    group.transitionTo(PreparingRebalance)
-
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
       s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
+    group.transitionTo(PreparingRebalance)
 
     val groupKey = GroupJoinKey(group.groupId)
     rebalancePurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))

@@ -801,8 +801,15 @@ class KafkaConfigTest {
         case KafkaConfig.NumReplicaAlterLogDirsThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.QueuedMaxBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.HeapDumpFolderProp => //ignore string
+        case KafkaConfig.HeapDumpTimeoutProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+
+        // Linkedin internal use for unofficial client logging
+        case KafkaConfig.UnofficialClientLoggingEnableProp => // ignore
+        case KafkaConfig.UnofficialClientCacheTtlProp => // ignore
+        case KafkaConfig.ExpectedClientSoftwareNamesProp => //ignore string
 
         // KRaft mode configs
         case KafkaConfig.ProcessRolesProp => // ignore
@@ -866,6 +873,7 @@ class KafkaConfigTest {
         case KafkaConfig.ControllerSocketTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.DefaultReplicationFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ReplicaLagTimeMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaRequestTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ReplicaSocketTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
         case KafkaConfig.ReplicaSocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ReplicaFetchMaxBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -885,6 +893,8 @@ class KafkaConfigTest {
         case KafkaConfig.ControlledShutdownMaxRetriesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControlledShutdownRetryBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControlledShutdownEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.ControlledShutdownSafetyCheckEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.ControlledShutdownSafetyCheckRedundancyFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.GroupInitialRebalanceDelayMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -899,6 +909,9 @@ class KafkaConfigTest {
         case KafkaConfig.OffsetsRetentionCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.OffsetCommitTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
+        case KafkaConfig.OffsetsTopicMaxMessageBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case KafkaConfig.OffsetsTopicMinInSyncReplicasProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetsTopicMinCompactionLagMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
         case KafkaConfig.TransactionalIdExpirationMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case KafkaConfig.TransactionsMaxTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case KafkaConfig.TransactionsTopicMinISRProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
@@ -906,8 +919,11 @@ class KafkaConfigTest {
         case KafkaConfig.TransactionsTopicPartitionsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case KafkaConfig.TransactionsTopicSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case KafkaConfig.TransactionsTopicReplicationFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.InactiveSensorExpirationTimeSecondsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
@@ -920,6 +936,7 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionsMaxReauthMsProp =>
         case KafkaConfig.SslProtocolProp => // ignore string
         case KafkaConfig.SslProviderProp => // ignore string
+        case KafkaConfig.SslContextProviderClassProp => // ignore string
         case KafkaConfig.SslEnabledProtocolsProp =>
         case KafkaConfig.SslKeystoreTypeProp => // ignore string
         case KafkaConfig.SslKeystoreLocationProp => // ignore string
@@ -994,8 +1011,14 @@ class KafkaConfigTest {
         //Kafka Yammer metrics reporter configs
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
+        case KafkaConfig.RequestMetricsSizeBucketsProp =>  assertPropertyInvalid(baseProperties, name, "", "1", "1, 2, 5, not_a_number, 9")
+        case KafkaConfig.TotalTimeHistogramEnabledMetricsProp => // ignore
 
         case KafkaConfig.SaslServerMaxReceiveSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+
+        // QuotaV2Configs
+        case KafkaConfig.QuotaV2HandlerClassNameProp => // NoOpQuotaV2Handler is used if the classname is invalid
+        case KafkaConfig.QuotaV2HandlerShutdownTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         // Raft Quorum Configs
         case RaftConfig.QUORUM_VOTERS_CONFIG => // ignore string

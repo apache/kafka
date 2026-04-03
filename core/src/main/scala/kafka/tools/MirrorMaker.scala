@@ -134,6 +134,7 @@ object MirrorMaker extends Logging {
             // so if we catch it in commit we can safely retry
             // and re-throw to break the loop
             commitOffsets(consumerWrapper)
+            consumerWrapper.clearOffsetMap()
             throw e
 
           case _: TimeoutException =>
@@ -152,10 +153,15 @@ object MirrorMaker extends Logging {
 
           case _: CommitFailedException =>
             retryNeeded = false
+            consumerWrapper.clearOffsetMap()
             warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
               "another instance. If you see this regularly, it could indicate that you need to either increase " +
               s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
               s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+          // HOTFIX LIKAFKA-12852
+          case e: KafkaException if e.getMessage != null && e.getMessage.contains("may not exist or user may not have Describe access to topic") =>
+            consumerWrapper.clearOffsetMap()
+            error("Failed to commit offsets due to an unrecoverable error such as committing to a deleted topic", e)
         }
       }
     } else {
@@ -349,6 +355,12 @@ object MirrorMaker extends Logging {
       consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset)) }.asJava)
       offsets.clear()
     }
+
+    // HOTFIX LIKAFKA-12852, need to clear the offsets map when a KafkaException has been thrown due to topic
+    // deletion during offset commet.
+    def clearOffsetMap(): Unit = {
+      offsets.clear()
+    }
   }
 
   private class InternalRebalanceListener(consumerWrapper: ConsumerWrapper,
@@ -505,6 +517,9 @@ object MirrorMaker extends Logging {
       .ofType(classOf[String])
       .defaultsTo("true")
 
+    val passthroughCompressionOpt = parser.accepts("enable.passthrough",
+      "When enabled, it avoids decompressing consumed record batches and doesn't re-compress in the producer")
+
     options = parser.parse(args: _*)
 
     def checkArgs() = {
@@ -538,6 +553,10 @@ object MirrorMaker extends Logging {
       maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
       maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
       maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+      if (options.has(passthroughCompressionOpt)) {
+        consumerProps.setProperty("enable.shallow.iterator", "true")
+        producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "passthrough")
+      }
       // Always set producer key and value serializer to ByteArraySerializer.
       producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
       producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)

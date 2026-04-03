@@ -285,7 +285,7 @@ abstract class QuotaTestClients(topic: String,
     if (expectThrottle) {
       assertTrue(throttleMetricValue > 0, s"Client with id=$clientId should have been throttled")
     } else {
-      assertTrue(throttleMetricValue.isNaN, s"Client with id=$clientId should not have been throttled")
+      assertTrue(throttleMetricValue == 0, s"Client with id=$clientId should not have been throttled")
     }
   }
 
@@ -303,7 +303,7 @@ abstract class QuotaTestClients(topic: String,
     def yammerMetricValue(name: String): Double = {
       val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       val (_, metric) = allMetrics.find { case (metricName, _) =>
-        metricName.getMBeanName.startsWith(name)
+        metricName.getMBeanName == name
       }.getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
       metric match {
         case m: Meter => m.count.toDouble

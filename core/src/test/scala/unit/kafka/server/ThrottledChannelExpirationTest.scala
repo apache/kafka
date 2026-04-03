@@ -51,7 +51,7 @@ class ThrottledChannelExpirationTest {
 
   @Test
   def testCallbackInvocationAfterExpiration(): Unit = {
-    val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, None, "")
 
     val delayQueue = new DelayQueue[ThrottledChannel]()
     val reaper = new clientMetrics.ThrottledChannelReaper(delayQueue, "")

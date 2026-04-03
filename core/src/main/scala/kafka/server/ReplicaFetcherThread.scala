@@ -183,9 +183,9 @@ class ReplicaFetcherThread(name: String,
         s"${log.highWatermark}")
 
     // mark the future replica for truncation only when we do last truncation
-    if (offsetTruncationState.truncationCompleted)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
-        offsetTruncationState.offset)
+//    if (offsetTruncationState.truncationCompleted)
+//      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
+//        offsetTruncationState.offset)
   }
 
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {

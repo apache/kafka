@@ -108,4 +108,6 @@ class ZkAlterPartitionManager(scheduler: Scheduler, time: Time, zkClient: KafkaZ
       }
     }
   }
+
+  override def shutdown(): Unit = {}
 }

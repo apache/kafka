@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,7 +62,12 @@ public class ClientUtilsTest {
         assertTrue(validatedAddresses.size() >= 1, "Unexpected addresses " + validatedAddresses);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
-        List<String> expectedHostNames = asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
+        List<String> expectedHostNames = Arrays.asList(
+            "104.18.26.120",
+            "104.18.27.120",
+            "2606:4700:0:0:0:0:6812:1a78",
+            "2606:4700:0:0:0:0:6812:1b78"
+        );
         assertTrue(expectedHostNames.containsAll(validatedHostNames), "Unexpected addresses " + validatedHostNames);
         validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
@@ -113,6 +119,25 @@ public class ClientUtilsTest {
         };
         HostResolver hostResolver = new AddressChangeHostResolver(addresses, addresses);
         assertEquals(asList(addresses), ClientUtils.resolve("kafka.apache.org", hostResolver));
+    }
+
+    @Test
+    public void testParseAndValidateAddressesDedupesErrors() {
+        int expectedNumberOfErrors = 1;
+        int actualNumberOfErrors = 0;
+        String expectedErrorMessage = "No resolvable bootstrap server in provided urls: ";
+
+        for (int i = 0; i < 10; i++) {
+            try {
+                ClientUtils.parseAndValidateAddresses(Collections.emptyList());
+            } catch (ConfigException e) {
+                assertEquals(expectedErrorMessage, e.getMessage());
+                actualNumberOfErrors++;
+            }
+        }
+
+        // Verify that only one error was thrown during the loop
+        assertEquals(expectedNumberOfErrors, actualNumberOfErrors);
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {

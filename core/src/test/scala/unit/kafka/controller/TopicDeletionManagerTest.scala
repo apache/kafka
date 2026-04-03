@@ -41,7 +41,7 @@ class TopicDeletionManagerTest {
       replicationFactor = 3)
 
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup()
+    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -68,7 +68,7 @@ class TopicDeletionManagerTest {
       numPartitions = 2,
       replicationFactor = 3)
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup()
+    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -117,7 +117,6 @@ class TopicDeletionManagerTest {
     assertEquals(1, partitionStateMachine.stateChangesCalls(OfflinePartition))
     assertEquals(1, partitionStateMachine.stateChangesCalls(NonExistentPartition))
 
-    assertEquals(1, replicaStateMachine.stateChangesCalls(ReplicaDeletionIneligible))
     assertEquals(1, replicaStateMachine.stateChangesCalls(OfflineReplica))
     assertEquals(1, replicaStateMachine.stateChangesCalls(ReplicaDeletionStarted))
     assertEquals(1, replicaStateMachine.stateChangesCalls(ReplicaDeletionSuccessful))
@@ -132,7 +131,7 @@ class TopicDeletionManagerTest {
       replicationFactor = 3)
 
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup()
+    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -151,8 +150,6 @@ class TopicDeletionManagerTest {
 
     // Broker 2 is taken offline
     val failedBrokerId = 2
-    val offlineBroker = controllerContext.liveOrShuttingDownBroker(failedBrokerId).get
-    val lastEpoch = controllerContext.liveBrokerIdAndEpochs(failedBrokerId)
     controllerContext.removeLiveBrokers(Set(failedBrokerId))
     assertEquals(Set(1, 3), controllerContext.liveBrokerIds)
 
@@ -164,35 +161,21 @@ class TopicDeletionManagerTest {
     assertEquals(fooPartitions, controllerContext.partitionsInState("foo", NonExistentPartition))
     verify(deletionClient).sendMetadataUpdate(fooPartitions)
     assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
-    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionIneligible))
+    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", OfflineReplica))
 
     assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
     assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
-    assertEquals(Set("foo"), controllerContext.topicsIneligibleForDeletion)
+    assertEquals(Set(), controllerContext.topicsIneligibleForDeletion)
 
     // Deletion succeeds for online replicas
     deletionManager.completeReplicaDeletion(onlineReplicas)
 
-    assertEquals(fooPartitions, controllerContext.partitionsInState("foo", NonExistentPartition))
-    assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
-    assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
-    assertEquals(Set("foo"), controllerContext.topicsIneligibleForDeletion)
-    assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionSuccessful))
-    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", OfflineReplica))
-
-    // Broker 2 comes back online and deletion is resumed
-    controllerContext.addLiveBrokers(Map(offlineBroker -> (lastEpoch + 1L)))
-    deletionManager.resumeDeletionForTopics(Set("foo"))
-
-    assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionSuccessful))
-    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
-
-    deletionManager.completeReplicaDeletion(offlineReplicas)
     assertEquals(Set.empty, controllerContext.partitionsForTopic("foo"))
     assertEquals(Set.empty[PartitionAndReplica], controllerContext.replicaStates.keySet.filter(_.topic == "foo"))
     assertEquals(Set(), controllerContext.topicsToBeDeleted)
     assertEquals(Set(), controllerContext.topicsWithDeletionStarted)
     assertEquals(Set(), controllerContext.topicsIneligibleForDeletion)
+    assertFalse(controllerContext.allTopics.contains("foo"))
   }
 
   @Test
@@ -204,7 +187,7 @@ class TopicDeletionManagerTest {
       replicationFactor = 3)
 
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup()
+    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -227,38 +210,18 @@ class TopicDeletionManagerTest {
 
     // Broker 2 fails
     val failedBrokerId = 2
-    val offlineBroker = controllerContext.liveOrShuttingDownBroker(failedBrokerId).get
-    val lastEpoch = controllerContext.liveBrokerIdAndEpochs(failedBrokerId)
     controllerContext.removeLiveBrokers(Set(failedBrokerId))
     assertEquals(Set(1, 3), controllerContext.liveBrokerIds)
     val (offlineReplicas, onlineReplicas) = fooReplicas.partition(_.replica == failedBrokerId)
+    // signal that the replicas on broker 2 have failed
+    replicaStateMachine.handleStateChanges(offlineReplicas.toSeq, OfflineReplica)
 
-    // Fail replica deletion
-    deletionManager.failReplicaDeletion(offlineReplicas)
-    assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
-    assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
-    assertEquals(Set("foo"), controllerContext.topicsIneligibleForDeletion)
-    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionIneligible))
-    assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
-
-    // Broker 2 is restarted. The offline replicas remain ineligable
-    // (TODO: this is probably not desired)
-    controllerContext.addLiveBrokers(Map(offlineBroker -> (lastEpoch + 1L)))
-    deletionManager.resumeDeletionForTopics(Set("foo"))
-    assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
-    assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
-    assertEquals(Set(), controllerContext.topicsIneligibleForDeletion)
-    assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
-    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionIneligible))
-
-    // When deletion completes for the replicas which started, then deletion begins for the remaining ones
+    // Verify that when the deletion of online replicas are completed, the deletion of the topic can be completed
     deletionManager.completeReplicaDeletion(onlineReplicas)
-    assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
-    assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
+    assertEquals(Set(), controllerContext.topicsToBeDeleted)
+    assertEquals(Set(), controllerContext.topicsWithDeletionStarted)
     assertEquals(Set(), controllerContext.topicsIneligibleForDeletion)
-    assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionSuccessful))
-    assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
-
+    assertFalse(controllerContext.allTopics.contains("foo"))
   }
 
   def initContext(brokers: Seq[Int],

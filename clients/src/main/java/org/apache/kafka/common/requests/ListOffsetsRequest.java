@@ -38,6 +38,16 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 public class ListOffsetsRequest extends AbstractRequest {
+    /**
+     * It is used to represent the earliest message stored in the local log which is also called the local-log-start-offset
+     */
+    /*
+    We named this LI_EARLIEST_LOCAL_TIMESTAMP and used -104 as the value, because Kafka trunk will eventually have a
+    EARLIEST_LOCAL_TIMESTAMP, and we are not sure about the timestamp code for that yet. We want to be able to run with
+    both of them enabled for some time before removing LI_EARLIEST_LOCAL_TIMESTAMP and fully moving
+    to EARLIEST_LOCAL_TIMESTAMP.
+     */
+    public static final long LI_EARLIEST_LOCAL_TIMESTAMP = -104L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
     public static final long MAX_TIMESTAMP = -3L;
@@ -49,12 +59,18 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
+    public static final int CONTROLLER_REPLICA_ID = -100;
 
     private final ListOffsetsRequestData data;
     private final Set<TopicPartition> duplicatePartitions;
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetsRequest> {
         private final ListOffsetsRequestData data;
+
+        public static Builder forController(short allowedVersion) {
+            return new Builder((short) 0, allowedVersion,
+                ListOffsetsRequest.CONTROLLER_REPLICA_ID, IsolationLevel.READ_UNCOMMITTED);
+        }
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);

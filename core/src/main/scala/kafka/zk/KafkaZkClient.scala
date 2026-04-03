@@ -110,6 +110,70 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Registers the preferred controller id in zookeeper.
+   * @param id controller id
+   */
+  def registerPreferredControllerId(id: Int): Unit = {
+    val path = PreferredControllerIdZNode.path(id)
+    val stat = checkedEphemeralCreate(path, null)
+    info(s"Registered preferred controller ${id} at path $path with czxid (preferred controller epoch): ${stat.getCzxid}")
+  }
+
+  def registerCorruptedBrokerId(brokerId: Int): Unit = {
+    val corruptedBroker = CorruptedBroker(brokerId)
+    val path = corruptedBroker.path
+    checkedEphemeralCreate(path, corruptedBroker.toJsonBytes)
+    info(s"Registered corrupted broker ${corruptedBroker.brokerId} at path $path")
+  }
+
+  def updateCorruptedBroker(corruptedBroker: CorruptedBroker): Unit = {
+    val path = corruptedBroker.path
+    val setDataRequest = SetDataRequest(path, corruptedBroker.toJsonBytes, ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(setDataRequest)
+    response.maybeThrow()
+    info(s"Updated corrupted broker ${corruptedBroker.brokerId} at path $path, clearedFromIsrs = ${corruptedBroker.clearedFromIsrs}")
+  }
+
+  def getCorruptedBrokers: Map[Int, CorruptedBroker] = {
+    val brokerIds = getChildren(CorruptedBrokersZNode.path).map(_.toInt).sorted
+
+    val getDataRequests = brokerIds.map(brokerId => GetDataRequest(
+      CorruptedBrokerIdZNode.path(brokerId),
+      ctx = Some(brokerId)))
+
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.flatMap { getDataResponse =>
+      val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
+      getDataResponse.resultCode match {
+        case Code.OK =>
+          Some(brokerId, CorruptedBrokerIdZNode.decode(brokerId, getDataResponse.data))
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+    }.toMap
+  }
+
+  private[kafka] def getFederatedTopic(topic: String, namespace: String): Option[String] = {
+    if (pathExists(FederatedTopicZnode.path(topic, namespace))) {
+      Some(s"/$namespace/$topic")
+    } else {
+      None
+    }
+  }
+
+  def getAllFederatedTopics(registerWatch: Boolean = false): Set[String] = {
+    val namespaces = getChildren(FederatedTopicsZNode.path)
+    namespaces
+      // For all topics, generate (topic -> namespace) tuple
+      .flatMap(namespace => getAllFederatedTopicsInNamespace(namespace, registerWatch).map(_ -> namespace))
+      // To map to merge potential duplicate of topic -> namespace
+      .toMap
+      // Serialize to znode paths
+      .map { case (topic: String, namespace: String) => s"/$namespace/$topic" }
+      .toSet
+  }
+
+  /**
    * Registers a given broker in zookeeper as the controller and increments controller epoch.
    * @param controllerId the id of the broker that is to be registered as the controller.
    * @return the (updated controller epoch, epoch zkVersion) tuple
@@ -455,6 +519,30 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Get entity configs for a given sequence of entities
+   * @param rootEntityType entity type
+   * @param sanitizedEntityNames The names of all of the entities
+   * @return The sucesssfully gathered configurations. Any which are not found or cannot be decoded will be omitted.
+   */
+  def getMultipleEntityConfigs(rootEntityType: String, sanitizedEntityNames: Seq[String]): Map[String, Properties] = {
+    val getDataRequests = sanitizedEntityNames.map(entityName =>
+      GetDataRequest(ConfigEntityZNode.path(rootEntityType, entityName), ctx = Some(entityName)))
+    retryRequestsUntilConnected(getDataRequests)
+      .flatMap { getDataResponse =>
+        val entityName = getDataResponse.ctx.get.asInstanceOf[String]
+        getDataResponse.resultCode match {
+          case Code.OK =>
+            Some(entityName, ConfigEntityZNode.decode(getDataResponse.data))
+          case Code.NONODE => None
+          case _ => {
+            error(s"Unable to deserialize $rootEntityType entity config ${ConfigEntityZNode.path(rootEntityType, entityName)}")
+            throw getDataResponse.resultException.get
+          }
+        }
+      }.toMap
+  }
+
+  /**
    * Sets or creates the entity znode path with the given configs depending
    * on whether it already exists or not.
    *
@@ -573,13 +661,78 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def getSortedBrokerList: Seq[Int] = getChildren(BrokerIdsZNode.path).map(_.toInt).sorted
 
   /**
+   * Get the map of brokerId -> brokerEpoch. This is the last known controlled shutdown performed for each broker.
+   */
+  def getBrokerShutdownEntries: Map[Int, Long] = {
+    val brokerIds = getChildren(BrokerShutdownNode.path).map(_.toInt).sorted;
+
+    val getDataRequests = brokerIds.map(brokerId => GetDataRequest(
+      BrokerShutdownIdZNode.path(brokerId),
+      ctx = Some(brokerId)))
+
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.flatMap { getDataResponse =>
+      val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
+      getDataResponse.resultCode match {
+        case Code.OK =>
+          Some(brokerId, BrokerShutdownIdZNode.decode(getDataResponse.data))
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+    }.toMap
+  }
+
+  /*
+   * Record that @brokerId has started the controlled shutdown process at @brokerEpoch.
+   */
+  def recordBrokerShutdown(brokerId: Int, brokerEpoch: Long, expectedControllerEpochZkVersion: Int): Unit = {
+    val zNodePath = BrokerShutdownIdZNode.path(brokerId)
+    val encodedZNodeValue = BrokerShutdownIdZNode.encode(brokerEpoch)
+
+    val setDataRequest = SetDataRequest(zNodePath, encodedZNodeValue, ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(setDataRequest, expectedControllerEpochZkVersion)
+    if (response.resultCode == KeeperException.Code.NONODE) {
+      createRecursive(zNodePath, encodedZNodeValue)
+    }
+  }
+
+  def removeBrokerShutdown(brokerIds: Seq[Int], expectedControllerEpochZkVersion: Int): Unit = {
+    val deleteRequests = brokerIds.map(brokerId =>
+      DeleteRequest(BrokerShutdownIdZNode.path(brokerId), ZkVersion.MatchAnyVersion))
+    retryRequestsUntilConnected(deleteRequests, expectedControllerEpochZkVersion)
+  }
+
+  /**
+   * Gets the list of preferred controller Ids
+   */
+  def getPreferredControllerList: Seq[Int] = getChildren(PreferredControllersZNode.path).map(_.toInt)
+
+  /**
    * Gets all topics in the cluster.
    * @param registerWatch indicates if a watch must be registered or not
    * @return sequence of topics in the cluster.
+   *
    */
   def getAllTopicsInCluster(registerWatch: Boolean = false): Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(
       GetChildrenRequest(TopicsZNode.path, registerWatch))
+    getChildrenResponse.resultCode match {
+      case Code.OK => getChildrenResponse.children.toSet
+      case Code.NONODE => Set.empty
+      case _ => throw getChildrenResponse.resultException.get
+    }
+  }
+
+  /**
+   * Gets all federated topics in the namespace.
+   * @param registerWatch indicates if a watch must be registered or not
+   * @return sequence of topics in the cluster.
+   *
+   */
+  def getAllFederatedTopicsInNamespace(namespace: String, registerWatch: Boolean = false): Set[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(
+      GetChildrenRequest(FederatedTopicZnode.namespacePath(namespace), registerWatch)
+    )
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.toSet
       case Code.NONODE => Set.empty
@@ -806,6 +959,23 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }.toMap
   }
 
+  def getPartitionNodeNonExistsTopics(topics: Set[String]): Set[String] = {
+    val existsRequests = topics.map(topic => ExistsRequest(TopicPartitionsZNode.path(topic), ctx = Some(topic)))
+    val existsResponses = retryRequestsUntilConnected(existsRequests.toSeq)
+    val newTopics = scala.collection.mutable.Set.empty[String]
+
+    existsResponses.foreach {
+      existsResponse =>
+        val topic = existsResponse.ctx.get.asInstanceOf[String]
+        existsResponse.resultCode match {
+          case Code.OK =>
+          case Code.NONODE => newTopics.add(topic)
+          case _ => throw existsResponse.resultException.get
+        }
+    }
+    newTopics.toSet
+  }
+
   /**
    * Gets the partition numbers for the given topics
    * @param topics the topics whose partitions we wish to get.
@@ -855,6 +1025,15 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         getChildren(TopicPartitionsZNode.path(topic)).map(_.toInt).map(new TopicPartition(topic, _))
       }.toSet
     }
+  }
+
+  /**
+    * Gets all partitions in for a topic
+    * @param topic topic name
+    * @return all partitions for the topic
+    */
+  def getTopicPartitions(topic: String) : Seq[String] = {
+    getChildren(TopicPartitionsZNode.path(topic))
   }
 
   /**
@@ -978,6 +1157,37 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Creates the delete topic flag znode.
+   * @throws KeeperException if there is an error while setting or creating the znode
+   */
+  def createDeleteTopicFlagPath(): Unit = {
+    createRecursive(DeleteTopicFlagZNode.path)
+  }
+
+  /**
+   * Get topic deletion flag in zookeeper.
+   * @return topic deletion flag in zookeeper.
+   */
+  def getTopicDeletionFlag: String = {
+    val getDataResponse = retryRequestUntilConnected(GetDataRequest(DeleteTopicFlagZNode.path))
+    getDataResponse.resultCode match {
+      case Code.OK => DeleteTopicFlagZNode.decode(getDataResponse.data)
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
+  /**
+   * Set topic deletion flag in zookeeper.
+   */
+  def setTopicDeletionFlag(flag: String): Unit = {
+    val setDataResponse = retryRequestUntilConnected(SetDataRequest(DeleteTopicFlagZNode.path, DeleteTopicFlagZNode.encode(flag), -1))
+    setDataResponse.resultCode match {
+      case Code.OK =>
+      case _ => throw setDataResponse.resultException.get
+    }
+  }
+
+  /**
    * Remove the given topics from the topics marked for deletion.
    * @param topics the topics to remove.
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
@@ -1047,6 +1257,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    */
   def createPartitionReassignment(reassignment: Map[TopicPartition, Seq[Int]])  = {
     createRecursive(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment))
+  }
+
+  def deletePartitionReassignment(): Unit = {
+    deletePath(ReassignPartitionsZNode.path, ZkVersion.MatchAnyVersion)
   }
 
   /**
@@ -1245,6 +1459,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def deleteController(expectedControllerEpochZkVersion: Int): Unit = {
     val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion)
     retryRequestUntilConnected(deleteRequest, expectedControllerEpochZkVersion)
+  }
+
+  /**
+   * Deletes the controller znode without checking the expectedControllerEpochZkVersion
+   * This is used to force a controller switch from the cli.
+   * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
+   */
+  def deleteControllerRaw(): Unit = {
+    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion)
+    retryRequestUntilConnected(deleteRequest, ZkVersion.MatchAnyVersion)
   }
 
   /**
@@ -1803,6 +2027,15 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   def deleteFeatureZNode(): Unit = {
     deletePath(FeatureZNode.path, ZkVersion.MatchAnyVersion, false)
+  }
+
+  def createFederatedTopicZNode(topic: String, namespace: String): Unit = {
+    val path = FederatedTopicZnode.path(topic, namespace)
+    createRecursive(path)
+  }
+
+  def deleteFederatedTopicZNode(topic: String, namespace: String): Unit = {
+    deletePath(FederatedTopicZnode.path(topic, namespace), ZkVersion.MatchAnyVersion, false)
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {

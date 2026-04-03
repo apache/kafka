@@ -147,4 +147,11 @@ public class AdminClientTestUtils {
     public static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
     }
+
+    /**
+     * Helper to create a KafkaAdminClient with a custom HostResolver accessible to tests outside this package.
+     */
+    public static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
+    }
 }

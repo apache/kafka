@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util.concurrent.TimeUnit
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -28,6 +29,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
+import kafka.server.KafkaServer.{EXPONENTIAL_BACKOFF_JITTER, EXPONENTIAL_BACKOFF_MAX_INTERVAL_MS, EXPONENTIAL_BACKOFF_MULTIPLIER}
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
@@ -44,7 +46,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{AppInfoParser, ExponentialBackoff, LogContext, PoisonPill, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
@@ -93,6 +95,9 @@ object KafkaServer {
   }
 
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
+  private val EXPONENTIAL_BACKOFF_MULTIPLIER = 2
+  private val EXPONENTIAL_BACKOFF_MAX_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
+  private val EXPONENTIAL_BACKOFF_JITTER = -0.01 // no randomness
 }
 
 /**
@@ -103,8 +108,30 @@ class KafkaServer(
   val config: KafkaConfig,
   time: Time = Time.SYSTEM,
   threadNamePrefix: Option[String] = None,
-  enableForwarding: Boolean = false
+  enableForwarding: Boolean = false,
+  actions: KafkaActions = NoOpKafkaActions
 ) extends KafkaBroker with Server {
+
+  // Visible for testing from linkedin-kafka-clients for backwards compatibility.
+  @deprecated
+  def this(
+    config: KafkaConfig,
+    time: Time,
+    threadNamePrefix: Option[String],
+    kafkaMetricsReporters: Seq[KafkaMetricsReporter],
+    actions: KafkaActions) = {
+    this(config, time, threadNamePrefix, enableForwarding = false, actions = actions)
+  }
+
+  // Visible for testing from mario for backwards compatibility.
+  @deprecated
+  def this(
+    config: KafkaConfig,
+    time: Time,
+    threadNamePrefix: Option[String],
+    kafkaMetricsReporters: Seq[KafkaMetricsReporter]) = {
+    this(config, time, threadNamePrefix, enableForwarding = false, actions = NoOpKafkaActions)
+  }
 
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
@@ -123,6 +150,8 @@ class KafkaServer(
   var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
+  var observer: Observer = null
+  var quotaV2Handler: QuotaV2Handler = null
   @volatile var socketServer: SocketServer = _
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
@@ -178,6 +207,31 @@ class KafkaServer(
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()
 
   override def brokerState: BrokerState = _brokerState
+  private var healthCheckScheduler: KafkaScheduler = null
+
+  private val kafkaActions: KafkaActions = actions
+
+  @volatile private var poisonPill: PoisonPill = null
+
+  private val retryExponentialBackoff = new ExponentialBackoff(
+    config.controlledShutdownRetryBackoffMs,
+    EXPONENTIAL_BACKOFF_MULTIPLIER,
+    EXPONENTIAL_BACKOFF_MAX_INTERVAL_MS,
+    EXPONENTIAL_BACKOFF_JITTER)
+
+  // populate the global flag
+  GlobalConfig.liDropCorruptedFilesEnable = config.liDropCorruptedFilesEnable
+
+  private def haltIfNotHealthy(): Unit = {
+    // This relies on io-thread to receive request from RequestChannel with 300 ms timeout, so that lastDequeueTimeMs
+    // will keep increasing even if there is no incoming request
+    val timeSinceLastDequeueInMs = time.milliseconds - socketServer.dataPlaneRequestChannel.lastDequeueTimeMs;
+    poisonPill.recordTimeSinceLastDequeue(timeSinceLastDequeueInMs)
+    if (timeSinceLastDequeueInMs > config.requestMaxLocalTimeMs) {
+      fatal(s"It has been more than ${config.requestMaxLocalTimeMs} ms since the last time any io-thread reads from RequestChannel. Shutdown broker now.")
+      poisonPill.die(config.heapDumpFolder, config.heapDumpTimeout)
+    }
+  }
 
   def clusterId: String = _clusterId
 
@@ -259,6 +313,7 @@ class KafkaServer(
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
         metrics = Server.initializeMetrics(config, time, clusterId)
+        // setReplaceOnDuplicateMetric removed
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
@@ -748,13 +803,14 @@ class KafkaServer(
       var shutdownSucceeded: Boolean = false
 
       try {
-
         var remainingRetries = retries
         var prevController: Node = null
         var ioException = false
+        var shutdownResponse: ControlledShutdownResponse = null
 
         while (!shutdownSucceeded && remainingRetries > 0) {
           remainingRetries = remainingRetries - 1
+          shutdownResponse = null
 
           // 1. Find the controller and establish a connection to it.
           // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
@@ -804,11 +860,8 @@ class KafkaServer(
                 time.milliseconds(), true)
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
 
-              val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
-              if (shutdownResponse.error != Errors.NONE) {
-                info(s"Controlled shutdown request returned after ${clientResponse.requestLatencyMs}ms " +
-                  s"with error ${shutdownResponse.error}")
-              } else if (shutdownResponse.data.remainingPartitions.isEmpty) {
+              shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
+              if (shutdownResponse.error == Errors.NONE && shutdownResponse.data.remainingPartitions.isEmpty) {
                 shutdownSucceeded = true
                 info("Controlled shutdown request returned successfully " +
                   s"after ${clientResponse.requestLatencyMs}ms")
@@ -826,14 +879,24 @@ class KafkaServer(
               case ioe: IOException =>
                 ioException = true
                 warn("Error during controlled shutdown, possibly because leader movement took longer than the " +
-                  s"configured controller.socket.timeout.ms and/or request.timeout.ms: ${ioe.getMessage}")
+                  s"configured controller.socket.asInstanceOf[{def time: org.apache.kafka.common.utils.Time}].timeout.ms and/or request.asInstanceOf[{def time: org.apache.kafka.common.utils.Time}].timeout.ms: ${ioe.getMessage}")
                 // ignore and try again
             }
           }
-          if (!shutdownSucceeded && remainingRetries > 0) {
-            Thread.sleep(config.controlledShutdownRetryBackoffMs)
-            info(s"Retrying controlled shutdown ($remainingRetries retries remaining)")
+          if (!shutdownSucceeded) {
+            var attempts = retries - remainingRetries
+            if (attempts < 1) {
+              // This should never happen, but just in case there is unexpected change to retries or remainingRetries in future.
+              attempts = 1
+            }
+            val retryWaitMs = retryExponentialBackoff.backoff(attempts - 1)
+            warn(s"Controlled shutdown failed for $attempts times. Retry in $retryWaitMs ms.")
+            Thread.sleep(retryWaitMs)
+            warn("Retrying controlled shutdown.")
           }
+          /** In case {@link KafkaController} reported that it's not safe to shutdown,
+           * the delegate KafkaAction will invoke Cruise-Control to demote this broker in Azure environment only. */
+          kafkaActions.notifyControlledShutdownStatus(shutdownSucceeded, shutdownResponse, remainingRetries)
         }
       }
       finally
@@ -960,6 +1023,11 @@ class KafkaServer(
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)
 
+        if (observer != null)
+          CoreUtils.swallow(observer.close(config.observerShutdownTimeoutMs, TimeUnit.MILLISECONDS), this)
+        if (quotaV2Handler != null)
+          CoreUtils.swallow(quotaV2Handler.close(config.quotaV2HandlerShutdownTimeoutMs, TimeUnit.MILLISECONDS), this)
+
         // Even though socket server is stopped much earlier, controller can generate
         // response for controlled shutdown request. Shutdown server at the end to
         // avoid any failures (e.g. when metrics are recorded)
@@ -967,6 +1035,7 @@ class KafkaServer(
           CoreUtils.swallow(socketServer.shutdown(), this)
         if (metrics != null)
           CoreUtils.swallow(metrics.close(), this)
+        // kafkaYammerMetrics.shutdownJmxReporter() removed in 3.6
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close(), this)
 

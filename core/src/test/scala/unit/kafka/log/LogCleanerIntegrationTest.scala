@@ -81,7 +81,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
       s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
 
-    val uncleanablePartitions = cleaner.cleanerManager.uncleanablePartitions(uncleanableDirectory)
+    val uncleanablePartitions = cleaner.cleanerManager.uncleanablePartitions(log)
     assertTrue(uncleanablePartitions.contains(topicPartitions(0)))
     assertTrue(uncleanablePartitions.contains(topicPartitions(1)))
     assertFalse(uncleanablePartitions.contains(topicPartitions(2)))

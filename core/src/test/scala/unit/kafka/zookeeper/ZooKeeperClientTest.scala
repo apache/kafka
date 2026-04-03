@@ -108,7 +108,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = newZooKeeperClient(clientConfig = clientConfig)
     try {
-      assertEquals(Some(propVal), KafkaConfig.zooKeeperClientProperty(client.clientConfig, propKey))
+      assertEquals(Some(propVal), KafkaConfig.zooKeeperClientProperty(client.zkClientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")

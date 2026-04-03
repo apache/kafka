@@ -22,6 +22,9 @@
 <suppressions>
 
     <!-- Note that [/\\] must be used as the path separator for cross-platform support -->
+    <!-- hotfixes -->
+    <suppress checks="Indentation"
+              files="(UpdateMetadataRequest).java"/>
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
@@ -61,6 +64,8 @@
               files="AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="AbstractResponse.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="NoOpAdminClient.java"/>
 
     <suppress checks="MethodLength"
               files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor).java"/>
@@ -123,7 +128,7 @@
               files="RequestResponseTest.java|FetcherTest.java|KafkaAdminClientTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
+              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|UpdateMetadataRequestTest|AclAuthorizerBenchmark"/>
 
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
@@ -182,6 +187,9 @@
 
     <suppress checks="MethodLength"
               files="KTableImpl.java"/>
+
+    <suppress checks="MethodLength"
+              files="(AbstractRequest|AbstractResponse).java"/>
 
     <suppress checks="ParameterNumber"
               files="StreamThread.java"/>

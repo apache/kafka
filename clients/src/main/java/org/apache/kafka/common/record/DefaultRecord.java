@@ -297,6 +297,16 @@ public class DefaultRecord implements Record {
             baseSequence, logAppendTime);
     }
 
+    public static DefaultRecord readAllRecords(int sizeInBytes,
+        byte attributes,
+        long offset,
+        long timestamp,
+        int sequence,
+        ByteBuffer buffer) {
+        return new DefaultRecord(sizeInBytes, attributes, offset,
+            timestamp, sequence, null, buffer, Record.EMPTY_HEADERS);
+    }
+
     private static DefaultRecord readFrom(ByteBuffer buffer,
                                           int sizeOfBodyInBytes,
                                           long baseOffset,

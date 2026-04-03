@@ -174,7 +174,7 @@ public class SenderTest {
         }));
         return Collections.unmodifiableMap(partitionRecords);
     }
- 
+
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -3305,7 +3305,7 @@ public class SenderTest {
     private TransactionManager createTransactionManager() {
         return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions());
     }
-    
+
     private void setupWithTransactionState(TransactionManager transactionManager) {
         setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE, 0);
     }

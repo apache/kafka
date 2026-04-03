@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The interface for the {@link KafkaProducer}
@@ -86,6 +87,11 @@ public interface Producer<K, V> extends Closeable {
     void flush();
 
     /**
+     * See {@link KafkaProducer#flush(long, TimeUnit)}
+     */
+    void flush(long timeout, TimeUnit unit);
+
+     /**
      * See {@link KafkaProducer#partitionsFor(String)}
      */
     List<PartitionInfo> partitionsFor(String topic);

@@ -19,10 +19,12 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.LeastLoadedNodeAlgorithm;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.EnumValueValidator;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -113,11 +115,13 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String METRICS_SAMPLE_WINDOW_MS_DOC = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC;
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+    public static final String METRICS_REPLACE_ON_DUPLICATE_CONFIG = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_CONFIG;
 
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
     public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
+    private static final String METRICS_REPLACE_ON_DUPLICATE_DOC = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_DOC;
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
@@ -127,6 +131,11 @@ public class AdminClientConfig extends AbstractConfig {
      */
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
+    // LinkedIn Hotfixes
+    public static final String LEAST_LOADED_NODE_ALGORITHM_CONFIG = CommonClientConfigs.LEAST_LOADED_NODE_ALGORITHM_CONFIG;
+    public static final String LEAST_LOADED_NODE_ALGORITHM_DOC = CommonClientConfigs.LEAST_LOADED_NODE_ALGORITHM_DOC;
+    public static final String DEFAULT_LEAST_LOADED_NODE_ALGORITHM = CommonClientConfigs.DEFAULT_LEAST_LOADED_NODE_ALGORITHM;
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -214,6 +223,11 @@ public class AdminClientConfig extends AbstractConfig {
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CLIENT_DNS_LOOKUP_DOC)
+                                .define(METRICS_REPLACE_ON_DUPLICATE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        METRICS_REPLACE_ON_DUPLICATE_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
@@ -227,6 +241,12 @@ public class AdminClientConfig extends AbstractConfig {
                                                 .in(Utils.enumOptions(SecurityProtocol.class)),
                                         Importance.MEDIUM,
                                         SECURITY_PROTOCOL_DOC)
+                                .define(LEAST_LOADED_NODE_ALGORITHM_CONFIG,
+                                       Type.STRING,
+                                       DEFAULT_LEAST_LOADED_NODE_ALGORITHM,
+                                       new EnumValueValidator<>(LeastLoadedNodeAlgorithm.class),
+                                       Importance.MEDIUM,
+                                       LEAST_LOADED_NODE_ALGORITHM_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }

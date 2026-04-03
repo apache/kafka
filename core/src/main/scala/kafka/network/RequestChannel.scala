@@ -254,6 +254,7 @@ object RequestChannel extends Logging {
       overrideMetricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
+        m.requestRateAcrossVersionsInternal.mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
         m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
@@ -363,6 +364,13 @@ class RequestChannel(val queueSize: Int,
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
   private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
+
+  // Set this to Long.Maxvalue so that KafkaHealthCheck will not shutdown broker if it
+  // reads lastDequeueTimeMs before lastDequeueTimeMs is updated by any KafkaRequestHandler thread.
+  @volatile var lastDequeueTimeMs = Long.MaxValue
+  // This metric can help user select a suitable threshold for requestMaxLocalTimeMs so that broker can shutdown itself only when it
+  // is stuck or too slow. A suggested value of requestMaxLocalTimeMs could be twice the 999'th percentile of the RequestDequeuePollIntervalMs.
+  private val requestDequeuePollIntervalMs = metricsGroup.newHistogram("RequestDequeuePollIntervalMs")
 
   metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
@@ -517,10 +525,12 @@ class RequestChannel(val queueSize: Int,
 object RequestMetrics {
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
+  val MetadataAllTopics = ApiKeys.METADATA.name + "AllTopics"
 
   val verifyPartitionsInTxnMetricName = ApiKeys.ADD_PARTITIONS_TO_TXN.name + "Verification"
 
   val RequestsPerSec = "RequestsPerSec"
+  val RequestsPerSecAcrossVersions = "RequestsPerSecAcrossVersions"
   val RequestQueueTimeMs = "RequestQueueTimeMs"
   val LocalTimeMs = "LocalTimeMs"
   val RemoteTimeMs = "RemoteTimeMs"
@@ -529,6 +539,7 @@ object RequestMetrics {
   val ResponseSendTimeMs = "ResponseSendTimeMs"
   val TotalTimeMs = "TotalTimeMs"
   val RequestBytes = "RequestBytes"
+  val ResponseBytes = "ResponseBytes"
   val MessageConversionsTimeMs = "MessageConversionsTimeMs"
   val TemporaryMemoryBytes = "TemporaryMemoryBytes"
   val ErrorsPerSec = "ErrorsPerSec"
@@ -542,6 +553,8 @@ class RequestMetrics(name: String) {
 
   val tags = Map("request" -> name).asJava
   val requestRateInternal = new Pool[Short, Meter]()
+  // Compared with the requestRateInterval, the requestRateAcrossVersionsInternal is the request rate across all versions
+  val requestRateAcrossVersionsInternal = metricsGroup.newMeter(RequestsPerSecAcrossVersions, "requests", TimeUnit.SECONDS, tags)
   // time a request spent in a request queue
   val requestQueueTimeHist = metricsGroup.newHistogram(RequestQueueTimeMs, true, tags)
   // time a request takes to be processed at the local broker
@@ -558,6 +571,8 @@ class RequestMetrics(name: String) {
   val totalTimeHist = metricsGroup.newHistogram(TotalTimeMs, true, tags)
   // request size in bytes
   val requestBytesHist = metricsGroup.newHistogram(RequestBytes, true, tags)
+  // response size in bytes
+  val responseBytesHist = metricsGroup.newHistogram(ResponseBytes, true, tags)
   // time for message conversions (only relevant to fetch and produce requests)
   val messageConversionsTimeHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
@@ -620,6 +635,7 @@ class RequestMetrics(name: String) {
     for (version <- requestRateInternal.keys) {
       metricsGroup.removeMetric(RequestsPerSec, tagsWithVersion(version))
     }
+    metricsGroup.removeMetric(RequestsPerSecAcrossVersions, tags)
     metricsGroup.removeMetric(RequestQueueTimeMs, tags)
     metricsGroup.removeMetric(LocalTimeMs, tags)
     metricsGroup.removeMetric(RemoteTimeMs, tags)

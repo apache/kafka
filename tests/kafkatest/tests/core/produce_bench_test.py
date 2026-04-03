@@ -49,7 +49,7 @@ class ProduceBenchTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_produce_bench(self, metadata_quorum=quorum.zk):
+    def test_produce_bench(self, metadata_quorum):
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,
@@ -66,7 +66,8 @@ class ProduceBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=8)
-    def test_produce_bench_transactions(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_produce_bench_transactions(self, metadata_quorum):
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,

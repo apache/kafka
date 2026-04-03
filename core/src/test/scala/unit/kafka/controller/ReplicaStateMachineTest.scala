@@ -249,11 +249,6 @@ class ReplicaStateMachineTest {
   }
 
   @Test
-  def testInvalidOfflineReplicaToNonexistentReplicaTransition(): Unit = {
-    testInvalidTransition(OfflineReplica, NonExistentReplica)
-  }
-
-  @Test
   def testInvalidOfflineReplicaToNewReplicaTransition(): Unit = {
     testInvalidTransition(OfflineReplica, NewReplica)
   }
@@ -307,11 +302,6 @@ class ReplicaStateMachineTest {
   @Test
   def testInvalidReplicaDeletionStartedToOnlineReplicaTransition(): Unit = {
     testInvalidTransition(ReplicaDeletionStarted, OnlineReplica)
-  }
-
-  @Test
-  def testInvalidReplicaDeletionStartedToOfflineReplicaTransition(): Unit = {
-    testInvalidTransition(ReplicaDeletionStarted, OfflineReplica)
   }
 
   @Test

@@ -61,6 +61,11 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
+    public boolean isUpdateClusterMetadataDue(long now) {
+        return false;
+    }
+
+    @Override
     public long maybeUpdate(long now) {
         return Long.MAX_VALUE;
     }
@@ -77,7 +82,8 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+    public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response,
+        String destination) {
         // Do nothing
     }
 

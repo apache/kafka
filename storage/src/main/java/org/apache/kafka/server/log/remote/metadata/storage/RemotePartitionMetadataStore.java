@@ -113,7 +113,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     @Override
     public void syncLogMetadataSnapshot(TopicIdPartition topicIdPartition,
                                         int metadataPartition,
-                                        Long metadataPartitionOffset) throws IOException {
+                                        long metadataPartitionOffset) throws IOException {
         RemotePartitionDeleteMetadata partitionDeleteMetadata = idToPartitionDeleteMetadata.get(topicIdPartition);
         if (partitionDeleteMetadata != null) {
             log.info("Skipping syncing of metadata snapshot as remote partition [{}] is with state: [{}] ", topicIdPartition,

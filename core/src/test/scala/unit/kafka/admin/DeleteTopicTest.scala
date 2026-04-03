@@ -19,7 +19,6 @@ package kafka.admin
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
-
 import scala.collection.Seq
 import kafka.log.UnifiedLog
 import kafka.zk.TopicPartitionZNode
@@ -28,10 +27,11 @@ import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
+import kafka.controller.ReplicaAssignment
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, UnknownTopicOrPartitionException}
+
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends QuorumTestHarness {
@@ -74,11 +74,10 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.waitUntilTrue(() =>
       servers.filter(s => s.config.brokerId != follower.config.brokerId)
         .forall(_.getLogManager.getLog(topicPartition).isEmpty), "Replicas 0,1 have not deleted log.")
-    // ensure topic deletion is halted
-    TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topics/test path deleted even when a follower replica is down")
     // restart follower replica
     follower.startup()
+    // create another topic to ensure the restarted brokers can receive at least one LeaderAndIsr request
+    TestUtils.createTopic(zkClient, "topic2", expectedReplicaAssignment, servers)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }
 
@@ -98,13 +97,11 @@ class DeleteTopicTest extends QuorumTestHarness {
     // shut down the controller to trigger controller failover during delete topic
     controller.shutdown()
 
-    // ensure topic deletion is halted
-    TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topics/test path deleted even when a replica is down")
-
     controller.startup()
     follower.startup()
 
+    // create another topic to ensure the restarted brokers can receive at least one LeaderAndIsr request
+    TestUtils.createTopic(zkClient, "topic2", expectedReplicaAssignment, servers)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }
 
@@ -114,6 +111,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val topicPartition = new TopicPartition(topic, 0)
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
+    brokerConfigs.foreach(p => p.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
     // create brokers
     val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     this.servers = allServers
@@ -141,6 +139,8 @@ class DeleteTopicTest extends QuorumTestHarness {
       adminClient.close()
     }
     follower.startup()
+    // create another topic to ensure the restarted brokers can receive at least one LeaderAndIsr request
+    TestUtils.createTopic(zkClient, "topic2", expectedReplicaAssignment, servers)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }
 
@@ -161,7 +161,15 @@ class DeleteTopicTest extends QuorumTestHarness {
                                                 reassignment: NewPartitionReassignment): Unit = {
     val e = assertThrows(classOf[ExecutionException], () => adminClient.alterPartitionReassignments(Collections.singletonMap(partition,
       Optional.of(reassignment))).all().get())
-    assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
+    // If the controller has already purged the current assignment for the partition,
+    // the adding replicas would include all of the replicas in the reassignment, i.e. replicas 1, 2, 3
+    // which will result in a InvalidReplicaAssignmentException since they are offline brokers.
+    // Otherwise, if the controller still has the current assignment, the adding replicas would only contain 3.
+    // Thus there won't be an InvalidReplicaAssignmentException. Instead, an UnknownTopicOrPartitionException
+    // will be returned.
+    val exceptionCause = e.getCause.getClass
+    assertTrue(exceptionCause.equals(classOf[InvalidReplicaAssignmentException]) ||
+      exceptionCause.equals(classOf[UnknownTopicOrPartitionException]))
   }
 
   private def getController() : (KafkaServer, Int) = {
@@ -181,18 +189,13 @@ class DeleteTopicTest extends QuorumTestHarness {
     }, "Controller should eventually exist")
   }
 
-  private def getAllReplicasFromAssignment(topic : String, assignment : Map[Int, Seq[Int]]) : Set[PartitionAndReplica] = {
-    assignment.flatMap { case (partition, replicas) =>
-      replicas.map {r => new PartitionAndReplica(new TopicPartition(topic, partition), r)}
-    }.toSet
-  }
-
   @Test
   def testIncreasePartitionCountDuringDeleteTopic(): Unit = {
     val topic = "test"
     val topicPartition = new TopicPartition(topic, 0)
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
+    brokerConfigs.foreach(p => p.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
     // create brokers
     val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     this.servers = allServers
@@ -213,12 +216,6 @@ class DeleteTopicTest extends QuorumTestHarness {
     // make sure deletion of all of the topic's replicas have been tried
     ensureControllerExists()
     val (controller, controllerId) = getController()
-    val allReplicasForTopic = getAllReplicasFromAssignment(topic, expectedReplicaAssignment)
-    TestUtils.waitUntilTrue(() => {
-      val replicasInDeletionSuccessful = controller.kafkaController.controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
-      val offlineReplicas = controller.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-      allReplicasForTopic == (replicasInDeletionSuccessful union offlineReplicas)
-    }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
 
     // increase the partition count for topic
     val props = new Properties()
@@ -244,6 +241,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     // bring back the failed brokers
     follower.startup()
     controller.startup()
+    TestUtils.createTopic(zkClient, "topic2", expectedReplicaAssignment, servers)
     TestUtils.verifyTopicDeletion(zkClient, topic, 2, servers)
     adminClient.close()
   }
@@ -340,6 +338,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     brokerConfigs.head.setProperty("log.cleanup.policy","compact")
     brokerConfigs.head.setProperty("log.segment.bytes","100")
     brokerConfigs.head.setProperty("log.cleaner.dedupe.buffer.size","1048577")
+    brokerConfigs.head.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
 
     servers = createTestTopicAndCluster(topic, brokerConfigs, expectedReplicaAssignment)
 
@@ -374,6 +373,7 @@ class DeleteTopicTest extends QuorumTestHarness {
   private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true, replicaAssignment: Map[Int, List[Int]] = expectedReplicaAssignment): Seq[KafkaServer] = {
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
     brokerConfigs.foreach(_.setProperty("delete.topic.enable", deleteTopicEnabled.toString))
+    brokerConfigs.foreach(_.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
     createTestTopicAndCluster(topic, brokerConfigs, replicaAssignment)
   }
 
@@ -445,6 +445,8 @@ class DeleteTopicTest extends QuorumTestHarness {
       */
     servers.foreach(_.startup())
     TestUtils.waitUntilTrue(() => servers.exists(_.kafkaController.isActive), "No controller is elected")
+    // create another topic to ensure the restarted brokers can receive at least one LeaderAndIsr request
+    TestUtils.createTopic(zkClient, "topic2", expectedReplicaAssignment, servers)
     TestUtils.verifyTopicDeletion(zkClient, topic, 2, servers)
   }
 }

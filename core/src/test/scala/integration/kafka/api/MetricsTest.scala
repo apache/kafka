@@ -116,6 +116,52 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     verifyRemoteStorageMetrics(systemRemoteStorageEnabled)
   }
 
+  @Test
+  def testRequestsPerSecAcrossVersionsMetric(): Unit = {
+    val topic = "topic"
+    val props = new Properties
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, props)
+    val tp = new TopicPartition(topic, 0)
+
+    // Produce and consume some records
+    val numRecords = 10
+    val recordSize = 100000
+    val producer = createProducer()
+    sendRecords(producer, numRecords, recordSize, tp)
+
+    val requestRateWithoutVersionMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
+    assertTrue(requestRateWithoutVersionMeter.count() > 0, "The Produce RequestsPerSecAcrossVersions metric is not recorded")
+  }
+
+  @Test
+  def testAllTopicsMetadataMetrics(): Unit = {
+    val adminClient = createAdminClient()
+    adminClient.listTopics().names().get()
+
+    val requestRateMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSec,request=MetadataAllTopics")
+    assertEquals(1, requestRateMeter.count(), "The MetadataAllTopics RequestsPerSec metric is not recorded")
+
+    val responseBytesHist = yammerHistogram("kafka.network:type=RequestMetrics,name=ResponseBytes,request=MetadataAllTopics")
+    assertEquals(1, responseBytesHist.count(), "The MetadataAllTopics ResponseBytes metric is not recorded")
+  }
+
+  @Test
+  def testRequestsPerSecAcrossVersionsMetric(): Unit = {
+    val topic = "topic"
+    val props = new Properties
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, props)
+    val tp = new TopicPartition(topic, 0)
+
+    // Produce and consume some records
+    val numRecords = 10
+    val recordSize = 100000
+    val producer = createProducer()
+    sendRecords(producer, numRecords, recordSize, tp)
+
+    val requestRateWithoutVersionMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
+    assertTrue(requestRateWithoutVersionMeter.count() > 0, "The Produce RequestsPerSecAcrossVersions metric is not recorded")
+  }
+
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
       recordSize: Int, tp: TopicPartition): Unit = {
     val bytes = new Array[Byte](recordSize)
@@ -304,6 +350,16 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     metric match {
       case m: Histogram => m
       case m => throw new AssertionError(s"Unexpected broker metric of class ${m.getClass}")
+    }
+  }
+
+  private def yammerMeterWithPrefix(prefix: String): Meter = {
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.startsWith(prefix) }
+      .getOrElse(fail(s"Unable to find broker metric with prefix $prefix: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+    metric match {
+      case m: Meter => m
+      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
     }
   }
 

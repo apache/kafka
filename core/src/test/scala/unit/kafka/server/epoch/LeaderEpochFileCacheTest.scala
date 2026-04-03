@@ -62,6 +62,36 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
+  def testFindPreviousEpoch(): Unit = {
+    assertEquals(None, cache.findPreviousEpoch(2))
+
+    cache.assign(epoch = 2, startOffset = 10)
+    assertEquals(None, cache.findPreviousEpoch(2))
+
+    cache.assign(epoch = 4, startOffset = 15)
+    assertEquals(Some(2), cache.findPreviousEpoch(4))
+
+    cache.assign(epoch = 10, startOffset = 20)
+    assertEquals(Some(4), cache.findPreviousEpoch(10))
+
+    cache.truncateFromEnd(18)
+    assertEquals(Some(2), cache.findPreviousEpoch(cache.latestEpoch.get))
+  }
+
+  @Test
+  def testFindNextEpoch(): Unit = {
+    cache.assign(0, 0)
+    cache.assign(1, 100)
+    cache.assign(2, 200)
+
+    assertEquals(Some(0), cache.findNextEpoch(-1))
+    assertEquals(Some(1), cache.findNextEpoch(0))
+    assertEquals(Some(2), cache.findNextEpoch(1))
+    assertEquals(None, cache.findNextEpoch(2))
+    assertEquals(None, cache.findNextEpoch(100))
+  }
+
+  @Test
   def shouldAddEpochAndMessageOffsetToCache() = {
     //When
     cache.assign(2, 10)
@@ -641,4 +671,14 @@ class LeaderEpochFileCacheTest {
     assertEquals(OptionalInt.empty(), cache.epochForOffset(5))
   }
 
+  @Test
+  def testGetEpochEntry(): Unit = {
+    cache.assign(2, 100L)
+    cache.assign(3, 500L)
+    cache.assign(5, 1000L)
+
+    assertEquals(EpochEntry(2, 100L), cache.getEpochEntry(2).get)
+    assertEquals(EpochEntry(3, 500L), cache.getEpochEntry(3).get)
+    assertEquals(EpochEntry(5, 1000L), cache.getEpochEntry(5).get)
+  }
 }

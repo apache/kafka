@@ -83,12 +83,13 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
    * zookeeper
    */
   private def initializePartitionState(): Unit = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     for (topicPartition <- controllerContext.allPartitions) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>
           // else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state
-          if (controllerContext.isReplicaOnline(currentLeaderIsrAndEpoch.leaderAndIsr.leader, topicPartition))
+          if (controllerContextSnapshot.isReplicaOnline(currentLeaderIsrAndEpoch.leaderAndIsr.leader, topicPartition))
           // leader is alive
             controllerContext.putPartitionState(topicPartition, OnlinePartition)
           else
@@ -272,10 +273,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    * @return The partitions that have been successfully initialized.
    */
   private def initializeLeaderAndIsrForPartitions(partitions: Seq[TopicPartition]): Seq[TopicPartition] = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val successfulInitializations = mutable.Buffer.empty[TopicPartition]
     val replicasPerPartition = partitions.map(partition => partition -> controllerContext.partitionReplicaAssignment(partition))
     val liveReplicasPerPartition = replicasPerPartition.map { case (partition, replicas) =>
-        val liveReplicasForPartition = replicas.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+        val liveReplicasForPartition = replicas.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
         partition -> liveReplicasForPartition
     }
     val (partitionsWithoutLiveReplicas, partitionsWithLiveReplicas) = liveReplicasPerPartition.partition { case (_, liveReplicas) => liveReplicas.isEmpty }
@@ -426,6 +428,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         leaderForPreferredReplica(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
       case ControlledShutdownPartitionLeaderElectionStrategy =>
         leaderForControlledShutdown(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty)
+      case RecommendedLeaderElectionStrategy(recommendedLeaders) =>
+        leaderForControlledShutdown(controllerContext, validLeaderAndIsrs).partition(_.leaderAndIsr.isEmpty) /* leaderForRecommendation removed, fallback to controlledShutdown */
     }
     partitionsWithoutLeaders.foreach { electionResult =>
       val partition = electionResult.topicPartition
@@ -473,9 +477,10 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)],
     allowUnclean: Boolean
   ): Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)] = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderAndIsrs.partition {
       case (partition, leaderAndIsr) =>
-        val liveInSyncReplicas = leaderAndIsr.isr.filter(controllerContext.isReplicaOnline(_, partition))
+        val liveInSyncReplicas = leaderAndIsr.isr.filter(controllerContextSnapshot.isReplicaOnline(_, partition))
         liveInSyncReplicas.isEmpty
     }
 
@@ -529,21 +534,32 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 }
 
 object PartitionLeaderElectionAlgorithms {
-  def offlinePartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int], uncleanLeaderElectionEnabled: Boolean, controllerContext: ControllerContext): Option[Int] = {
-    assignment.find(id => liveReplicas.contains(id) && isr.contains(id)).orElse {
-      if (uncleanLeaderElectionEnabled) {
-        val leaderOpt = assignment.find(liveReplicas.contains)
-        if (leaderOpt.isDefined)
-          controllerContext.stats.uncleanLeaderElectionRate.mark()
-        leaderOpt
-      } else {
-        None
-      }
+
+  /**
+   * @return Optionally, a tuple (replica, flag) where flag is a boolean indicating if unclean leader election was
+   *         used to replace the replica.
+   */
+  def offlinePartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int], uncleanLeaderElectionEnabled: Boolean): Option[(Int, Boolean)] = {
+    assignment.find(id => liveReplicas.contains(id) && isr.contains(id)) match {
+      case Some(replicaId) => Some(replicaId, false)
+      case None =>
+        if (uncleanLeaderElectionEnabled) {
+          assignment.find(liveReplicas.contains) match {
+            case Some(uncleanReplicaId) => Some(uncleanReplicaId, true)
+            case None => None
+          }
+        } else {
+          None
+        }
     }
   }
 
   def reassignPartitionLeaderElection(reassignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int]): Option[Int] = {
     reassignment.find(id => liveReplicas.contains(id) && isr.contains(id))
+  }
+
+  def recommendedPartitionLeaderElection(recommendedLeader: Option[Int], isr: Seq[Int], liveReplicas: Set[Int]): Option[Int] = {
+    recommendedLeader.find(id => liveReplicas.contains(id) && isr.contains(id))
   }
 
   def preferredReplicaPartitionLeaderElection(assignment: Seq[Int], isr: Seq[Int], liveReplicas: Set[Int]): Option[Int] = {
@@ -560,6 +576,7 @@ final case class OfflinePartitionLeaderElectionStrategy(allowUnclean: Boolean) e
 final case object ReassignPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 final case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 final case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+final case class RecommendedLeaderElectionStrategy(recommendedLeaders: Map[TopicPartition, Int]) extends PartitionLeaderElectionStrategy
 
 sealed trait PartitionState {
   def state: Byte

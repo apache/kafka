@@ -281,4 +281,35 @@ public class ForwardingAdmin implements Admin {
     public Map<MetricName, ? extends Metric> metrics() {
         return delegate.metrics();
     }
+
+    @Override
+    public SkipShutdownSafetyCheckResult skipShutdownSafetyCheck(SkipShutdownSafetyCheckOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public MoveControllerResult moveController(MoveControllerOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ElectLeadersResult electRecommendedLeaders(
+            java.util.Map<org.apache.kafka.common.TopicPartition, Integer> partitionsWithRecommendedLeaders,
+            ElectLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(java.util.Map<String, String> topics, DeleteFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public CreateOrDeleteFederatedTopicZnodesResult createFederatedTopicZnodes(java.util.Map<String, String> topics, CreateFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(java.util.Map<String, String> topics, ListFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
 }

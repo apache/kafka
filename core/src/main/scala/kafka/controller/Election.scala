@@ -37,16 +37,14 @@ object Election {
       case Some(leaderAndIsr) =>
         val isr = leaderAndIsr.isr
         val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
-          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
-        val newLeaderAndIsrOpt = leaderOpt.map { leader =>
+          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled)
+        val newLeaderAndIsrOpt = leaderOpt.map { case (leader, _) =>
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)
 
           if (!isr.contains(leader) && isLeaderRecoverySupported) {
-            // The new leader is not in the old ISR so mark the partition a RECOVERING
             leaderAndIsr.newRecoveringLeaderAndIsr(leader, newIsr)
           } else {
-            // Elect a new leader but keep the previous leader recovery state
             leaderAndIsr.newLeaderAndIsr(leader, newIsr)
           }
         }
@@ -159,7 +157,7 @@ object Election {
    */
   def leaderForControlledShutdown(controllerContext: ControllerContext,
                                   leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)]): Seq[ElectionResult] = {
-    val shuttingDownBrokerIds = controllerContext.shuttingDownBrokerIds.toSet
+    val shuttingDownBrokerIds = controllerContext.shuttingDownBrokerIds.keySet.toSet
     leaderAndIsrs.map { case (partition, leaderAndIsr) =>
       leaderForControlledShutdown(partition, leaderAndIsr, shuttingDownBrokerIds, controllerContext)
     }

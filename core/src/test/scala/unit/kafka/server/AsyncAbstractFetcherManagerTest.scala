@@ -37,7 +37,7 @@ import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
-class AbstractFetcherManagerTest {
+class AsyncAbstractFetcherManagerTest {
 
   @BeforeEach
   def cleanMetricRegistry(): Unit = {

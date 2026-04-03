@@ -40,6 +40,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -871,7 +872,8 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
-        log.debug("Sending FindCoordinator request to broker {}", node);
+        // initiate the group metadata request
+        log.info("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(CoordinatorType.GROUP.id())
                 .setKey(this.rebalanceConfig.groupId);
@@ -911,7 +913,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
-                log.debug("Group coordinator lookup failed: {}", coordinatorData.errorMessage());
+                log.info("Group coordinator lookup failed: {}", coordinatorData.errorMessage());
                 future.raise(error);
             }
         }
@@ -1392,6 +1394,21 @@ public abstract class AbstractCoordinator implements Closeable {
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
                 lastHeartbeat);
+
+            //HOTFIX - extra liveliness-related metrics
+
+            Measurable lastHeartbeatReceived =
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatReceive(), TimeUnit.MILLISECONDS);
+                    }
+                };
+            metrics.addMetric(metrics.metricName("last-heartbeat-received-seconds-ago",
+                this.metricGrpName,
+                "The number of seconds since the last successful controller heartbeat was received"),
+                lastHeartbeatReceived);
+
+            //end HOTFIX
         }
     }
 

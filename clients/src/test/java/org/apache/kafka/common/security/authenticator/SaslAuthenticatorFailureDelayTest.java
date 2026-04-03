@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,8 +70,8 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     @BeforeEach
     public void setup() throws Exception {
         LoginManager.closeAll();
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        serverCertStores = new CertStores(true, "localhost", TestSslUtils.SSLProvider.DEFAULT);
+        clientCertStores = new CertStores(false, "localhost", TestSslUtils.SSLProvider.DEFAULT);
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();

@@ -61,6 +61,10 @@ public class CommonClientConfigs {
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 
+
+    public static final String METADATA_TOPIC_EXPIRY_MS_CONFIG = "metadata.topic.expiry.ms";
+    public static final String METADATA_TOPIC_EXPIRY_MS_DOC = "The period of time in milliseconds before we expire topic from metadata cache";
+
     public static final String SEND_BUFFER_CONFIG = "send.buffer.bytes";
     public static final String SEND_BUFFER_DOC = "The size of the TCP send buffer (SO_SNDBUF) to use when sending data. If the value is -1, the OS default will be used.";
     public static final int SEND_BUFFER_LOWER_BOUND = -1;
@@ -71,6 +75,9 @@ public class CommonClientConfigs {
 
     public static final String CLIENT_ID_CONFIG = "client.id";
     public static final String CLIENT_ID_DOC = "An id string to pass to the server when making requests. The purpose of this is to be able to track the source of requests beyond just ip/port by allowing a logical application name to be included in server-side request logging.";
+
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG = "li.client.software.name.and.commit";
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_DOC = "A name string to indicate client software name and corresponding commit hash. The purpose of this is to be able to track/analyze clients beyond just client id";
 
     public static final String CLIENT_RACK_CONFIG = "client.rack";
     public static final String CLIENT_RACK_DOC = "A rack identifier for this client. This can be any string value which indicates where this client is physically located. It corresponds with the broker config 'broker.rack'";
@@ -97,6 +104,10 @@ public class CommonClientConfigs {
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = "metrics.recording.level";
     public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics.";
+
+    public static final String METRICS_REPLACE_ON_DUPLICATE_CONFIG = "metrics.replace.on.duplicate";
+    public static final String METRICS_REPLACE_ON_DUPLICATE_DOC = "If set to true, then multiple sensors registering the same metric will not throw, but will instead log an error. This makes sensor registration errors non fatal.";
+
 
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
@@ -192,6 +203,19 @@ public class CommonClientConfigs {
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+
+    public static final String LEAST_LOADED_NODE_ALGORITHM_CONFIG = "linkedin.least.loaded.node.algorithm";
+    public static final String LEAST_LOADED_NODE_ALGORITHM_DOC = "when clients look for the least loaded (from the client point of view) node to route requests to "
+                                                                 + "(usually metadata requests) - which algorithm to use. values are in class org.apache.kafka.clients "
+                                                                 + "and are currently VANILLA (picks node with least expected latency) and AT_LEAST_THREE (random out "
+                                                                 + "of 3 lowest-expected-latency nodes)";
+    public static final String DEFAULT_LEAST_LOADED_NODE_ALGORITHM = LeastLoadedNodeAlgorithm.VANILLA.name();
+
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG = "li.client.cluster.metadata.expire.time.ms";
+    public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_DOC = "The configuration controls the max time the client cluster metadata can remain idle/unchanged before "
+        + "trying to resolve the bootstrap servers from given url again; different from the other metadata.max.age.ms config, "
+        + "which will try to refresh metadata by choosing from existing resolved node set, this config will force resolving "
+        + "the bootstrap url again to get new node set and use the new node set to send update metadata request";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

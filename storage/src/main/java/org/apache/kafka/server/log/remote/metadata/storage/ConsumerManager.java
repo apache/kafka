@@ -44,6 +44,7 @@ public class ConsumerManager implements Closeable {
 
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
     private final Time time;
+    @SuppressWarnings("auxiliaryclass")
     private final ConsumerTask consumerTask;
     private final Thread consumerTaskThread;
 

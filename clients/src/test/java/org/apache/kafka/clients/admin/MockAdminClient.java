@@ -409,6 +409,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public CreateOrDeleteFederatedTopicZnodesResult createFederatedTopicZnodes(Map<String, String> federatedTopics,
+        CreateFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public ListTopicsResult listTopics(ListTopicsOptions options) {
         Map<String, TopicListing> topicListings = new HashMap<>();
 
@@ -536,6 +542,11 @@ public class MockAdminClient extends AdminClient {
         else
             throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
         return result;
+    }
+
+    @Override
+    public CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics, DeleteFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNameCollection, DeleteTopicsOptions options) {
@@ -752,6 +763,14 @@ public class MockAdminClient extends AdminClient {
             ElectLeadersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
+
+    @Override
+    synchronized public ElectLeadersResult electRecommendedLeaders(
+        Map<TopicPartition, Integer> partitionsWithRecommendedLeaders,
+        ElectLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
 
     @Override
     synchronized public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
@@ -1313,6 +1332,16 @@ public class MockAdminClient extends AdminClient {
     @Override
     synchronized public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
+    }
+
+    @Override
+    public SkipShutdownSafetyCheckResult skipShutdownSafetyCheck(SkipShutdownSafetyCheckOptions options) {
+        return null;
+    }
+
+    @Override
+    public MoveControllerResult moveController(MoveControllerOptions options) {
+        return null;
     }
 
     synchronized public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {

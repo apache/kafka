@@ -438,7 +438,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.metadata = new ProducerMetadata(retryBackoffMs,
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
-                        config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
+                        metadataMaxIdleMs(config),
                         logContext,
                         clusterResourceListeners,
                         Time.SYSTEM);
@@ -529,6 +529,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                 this.transactionManager,
                 apiVersions);
+    }
+
+    // visible for testing
+    static long metadataMaxIdleMs(ProducerConfig config) {
+        long metadataTopicExpiryMs = config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG);
+        if (metadataTopicExpiryMs >= 0) {
+            return metadataTopicExpiryMs;
+        }
+        return config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG);
     }
 
     private static int lingerMs(ProducerConfig config) {
@@ -991,6 +1000,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             try {
                 serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
             } catch (ClassCastException cce) {
+                sender.sendError(record.topic(), 1);
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer", cce);
@@ -999,6 +1009,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             try {
                 serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
             } catch (ClassCastException cce) {
+                sender.sendError(record.topic(), 1);
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer", cce);
@@ -1127,6 +1138,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             metadata.add(topic, nowMs + elapsed);
             int version = metadata.requestUpdateForTopic(topic);
+            metadata.recordMetadataRequest();
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);
@@ -1204,6 +1216,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws InterruptException If the thread is interrupted while blocked
      */
+    @Override
+    public void flush(long timeout, java.util.concurrent.TimeUnit unit) {
+        // LI: delegate to the standard flush for now
+        flush();
+    }
+
     @Override
     public void flush() {
         log.trace("Flushing accumulated records in producer.");

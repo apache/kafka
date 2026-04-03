@@ -62,7 +62,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         remoteLogMetadataManagerHarness.close();
     }
 
-    public TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
+    private TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
         return remoteLogMetadataManagerHarness.remoteLogMetadataManager();
     }
 

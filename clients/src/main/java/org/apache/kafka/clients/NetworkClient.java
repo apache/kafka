@@ -577,7 +577,16 @@ public class NetworkClient implements KafkaClient {
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, updatedNow);
-        handleCompletedReceives(responses, updatedNow);
+
+        try {
+            handleCompletedReceives(responses, updatedNow);
+        } catch (StaleClusterMetadataException e) {
+            // upon stale metadata exception from a different cluster, close the network client
+            // the producer/consumer will hit closedSelector exception and close
+            log.error("Received stale metadata from a different cluster, close the network client now");
+            this.close();
+        }
+
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
@@ -922,7 +931,7 @@ public class NetworkClient implements KafkaClient {
             // If the received response includes a throttle delay, throttle the connection.
             maybeThrottle(response, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && response instanceof MetadataResponse)
-                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
+                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response, req.destination);
             else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
             else
@@ -1065,6 +1074,12 @@ public class NetworkClient implements KafkaClient {
             return !hasFetchInProgress() && this.metadata.timeToNextUpdate(now) == 0;
         }
 
+        @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return isUpdateDue(now);
+        }
+
+
         private boolean hasFetchInProgress() {
             return inProgress != null;
         }
@@ -1124,7 +1139,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response, String destination) {
             // If any partition has leader with missing listeners, log up to ten of these partitions
             // for diagnosing broker configuration issues.
             // This could be a transient issue if listeners were added dynamically to brokers.
@@ -1141,8 +1156,10 @@ public class NetworkClient implements KafkaClient {
 
             // Check if any topic's metadata failed to get updated
             Map<String, Errors> errors = response.errors();
-            if (!errors.isEmpty())
-                log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
+            if (!errors.isEmpty()) {
+                log.warn("Error while fetching metadata with from source {} with correlation id {} : {}", destination,
+                    requestHeader.correlationId(), errors);
+            }
 
             // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
             // we should retry later.

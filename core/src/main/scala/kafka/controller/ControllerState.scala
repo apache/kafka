@@ -114,9 +114,41 @@ object ControllerState {
     def value = 17
   }
 
+  case object TopicMinInSyncReplicasConfigChange extends ControllerState {
+    def value = 18
+  }
+
+  case object SkipControlledShutdownSafetyCheck extends ControllerState {
+    def value = 19
+  }
+
+  case object TopicDeletionFlagChange extends ControllerState {
+    def value = 100
+  }
+
+  case object PreferredControllerChange extends ControllerState {
+    def value = 101
+  }
+
+  case object CorruptedBrokersChange extends ControllerState {
+    def value = 102
+  }
+
+  case object CorruptedBrokerOffsetsReceived extends ControllerState {
+    def value = 103
+  }
+
+  case object DelayedElectionSuccess extends ControllerState {
+    def value = 104
+  }
+
+  case object RegisterCorruptedBroker extends ControllerState {
+    def value = 105
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
     AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
     LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,
     TopicUncleanLeaderElectionEnable, ListPartitionReassignment, UpdateMetadataResponseReceived,
-    UpdateFeatures)
+    UpdateFeatures, TopicMinInSyncReplicasConfigChange, SkipControlledShutdownSafetyCheck, TopicDeletionFlagChange, PreferredControllerChange)
 }

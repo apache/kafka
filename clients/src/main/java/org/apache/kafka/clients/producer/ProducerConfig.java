@@ -74,6 +74,18 @@ public class ProducerConfig extends AbstractConfig {
             "time since a topic was last produced to exceeds the metadata idle duration, then the topic's " +
             "metadata is forgotten and the next access to it will force a metadata fetch request.";
 
+    /** <code>metadata.topic.expiry.ms</code> */
+    public static final String METADATA_TOPIC_EXPIRY_MS_CONFIG = "metadata.topic.expiry.ms";
+    private static final ConfigDef.LambdaValidator METADATA_TOPIC_EXPIRY_MS_VALIDATOR = ConfigDef.LambdaValidator.with(
+        (name, value) -> {
+            long longValue = (long) value;
+            if (longValue != -1 && longValue < 5000) {
+                throw new ConfigException(name, value, "Value must be either -1 or at least 5000.");
+            }
+        },
+        () -> "[5000,...], or -1"
+    );
+
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
     private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent"
@@ -166,6 +178,9 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+
+    /** <code>li.client.software.name.and.commit</code> */
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG = CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG;
 
     /** <code>send.buffer.bytes</code> */
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
@@ -332,6 +347,10 @@ public class ProducerConfig extends AbstractConfig {
      */
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+    /** <code>allow.auto.create.topics</code> */
+    public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
+    private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "The client-side (producer) permission to allow auto-topic creation. Both the client-side and the broker-side should enable auto-topic creation in order for a topic to be automatically created";
+    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = false;
 
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
@@ -360,6 +379,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG, Type.STRING, "li-oss-producer-java", Importance.LOW, CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
@@ -388,6 +408,12 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.LONG,
                                         5 * 60 * 1000,
                                         atLeast(5000),
+                                        Importance.LOW,
+                                        METADATA_MAX_IDLE_DOC)
+                                .define(METADATA_TOPIC_EXPIRY_MS_CONFIG,
+                                        Type.LONG,
+                                        -1,
+                                        METADATA_TOPIC_EXPIRY_MS_VALIDATOR,
                                         Importance.LOW,
                                         METADATA_MAX_IDLE_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
@@ -483,7 +509,12 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
+                                        Type.BOOLEAN,
+                                        DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
+                                        Importance.MEDIUM,
+                                        ALLOW_AUTO_CREATE_TOPICS_DOC);
     }
 
     @Override

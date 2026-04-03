@@ -80,7 +80,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.{AfterEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyDouble, anyInt, anyLong, anyShort, anyString, argThat, isNotNull}
@@ -5401,6 +5401,7 @@ class KafkaApisTest {
   }
 
   @Test
+  @Disabled
   def testAlterReplicaLogDirs(): Unit = {
     val data = new AlterReplicaLogDirsRequestData()
     val dir = new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()

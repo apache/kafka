@@ -91,6 +91,11 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return false;
+        }
+
+        @Override
         public boolean isUpdateDue(long now) {
             return false;
         }
@@ -112,7 +117,8 @@ public class AdminMetadataManager {
         }
 
         @Override
-        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
+        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse,
+            String destination) {
             // Do nothing
         }
 

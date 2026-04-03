@@ -33,6 +33,10 @@ public class UpdateMetadataResponse extends AbstractResponse {
         this.data = data;
     }
 
+    public short errorCode() {
+        return data.errorCode();
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }

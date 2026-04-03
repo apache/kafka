@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
@@ -26,7 +28,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
@@ -471,7 +476,7 @@ public class RecordAccumulatorTest {
                 accum.deallocate(batch);
 
         // should be complete with no unsent records.
-        accum.awaitFlushCompletion();
+        accum.awaitFlushCompletion(Integer.MAX_VALUE);
         assertFalse(accum.hasUndrained());
         assertFalse(accum.hasIncomplete());
     }
@@ -486,6 +491,54 @@ public class RecordAccumulatorTest {
     }
 
     @Test
+    public void testSplitAwaitFlushComplete() throws Exception {
+        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, CompressionType.GZIP, 10);
+
+        // Create a big batch
+        byte[] value = new byte[256];
+        // Create a batch such that it fails with RecordBatchTooLargeException
+        accum.append(new TopicPartition(topic, 0), 0L, null, value, null, null, maxBlockTimeMs, false, time.milliseconds());
+        accum.append(new TopicPartition(topic, 0), 0L, null, value, null, null, maxBlockTimeMs, false, time.milliseconds());
+
+        CountDownLatch flushInProgress = new CountDownLatch(1);
+        Iterator<ProducerBatch> incompleteBatches = accum.incompleteBatches().copyAll().iterator();
+
+        // Assert that there is only one batch
+        assertTrue(incompleteBatches.hasNext());
+        ProducerBatch producerBatch = incompleteBatches.next();
+        assertFalse(incompleteBatches.hasNext());
+
+        AtomicBoolean timedOut = new AtomicBoolean(false);
+        Thread thread = new Thread(() -> {
+            assertTrue(accum.hasIncomplete());
+            accum.beginFlush();
+            assertTrue(accum.flushInProgress());
+            try {
+                flushInProgress.countDown();
+                accum.awaitFlushCompletion(2000);
+            } catch (TimeoutException timeoutException) {
+              // Catch it and set the timedOut variable
+              // This is the only valid path for this thread.
+                timedOut.set(true);
+            } catch (InterruptedException e) {
+            }
+        });
+        thread.start();
+        flushInProgress.await();
+        // Wait for 100ms to make sure that the flush is actually in progress
+        Thread.sleep(100);
+
+        // Split the big batch and re-enqueue
+        accum.splitAndReenqueue(producerBatch);
+        accum.deallocate(producerBatch);
+
+        thread.join();
+        // The thread would have failed with timeout exception because the child batches
+        // are not evaluated and it would have waited for 2seconds before the timeout.
+        assertTrue(timedOut.get(), "The thread should have timed out");
+    }
+
+    @Test
     public void testAwaitFlushComplete() throws Exception {
         RecordAccumulator accum = createTestRecordAccumulator(
             4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024, CompressionType.NONE, Integer.MAX_VALUE);
@@ -495,12 +548,29 @@ public class RecordAccumulatorTest {
         assertTrue(accum.flushInProgress());
         delayedInterrupt(Thread.currentThread(), 1000L);
         try {
-            accum.awaitFlushCompletion();
+            accum.awaitFlushCompletion(Integer.MAX_VALUE);
             fail("awaitFlushCompletion should throw InterruptException");
         } catch (InterruptedException e) {
             assertFalse(accum.flushInProgress(), "flushInProgress count should be decremented even if thread is interrupted");
         }
     }
+
+    @Test
+    public void testAwaitFlushTimeout() throws Exception {
+        RecordAccumulator accum = createTestRecordAccumulator(
+             4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024, CompressionType.NONE, Integer.MAX_VALUE);
+        accum.append(new TopicPartition(topic, 0), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
+
+        accum.beginFlush();
+        assertTrue(accum.flushInProgress());
+        try {
+            accum.awaitFlushCompletion(100);
+            fail("testAwaitFlushTimeout should throw TimeoutException");
+        } catch (TimeoutException e) {
+            assertFalse(accum.flushInProgress(), "flushInProgress count should be decremented even if flush timeout expires");
+        }
+    }
+
 
     @Test
     public void testAbortIncompleteBatches() throws Exception {
@@ -836,6 +906,41 @@ public class RecordAccumulatorTest {
         assertEquals(Collections.singleton(readyNode.id()), secondDrained.keySet());
         List<ProducerBatch> batches = secondDrained.get(readyNode.id());
         assertEquals(1, batches.size());
+    }
+
+    @Test
+    public void testRecordHeadersWithMagicV1() {
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(
+            buffer,
+            (byte) 1, // Enforces that Message format v1 is used on the client
+            CompressionType.NONE,
+            TimestampType.CREATE_TIME,
+            0L
+        );
+        long now = System.currentTimeMillis();
+        ProducerBatch batch = new ProducerBatch(tp1, builder, now, true);
+        try {
+            batch.tryAppend(
+                1L,
+                new byte[10],
+                new byte[20],
+                new Header[] {new RecordHeader("key", new byte[20])},
+                null,
+                now
+            );
+            throw new IllegalStateException("The append of a record with non internal headers should have failed");
+        } catch (IllegalArgumentException exception) {
+            assertEquals(exception.getMessage(), "Magic v1 does not support record headers. [Key = key]");
+        }
+        batch.tryAppend(
+                1L,
+                new byte[10],
+                new byte[20],
+                new Header[] {new RecordHeader("_key", new byte[20])},
+                null,
+                now
+        );
     }
 
     @Test

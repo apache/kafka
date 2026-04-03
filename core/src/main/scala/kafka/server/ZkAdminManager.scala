@@ -180,8 +180,27 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val resolvedNumPartitions = if (topic.numPartitions == NO_NUM_PARTITIONS)
           defaultNumPartitions else topic.numPartitions
-        val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
+        var resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
           defaultReplicationFactor else topic.replicationFactor
+
+        var minRF = defaultReplicationFactor
+        if (config.controlledShutdownSafetyCheckEnable) {
+          val minIsrConfig = topic.configs().find(KafkaConfig.MinInSyncReplicasProp);
+          val minIsr = if (minIsrConfig != null) {
+            minIsrConfig.value().toShort
+          } else {
+            1.toShort /* Defaults.MinInSyncReplicas */
+          }
+
+          minRF = (config.controlledShutdownSafetyCheckRedundancyFactor + minIsr + 1).toShort
+          // The replication factor must be at least the sum of
+          // (config.controlledShutdownSafetyCheckRedundancyFactor + minIsr + 1) to be able to safely shut down the broker.
+          // The assumption is that these configs are rarely changed, so the calculated minRF at topic creation time
+          // is good for the lifetime of the topic. If not, there should be other workarounds to fix the RF.
+          if (resolvedReplicationFactor < minRF) {
+            resolvedReplicationFactor = minRF
+          }
+        }
 
         val assignments = if (topic.assignments.isEmpty) {
           CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
@@ -191,6 +210,11 @@ class ZkAdminManager(val config: KafkaConfig,
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
           // this follows the existing logic in TopicCommand
           topic.assignments.forEach { assignment =>
+            if (config.controlledShutdownSafetyCheckEnable && assignment.brokerIds().size() < minRF) {
+              throw new InvalidReplicaAssignmentException(
+                s"Topic ${topic.name} has ${assignment.brokerIds().size()} replicas assigned for partition " +
+                  s"${assignment.partitionIndex}, which is less than the required replication factor $minRF.")
+            }
             assignments(assignment.partitionIndex) = assignment.brokerIds.asScala.map(a => a: Int)
           }
           assignments

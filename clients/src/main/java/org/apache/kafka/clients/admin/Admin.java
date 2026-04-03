@@ -201,6 +201,20 @@ public interface Admin extends AutoCloseable {
     CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options);
 
     /**
+     * Create federated topic znodes, with znode name as the topic name and data as namespace name.
+     * This operation is decoupled from createTopics and will eventually only change
+     * the ACL validation behavior within kafka-server level
+     * @param federatedTopics map of topic name to namespace name for federated topics
+     * @return The CreateOrDeleteFederatedTopicZnodesResult
+     */
+    default CreateOrDeleteFederatedTopicZnodesResult createFederatedTopicZnodes(Map<String, String> federatedTopics) {
+        return createFederatedTopicZnodes(federatedTopics, new CreateFederatedTopicZnodesOptions());
+    }
+
+    CreateOrDeleteFederatedTopicZnodesResult createFederatedTopicZnodes(Map<String, String> federatedTopics,
+        CreateFederatedTopicZnodesOptions options);
+
+    /**
      * This is a convenience method for {@link #deleteTopics(TopicCollection, DeleteTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
@@ -263,6 +277,18 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options);
+
+    /**
+     * Delete federated topic znodes. This operation is decoupled from deleteTopics and will eventually only change
+     * the ACL validation behavior within kafka-server level
+     * @param federatedTopics map of topic name to namespace name for federated topics
+     * @return The CreateOrDeleteFederatedTopicZnodesResult
+     */
+    default CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics) {
+        return deleteFederatedTopicZnodes(federatedTopics, new DeleteFederatedTopicZnodesOptions());
+    }
+
+    CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics, DeleteFederatedTopicZnodesOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
@@ -1061,6 +1087,46 @@ public interface Admin extends AutoCloseable {
         ElectLeadersOptions options);
 
 
+    default ElectLeadersResult electRecommendedLeaders(
+        Map<TopicPartition, Integer> partitionsWithRecommendedLeaders) {
+        return electRecommendedLeaders(partitionsWithRecommendedLeaders, new ElectLeadersOptions());
+    }
+
+    /**
+     * Switch the leadership of the given {@code partitions} to the corresponding recommending replicas.
+     * <p>
+     * This operation is not transactional, so it may succeed for some partitions while fail for others.
+     * <p>
+     * It may take several seconds after this method returns success for all the brokers in the cluster
+     * to become aware that the partitions have new leaders. During this time,
+     * {@link #describeTopics(Collection)} may not return information about the partitions'
+     * new leaders.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the future obtained
+     * from the returned {@link ElectLeadersResult}:
+     * <ul>
+     * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     * if the authenticated user didn't have alter access to the cluster.</li>
+     * <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     * if the topic or partition did not exist within the cluster.</li>
+     * <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     * if the topic was already queued for deletion.</li>
+     * <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     * if the request was sent to a broker that was not the controller for the cluster.</li>
+     * <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     * if the request timed out before the election was complete.</li>
+     * <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
+     * if the preferred leader was not alive or not in the ISR.</li>
+     * </ul>
+     *
+     * @param partitionsWithRecommendedLeaders      The map from partitions to their corresponding recommended new leaders
+     * @param options                               The options to use when electing the leaders.
+     * @return The ElectLeadersResult.
+     */
+    ElectLeadersResult electRecommendedLeaders(
+        Map<TopicPartition, Integer> partitionsWithRecommendedLeaders,
+        ElectLeadersOptions options);
+
     /**
      * Change the reassignments for one or more partitions.
      * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>revert</bold> the reassignment for the associated partition.
@@ -1233,6 +1299,15 @@ public interface Admin extends AutoCloseable {
      * @return The ListOffsetsResult.
      */
     ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options);
+
+    /**
+     * Move the kafka controller to a different host.
+     * When the active controller is elected via Zookeeper, this API will send
+     * an LiMoveControllerRequest to a kafka broker, which will delete the /controller znode.
+     *
+     * @param options The options to use when moving the controller.
+     */
+    MoveControllerResult moveController(MoveControllerOptions options);
 
     /**
      * Describes all entities matching the provided filter that have at least one client quota configuration
@@ -1664,4 +1739,12 @@ public interface Admin extends AutoCloseable {
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
+
+    /**
+     * Skip the shutdown safety check for a given (brokerId, brokerEpoch).
+     *
+     * @param options The options to use when skipping the shutdown safety check for a broker.
+     * @return The SkipShutdownSafetyCheckResult.
+     */
+    SkipShutdownSafetyCheckResult skipShutdownSafetyCheck(SkipShutdownSafetyCheckOptions options);
 }

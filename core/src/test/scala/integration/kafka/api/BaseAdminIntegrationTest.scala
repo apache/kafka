@@ -23,6 +23,7 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl.AclOperation
@@ -99,7 +100,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
-    
+
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -206,6 +207,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
       config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+      // Set up CreateTopicPolicy to be included in test.
+      config.setProperty(KafkaConfig.DefaultReplicationFactorProp, "1")
+      config.setProperty(KafkaConfig.CreateTopicPolicyClassNameProp, "kafka.server.LiCreateTopicPolicy")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
@@ -236,6 +240,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       expectedPresent.forall(topicName => topics.contains(topicName)) &&
         expectedMissing.forall(topicName => !topics.contains(topicName))
     }, "timed out waiting for topics")
+  }
+
+  def waitForFederatedTopicZnodes(client: KafkaZkClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
+    waitUntilTrue(() => {
+      val topics = client.getAllFederatedTopics()
+      expectedPresent.forall(topicName => topics.contains(topicName)) &&
+        expectedMissing.forall(topicName => !topics.contains(topicName))
+    }, "timed out waiting for federated topics")
   }
 
   def getTopicMetadata(client: Admin,

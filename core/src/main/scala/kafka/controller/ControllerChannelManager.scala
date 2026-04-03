@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 
@@ -429,7 +429,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
         .setIsNew(isNew || alreadyNew)
 
-      if (metadataVersionProvider.apply().isAtLeast(IBP_3_2_IV0)) {
+      if (metadataVersionProvider.apply().isAtLeast(MetadataVersion.IBP_3_2_IV0)) {
         partitionState.setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
       }
 
@@ -508,13 +508,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   private def sendLeaderAndIsrRequest(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val metadataVersion = metadataVersionProvider.apply()
     val leaderAndIsrRequestVersion: Short =
-      if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 7
-      else if (metadataVersion.isAtLeast(IBP_3_2_IV0)) 6
-      else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 5
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 4
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV0)) 3
-      else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 2
-      else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 1
+      if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_4_IV0)) 7
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_2_IV0)) 6
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV1)) 5
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_4_IV1)) 4
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_4_IV0)) 3
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_2_IV0)) 2
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_1_0_IV0)) 1
       else 0
 
     leaderAndIsrRequestMap.forKeyValue { (broker, leaderAndIsrPartitionStates) =>
@@ -563,14 +563,14 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val partitionStates = updateMetadataRequestPartitionInfoMap.values.toBuffer
     val metadataVersion = metadataVersionProvider.apply()
     val updateMetadataRequestVersion: Short =
-      if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 8
-      else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 7
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 6
-      else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 5
-      else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 4
-      else if (metadataVersion.isAtLeast(IBP_0_10_2_IV0)) 3
-      else if (metadataVersion.isAtLeast(IBP_0_10_0_IV1)) 2
-      else if (metadataVersion.isAtLeast(IBP_0_9_0)) 1
+      if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_4_IV0)) 8
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV1)) 7
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_4_IV1)) 6
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_2_IV0)) 5
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_1_0_IV0)) 4
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_0_10_2_IV0)) 3
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_0_10_0_IV1)) 2
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_0_9_0)) 1
       else 0
 
     val liveBrokers = metadataInstance.liveOrShuttingDownBrokers.iterator.map { broker =>
@@ -623,10 +623,10 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     val traceEnabled = stateChangeLog.isTraceEnabled
     val metadataVersion = metadataVersionProvider.apply()
     val stopReplicaRequestVersion: Short =
-      if (metadataVersion.isAtLeast(IBP_3_4_IV0)) 4
-      else if (metadataVersion.isAtLeast(IBP_2_6_IV0)) 3
-      else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 2
-      else if (metadataVersion.isAtLeast(IBP_2_2_IV0)) 1
+      if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_4_IV0)) 4
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_6_IV0)) 3
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_4_IV1)) 2
+      else if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_2_IV0)) 1
       else 0
 
     def responseCallback(brokerId: Int, isPartitionDeleted: TopicPartition => Boolean)

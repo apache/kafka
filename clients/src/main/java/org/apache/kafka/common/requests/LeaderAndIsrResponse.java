@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class LeaderAndIsrResponse extends AbstractResponse {
@@ -51,6 +52,10 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         return this.data.topics();
     }
 
+    public short errorCode() {
+        return data.errorCode();
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
@@ -60,13 +65,13 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         Errors error = error();
         if (error != Errors.NONE) {
             // Minor optimization since the top-level error applies to all partitions
-            if (version < 5) 
+            if (version < 6)
                 return Collections.singletonMap(error, data.partitionErrors().size() + 1);
-            return Collections.singletonMap(error, 
+            return Collections.singletonMap(error,
                     data.topics().stream().mapToInt(t -> t.partitionErrors().size()).sum() + 1);
         }
         Map<Errors, Integer> errors;
-        if (version < 5)
+        if (version < 6)
             errors = errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
         else
             errors = errorCounts(data.topics().stream().flatMap(t -> t.partitionErrors().stream()).map(l ->
@@ -75,9 +80,17 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         return errors;
     }
 
+    public List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> rawPartitionErrors() {
+        return data.partitionErrors();
+    }
+
+    public LeaderAndIsrTopicErrorCollection rawTopics() {
+        return data.topics();
+    }
+
     public Map<TopicPartition, Errors> partitionErrors(Map<Uuid, String> topicNames) {
         Map<TopicPartition, Errors> errors = new HashMap<>();
-        if (version < 5) {
+        if (version < 6) {
             data.partitionErrors().forEach(partition ->
                     errors.put(new TopicPartition(partition.topicName(), partition.partitionIndex()),
                             Errors.forCode(partition.errorCode())));

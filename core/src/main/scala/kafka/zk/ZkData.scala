@@ -95,9 +95,74 @@ object BrokersZNode {
   def path = "/brokers"
 }
 
+object FederatedTopicsZNode {
+  def path = "/federatedTopics"
+}
+
+object PreferredControllersZNode {
+  def path = s"${BrokersZNode.path}/preferred_controllers"
+  def encode: Array[Byte] = null
+}
+
+object PreferredControllerIdZNode {
+  def path(id: Int) = s"${BrokersZNode.path}/preferred_controllers/$id"
+}
+
+object CorruptedBrokersZNode {
+  def path = s"${BrokersZNode.path}/corrupted"
+  def encode: Array[Byte] = null
+}
+
+object CorruptedBroker {
+  def apply(brokerId: Int, clearedFromIsrs: Boolean = false): CorruptedBroker = {
+    val version = 0
+    new CorruptedBroker(brokerId, version, clearedFromIsrs)
+  }
+}
+
+case class CorruptedBroker(brokerId: Int, version: Int, clearedFromIsrs: Boolean) {
+  val path: String = CorruptedBrokerIdZNode.path(brokerId)
+  def toJsonBytes: Array[Byte] = CorruptedBrokerIdZNode.encode(this)
+}
+
+object CorruptedBrokerIdZNode {
+  private val VersionKey = "version"
+  private val ClearedFromIsrsKey = "clearedFromIsrs"
+
+  def path(id: Int) = s"${CorruptedBrokersZNode.path}/$id"
+  def encode(corruptedBroker: CorruptedBroker): Array[Byte] = {
+    val jsonMap = Map(
+      VersionKey -> corruptedBroker.version,
+      ClearedFromIsrsKey -> corruptedBroker.clearedFromIsrs)
+    Json.encodeAsBytes(jsonMap.asJava)
+  }
+  def decode(id: Int, jsonBytes: Array[Byte]): CorruptedBroker = {
+    Json.tryParseBytes(jsonBytes) match {
+      case Right(json) =>
+        val corruptedBrokerJson = json.asJsonObject
+        val version = corruptedBrokerJson(VersionKey).to[Int]
+        val clearedFromIsrs = corruptedBrokerJson(ClearedFromIsrsKey).to[Boolean]
+        new CorruptedBroker(id, version, clearedFromIsrs)
+      case Left(e) =>
+        throw new KafkaException(s"Failed to parse Zookeeper data for corrupted broker Id $id: " +
+          s"${new String(jsonBytes, UTF_8)}", e)
+    }
+  }
+}
+
 object BrokerIdsZNode {
   def path = s"${BrokersZNode.path}/ids"
   def encode: Array[Byte] = null
+}
+
+object BrokerShutdownNode {
+  def path = s"${BrokersZNode.path}/shutdown"
+}
+
+object BrokerShutdownIdZNode {
+  def path(id: Int) = s"${BrokerShutdownNode.path}/$id"
+  def encode(epoch: Long): Array[Byte] = epoch.toString.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): Long = new String(bytes, UTF_8).toLong
 }
 
 object BrokerInfo {
@@ -292,6 +357,11 @@ object BrokerIdZNode {
           s"${new String(jsonBytes, UTF_8)}", e)
     }
   }
+}
+
+object FederatedTopicZnode {
+  def path(topic: String, namespace: String) = s"${FederatedTopicsZNode.path}/$namespace/$topic"
+  def namespacePath(namespace: String) = s"${FederatedTopicsZNode.path}/$namespace"
 }
 
 object TopicsZNode {
@@ -491,6 +561,14 @@ object DeleteTopicsZNode {
 
 object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
+}
+
+// LI feature of dynamic deletion flag requires Zk, so actually KIP-500 would fail the feature"
+// TODO: refactor as Kafka dynamic configs (configs/brokers/<default>)
+object DeleteTopicFlagZNode {
+  def path = "/topic_deletion_flag"
+  def encode(topicDeletionFlag: String): Array[Byte] = topicDeletionFlag.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = if (bytes != null) new String(bytes, UTF_8) else ""
 }
 
 /**
@@ -1080,6 +1158,7 @@ object ZkData {
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureRootPaths = Seq(AdminZNode.path,
     BrokersZNode.path,
+    BrokerShutdownNode.path,
     ClusterZNode.path,
     ConfigZNode.path,
     ControllerZNode.path,
@@ -1096,6 +1175,9 @@ object ZkData {
   val PersistentZkPaths = Seq(
     ConsumerPathZNode.path, // old consumer path
     BrokerIdsZNode.path,
+    BrokerShutdownNode.path,
+    PreferredControllersZNode.path,
+    CorruptedBrokersZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,
     DeleteTopicsZNode.path,

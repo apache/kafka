@@ -2390,13 +2390,18 @@ class ReplicaManager(val config: KafkaConfig,
             expectedLeaders,
             failures,
             this,
-            responseCallback
+            { result: Either[Map[TopicPartition, ApiError], Errors] =>
+              result match {
+                case Left(partitionResults) => responseCallback(partitionResults)
+                case Right(_) => responseCallback(Map.empty)
+              }
+            }
           ),
           watchKeys
         )
       } else {
           // There are no partitions actually being elected, so return immediately
-          responseCallback(failures)
+          responseCallback(failures.toMap)
       }
     }
 

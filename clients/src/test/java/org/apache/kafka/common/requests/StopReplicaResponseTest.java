@@ -46,7 +46,7 @@ public class StopReplicaResponseTest {
 
         for (short version : STOP_REPLICA.allVersions()) {
             StopReplicaRequest request = new StopReplicaRequest.Builder(version,
-                15, 20, 0, false, topicStates).build(version);
+                15, 20, 0, 0, false, topicStates).build(version);
             StopReplicaResponse response = request
                 .getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
             assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 3),

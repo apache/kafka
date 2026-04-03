@@ -26,13 +26,24 @@
   "fields": [
     { "name": "ElectionType", "type": "int8", "versions": "1+",
       "about": "Type of elections to conduct for the partition. A value of '0' elects the preferred replica. A value of '1' elects the first live replica if there are no in-sync replica." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "default": "-1", "tag": 0, "taggedVersions": "2+",
+      "about": "The epoch of the requesting broker" },
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+",
       "about": "The topic partitions to elect leaders.",
       "fields": [
         { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
           "about": "The name of a topic." },
         { "name": "Partitions", "type": "[]int32", "versions": "0+",
-          "about": "The partitions of this topic whose leader should be elected." }
+          "about": "The partitions of this topic whose leader should be elected." },
+        { "name":  "RecommendedPartitionLeaders", "type":  "[]RecommendedPartitionLeaderState", "versions":  "2+", "tag": 0, "taggedVersions": "2+",
+          "about":  "The recommended new leaders for partitions",
+          "fields": [
+            { "name": "PartitionIndex", "type": "int32", "versions": "2+",
+              "about": "The partition index." },
+            { "name": "RecommendedLeader", "type": "int32", "versions": "2+",
+              "about": "The recommended leader." }
+          ]
+        }
       ]
     },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",

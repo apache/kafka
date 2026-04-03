@@ -392,6 +392,7 @@ public abstract class SslFactoryTest {
                 .createNewTrustStore(trustStoreFile1)
                 .usePem(usePem)
                 .build();
+        sslConfig1.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
         SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
         sslFactory.configure(sslConfig1);
 

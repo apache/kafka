@@ -247,6 +247,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
+  def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]],topicConfig: Properties): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment, servers, topicConfig)
+
+
+  def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]],topicConfig: Properties): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment, servers, topicConfig)
+
+
   /**
    * Pick a broker at random and kill it if it isn't already dead
    * Return the id of the broker killed

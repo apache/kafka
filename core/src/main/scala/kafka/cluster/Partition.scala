@@ -131,13 +131,13 @@ object Partition {
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
-      localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
+      localBrokerEpochSupplier = (() => -1L) /* brokerEpochSupplier removed in 3.6 */,
       time = time,
       alterPartitionListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrManager = replicaManager.alterPartitionManager)
+      alterPartitionManager = replicaManager.alterPartitionManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -290,7 +290,7 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterPartitionManager) extends Logging {
+                alterPartitionManager: AlterPartitionManager) extends Logging {
 
   import Partition.metricsGroup
 
@@ -364,6 +364,17 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == _.config.minInSyncReplicas }
 
+  // To avoid false positives, if the isAcksValid check is performed on a follower, we treat it as valid and return true
+  def isAcksValid(requiredAcks: Short): Boolean = leaderLogIfLocal.forall { log =>
+    if (log.config.minInSyncReplicas > 1) {
+      // Inside LI, minInSyncReplicas > 1 means the topic should have durable settings, which means the producer's acks
+      // should be -1. Otherwise, with acks=0 or acks=1, there is no durability guarantees for the produced data.
+      requiredAcks == -1
+    } else {
+      true
+    }
+  }
+
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
 
   def isAddingLocalReplica: Boolean = assignmentState.isAddingReplica(localBrokerId)
@@ -394,6 +405,23 @@ class Partition(val topicPartition: TopicPartition,
   def removeListener(listener: PartitionListener): Unit = {
     listeners.remove(listener)
   }
+
+  def isOneAboveMinIsr: Boolean = {
+    leaderLogIfLocal match {
+      case Some(leaderLog) => inSyncReplicaIds.size == leaderLog.config.minInSyncReplicas + 1
+      case None => false
+    }
+  }
+
+
+
+
+
+
+
+
+
+
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -1607,9 +1635,6 @@ class Partition(val topicPartition: TopicPartition,
   def deleteRecordsOnLeader(offset: Long): LogDeleteRecordsResult = inReadLock(leaderIsrUpdateLock) {
     leaderLogIfLocal match {
       case Some(leaderLog) =>
-        if (!leaderLog.config.delete)
-          throw new PolicyViolationException(s"Records of partition $topicPartition can not be deleted due to the configured policy")
-
         val convertedOffset = if (offset == DeleteRecordsRequest.HIGH_WATERMARK)
           leaderLog.highWatermark
         else
@@ -1777,7 +1802,7 @@ class Partition(val topicPartition: TopicPartition,
 
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {
     debug(s"Submitting ISR state change $proposedIsrState")
-    val future = alterIsrManager.submit(
+    val future = alterPartitionManager.submit(
       new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
       proposedIsrState.sentLeaderAndIsr,
       controllerEpoch

@@ -302,7 +302,7 @@ class RequestQuotaTest extends BaseRequestTest {
             .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
-          new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
+          new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue,
             Seq(new LeaderAndIsrPartitionState()
               .setTopicName(tp.topic)
               .setPartitionIndex(tp.partition)
@@ -326,7 +326,7 @@ class RequestQuotaTest extends BaseRequestTest {
                 .setDeletePartition(true)).asJava)
           ).asJava
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
-            Int.MaxValue, Long.MaxValue, false, topicStates)
+            Int.MaxValue, Long.MaxValue, Long.MaxValue, false, topicStates)
 
         case ApiKeys.UPDATE_METADATA =>
           val partitionState = Seq(new UpdateMetadataPartitionState()
@@ -347,7 +347,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setSecurityProtocol(securityProtocol.id)
               .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
           new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            partitionState, brokers, Collections.emptyMap())
+            Long.MaxValue, partitionState, brokers, Collections.emptyMap())
 
         case ApiKeys.CONTROLLED_SHUTDOWN =>
           new ControlledShutdownRequest.Builder(
@@ -710,6 +710,24 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
           new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData(), true)
 
+        case ApiKeys.LI_COMBINED_CONTROL =>
+          new LiCombinedControlRequest.Builder(ApiKeys.LI_COMBINED_CONTROL.latestVersion, brokerId, 0,
+            false, new util.ArrayList[LiCombinedControlRequestData.LeaderAndIsrPartitionState](),
+            new util.ArrayList[Node](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataPartitionState](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
+            new util.ArrayList[LiCombinedControlRequestData.StopReplicaPartitionState](), Collections.emptyMap())
+
+        case ApiKeys.LI_MOVE_CONTROLLER =>
+          new LiMoveControllerRequest.Builder(new LiMoveControllerRequestData(), ApiKeys.LI_MOVE_CONTROLLER.latestVersion)
+
+        case ApiKeys.LI_CREATE_FEDERATED_TOPIC_ZNODES =>
+          new LiCreateFederatedTopicZnodesRequest.Builder(new LiCreateFederatedTopicZnodesRequestData(), ApiKeys.LI_CREATE_FEDERATED_TOPIC_ZNODES.latestVersion)
+
+        case ApiKeys.LI_DELETE_FEDERATED_TOPIC_ZNODES =>
+          new LiDeleteFederatedTopicZnodesRequest.Builder(new LiDeleteFederatedTopicZnodesRequestData(), ApiKeys.LI_DELETE_FEDERATED_TOPIC_ZNODES.latestVersion)
+
+        case ApiKeys.LI_LIST_FEDERATED_TOPIC_ZNODES =>
+          new LiListFederatedTopicZnodesRequest.Builder(new LiListFederatedTopicZnodesRequestData(), ApiKeys.LI_LIST_FEDERATED_TOPIC_ZNODES.latestVersion)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -784,7 +802,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(throttled, s"Response not throttled: $smallQuotaProducerClient")
     assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0,
       s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient")
-    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN,
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request) == 0,
       s"Throttle time metrics for request quota updated: $smallQuotaProducerClient")
   }
 
@@ -797,7 +815,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(throttled, s"Response not throttled: $smallQuotaConsumerClientId")
     assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0,
       s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClient")
-    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN,
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request) == 0,
       s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient")
   }
 
@@ -807,7 +825,7 @@ class RequestQuotaTest extends BaseRequestTest {
     val unthrottledClient = Client(unthrottledClientId, apiKey)
     unthrottledClient.runUntil(_.throttleTimeMs <= 0.0)
     assertEquals(1, unthrottledClient.correlationId)
-    assertTrue(throttleTimeMetricValue(unthrottledClientId).isNaN, s"Client should not have been throttled: $unthrottledClient")
+    assertTrue(throttleTimeMetricValue(unthrottledClientId) == 0, s"Client should not have been throttled: $unthrottledClient")
   }
 
   private def checkExemptRequestMetric(apiKey: ApiKeys): Unit = {

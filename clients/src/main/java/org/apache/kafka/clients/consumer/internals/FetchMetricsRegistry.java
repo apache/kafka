@@ -41,6 +41,8 @@ public class FetchMetricsRegistry {
     public MetricNameTemplate recordsLeadMin;
     public MetricNameTemplate fetchThrottleTimeAvg;
     public MetricNameTemplate fetchThrottleTimeMax;
+    public MetricNameTemplate metadataRequestRate;
+    public MetricNameTemplate metadataRequestTotal;
     public MetricNameTemplate topicFetchSizeAvg;
     public MetricNameTemplate topicFetchSizeMax;
     public MetricNameTemplate topicBytesConsumedRate;
@@ -94,7 +96,10 @@ public class FetchMetricsRegistry {
                 "The number of fetch requests per second.", tags);
         this.fetchRequestTotal = new MetricNameTemplate("fetch-total", groupName,
                 "The total number of fetch requests.", tags);
-
+        this.metadataRequestTotal = new MetricNameTemplate("consumer-metadata-request-total",
+            "consumer-metrics", "The total number of metadata requests sent by the consumer", tags);
+        this.metadataRequestRate = new MetricNameTemplate("consumer-metadata-request-rate", "consumer-metrics",
+            "The average per-second number of metadata request sent by the consumer", tags);
         this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName,
                 "The maximum lag in terms of number of records for any partition in this window. NOTE: This is based on current offset and not committed offset", tags);
         this.recordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
@@ -175,7 +180,9 @@ public class FetchMetricsRegistry {
             partitionRecordsLead,
             partitionRecordsLeadMin,
             partitionRecordsLeadAvg,
-            partitionPreferredReadReplica
+            partitionPreferredReadReplica,
+            metadataRequestRate,
+            metadataRequestTotal
         );
     }
 

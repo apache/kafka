@@ -133,6 +133,18 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertTrue(dataPlaneMetricMap("network-io-total").metricValue().asInstanceOf[Double] == 0.0)
   }
 
+  @Test
+  def testSumOfTopicNameLength(): Unit = {
+    servers = makeServers(1)
+    val topic1 = "topic1"
+    TestUtils.createTopic(zkClient, topic1, 1, 1, servers)
+    val topic2 = "topic2"
+    TestUtils.createTopic(zkClient, topic2, 1, 1, servers)
+
+    val sumOfTopicNameLength = TestUtils.yammerMetricValue("SumOfTopicNameLength")
+    assertEquals(topic1.size + topic2.size + 2 * KafkaController.topicNameBytesOverheadOnZk, sumOfTopicNameLength)
+  }
+
   // This test case is used to ensure that there will be no correctness issue after we avoid sending out full
   // UpdateMetadataRequest to all brokers in the cluster
   @Test
@@ -289,6 +301,33 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers.take(1))
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
+  }
+
+  /**
+   * Tests that controller will fix insufficient RF topic by assigning sufficient replicas
+   */
+  @Test
+  def testTopicCreationWithFixingRF(): Unit = {
+    val topicRF1 = "test_topic_rf1"
+    val partition = 0
+    val defaultRF = 2
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
+      .map(prop => {
+        prop.setProperty(KafkaConfig.DefaultReplicationFactorProp, defaultRF.toString)
+        prop.setProperty(KafkaConfig.CreateTopicPolicyClassNameProp, "kafka.server.LiCreateTopicPolicy")
+        prop
+      }).map(KafkaConfig.fromProps)
+    servers = serverConfigs.map(s => TestUtils.createServer(s))
+
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val assignment = Map(partition -> List(controllerId)) // topicRF1 original RF set to 1
+    TestUtils.createTopic(zkClient, topicRF1, partitionReplicaAssignment = assignment, servers = servers, new Properties())
+
+    waitForPartitionState(new TopicPartition(topicRF1, partition), firstControllerEpoch, zkClient.getAllBrokersInCluster.map(b => b.id),
+      LeaderAndIsr.initialLeaderEpoch, "failed to get expected partition state upon valid RF topic creation")
+
+    // Actual RF should be corrected to 2
+    assertEquals(defaultRF, zkClient.getReplicasForPartition(new TopicPartition(topicRF1, partition)).size)
   }
 
   @Test
@@ -613,6 +652,64 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   @Test
+  def testControllerChangeDoesNotPutReplicasOffline(): Unit = {
+    val expectedReplicaAssignment = Map(0  -> List(0, 1))
+    val topic = "test"
+    val partition = 0
+
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
+      .map { props => {
+        props.setProperty(KafkaConfig.ControlledShutdownMaxRetriesProp, "2147483640")
+        KafkaConfig.fromProps(props)
+      }
+      }
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
+
+    var controllerId = zkClient.getControllerId.get
+    var controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+
+    val broker1 = servers.find(_.config.brokerId == 1).get
+    broker1.shutdown()
+
+    val activeServers = servers.filter(s => s != broker1)
+    // wait for the update metadata request to trickle to the brokers
+    TestUtils.waitUntilTrue(() =>
+      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.isr.size == 1),
+      "ISR did not get reduced after controlled shutdown of broker 1")
+
+    controllerId = zkClient.getControllerId.get
+    controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+
+    val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
+    val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
+
+    controller.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.kafkaController.brokerEpoch, controlledShutdownCallback)
+
+    var partitionsRemaining = resultQueue.take().get
+    assertEquals(1, partitionsRemaining.size)
+    // leader doesn't change since all the other replicas are shut down
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
+
+  // Now ensure that after the controller moves, shutdown is still rejected.
+    zkClient.deleteController(controller.controllerContext.epochZkVersion)
+    TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "New controller failed to start")
+
+    val newControllerId = zkClient.getControllerId.get
+    val newController = servers.find(p => p.config.brokerId == newControllerId).get.kafkaController
+
+    newController.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.kafkaController.brokerEpoch, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take().get
+    assertEquals(1, partitionsRemaining.size)
+    // leader should still not change
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
+  }
+
+  @Test
   def testControlledShutdown(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
@@ -844,12 +941,16 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp0 = new TopicPartition("t", 0)
     val tp1 = new TopicPartition("t", 1)
     val partitions = Set(tp0, tp1)
-    val event1 = ReplicaLeaderElection(Some(partitions), ElectionType.PREFERRED, ZkTriggered, partitionsMap => {
+    val event1 = ReplicaLeaderElection(Some(partitions), Some(Map.empty), ElectionType.PREFERRED, ZkTriggered, topResult => {
+      topResult match {
+        case Right(error) =>
+        case Left(partitionsMap) => // To make the rebasing with upstream kafka easier, we don't indent the following block
       for (partition <- partitionsMap) {
         partition._2 match {
           case Left(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
           case Right(_) => throw new AssertionError("replica leader election should error")
         }
+      }
       }
     })
     val event2 = ControlledShutdown(0, 0, {
@@ -1776,6 +1877,83 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   @Test
+  def testTopicDeletionWithOfflineBrokers(): Unit = {
+    val tp = new TopicPartition("t", 0)
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    servers = makeServers(2)
+    TestUtils.createTopic(zkClient, tp.topic, 1, 2, servers)
+    val topicId1 = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+
+    // shutdown one broker and then delete the topic
+    val broker0 = servers.find(_.config.brokerId == 0).get
+    broker0.shutdown()
+    broker0.awaitShutdown()
+    adminZkClient.deleteTopic(tp.topic())
+    val broker1 = servers.find(_.config.brokerId == 1).get
+    TestUtils.waitUntilTrue(() => {
+      !broker1.replicaManager.getLog(tp).isDefined
+    }, "The replica on broker1 cannot be deleted")
+    TestUtils.waitUntilTrue(() => {
+      !zkClient.pathExists(TopicZNode.path(tp.topic()))
+    }, s"The topic ${tp.topic} is not removed from zookeeper")
+
+    // recreate the topic and wait until broker1 get the log recreated
+    val assignment = Map(tp.partition -> Seq(0, 1))
+    adminZkClient.createTopicWithAssignment(tp.topic, config = new Properties(), assignment)
+    TestUtils.waitUntilTrue(() => {
+      broker1.replicaManager.getLog(tp).isDefined
+    }, "The replica on broker1 cannot be deleted")
+    val topicId2 = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertNotEquals(topicId2, topicId1, "Topic IDs across generations should not be the same")
+
+    // restart the offline broker0, and wait until convergence of topic ID on all brokers
+    broker0.startup()
+    TestUtils.waitUntilTrue(() => {
+      servers.forall{s => {
+        val logOpt = s.replicaManager.getLog(tp)
+        if (logOpt.isDefined) {
+          logOpt.get.topicId == topicId2
+        } else {
+          false
+        }
+      }}
+    }, s"Not every online broker has the correct topic ID for topic ${tp.topic()}")
+  }
+
+  @Test
+  def testDeletionOfStrayPartitions(): Unit = {
+    val tp = new TopicPartition("t1", 0)
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    servers = makeServers(2)
+    TestUtils.createTopic(zkClient, tp.topic, 1, 2, servers)
+    TestUtils.waitUntilTrue(() => {
+      servers.forall{server => server.replicaManager.getLog(tp).isDefined}
+    }, "The replica on broker1 cannot be deleted")
+
+    // shutdown one broker and then delete the topic
+    val broker0 = servers.find(_.config.brokerId == 0).get
+    broker0.shutdown()
+    broker0.awaitShutdown()
+    adminZkClient.deleteTopic(tp.topic())
+    TestUtils.waitUntilTrue(() => {
+      !zkClient.pathExists(TopicZNode.path(tp.topic()))
+    }, "The replica on broker1 cannot be deleted")
+
+
+    // restart the offline broker and make sure the stray partitions will be deleted
+    broker0.startup()
+    val topic2 = "t2"
+    // create another topic to ensure at least one LeaderAndIsr request is being sent to the restarted broker
+    TestUtils.createTopic(zkClient, topic2, 1, 2, servers)
+
+    TestUtils.waitUntilTrue(() => {
+      !broker0.replicaManager.getLog(tp).isDefined
+    }, "The replica on broker0 cannot be deleted", waitTimeMs = 20000)
+  }
+
+  @Test
   def testTopicIdUpgradeAfterReassigningPartitions(): Unit = {
     val tp = new TopicPartition("t", 0)
     val reassignment = Map(tp -> Some(Seq(0)))
@@ -1921,6 +2099,18 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     }, message)
   }
 
+  private def waitForPartitionState(tp: TopicPartition,
+    controllerEpoch: Int,
+    leaders: Seq[Int],
+    leaderEpoch: Int,
+    message: String): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+      leaderIsrAndControllerEpochMap.contains(tp) && leaders.exists(
+        leader=> isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch))
+    }, message)
+  }
+
   private def isExpectedPartitionState(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        controllerEpoch: Int,
                                        leader: Int,
@@ -1944,6 +2134,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
       config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
+      config.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))

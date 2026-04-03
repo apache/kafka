@@ -143,7 +143,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.join(
             rightStream,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
         ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
@@ -190,7 +190,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
                 valueJoiner,
-                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+                JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
             ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
@@ -204,7 +204,10 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)
+            ),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
@@ -235,7 +238,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.leftJoin(
             rightStream,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
         ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
@@ -249,7 +252,10 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)
+            ),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
@@ -282,7 +288,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
                      .selectKey(MockMapper.selectKeyKeyValueMapper()),
                 valueJoiner,
-                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+                JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
             ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
@@ -296,7 +302,10 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)
+            ),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
@@ -327,7 +336,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.outerJoin(
             rightStream,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
         ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
@@ -341,7 +350,10 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)
+            ),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
                 new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
@@ -374,7 +386,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
                 valueJoiner,
-                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+                JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
             ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);
@@ -467,11 +479,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.join(
             rightStream,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
         ).join(
             rightStream,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            JoinWindows.of(ofSeconds(10)).grace(ofHours(24))
         ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(inputWithoutOutOfOrderData, expectedResult);

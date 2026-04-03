@@ -210,6 +210,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     /**
+     * <code>li.client.software.name.and.commit</code>
+     * */
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG = CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG;
+
+    /**
      * <code>client.rack</code>
      */
     public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
@@ -262,6 +267,12 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
     private static final String CHECK_CRCS_DOC = "Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases seeking extreme performance.";
 
+    /**
+     * <code>enable.shallow.iterator</code>
+     */
+    public static final String ENABLE_SHALLOW_ITERATOR_CONFIG = "enable.shallow.iterator";
+    private static final String ENABLE_SHALLOW_ITERATOR_DOC = "Shallow iterate message batches in the consumer, returning message batches (potentially compressed) instead of individual records";
+
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
     public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
@@ -285,6 +296,7 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>default.api.timeout.ms</code> */
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_DOC = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -342,7 +354,14 @@ public class ConsumerConfig extends AbstractConfig {
             " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
             " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
             " be set to `false` when using brokers older than 0.11.0";
-    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
+    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = false;
+
+    /** <code>skip.metadata.cache.update.upon.unassign</code> */
+    public static final String SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN = "linkedin.skip.metadata.cache.update.upon.unassign";
+    private static final String SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN_DOC = "Skip metadata cache update if the new " +
+            "partition assignment passed to the <code>assign</code> method is a subset of the current assignment since " +
+            "the consumer instance should already have metadata for assigned partitions.";
+    public static final boolean DEFAULT_SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN = false;
 
     /**
      * <code>security.providers</code>
@@ -411,6 +430,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         "",
                                         Importance.LOW,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG,
+                                        Type.STRING,
+                                        "li-oss-consumer-java",
+                                        Importance.LOW,
+                                        CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_DOC)
                                 .define(CLIENT_RACK_CONFIG,
                                         Type.STRING,
                                         DEFAULT_CLIENT_RACK,
@@ -481,6 +505,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         true,
                                         Importance.LOW,
                                         CHECK_CRCS_DOC)
+                                .define(ENABLE_SHALLOW_ITERATOR_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        ENABLE_SHALLOW_ITERATOR_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -588,6 +617,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
+                                .define(SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN,
+                                        Type.BOOLEAN,
+                                        DEFAULT_SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN,
+                                        Importance.LOW,
+                                        SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,

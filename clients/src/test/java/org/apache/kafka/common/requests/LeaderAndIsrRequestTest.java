@@ -54,7 +54,7 @@ public class LeaderAndIsrRequestTest {
     @Test
     public void testUnsupportedVersion() {
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
-                (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
+                (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0, 0,
                 Collections.emptyList(), Collections.emptyMap(), Collections.emptySet());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
@@ -65,7 +65,7 @@ public class LeaderAndIsrRequestTest {
         String topicName = "topic";
         int partition = 0;
         for (short version : LEADER_AND_ISR.allVersions()) {
-            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
+            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 0, 0, 0, 0,
                 Collections.singletonList(new LeaderAndIsrPartitionState()
                     .setTopicName(topicName)
                     .setPartitionIndex(partition)),
@@ -78,7 +78,7 @@ public class LeaderAndIsrRequestTest {
 
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
 
-            if (version < 5) {
+            if (version < 6) {
                 assertEquals(
                     Collections.singletonList(new LeaderAndIsrPartitionError()
                         .setTopicName(topicName)
@@ -153,7 +153,7 @@ public class LeaderAndIsrRequestTest {
             topicIds.put("topic0", Uuid.randomUuid());
             topicIds.put("topic1", Uuid.randomUuid());
 
-            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
+            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, 3, partitionStates,
                 topicIds, liveNodes).build();
 
             List<LeaderAndIsrLiveLeader> liveLeaders = liveNodes.stream().map(n -> new LeaderAndIsrLiveLeader()
@@ -170,9 +170,9 @@ public class LeaderAndIsrRequestTest {
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
                 new ByteBufferAccessor(byteBuffer), version), version);
 
-            // Adding/removing replicas is only supported from version 3, so the deserialized request won't have
+            // Adding/removing replicas is only supported from version 4, so the deserialized request won't have
             // them for earlier versions.
-            if (version < 3) {
+            if (version < 4) {
                 partitionStates.get(0)
                     .setAddingReplicas(emptyList())
                     .setRemovingReplicas(emptyList());
@@ -184,9 +184,9 @@ public class LeaderAndIsrRequestTest {
                 topicIds = new HashMap<>();
             }
 
-            //  In versions 2-4 there are TopicStates, but no topicIds, so deserialized requests will have
+            //  In versions 2-5 there are TopicStates, but no topicIds, so deserialized requests will have
             //  Zero Uuids in place.
-            if (version > 1 && version < 5) {
+            if (version > 1 && version < 6) {
                 topicIds.put("topic0", Uuid.ZERO_UUID);
                 topicIds.put("topic1", Uuid.ZERO_UUID);
             }
@@ -211,7 +211,7 @@ public class LeaderAndIsrRequestTest {
                 .setPartitionIndex(tp.partition()));
             topicIds.put(tp.topic(), Uuid.randomUuid());
         }
-        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0, 0,
             partitionStates, topicIds, Collections.emptySet());
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);

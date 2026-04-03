@@ -17,17 +17,17 @@
 package kafka.server
 
 import kafka.server.QuotaType.Request
+import kafka.utils.KafkaScheduler
 import org.apache.kafka.common.metrics.Quota
-
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = ClientQuotaManagerConfig()
-
+  private val scheduler = new KafkaScheduler(1)
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {
-    val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", None)
+    val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, Some(scheduler), "", None)
     clientRequestQuotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", Request.toString, ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NanosToPercentagePerSecond

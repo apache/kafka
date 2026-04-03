@@ -355,6 +355,44 @@ public class BufferPoolTest {
         assertEquals(bufferPool.availableMemory(), 1024);
     }
 
+    @Test
+    public void overDeallocate() {
+        BufferPool bufferPool = new BufferPool(1024, 512, metrics, time, metricGroup);
+        bufferPool.deallocate(ByteBuffer.allocate(512));
+        assertEquals(bufferPool.availableMemory(), bufferPool.totalMemory());
+    }
+
+    @Test
+    public void dedupeDeallocations() throws Exception {
+        BufferPool bufferPool = new BufferPool(1024, 512, metrics, time, metricGroup);
+        ByteBuffer bbuf = bufferPool.allocate(512, 1);
+        ByteBuffer shallowCopy = bbuf.slice();
+        bufferPool.deallocate(bbuf);
+        bufferPool.deallocate(shallowCopy);
+        assertEquals(bufferPool.totalMemory(), bufferPool.availableMemory());
+    }
+
+    @Test
+    public void testExpandBufferDeallocations() throws Exception {
+
+        int batchSize = 512;
+        BufferPool bufferPool = new BufferPool(2048, batchSize, metrics, time, metricGroup);
+
+        ByteBuffer bbuf1 = bufferPool.allocate(batchSize, 1);
+        ByteBuffer bbuf2 = bufferPool.allocate(batchSize, 1);
+
+        int expandSize = batchSize * 2;
+        // expand bbuf1 to 2x of the original size
+        bbuf1 = ByteBuffer.allocate(expandSize);
+
+        // return initially allocated size of bbuf1 to bufferpool
+        bufferPool.deallocate(bbuf1, batchSize);
+        assertEquals(bufferPool.totalMemory(), bufferPool.availableMemory() + batchSize);
+
+        bufferPool.deallocate(bbuf2, batchSize);
+        assertEquals(bufferPool.totalMemory(), bufferPool.availableMemory());
+    }
+
     public static class StressTestThread extends Thread {
         private final int iterations;
         private final BufferPool pool;

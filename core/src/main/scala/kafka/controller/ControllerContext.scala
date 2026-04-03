@@ -77,7 +77,8 @@ class ControllerContext extends ControllerChannelContext {
   val stats = new ControllerStats
   var offlinePartitionCount = 0
   var preferredReplicaImbalanceCount = 0
-  val shuttingDownBrokerIds = mutable.Set.empty[Int]
+  val shuttingDownBrokerIds = mutable.Map.empty[Int, Long]
+  val skipShutdownSafetyCheck = mutable.Map.empty[Int, Long]
   private val liveBrokers = mutable.Set.empty[Broker]
   private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
   var epoch: Int = KafkaController.InitialControllerEpoch
@@ -87,11 +88,18 @@ class ControllerContext extends ControllerChannelContext {
   var topicIds = mutable.Map.empty[String, Uuid]
   var topicNames = mutable.Map.empty[Uuid, String]
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
+  @volatile private var partitionAssignmentsChanged = false
+  // Caution: for performance optimization, the lazilyUpdatedAssignmentsByBroker is not always up to date, and it's only updated
+  // when the per broker partition assignments are queried and the partitionAssignmentChanged is true
+  private val lazilyUpdatedAssignmentsByBroker = mutable.Map.empty[Int, mutable.Set[PartitionAndReplica]]
   private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
   val replicasOnOfflineDirs = mutable.Map.empty[Int, Set[TopicPartition]]
+
+  // A map to indicate the explicitly configured value of min.insync.replicas config per corresponding topic.
+  val topicMinIsrConfig = mutable.Map.empty[String, Int]
 
   val topicsToBeDeleted = mutable.Set.empty[String]
 
@@ -122,6 +130,7 @@ class ControllerContext extends ControllerChannelContext {
     topicIds.clear()
     topicNames.clear()
     partitionAssignments.clear()
+    partitionAssignmentsChanged = true
     partitionLeadershipInfo.clear()
     partitionsBeingReassigned.clear()
     replicasOnOfflineDirs.clear()
@@ -161,8 +170,34 @@ class ControllerContext extends ControllerChannelContext {
       .getOrElse(topicPartition.partition, ReplicaAssignment.empty)
   }
 
+  /**
+   * this method should be called each time the per broker partition assignments are queried
+   */
+  private def maybeUpdateAssignmentsByBroker(): Unit = {
+    if (partitionAssignmentsChanged) {
+      // Potentially concurrent access to the lazilyUpdatedAssignmentsByBroker by multiple RequestSendThreads
+      lazilyUpdatedAssignmentsByBroker.synchronized {
+        // the partitionAssignmentsChanged may have changed while we waited for the lock on lazilyUpdatedAssignmentsByBroker
+        if (partitionAssignmentsChanged) {
+          lazilyUpdatedAssignmentsByBroker.clear()
+
+          partitionAssignments.foreach {
+            case (topic, topicReplicaAssignment) => topicReplicaAssignment.foreach {
+              case (partition, partitionAssignment) =>
+                partitionAssignment.replicas.foreach { brokerId =>
+                  lazilyUpdatedAssignmentsByBroker.getOrElseUpdate(brokerId, mutable.Set.empty).add(PartitionAndReplica(new TopicPartition(topic, partition), brokerId))
+                }
+            }
+          }
+          partitionAssignmentsChanged = false
+        }
+      }
+    }
+  }
+
   def updatePartitionFullReplicaAssignment(topicPartition: TopicPartition, newAssignment: ReplicaAssignment): Unit = {
     val assignments = partitionAssignments.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
+    partitionAssignmentsChanged = true
     val previous = assignments.put(topicPartition.partition, newAssignment)
     val leadershipInfo = partitionLeadershipInfo.get(topicPartition)
     updatePreferredReplicaImbalanceMetric(topicPartition, previous, leadershipInfo,
@@ -202,6 +237,9 @@ class ControllerContext extends ControllerChannelContext {
   def addLiveBrokers(brokerAndEpochs: Map[Broker, Long]): Unit = {
     liveBrokers ++= brokerAndEpochs.keySet
     liveBrokerEpochs ++= brokerAndEpochs.map { case (broker, brokerEpoch) => (broker.id, brokerEpoch) }
+
+    shuttingDownBrokerIds.filterInPlace((brokerId, epoch) =>
+      liveBrokerEpochs.contains(brokerId) && epoch >= liveBrokerEpochs(brokerId))
   }
 
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
@@ -215,20 +253,50 @@ class ControllerContext extends ControllerChannelContext {
   }
 
   // getter
-  def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet.diff(shuttingDownBrokerIds)
+  def liveBrokerIds: Set[Int] = liveBrokerEpochs.filter(b => b._2 > shuttingDownBrokerIds.getOrElse(b._1, -1L)).keySet
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
+  def maxBrokerEpoch: Long = liveBrokerEpochs.values.max
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
 
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+  def partitionUnassignableBrokerIds(maintenanceBrokers: Seq[Int]): Seq[Int] = maintenanceBrokers ++ getLivePreferredControllerIds
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
-    partitionAssignments.flatMap {
-      case (topic, topicReplicaAssignment) => topicReplicaAssignment.filter {
-        case (_, partitionAssignment) => partitionAssignment.replicas.contains(brokerId)
-      }.map {
-        case (partition, _) => new TopicPartition(topic, partition)
-      }
-    }.toSet
+    maybeUpdateAssignmentsByBroker()
+
+    lazilyUpdatedAssignmentsByBroker.synchronized {
+      lazilyUpdatedAssignmentsByBroker.getOrElse(brokerId, mutable.Set.empty).map {
+        partitionAndReplica => partitionAndReplica.topicPartition
+      }.toSet
+    }
   }
 
   def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition): Boolean = {
@@ -244,17 +312,15 @@ class ControllerContext extends ControllerChannelContext {
   }
 
   def replicasOnBrokers(brokerIds: Set[Int]): Set[PartitionAndReplica] = {
-    brokerIds.flatMap { brokerId =>
-      partitionAssignments.flatMap {
-        case (topic, topicReplicaAssignment) => topicReplicaAssignment.collect {
-          case (partition, partitionAssignment) if partitionAssignment.replicas.contains(brokerId) =>
-            PartitionAndReplica(new TopicPartition(topic, partition), brokerId)
-        }
+    maybeUpdateAssignmentsByBroker()
+    lazilyUpdatedAssignmentsByBroker.synchronized {
+      brokerIds.flatMap { brokerId =>
+        lazilyUpdatedAssignmentsByBroker.getOrElse(brokerId, mutable.Set.empty)
       }
     }
   }
 
-  def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
+    def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).flatMap {
       case (partition, assignment) => assignment.replicas.map { r =>
         PartitionAndReplica(new TopicPartition(topic, partition), r)
@@ -330,6 +396,12 @@ class ControllerContext extends ControllerChannelContext {
         partitionLeadershipInfo.remove(new TopicPartition(topic, partition))
       }
     }
+    partitionAssignmentsChanged = true
+
+    partitionStates.foreach {
+      case (topicPartition, _) if topicPartition.topic == topic => partitionStates.remove(topicPartition)
+      case _ =>
+    }
   }
 
   def queueTopicDeletion(topicToBeAddedIntoDeletionList: Set[String]): Unit = {
@@ -364,12 +436,16 @@ class ControllerContext extends ControllerChannelContext {
     topicsToBeDeleted
   }
 
+  def replicasInStates(topic: String, expectedStates: Set[ReplicaState]): Set[PartitionAndReplica] = {
+    replicasForTopic(topic).filter(replica => expectedStates.contains(replicaStates(replica))).toSet
+  }
+
   def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] = {
     replicasForTopic(topic).filter(replica => replicaStates(replica) == state).toSet
   }
 
-  def areAllReplicasInState(topic: String, state: ReplicaState): Boolean = {
-    replicasForTopic(topic).forall(replica => replicaStates(replica) == state)
+  def areAllReplicasInStates(topic: String, expectedStates: Set[ReplicaState]): Boolean = {
+    replicasForTopic(topic).forall(replica => expectedStates.contains(replicaStates(replica)))
   }
 
   def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean = {
@@ -401,10 +477,17 @@ class ControllerContext extends ControllerChannelContext {
     updatePartitionStateMetrics(partition, currentState, targetState)
   }
 
+  def excludeDeletingTopicFromOfflinePartitionCount(topic: String): Unit = {
+    if (isTopicQueuedUpForDeletion(topic)) {
+      offlinePartitionCount = offlinePartitionCount -
+        partitionsForTopic(topic).count(partition => partitionState(partition) == OfflinePartition)
+    }
+  }
+
   private def updatePartitionStateMetrics(partition: TopicPartition,
                                           currentState: PartitionState,
                                           targetState: PartitionState): Unit = {
-    if (!isTopicDeletionInProgress(partition.topic)) {
+    if (!isTopicQueuedUpForDeletion(partition.topic)) {
       if (currentState != OfflinePartition && targetState == OfflinePartition) {
         offlinePartitionCount = offlinePartitionCount + 1
       } else if (currentState == OfflinePartition && targetState != OfflinePartition) {
@@ -545,4 +628,25 @@ class ControllerContext extends ControllerChannelContext {
 
   private def isValidPartitionStateTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
     targetState.validPreviousStates.contains(partitionStates(partition))
+
+  var corruptedBrokers: Set[Int] = Set.empty
+  def setCorruptedBrokers(brokers: Set[Int]): Unit = { corruptedBrokers = brokers }
+  private var _livePreferredControllerIds: Set[Int] = Set.empty
+  def setLivePreferredControllerIds(ids: Set[Int]): Unit = { _livePreferredControllerIds = ids }
+  def getLivePreferredControllerIds: Seq[Int] = _livePreferredControllerIds.toSeq
+
+}
+
+case class ControllerContextSnapshot(controllerContext: ControllerContext) {
+  val liveBrokerIds = controllerContext.liveBrokerIds
+  val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+  val replicasOnOfflineDirs = controllerContext.replicasOnOfflineDirs
+
+  def isReplicaOnline(brokerId: Int, topicPartition: org.apache.kafka.common.TopicPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
+    val brokerOnline = {
+      if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
+      else liveBrokerIds.contains(brokerId)
+    }
+    brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
+  }
 }

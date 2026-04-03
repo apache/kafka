@@ -48,6 +48,8 @@ class DelayedDeleteRecords(delayMs: Long,
                            responseCallback: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult] => Unit)
   extends DelayedOperation(delayMs) {
 
+  import DelayedOperation._
+
   // first update the acks pending variable according to the error code
   deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
     if (status.responseStatus.errorCode == Errors.NONE.code) {

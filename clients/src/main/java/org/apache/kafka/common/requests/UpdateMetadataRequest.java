@@ -17,6 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -47,7 +49,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
         private final Map<String, Uuid> topicIds;
+        private Lock buildLock = new ReentrantLock();
 
+        // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
+        private final Map<Short, UpdateMetadataRequest> requestCache = new HashMap<>();
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
                        Map<String, Uuid> topicIds) {
@@ -66,6 +71,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public UpdateMetadataRequest build(short version) {
+            // the following inner blocks are not indented in order to make hotfix cherry-picking easier
+            buildLock.lock();
+            try {
+            UpdateMetadataRequest updateMetadataRequest = requestCache.get(version);
+            if (updateMetadataRequest == null) {
             if (version < 3) {
                 for (UpdateMetadataBroker broker : liveBrokers) {
                     if (version == 0) {
@@ -104,7 +114,13 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 data.setUngroupedPartitionStates(partitionStates);
             }
 
-            return new UpdateMetadataRequest(data, version);
+            updateMetadataRequest = new UpdateMetadataRequest(data, version);
+            requestCache.put(version, updateMetadataRequest);
+            }
+            return updateMetadataRequest;
+            } finally {
+                buildLock.unlock();
+            }
         }
 
         private static Map<String, UpdateMetadataTopicState> groupByTopic(Map<String, Uuid> topicIds, List<UpdateMetadataPartitionState> partitionStates) {
@@ -126,14 +142,36 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
+            // HOTFIX: LIKAFKA-24478
+            // large cluster with large metadata can create really large string
+            // potentially causing OOM
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", brokerEpoch=").append(brokerEpoch).
-                append(", partitionStates=").append(partitionStates).
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
+
+            // bld.append("(type: UpdateMetadataRequest=").
+            //   append(", controllerId=").append(controllerId).
+            //   append(", controllerEpoch=").append(controllerEpoch).
+            //   append(", brokerEpoch=").append(brokerEpoch).
+            //   append(", partitionStates=").append(partitionStates).
+            //   append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
+            //   append(")");
             return bld.toString();
+        }
+
+        public List<UpdateMetadataPartitionState> partitionStates() {
+            return partitionStates;
+        }
+
+        public List<UpdateMetadataBroker> liveBrokers() {
+            return liveBrokers;
+        }
+
+        public Map<String, Uuid> topicIds() {
+            return topicIds;
         }
     }
 

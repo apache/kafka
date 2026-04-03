@@ -28,6 +28,11 @@ import java.util.List;
 import java.util.Set;
 
 public class ConsumerMetadata extends Metadata {
+    // LI: stub for metadata request rate tracking
+    public void recordMetadataRequest() {
+        // no-op: sensor not wired up in 3.6 yet
+    }
+
     private final boolean includeInternalTopics;
     private final boolean allowAutoTopicCreation;
     private final SubscriptionState subscription;

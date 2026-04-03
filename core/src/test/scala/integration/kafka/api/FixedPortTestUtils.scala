@@ -44,7 +44,8 @@ object FixedPortTestUtils {
     enableDeleteTopic: Boolean = false): Seq[Properties] = {
     val ports = FixedPortTestUtils.choosePorts(numConfigs)
     (0 until numConfigs).map { node =>
-      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, ports(node))
+      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic = enableDeleteTopic,
+        port = ports(node))
     }
   }
 

@@ -27,7 +27,7 @@ import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import kafka.metrics.KafkaMetricsGroup
 
 import java.util.Collections
 import scala.collection.mutable
@@ -189,7 +189,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               numThreads: Int,
                               requestHandlerAvgIdleMetricName: String,
                               logAndThreadNamePrefix : String) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsGroup = new Object with kafka.metrics.KafkaMetricsGroup
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
@@ -232,11 +232,11 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 }
 
 class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[KafkaConfig]) {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsGroup = new Object with kafka.metrics.KafkaMetricsGroup
 
-  val tags: java.util.Map[String, String] = name match {
-    case None => Collections.emptyMap()
-    case Some(topic) => Map("topic" -> topic).asJava
+  val tags: Map[String, String] = name match {
+    case None => Map.empty
+    case Some(topic) => Map("topic" -> topic)
   }
 
   case class MeterWrapper(metricType: String, eventType: String) {
@@ -276,6 +276,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     BrokerTopicStats.BytesOutPerSec -> MeterWrapper(BrokerTopicStats.BytesOutPerSec, "bytes"),
     BrokerTopicStats.BytesRejectedPerSec -> MeterWrapper(BrokerTopicStats.BytesRejectedPerSec, "bytes"),
     BrokerTopicStats.FailedProduceRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedProduceRequestsPerSec, "requests"),
+    BrokerTopicStats.ProduceRequestsWithInvalidAcksPerSec -> MeterWrapper(BrokerTopicStats.ProduceRequestsWithInvalidAcksPerSec, "requests"),
     BrokerTopicStats.FailedFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedFetchRequestsPerSec, "requests"),
     BrokerTopicStats.TotalProduceRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalProduceRequestsPerSec, "requests"),
     BrokerTopicStats.TotalFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalFetchRequestsPerSec, "requests"),
@@ -335,6 +336,8 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def failedProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).meter()
 
+  def produceRequestsWithInvalidAcksRate: Meter = metricTypeMap.get(BrokerTopicStats.ProduceRequestsWithInvalidAcksPerSec).meter()
+
   def failedFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).meter()
 
   def totalProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalProduceRequestsPerSec).meter()
@@ -382,6 +385,7 @@ object BrokerTopicStats {
   val ReplicationBytesInPerSec = "ReplicationBytesInPerSec"
   val ReplicationBytesOutPerSec = "ReplicationBytesOutPerSec"
   val FailedProduceRequestsPerSec = "FailedProduceRequestsPerSec"
+  val ProduceRequestsWithInvalidAcksPerSec = "ProduceRequestsWithInvalidAcksPerSec"
   val FailedFetchRequestsPerSec = "FailedFetchRequestsPerSec"
   val TotalProduceRequestsPerSec = "TotalProduceRequestsPerSec"
   val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"
@@ -482,4 +486,12 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
 
     info("Broker and topic stats closed")
   }
+}
+
+object BrokerMetadataStats extends KafkaMetricsGroup {
+  val outgoingBytesRate: Meter = newMeter("MetadataOutgoingBytesPerSec", "bytes", TimeUnit.SECONDS)
+}
+
+object ConsumerStats extends KafkaMetricsGroup {
+  val consumedDataAgeHist = newHistogram("ConsumedDataAgeMs")
 }

@@ -30,7 +30,8 @@ class MockReplicaStateMachine(controllerContext: ControllerContext) extends Repl
     stateChangesByTargetState.clear()
   }
 
-  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState,
+                                  controllerContextSnapshot: ControllerContextSnapshot = ControllerContextSnapshot(controllerContext)): Unit = {
     stateChangesByTargetState(targetState) = stateChangesByTargetState(targetState) + 1
 
     replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))

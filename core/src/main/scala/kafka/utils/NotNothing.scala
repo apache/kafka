@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 
 /**
   * This is a trick to prevent the compiler from inferring the `Nothing` type in cases where it would be a bug to do
@@ -37,5 +37,5 @@ trait NotNothing[T]
 object NotNothing {
   private val evidence: NotNothing[Any] = new Object with NotNothing[Any]
 
-  implicit def notNothingEvidence[T](implicit n: T =:= T): NotNothing[T] = evidence.asInstanceOf[NotNothing[T]]
+  implicit def notNothingEvidence[T](implicit @nowarn("cat=unused") n: T =:= T): NotNothing[T] = evidence.asInstanceOf[NotNothing[T]]
 }

@@ -55,6 +55,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE;
+
 
 public class MemoryRecordsBuilderTest {
 
@@ -83,6 +85,8 @@ public class MemoryRecordsBuilderTest {
             List<Arguments> values = new ArrayList<>();
             for (int bufferOffset : Arrays.asList(0, 15))
                 for (CompressionType type: CompressionType.values()) {
+                    if (type == CompressionType.PASSTHROUGH)
+                        continue;
                     List<Byte> magics = type == CompressionType.ZSTD
                             ? Collections.singletonList(RecordBatch.MAGIC_VALUE_V2)
                             : asList(RecordBatch.MAGIC_VALUE_V0, MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2);
@@ -532,7 +536,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(CompressionType.class)
+    @EnumSource(value = CompressionType.class, mode = EXCLUDE, names = {"PASSTHROUGH"})
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime(CompressionType compressionType) {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
@@ -595,7 +599,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(CompressionType.class)
+    @EnumSource(value = CompressionType.class, mode = EXCLUDE, names = {"PASSTHROUGH"})
     public void convertToV1WithMixedV0AndV2Data(CompressionType compressionType) {
         ByteBuffer buffer = ByteBuffer.allocate(512);
 

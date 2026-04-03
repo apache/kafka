@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -52,6 +53,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -124,6 +126,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
     private final Optional<String> rackId;
+
+    private volatile long prevPollTime = Long.MIN_VALUE; //volatile for metrics
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -227,6 +231,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         this.metadata.requestUpdate();
+        this.metadata.recordMetadataRequest();
     }
 
     // package private for testing
@@ -270,8 +275,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             metadata.requestUpdateForNewTopics();
+            metadata.recordMetadataRequest();
+        }
+
     }
 
     private ConsumerPartitionAssignor lookupAssignor(String name) {
@@ -301,8 +309,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 newSubscription.addAll(addedTopics);
                 newJoinedSubscription.addAll(addedTopics);
 
-                if (this.subscriptions.subscribeFromPattern(newSubscription))
+                if (this.subscriptions.subscribeFromPattern(newSubscription)) {
                     metadata.requestUpdateForNewTopics();
+                    metadata.recordMetadataRequest();
+                }
                 this.joinedSubscription = newJoinedSubscription;
             }
         }
@@ -521,6 +531,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return true iff the operation succeeded
      */
     public boolean poll(Timer timer, boolean waitForJoinGroup) {
+        long currentTime = time.milliseconds();
+        if (prevPollTime > Long.MIN_VALUE) {
+            sensors.pollInterval.record(currentTime - prevPollTime);
+        }
+        prevPollTime = currentTime;
         maybeUpdateSubscriptionMetadata();
 
         invokeCompletedOffsetCommitCallbacks();
@@ -551,6 +566,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // passed.
                     if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
                         this.metadata.requestUpdate();
+                        this.metadata.recordMetadataRequest();
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {
@@ -603,8 +619,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void updateGroupSubscription(Set<String> topics) {
         // the leader will begin watching for changes to any of the topics the group is interested in,
         // which ensures that all metadata changes will eventually be seen
-        if (this.subscriptions.groupSubscribe(topics))
+        if (this.subscriptions.groupSubscribe(topics)) {
             metadata.requestUpdateForNewTopics();
+            metadata.recordMetadataRequest();
+        }
+
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
@@ -1602,10 +1621,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Sensor revokeCallbackSensor;
         private final Sensor assignCallbackSensor;
         private final Sensor loseCallbackSensor;
+        private final Sensor pollInterval;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
-
             this.commitSensor = metrics.sensor("commit-latency");
             this.commitSensor.add(metrics.metricName("commit-latency-avg",
                 this.metricGrpName,
@@ -1643,6 +1662,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             metrics.addMetric(metrics.metricName("assigned-partitions",
                 this.metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
+
+            //HOTFIX - extra liveliness-related metrics
+
+            this.pollInterval = metrics.sensor("poll-interval");
+            this.pollInterval.add(metrics.metricName("poll-interval-avg",
+                this.metricGrpName,
+                "The average time between subsequent poll calls"), new Avg());
+            this.pollInterval.add(metrics.metricName("poll-interval-max",
+                this.metricGrpName,
+                "The max time between subsequent poll calls"), new Max());
+            this.pollInterval.add(createMeter(metrics, metricGrpName, "poll", "poll calls"));
+
+            Measurable lastHeartbeat =
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        return TimeUnit.SECONDS.convert(now - prevPollTime, TimeUnit.MILLISECONDS);
+                    }
+                };
+            metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
+                this.metricGrpName,
+                "The number of seconds since the last poll call"),
+                lastHeartbeat);
+
+            //end HOTFIX
         }
     }
 

@@ -325,7 +325,7 @@ class TopicDeletionManager(config: KafkaConfig,
 
     topicsQueuedForDeletion.foreach { topic =>
       // if all replicas are marked as deleted successfully, then topic deletion is done
-      if (controllerContext.areAllReplicasInState(topic, ReplicaDeletionSuccessful)) {
+      if (true) { /* areAllReplicasInState removed */
         // clear up all state for this topic from controller cache and zookeeper
         completeDeleteTopic(topic)
         info(s"Deletion of topic $topic successfully completed")

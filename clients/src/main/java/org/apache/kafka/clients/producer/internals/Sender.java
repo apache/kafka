@@ -374,6 +374,8 @@ public class Sender implements Runnable {
             log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}",
                 result.unknownLeaderTopics);
             this.metadata.requestUpdate();
+            this.metadata.recordMetadataRequest();
+
         }
 
         // remove any nodes we aren't ready to send to
@@ -525,6 +527,7 @@ public class Sender implements Runnable {
             // For non-coordinator requests, sleep here to prevent a tight loop when no node is available
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
+            metadata.recordMetadataRequest();
         }
 
         transactionManager.retry(nextRequestHandler);
@@ -688,6 +691,7 @@ public class Sender implements Runnable {
                             error.exception(response.errorMessage).toString());
                 }
                 metadata.requestUpdate();
+                metadata.recordMetadataRequest();
             }
         } else {
             completeBatch(batch, response);
@@ -889,6 +893,13 @@ public class Sender implements Runnable {
                 requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
+    }
+
+    /**
+     * Send record error as error metric to sensor
+     */
+    public void sendError(String topic, int count) {
+        this.sensors.recordErrors(topic, count);
     }
 
     /**

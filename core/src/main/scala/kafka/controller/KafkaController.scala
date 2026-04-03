@@ -62,6 +62,15 @@ final case object ZkTriggered extends ElectionTrigger
 final case object AdminClientTriggered extends ElectionTrigger
 
 object KafkaController extends Logging {
+  def timing(taskStartMs: Long, failoverStartMs: Long, time: org.apache.kafka.common.utils.Time): String = {
+    val now = time.milliseconds()
+    s"""[task: ${if (taskStartMs >= 0) now - taskStartMs else -1}ms, total: ${if (failoverStartMs >= 0) now - failoverStartMs else -1}ms]"""
+  }
+  def timing(taskStartMs: Long, failoverStartMs: Long): String = {
+    val now = System.currentTimeMillis()
+    s"""[task: ${if (taskStartMs >= 0) now - taskStartMs else -1}ms, total: ${if (failoverStartMs >= 0) now - failoverStartMs else -1}ms]"""
+  }
+
   val InitialControllerEpoch = 0
   val InitialControllerEpochZkVersion = 0
 
@@ -636,7 +645,7 @@ class KafkaController(val config: KafkaConfig,
     info(s"Broker failure callback for ${deadBrokers.mkString(",")}")
     deadBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
     val deadBrokersThatWereShuttingDown =
-      deadBrokers.filter(id => controllerContext.shuttingDownBrokerIds.remove(id))
+      deadBrokers.filter(id => controllerContext.shuttingDownBrokerIds.remove(id).isDefined)
     if (deadBrokersThatWereShuttingDown.nonEmpty)
       info(s"Removed ${deadBrokersThatWereShuttingDown.mkString(",")} from list of shutting down brokers.")
     val allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokers.toSet)
@@ -1379,7 +1388,7 @@ class KafkaController(val config: KafkaConfig,
     if (!controllerContext.liveOrShuttingDownBrokerIds.contains(id))
       throw new BrokerNotAvailableException(s"Broker id $id does not exist.")
 
-    controllerContext.shuttingDownBrokerIds.add(id)
+    controllerContext.shuttingDownBrokerIds += (id -> -1L)
     debug(s"All shutting down brokers: ${controllerContext.shuttingDownBrokerIds.mkString(",")}")
     debug(s"Live brokers: ${controllerContext.liveBrokerIds.mkString(",")}")
 
