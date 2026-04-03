@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -428,6 +429,64 @@ public class PapiDslIntegrationTest {
                     .withValueSerde(Serdes.String())
                     .withRetention(Duration.ofHours(10L))
             ),
+            true
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSlidingReducedKTableStoreAsTimestampedStore() {
+        verifyWindow(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1L)))
+            .reduce(
+                (value, aggregate) -> value,
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSlidingReducedOnWindowCloseKTableStoreAsTimestampedStore() {
+        verifyWindow(builder
+                .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+                .groupByKey()
+                .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1L)))
+                .emitStrategy(EmitStrategy.onWindowClose())
+                .reduce(
+                    (value, aggregate) -> value,
+                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+                ),
+            true
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSlidingAggregatedKTableStoreAsTimestampedStore() {
+        verifyWindow(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1L)))
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSlidingAggregatedOnWindowCloseKTableStoreAsTimestampedStore() {
+        verifyWindow(builder
+                .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+                .groupByKey()
+                .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1L)))
+                .emitStrategy(EmitStrategy.onWindowClose())
+                .aggregate(
+                    () -> "",
+                    (key, value, aggregate) -> value,
+                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+                ),
             true
         );
     }
