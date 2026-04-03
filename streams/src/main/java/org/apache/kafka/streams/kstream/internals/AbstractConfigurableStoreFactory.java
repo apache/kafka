@@ -27,13 +27,13 @@ import java.util.Set;
 public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private final Set<String> connectedProcessorNames = new HashSet<>();
     private DslStoreSuppliers dslStoreSuppliers;
-    private final DslStoreFormat defaultStoreDefaultFormat;
+    private final DslStoreFormat defaultDslStoreFormat;
     private DslStoreFormat dslStoreFormatOverwrite;
 
     public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers,
-                                            final DslStoreFormat defaultStoreDefaultFormat) {
+                                            final DslStoreFormat defaultDslStoreFormat) {
         this.dslStoreSuppliers = initialStoreSuppliers;
-        this.defaultStoreDefaultFormat = defaultStoreDefaultFormat;
+        this.defaultDslStoreFormat = defaultDslStoreFormat;
     }
 
     @Override
@@ -57,7 +57,7 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     }
 
     public DslStoreFormat dslStoreFormat() {
-        return dslStoreFormatOverwrite == null ? defaultStoreDefaultFormat : dslStoreFormatOverwrite;
+        return dslStoreFormatOverwrite == null ? defaultDslStoreFormat : dslStoreFormatOverwrite;
     }
 
     protected DslStoreSuppliers dslStoreSuppliers() {
