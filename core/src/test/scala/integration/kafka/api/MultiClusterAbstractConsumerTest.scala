@@ -21,7 +21,8 @@ import java.util
 import java.util.Properties
 
 import kafka.server.{KafkaConfig, MultiClusterBaseRequestTest}
-import kafka.utils.{ShutdownableThread, TestUtils}
+import kafka.utils.TestUtils
+import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -30,7 +31,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.BeforeEach
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 
@@ -341,11 +342,11 @@ abstract class MultiClusterAbstractConsumerTest extends MultiClusterBaseRequestT
                                            partitionsToAssign: Set[TopicPartition])
     extends ShutdownableThread("daemon-consumer-assignment", false) {
 
-    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
       this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
     }
 
-    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) = {
       this(consumer, List.empty[String], partitionsToAssign)
     }
 

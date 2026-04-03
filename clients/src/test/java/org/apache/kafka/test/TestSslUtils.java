@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
+import org.apache.kafka.common.security.ssl.SimpleSslContextProvider;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERT61String;
@@ -81,10 +82,6 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
-
-import org.apache.kafka.common.security.ssl.BoringSslContextProvider;
-import org.apache.kafka.common.security.ssl.SimpleSslContextProvider;
-
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -200,18 +197,17 @@ public class TestSslUtils {
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
             Mode mode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder(), SSLProvider.DEFAULT);
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean createTrustStore,
-            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder, SSLProvider sslProvider)
+            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
             throws IOException, GeneralSecurityException {
         SslConfigsBuilder builder = new SslConfigsBuilder(mode)
                 .useClientCert(useClientCert)
                 .certAlias(certAlias)
                 .cn(cn)
-                .certBuilder(certBuilder)
-                .provider(sslProvider);
+                .certBuilder(certBuilder);
         if (createTrustStore)
             builder = builder.createNewTrustStore(trustStoreFile);
         else
@@ -575,7 +571,7 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
             if (provider.equals(SSLProvider.OPENSSL)) {
-                sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, BoringSslContextProvider.class.getName());
+                sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, "org.apache.kafka.common.security.ssl.BoringSslContextProvider");
             } else {
                 sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SimpleSslContextProvider.class.getName());
             }

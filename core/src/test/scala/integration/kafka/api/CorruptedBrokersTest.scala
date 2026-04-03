@@ -18,7 +18,7 @@
 package integration.kafka.api
 
 import kafka.api.{IntegrationTestHarness, LeaderAndIsr}
-import kafka.log.Log.offsetFromFile
+import kafka.log.UnifiedLog.offsetFromFile
 import kafka.log.{LogSegment}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
+import scala.collection.Seq
 
 class CorruptedBrokersTest extends IntegrationTestHarness {
   val brokerCount = 3
@@ -61,7 +62,7 @@ class CorruptedBrokersTest extends IntegrationTestHarness {
     val controller = getController().kafkaController
     assertTrue(electedControllerId == controllerId)
 
-    createTopic(topic, Map(partition -> Seq(broker1Id, broker2Id)))
+    createTopicWithAssignment(topic, Map(partition -> Seq(broker1Id, broker2Id)))
 
     val producer = createProducer()
     sendRecords(producer, 5)
@@ -80,14 +81,14 @@ class CorruptedBrokersTest extends IntegrationTestHarness {
     truncateLog(broker1Id, 3)
     truncateLog(broker2Id, 2)
 
-    restartDeadBroker(broker2Id)
+    startBroker(broker2Id)
 
     TestUtils.waitUntilTrue(
       () => {
         zkClient.getCorruptedBrokers.get(2).exists(_.clearedFromIsrs)
       }, "Broker 2 did not get cleaned from ISRs")
 
-    restartDeadBroker(broker1Id)
+    startBroker(broker1Id)
 
     TestUtils.waitUntilTrue(
       () => {
@@ -98,7 +99,7 @@ class CorruptedBrokersTest extends IntegrationTestHarness {
   def truncateLog(brokerId: Int, truncationOffset: Int): Unit = {
     val server = serverForId(brokerId).get
     val log = server.logManager.getLog(topicPartition).get
-    val lastSegment = log.segments.lastSegment.get
+    val lastSegment = log.logSegments.toSeq.last
     val segmentFile = lastSegment.log.file
 
     val baseOffset = offsetFromFile(segmentFile)
@@ -107,7 +108,7 @@ class CorruptedBrokersTest extends IntegrationTestHarness {
     s2.close()
   }
 
-  def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], recordCount: Int) {
+  def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], recordCount: Int): Unit = {
     val futures = (0 until recordCount).map { index =>
       val record = new ProducerRecord(topic, partition, index.toString.getBytes, index.toString.getBytes)
       producer.send(record)

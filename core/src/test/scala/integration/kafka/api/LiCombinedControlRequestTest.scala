@@ -35,7 +35,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.util.Properties
 import java.util
-import scala.jdk.CollectionConverters.mapAsScalaMapConverter
+import org.junit.jupiter.api.TestInfo
+import scala.jdk.CollectionConverters._
 
 /**
  * This class is used to test the LiCombinedControlRequest when the feature is enabled and disabled via
@@ -49,8 +50,8 @@ class LiCombinedControlRequestTest extends KafkaServerTestHarness  with Logging 
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     adminClient = createAdminClient()
   }
 
@@ -114,11 +115,11 @@ class LiCombinedControlRequestTest extends KafkaServerTestHarness  with Logging 
     // Create 1 partition on broker 0. Broker 1 will receive a UpdateMetadata request containing partitions,
     // have firstUpdateMetadataWithPartitionsSent be true, and have LiCombinedControl enabled.
     // At this time, broker 1 should have no partition.
-    createTopic("topic2", Map(0 -> Seq(0)))
-    createTopic("topic3", Map(0 -> Seq(0)))
+    createTopicWithAssignment("topic2", Map(0 -> Seq(0)))
+    createTopicWithAssignment("topic3", Map(0 -> Seq(0)))
 
     // Create 1 partition on broker 1.
-    createTopic("topic4", Map(0 -> Seq(1)))
+    createTopicWithAssignment("topic4", Map(0 -> Seq(1)))
 
     // check the subsequent controller requests are not sent through raw requests
     val rawUpdateMetadataRequestsSent1 = getUpdateMetadataRequestCount()
@@ -150,7 +151,7 @@ class LiCombinedControlRequestTest extends KafkaServerTestHarness  with Logging 
     topicIds.put("topic2", topic2Uuid)
     topicIds.put("topic3", topic3Uuid)
 
-    val liCombinedControlRequest = new LiCombinedControlRequest.Builder(1, 0, 0, false, leaderAndIsrPartitionStates,
+    val liCombinedControlRequest = new LiCombinedControlRequest.Builder(1.toShort, 0, 0, false, leaderAndIsrPartitionStates,
       new util.ArrayList[Node](), updateMetadataPartitionStates, new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
       stopReplicaPartitionStates, topicIds).build()
 

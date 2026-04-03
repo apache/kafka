@@ -272,8 +272,10 @@ subprojects {
       options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
-    options.compilerArgs << "-Xlint:-this-escape"
-    options.compilerArgs << "-Xlint:-auxiliaryclass"
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
+      options.compilerArgs << "-Xlint:-this-escape"
+      options.compilerArgs << "-Xlint:-auxiliaryclass"
+    }
     options.compilerArgs << "-Werror"
 
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also

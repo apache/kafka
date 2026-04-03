@@ -161,7 +161,6 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          epochInRequest,
           partitionStates.asJava, topicIds, nodes.toSet.asJava)
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
@@ -203,7 +202,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
         }.toBuffer
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
-          epochInRequest, epochInRequest,
+          epochInRequest,
           partitionStates.asJava, liveBrokers.asJava, Collections.emptyMap())
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
@@ -231,7 +230,6 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
         ).asJava
         val requestBuilder = new StopReplicaRequest.Builder(
           ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
-          epochInRequest, // Correct broker epoch
           epochInRequest, // Correct broker epoch
           false, topicStates)
 

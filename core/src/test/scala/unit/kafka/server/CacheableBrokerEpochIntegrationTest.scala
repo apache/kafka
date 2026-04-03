@@ -18,13 +18,12 @@
 package kafka.server
 
 import java.util.Properties
-import kafka.api.KAFKA_2_3_IV1
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Test
 
-class CacheableBrokerEpochIntegrationTest extends ZooKeeperTestHarness {
+class CacheableBrokerEpochIntegrationTest extends QuorumTestHarness {
   @Test
   def testNewControllerConfig(): Unit = {
     testControlRequests(true)
@@ -42,7 +41,7 @@ class CacheableBrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         TestUtils.createBrokerConfig(controllerId, zkConnect)
       } else {
         val oldConfig = TestUtils.createBrokerConfig(controllerId, zkConnect)
-        oldConfig.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_3_IV1.toString)
+        oldConfig.put(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_2_3_IV1.version())
         oldConfig
       }
     val controller = TestUtils.createServer(KafkaConfig.fromProps(controllerConfig))

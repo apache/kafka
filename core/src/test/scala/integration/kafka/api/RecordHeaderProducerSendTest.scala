@@ -20,7 +20,6 @@ package integration.kafka.api
 import java.util.Properties
 
 import kafka.api.BaseProducerSendTest
-import kafka.server.KafkaConfig
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.header.internals.RecordHeaders
 import org.junit.jupiter.api.Test
@@ -30,7 +29,7 @@ class RecordHeaderProducerSendTest extends BaseProducerSendTest {
   @Test
   def testRecordHeaders(): Unit = {
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "true")
@@ -67,10 +66,4 @@ class RecordHeaderProducerSendTest extends BaseProducerSendTest {
     producer.close()
   }
 
-  override def overrideConfigs(): Properties = {
-    val properties = new Properties()
-    properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.10.2")
-    properties.put(KafkaConfig.LogMessageFormatVersionProp, "0.10.2")
-    properties
-  }
 }

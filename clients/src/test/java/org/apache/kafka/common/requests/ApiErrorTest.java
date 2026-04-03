@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
-import org.apache.kafka.common.errors.NotEnoughPreferredControllersException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -56,9 +55,6 @@ public class ApiErrorTest {
 
         arguments.add(Arguments.of(
             new NotEnoughReplicasException(), Errors.NOT_ENOUGH_REPLICAS, null));
-
-        arguments.add(Arguments.of(
-            new NotEnoughPreferredControllersException(), Errors.NOT_ENOUGH_PREFERRED_CONTROLLERS, null));
 
         // avoid populating the error message if it's a generic one
         arguments.add(Arguments.of(

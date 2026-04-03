@@ -46,11 +46,11 @@ class QuotaMetricsTest extends IntegrationTestHarness {
 
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: org.junit.jupiter.api.TestInfo): Unit = {
     // change the frequency of the Metrics Scheduler so that expired metrics can be removed faster
     Metrics.setMetricsSchedulerInitialDelaySeconds(0);
     Metrics.setMetricsSchedulerPeriodSeconds(1);
-    super.setUp()
+    super.setUp(testInfo)
 
     // [KIP-124] apply the dynamic request_percentage quota override on the client id level for all client ids
     val adminClient = createAdminClient()
@@ -131,10 +131,10 @@ class QuotaMetricsTest extends IntegrationTestHarness {
     clientIdFilter: String) = {
     val allMetrics = servers(0).metrics.metrics().asScala
 
-    allMetrics.filterKeys{name =>
+    allMetrics.view.filterKeys{name =>
       name.name().equals(metricNameFilter) && name.group().equals(metricGroupFilter) &&
         name.tags().containsKey("client-id") &&
-        name.tags.get("client-id").equals(clientIdFilter)}
+        name.tags.get("client-id").equals(clientIdFilter)}.toMap
   }
 
   private def verifyQuotaMetrics(metricNameFilter: String, metricGroupFilter: String,

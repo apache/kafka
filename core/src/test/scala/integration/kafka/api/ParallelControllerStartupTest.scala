@@ -16,6 +16,7 @@
 package kafka.api
 
 import java.util.Properties
+import scala.collection.Seq
 
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -62,7 +63,7 @@ class ParallelControllerStartupTest extends IntegrationTestHarness {
 
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: org.junit.jupiter.api.TestInfo): Unit = {
     debug(s"beginning ParallelControllerStartupTest setUp() override to disallow data brokers acting as controllers, disable auto-topic creation, parallelize controller startup, etc.")
 
     //this.serverConfig.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "false")
@@ -71,7 +72,7 @@ class ParallelControllerStartupTest extends IntegrationTestHarness {
     this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
     this.serverConfig.setProperty(KafkaConfig.LiNumControllerInitThreadsProp, "10") // parallel-startup mode
 
-    super.setUp() // starts ZK, then invokes modifyConfigs(); eventually starts brokers, then elects controller
+    super.setUp(testInfo) // starts ZK, then invokes modifyConfigs(); eventually starts brokers, then elects controller
     debug(s"done with setUp() override for ParallelControllerStartupTest")
   }
 

@@ -28,14 +28,14 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import java.util.Properties
-import scala.jdk.CollectionConverters.mapAsScalaMapConverter
+import scala.jdk.CollectionConverters._
 
 class PartitionLoggingTest extends IntegrationTestHarness{
   override protected def brokerCount: Int = 4
   val topic = "test"
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: org.junit.jupiter.api.TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // create the test topic with all the brokers as replicas
     val topicConfig = new Properties()
@@ -84,8 +84,7 @@ class PartitionLoggingTest extends IntegrationTestHarness{
     // shutdown brokers to put the partition offline
     val brokersToShutdown = servers.filter{s => brokersWithReplica.contains(s.config.brokerId)}
     val controller = servers.filter(s => s.config.brokerId == controllerId).head.kafkaController
-    brokersToShutdown.map(broker => controller.skipControlledShutdownSafetyCheck(
-      broker.config.brokerId, controller.controllerContext.liveBrokerIdAndEpochs(broker.config.brokerId), {case _ => {}}));
+    // TODO: skipControlledShutdownSafetyCheck not yet ported to 3.6 – safety check bypassing disabled
     brokersToShutdown(0).shutdown()
     waitForPartitionUnderMinISRState(tp, false)
     brokersToShutdown.takeRight(2).foreach(_.shutdown())
@@ -117,10 +116,14 @@ class PartitionLoggingTest extends IntegrationTestHarness{
       offlinePartitionExist == (partitionStateOpt.get.leaderAndIsr.leader == -1)
     }, "the partition should have leader " + {if (offlinePartitionExist)  "equal -1" else "not equal -1"})
 
-    val offlinePartitionsCountGauge = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .find { case (k, _) => k.getName.endsWith("OfflinePartitionsCount") }
-      .getOrElse(throw new AssertionError( "Unable to find metric OfflinePartitionsCount"))
-      ._2.asInstanceOf[Gauge[Int]]
+    val offlinePartitionsCountGauge = {
+      import scala.jdk.CollectionConverters._
+      val allMetrics: java.util.Map[com.yammer.metrics.core.MetricName, com.yammer.metrics.core.Metric] = KafkaYammerMetrics.defaultRegistry.allMetrics
+      allMetrics.entrySet().iterator().asScala
+        .find(e => e.getKey.getName.endsWith("OfflinePartitionsCount"))
+        .getOrElse(throw new AssertionError("Unable to find metric OfflinePartitionsCount"))
+        .getValue.asInstanceOf[Gauge[Int]]
+    }
 
     // there are also other topics, e.g., 5 offset topics, so by shutting down brokers to result in offline partitions,
     // we do not check the exact number of offlinePartitionsCount, but only check whether it is greater than 0

@@ -23,25 +23,24 @@ import kafka.server.KafkaConfig.fromProps
 import kafka.tools.MaintenanceBrokerTestUtils
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.{AfterEach, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
 /**
   * This is the main test which ensure maintenance broker work correctly.
   */
-class MaintenanceBrokerTest extends ZooKeeperTestHarness {
+class MaintenanceBrokerTest extends QuorumTestHarness {
 
   var brokers: Seq[KafkaServer] = null
 
   @AfterEach
-  override def tearDown() {
+  override def tearDown(): Unit = {
     shutdownServers(brokers)
     super.tearDown()
   }

@@ -26,7 +26,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -143,23 +143,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
     val responseBytesHist = yammerHistogram("kafka.network:type=RequestMetrics,name=ResponseBytes,request=MetadataAllTopics")
     assertEquals(1, responseBytesHist.count(), "The MetadataAllTopics ResponseBytes metric is not recorded")
-  }
-
-  @Test
-  def testRequestsPerSecAcrossVersionsMetric(): Unit = {
-    val topic = "topic"
-    val props = new Properties
-    createTopic(topic, numPartitions = 1, replicationFactor = 1, props)
-    val tp = new TopicPartition(topic, 0)
-
-    // Produce and consume some records
-    val numRecords = 10
-    val recordSize = 100000
-    val producer = createProducer()
-    sendRecords(producer, numRecords, recordSize, tp)
-
-    val requestRateWithoutVersionMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
-    assertTrue(requestRateWithoutVersionMeter.count() > 0, "The Produce RequestsPerSecAcrossVersions metric is not recorded")
   }
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,

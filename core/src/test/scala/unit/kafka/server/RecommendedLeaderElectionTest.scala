@@ -21,6 +21,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -29,7 +31,7 @@ import java.util.Properties
 class RecommendedLeaderElectionTest extends KafkaServerTestHarness {
   val numNodes = 2
   val overridingProps = new Properties
-  override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps)).toSeq
 
   @Test
   def testRecommendedLeaderElection(): Unit = {
@@ -71,7 +73,7 @@ class RecommendedLeaderElectionTest extends KafkaServerTestHarness {
   }
 
   def createAdminClient(props: Properties = new Properties): Admin = {
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
     Admin.create(props)
   }
 }

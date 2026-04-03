@@ -17,11 +17,12 @@
 
 package unit.kafka.integration
 
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.{Admin, MoveControllerOptions}
 import org.apache.kafka.clients.producer.{Producer, ProducerRecord}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
@@ -30,7 +31,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Properties}
 
-class AlterIsrRequestTest extends ZooKeeperTestHarness {
+class AlterIsrRequestTest extends QuorumTestHarness {
   @Test
   def testUnauthorizedAlterISRRequest(): Unit = {
     // create brokers
@@ -49,11 +50,11 @@ class AlterIsrRequestTest extends ZooKeeperTestHarness {
       })
       .map(KafkaConfig.fromProps)
     // start servers in reverse order to ensure the last broker becomes the controller
-    val servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    val servers = serverConfigs.reverseIterator.map(s => TestUtils.createServer(s)).toSeq
     val firstControllerId = TestUtils.waitUntilControllerElected(zkClient)
     val firstControllerEpoch = zkClient.getControllerEpoch.get._1
     assertTrue(firstControllerId == totalBrokers - 1)
-    info(s"First elected controller is $firstControllerId")
+    logger.info(s"First elected controller is $firstControllerId")
 
     val topic = "test"
     val partition = 0
@@ -63,16 +64,16 @@ class AlterIsrRequestTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers, topicConfig = topicConfig)
 
     // ensure the ISR has a size of 3
-    val adminClient = TestUtils.createAdminClient(servers)
+    val adminClient = TestUtils.createAdminClient(servers, new Properties())
     val initialISR = getISR(adminClient, tp)
     assertEquals(3, initialISR.size())
-    info(s"The initial ISR size is $initialISR")
+    logger.info(s"The initial ISR size is $initialISR")
 
     /**
      * Produce 1 message to trigger a mismatch of log end offset between the leader and followers.
      * This should further trigger an AlterISRRequest from the leader to the controller
      */
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks=1)
+    val producer = TestUtils.createProducer(TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)), acks=1)
     produceRecord(producer, topic, partition)
 
     waitForDifferentController(adminClient, firstControllerId, firstControllerEpoch)
@@ -80,18 +81,18 @@ class AlterIsrRequestTest extends ZooKeeperTestHarness {
     // Ensure that the AlterISR request can go through with the new controller
     TestUtils.waitUntilTrue(() => {
       val currentISR = getISR(adminClient, tp)
-      info(s"current isr $currentISR")
+      logger.info(s"current isr $currentISR")
       currentISR.size() == 1
     }, "Unable to update the ISR despite a new controller", pause = 2000)
 
-    info("Test has finished, shutting down the clients and servers")
+    logger.info("Test has finished, shutting down the clients and servers")
     producer.close()
     adminClient.close()
     servers.foreach(_.shutdown())
   }
 
   private def getISR(adminClient: Admin, tp: TopicPartition): util.List[Node] = {
-    val topicDescMap = adminClient.describeTopics(Collections.singleton(tp.topic())).all().get()
+    val topicDescMap = adminClient.describeTopics(Collections.singleton(tp.topic())).allTopicNames().get()
     topicDescMap.get(tp.topic()).partitions().get(tp.partition()).isr()
   }
 
@@ -112,6 +113,6 @@ class AlterIsrRequestTest extends ZooKeeperTestHarness {
 
       latestController = zkClient.getControllerId.get
     }
-    info(s"Elected new controller $latestController")
+    logger.info(s"Elected new controller $latestController")
   }
 }

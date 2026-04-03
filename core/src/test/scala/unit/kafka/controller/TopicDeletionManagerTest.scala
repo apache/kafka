@@ -41,7 +41,7 @@ class TopicDeletionManagerTest {
       replicationFactor = 3)
 
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
+    replicaStateMachine.startup()
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -68,7 +68,7 @@ class TopicDeletionManagerTest {
       numPartitions = 2,
       replicationFactor = 3)
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
+    replicaStateMachine.startup()
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -131,7 +131,7 @@ class TopicDeletionManagerTest {
       replicationFactor = 3)
 
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
+    replicaStateMachine.startup()
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,
@@ -187,7 +187,7 @@ class TopicDeletionManagerTest {
       replicationFactor = 3)
 
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
-    replicaStateMachine.startup(ControllerContextSnapshot(controllerContext))
+    replicaStateMachine.startup()
 
     val partitionStateMachine = new MockPartitionStateMachine(
       controllerContext,

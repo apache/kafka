@@ -17,20 +17,21 @@
 
 package unit.kafka.integration
 
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.producer.{Producer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
 import java.util.{Collections, Properties}
 
-class DegradedLeaderTest extends ZooKeeperTestHarness {
+class DegradedLeaderTest extends QuorumTestHarness {
   @Test
   def testLeadershipTransferByDegradedLeader(): Unit = {
     // create brokers
@@ -45,7 +46,7 @@ class DegradedLeaderTest extends ZooKeeperTestHarness {
       })
       .map(KafkaConfig.fromProps)
     // start servers in reverse order to ensure broker 4 becomes the controller
-    val servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    val servers = serverConfigs.reverseIterator.map(s => TestUtils.createServer(s)).toSeq
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     // val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     assertTrue(controllerId == 4)
@@ -67,11 +68,11 @@ class DegradedLeaderTest extends ZooKeeperTestHarness {
      * The UnderMinISR partitions will only happen after some messages are produced.
      */
 
-    val adminClient = TestUtils.createAdminClient(servers)
+    val adminClient = TestUtils.createAdminClient(servers, new Properties())
     val initialLeader = 0
     assertTrue(getLeader(adminClient, tp) == initialLeader)
 
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers))
+    val producer = TestUtils.createProducer(TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
     produceRecord(producer, topic, partition)
 
     TestUtils.waitUntilTrue(() => {
@@ -89,7 +90,7 @@ class DegradedLeaderTest extends ZooKeeperTestHarness {
   }
 
   private def getLeader(adminClient: Admin, tp: TopicPartition): Int = {
-    val topicDescMap = adminClient.describeTopics(Collections.singleton(tp.topic())).all().get()
+    val topicDescMap = adminClient.describeTopics(Collections.singleton(tp.topic())).allTopicNames().get()
     topicDescMap.get(tp.topic()).partitions().get(tp.partition()).leader().id()
   }
 

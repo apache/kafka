@@ -662,7 +662,7 @@ object TestUtils extends Logging {
     }
   }
 
-  def createAdminClient(servers: Seq[KafkaServer], props: Properties = new Properties): Admin = {
+  def createAdminClient(servers: Seq[KafkaServer], props: Properties): Admin = {
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     AdminClient.create(props)

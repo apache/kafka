@@ -17,7 +17,7 @@ package kafka.api
 
 import org.junit.jupiter.api.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Currently a simple proof of concept of a multi-cluster integration test, but ultimately intended

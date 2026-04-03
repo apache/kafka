@@ -72,7 +72,7 @@ class OffsetIndexTest {
         if(offset < valMap.firstKey)
           new OffsetPosition(idx.baseOffset, 0)
         else
-          new OffsetPosition(valMap.to(offset).last._1, valMap.to(offset).last._2._2)
+          new OffsetPosition(valMap.rangeTo(offset).last._1, valMap.rangeTo(offset).last._2._2)
       assertEquals(rightAnswer, idx.lookup(offset),
         "The index should give the same answer as the sorted map")
     }

@@ -1011,8 +1011,9 @@ class KafkaConfigTest {
         //Kafka Yammer metrics reporter configs
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
-        case KafkaConfig.RequestMetricsSizeBucketsProp =>  assertPropertyInvalid(baseProperties, name, "", "1", "1, 2, 5, not_a_number, 9")
-        case KafkaConfig.TotalTimeHistogramEnabledMetricsProp => // ignore
+        // TODO: RequestMetricsSizeBucketsProp and TotalTimeHistogramEnabledMetricsProp not yet ported to 3.6
+        // case KafkaConfig.RequestMetricsSizeBucketsProp =>  assertPropertyInvalid(baseProperties, name, "", "1", "1, 2, 5, not_a_number, 9")
+        // case KafkaConfig.TotalTimeHistogramEnabledMetricsProp => // ignore
 
         case KafkaConfig.SaslServerMaxReceiveSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 

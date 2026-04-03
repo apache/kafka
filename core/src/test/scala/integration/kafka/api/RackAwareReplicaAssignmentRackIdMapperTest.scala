@@ -23,7 +23,8 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.{AfterEach, Assertions, Test}
 
 import java.util.Properties
-import scala.collection.JavaConverters._
+import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 class RackAwareReplicaAssignmentRackIdMapperTest extends IntegrationTestHarness {
   val rackIdMapperClassName = classOf[IgnorePrefixRackIdMapper].getCanonicalName
@@ -59,7 +60,7 @@ class RackAwareReplicaAssignmentRackIdMapperTest extends IntegrationTestHarness 
 
   def createConfig: java.util.Map[String, Object] = {
     val config = new java.util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: java.util.Map[Object, Object] =
       adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
@@ -100,7 +101,7 @@ class RackAwareReplicaAssignmentRackIdMapperTest extends IntegrationTestHarness 
     waitForTopics(client, Seq(topicName), Seq())
 
     val assignment =
-      client.describeTopics(Seq(topicName).asJava).values().get(topicName).get()
+      client.describeTopics(Seq(topicName).asJava).topicNameValues().get(topicName).get()
         .partitions().asScala
         // Flatten each replica node in every partition as (Node -> Partition)
         .flatMap(tp => tp.replicas().asScala.map(_ -> tp.partition()))

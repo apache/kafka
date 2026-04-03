@@ -132,9 +132,6 @@ public class ProducerBatchTest {
     @Test
     public void testSplitPreservesHeaders() {
         for (CompressionType compressionType : CompressionType.values()) {
-            if (compressionType == CompressionType.PASSTHROUGH)
-                continue;
-
             MemoryRecordsBuilder builder = MemoryRecords.builder(
                     ByteBuffer.allocate(1024),
                     MAGIC_VALUE_V2,
@@ -171,8 +168,7 @@ public class ProducerBatchTest {
     public void testSplitPreservesMagicAndCompressionType() {
         for (byte magic : Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2)) {
             for (CompressionType compressionType : CompressionType.values()) {
-                if ((compressionType == CompressionType.NONE && magic < MAGIC_VALUE_V2) ||
-                    compressionType == CompressionType.PASSTHROUGH)
+                if (compressionType == CompressionType.NONE && magic < MAGIC_VALUE_V2)
                     continue;
 
                 if (compressionType == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)

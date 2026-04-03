@@ -35,7 +35,7 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 class ControllerRequestMergerTest {
@@ -75,11 +75,11 @@ class ControllerRequestMergerTest {
   def testMergingDifferentLeaderAndIsrPartitions(): Unit = {
     val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
     val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-    brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+    brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val partitionStates2 = getLeaderAndIsrPartitionStates(topic, 1)
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+      brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val transformedPartitionStates = (partitionStates1 ++ partitionStates2).map{partittionState =>
       LiCombinedControlTransformer.transformLeaderAndIsrPartition(partittionState, brokerEpoch)
@@ -110,11 +110,11 @@ class ControllerRequestMergerTest {
   def testMultipleRequestsOnSameLeaderAndIsrPartition(): Unit = {
     val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
     val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+      brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val partitionStates2 = getLeaderAndIsrPartitionStates(topic, 0)
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+      brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val transformedPartitionStates = partitionStates1.map{partittionState =>
       LiCombinedControlTransformer.transformLeaderAndIsrPartition(partittionState, brokerEpoch)
@@ -137,11 +137,11 @@ class ControllerRequestMergerTest {
   def testSupersedingLeaderAndIsrPartitionStates(): Unit = {
     val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
     val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+      brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val partitionStates2 = getLeaderAndIsrPartitionStates(topic, 0, 1)
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+      brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val transformedPartitionStates = partitionStates2.map{partitionState =>
       LiCombinedControlTransformer.transformLeaderAndIsrPartition(partitionState, brokerEpoch)
@@ -174,7 +174,7 @@ class ControllerRequestMergerTest {
       .setLeader(0)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
-      .setZkVersion(0)
+      .setPartitionEpoch(0)
       .setReplicas(replicas)
       .setIsNew(false))
   }
@@ -183,11 +183,11 @@ class ControllerRequestMergerTest {
   def testMergingFullLeaderAndISRWithExistingPartitionStates(): Unit = {
     val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
     val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+      brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
 
     val partitionStates2 = getLeaderAndIsrPartitionStates(topic, 0, 1)
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava, true)
+      brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava, true)
     controllerRequestMerger.addRequest(leaderAndIsrRequest1)
     assertThrows(classOf[IllegalStateException], () => controllerRequestMerger.addRequest(leaderAndIsrRequest2))
   }
@@ -196,18 +196,18 @@ class ControllerRequestMergerTest {
   def testMergingFullLeaderAndISR(): Unit = {
     val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
     val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-      brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava, true)
+      brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava, true)
     assertEquals(false, controllerRequestMerger.addRequest(leaderAndIsrRequest1))
   }
 
   @Test
   def testMergingDifferentUpdateMetadataPartitions(): Unit = {
     val partitionStates1 = getUpdateMetadataPartitionStates(topic, 0)
-    val updateMetadataRequest1 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
+    val updateMetadataRequest1 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch,
       partitionStates1.asJava, updateMetadataLiveBrokers, Map(topic -> topicId).asJava)
 
     val partitionStates2 = getUpdateMetadataPartitionStates(topic, 1)
-    val updateMetadataRequest2 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
+    val updateMetadataRequest2 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch,
       partitionStates2.asJava, updateMetadataLiveBrokers, Map(topic -> topicId).asJava)
 
     val transformedPartitionStates = (partitionStates1 ++ partitionStates2).map{partitionState =>
@@ -235,11 +235,11 @@ class ControllerRequestMergerTest {
   @Test
   def testSupersedingUpdateMetadataPartitionStates(): Unit = {
     val partitionStates1 = getUpdateMetadataPartitionStates(topic, 0)
-    val updateMetadataRequest1 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
+    val updateMetadataRequest1 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch,
       partitionStates1.asJava, updateMetadataLiveBrokers, Map(topic -> topicId).asJava)
 
     val partitionStates2 = getUpdateMetadataPartitionStates(topic, 0)
-    val updateMetadataRequest2 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch, brokerEpoch,
+    val updateMetadataRequest2 = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, brokerEpoch,
       partitionStates2.asJava, updateMetadataLiveBrokers, Map(topic -> topicId).asJava)
 
     val transformedPartitionStates = partitionStates2.map{partitionState =>
@@ -296,12 +296,12 @@ class ControllerRequestMergerTest {
 
     val partitions1 = List(new TopicPartition(topic, 0))
     val stopReplicaRequest1 = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
-      brokerEpoch, true, getStopReplicaTopicState(0, true, leaderEpoch))
+      true, getStopReplicaTopicState(0, true, leaderEpoch))
 
 
     val partitions2 = List(new TopicPartition(topic, 1))
     val stopReplicaRequest2 = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
-      brokerEpoch, true, getStopReplicaTopicState(1, true, leaderEpoch))
+      true, getStopReplicaTopicState(1, true, leaderEpoch))
 
     controllerRequestMerger.addRequest(stopReplicaRequest1)
     controllerRequestMerger.addRequest(stopReplicaRequest2)
@@ -339,10 +339,10 @@ class ControllerRequestMergerTest {
     // the merger should return two different LiCombinedControlRequests
     val leaderEpoch = 2
     val stopReplicaRequest1 = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
-      brokerEpoch, false, getStopReplicaTopicState(0, false, leaderEpoch))
+      false, getStopReplicaTopicState(0, false, leaderEpoch))
 
     val stopReplicaRequest2 = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch, brokerEpoch,
-      brokerEpoch, true, getStopReplicaTopicState(0, true, leaderEpoch))
+      true, getStopReplicaTopicState(0, true, leaderEpoch))
 
     controllerRequestMerger.addRequest(stopReplicaRequest1)
     controllerRequestMerger.addRequest(stopReplicaRequest2)

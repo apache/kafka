@@ -127,10 +127,9 @@ public class AbstractCoordinatorTest {
     private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
-        metrics = new Metrics(mockTime);
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
                 false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
-                logContext, new ClusterResourceListeners(), metrics);
+                logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);
         this.consumerClient = new ConsumerNetworkClient(logContext,
@@ -144,6 +143,7 @@ public class AbstractCoordinatorTest {
         mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        metrics = new Metrics(mockTime);
 
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(SESSION_TIMEOUT_MS,
                                                                         rebalanceTimeoutMs,

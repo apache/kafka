@@ -333,7 +333,7 @@ object LogCleanerParameterizedIntegrationTest {
   // Current tests does not support them yet
   class ExcludePassthrough extends ArgumentsProvider {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
-      java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.PASSTHROUGH).map(codec => Arguments.of(codec)))
+      java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
   }
 
   // zstd compression is not supported with older message formats (i.e supported by V0 and V1)
@@ -341,7 +341,7 @@ object LogCleanerParameterizedIntegrationTest {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
       java.util.Arrays.stream(
         CompressionType.values
-          .filter(!Set(CompressionType.ZSTD, CompressionType.PASSTHROUGH).contains(_))
+          .filter(!Set(CompressionType.ZSTD).contains(_))
           .map(codec => Arguments.of(codec))
       )
   }
