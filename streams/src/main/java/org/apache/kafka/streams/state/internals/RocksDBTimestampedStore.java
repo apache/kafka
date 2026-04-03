@@ -37,7 +37,7 @@ import java.util.List;
 public class RocksDBTimestampedStore extends RocksDBStore implements TimestampedBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStore.class);
 
-    private static final byte[] TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME = "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
+    static final byte[] TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME = "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBTimestampedStore(final String name,
                                    final String metricsScope) {
@@ -56,27 +56,36 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
         final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
         final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
+        final ColumnFamilyHandle offsetsColumnFamily = columnFamilies.get(2);
 
-        final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
-        noTimestampsIter.seekToFirst();
-        if (noTimestampsIter.isValid()) {
-            log.info("Opening store {} in upgrade mode", name);
-            cfAccessor = new DualColumnFamilyAccessor(
-                noTimestampColumnFamily,
-                withTimestampColumnFamily,
-                TimestampedBytesStore::convertToTimestampedFormat,
-                this
-            );
-        } else {
-            log.info("Opening store {} in regular mode", name);
-            cfAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
-            noTimestampColumnFamily.close();
+        try (final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily)) {
+            noTimestampsIter.seekToFirst();
+            if (noTimestampsIter.isValid()) {
+                log.info("Opening store {} in upgrade mode", name);
+                cfAccessor = new DualColumnFamilyAccessor(
+                    offsetsColumnFamily,
+                    noTimestampColumnFamily,
+                    withTimestampColumnFamily,
+                    TimestampedBytesStore::convertToTimestampedFormat,
+                    this,
+                    open
+                );
+            } else {
+                log.info("Opening store {} in regular mode", name);
+                cfAccessor = new SingleColumnFamilyAccessor(offsetsColumnFamily, withTimestampColumnFamily);
+                noTimestampColumnFamily.close();
+            }
+        } catch (final RuntimeException e) {
+            for (final ColumnFamilyHandle handle : columnFamilies) {
+                handle.close();
+            }
+            throw e;
         }
-        noTimestampsIter.close();
     }
 
 }

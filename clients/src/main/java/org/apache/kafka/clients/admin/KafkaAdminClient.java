@@ -900,6 +900,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          * @param throwable The failure exception.
          */
+        @SuppressWarnings("NPathComplexity")
         final void fail(long now, Throwable throwable) {
             if (curNode != null) {
                 runnable.nodeReadyDeadlines.remove(curNode);
@@ -921,6 +922,11 @@ public class KafkaAdminClient extends AdminClient {
             }
             nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
+            // Don't mask VirtualMachineError as TimeoutException - propagate it directly
+            if (throwable instanceof VirtualMachineError) {
+                handleFailure(throwable);
+                return;
+            }
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 handleTimeoutFailure(now, throwable);
@@ -3054,7 +3060,8 @@ public class KafkaAdminClient extends AdminClient {
                 Errors.forCode(logDirResult.errorCode()).exception(),
                 replicaInfoMap,
                 logDirResult.totalBytes(),
-                logDirResult.usableBytes()));
+                logDirResult.usableBytes(),
+                logDirResult.isCordoned()));
         }
         return result;
     }
@@ -3864,6 +3871,14 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    /**
+     * Get the metrics kept by the admin client.
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the admin client
+     */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());

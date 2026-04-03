@@ -31,7 +31,6 @@ import java.net.URL;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.components.Versioned;
 
 /**
  * Fake plugin class for testing classloading isolation
@@ -40,7 +39,7 @@ import org.apache.kafka.connect.components.Versioned;
  * Exfiltrates data via {@link ReadVersionFromResource#fromConnectData(String, Schema, Object)}
  * and {@link ReadVersionFromResource#toConnectData(String, byte[])}.
  */
-public class ReadVersionFromResource implements Converter, Versioned {
+public class ReadVersionFromResource implements Converter {
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
 

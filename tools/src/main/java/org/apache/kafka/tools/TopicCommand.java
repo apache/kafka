@@ -60,6 +60,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -154,7 +155,7 @@ public abstract class TopicCommand {
         return ret;
     }
 
-    private static Properties parseTopicConfigsToBeAdded(TopicCommandOptions opts) {
+    private static Map<String, String> parseTopicConfigsToBeAdded(TopicCommandOptions opts) {
         List<List<String>> configsToBeAdded = opts.topicConfig().orElse(List.of())
             .stream()
             .map(s -> List.of(s.split("\\s*=\\s*")))
@@ -164,9 +165,8 @@ public abstract class TopicCommand {
             throw new IllegalArgumentException("requirement failed: Invalid topic config: all configs to be added must be in the format \"key=val\".");
         }
 
-        Properties props = new Properties();
-        configsToBeAdded.stream()
-            .forEach(pair -> props.setProperty(pair.get(0).trim(), pair.get(1).trim()));
+        Map<String, String> props = new HashMap<>();
+        configsToBeAdded.forEach(pair -> props.put(pair.get(0).trim(), pair.get(1).trim()));
         LogConfig.validate(props);
         return props;
     }
@@ -243,7 +243,7 @@ public abstract class TopicCommand {
         private final Optional<Integer> partitions;
         private final Optional<Integer> replicationFactor;
         private final Map<Integer, List<Integer>> replicaAssignment;
-        private final Properties configsToAdd;
+        private final Map<String, String> configsToAdd;
 
         private final TopicCommandOptions opts;
 
@@ -455,10 +455,7 @@ public abstract class TopicCommand {
                     ? new NewTopic(topic.name, topic.replicaAssignment)
                     : new NewTopic(topic.name, topic.partitions, topic.replicationFactor.map(Integer::shortValue));
 
-                Map<String, String> configsMap = topic.configsToAdd.stringPropertyNames().stream()
-                    .collect(Collectors.toMap(name -> name, topic.configsToAdd::getProperty));
-
-                newTopic.configs(configsMap);
+                newTopic.configs(topic.configsToAdd);
                 CreateTopicsResult createResult = adminClient.createTopics(Set.of(newTopic),
                     new CreateTopicsOptions().retryOnQuotaViolation(false));
                 createResult.all().get();

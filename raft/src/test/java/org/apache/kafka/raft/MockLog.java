@@ -419,7 +419,7 @@ public class MockLog implements RaftLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation isolation) {
+    public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
         verifyOffsetInRange(startOffset);
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
@@ -444,7 +444,13 @@ public class MockLog implements RaftLog {
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
-            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset && !batch.entries.isEmpty()) {
+            // Since we operate in batches, it is possible for byte size of returned batches to exceed
+            // maxTotalBatchBytes. To keep to that invariant, we exit the loop as soon as the buffer contains
+            // more bytes than maxTotalBatchBytes.
+            if (batch.lastOffset() >= startOffset
+                && batch.lastOffset() < maxOffset
+                && !batch.entries.isEmpty()
+                && buffer.position() < maxTotalBatchBytes) {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
@@ -462,6 +468,9 @@ public class MockLog implements RaftLog {
 
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
+        if (batchCount > 1) {
+            records = records.slice(0, maxTotalBatchBytes);
+        }
 
         if (batchStartOffset == null) {
             throw new RuntimeException("Expected to find at least one entry starting from offset " +
@@ -513,7 +522,11 @@ public class MockLog implements RaftLog {
             );
         }
 
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            1 // Only needs to read the first batch.
+        ).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                 String.format(

@@ -36,6 +36,7 @@ import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
@@ -57,7 +58,7 @@ import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
@@ -65,6 +66,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
+import java.util.stream.Collectors
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -109,7 +111,7 @@ class BrokerServer(
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
   var logDirFailureChannel: LogDirFailureChannel = _
-  var logManager: LogManager = _
+  var logManager: JLogManager = _
   var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
@@ -211,18 +213,20 @@ class BrokerServer(
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config,
-        sharedServer.metaPropsEnsemble.errorLogDirs().asScala.toSeq,
+        sharedServer.metaPropsEnsemble.errorLogDirs(),
         metadataCache,
         kafkaScheduler,
         time,
         brokerTopicStats,
         logDirFailureChannel)
 
-      lifecycleManager = new BrokerLifecycleManager(config,
+      lifecycleManager = new BrokerLifecycleManager(
+        config,
         time,
         s"broker-${config.nodeId}-",
-        logManager.directoryIdsSet.asJava,
-        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
+        logManager.directoryIdsSet,
+        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start(),
+        () => metadataCache.metadataVersion().isCordonedLogDirsSupported)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -324,7 +328,7 @@ class BrokerServer(
         config.brokerId,
         () => metadataCache.getImage(),
         (directoryId: Uuid) => logManager.directoryPath(directoryId).
-          getOrElse("[unknown directory path]")
+          orElse("[unknown directory path]")
       )
       val directoryEventHandler = new DirectoryEventHandler {
         override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
@@ -332,7 +336,13 @@ class BrokerServer(
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
-      }
+
+        override def handleCordoned(directoryIds: util.Set[Uuid]): Unit =
+          lifecycleManager.propagateDirectoryCordoned(directoryIds)
+
+        override def handleUncordoned(directoryIds: util.Set[Uuid]): Unit =
+          lifecycleManager.propagateDirectoryUncordoned(directoryIds)
+}
 
       /**
        * TODO: move this action queue to handle thread so we can simplify concurrency handling
@@ -365,7 +375,7 @@ class BrokerServer(
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.BrokerRole.toString)
 
       /* initializing the groupConfigManager */
-      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), config.groupCoordinatorConfig, config.shareGroupConfig)
 
       /* create share coordinator */
       shareCoordinator = createShareCoordinator()
@@ -411,13 +421,17 @@ class BrokerServer(
         s"broker-${config.nodeId}-",
         config.brokerHeartbeatIntervalMs
       )
+      val initialCordonedLogDirs: util.Set[Uuid] = config.cordonedLogDirs().stream()
+        .map(dir => logManager.directoryId(dir).get)
+        .collect(Collectors.toSet())
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         clusterId,
         listenerInfo.toBrokerRegistrationRequest,
         featuresRemapped,
-        logManager.readBrokerEpochFromCleanShutdownFiles()
+        logManager.readBrokerEpochFromCleanShutdownFiles(),
+        initialCordonedLogDirs
       )
 
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
@@ -443,7 +457,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
-        groupConfigManager,
+        new ShareGroupConfigProvider(groupConfigManager),
         brokerTopicStats
       )
 
@@ -704,7 +718,6 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 
@@ -753,9 +766,9 @@ class BrokerServer(
       }
 
       val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).toJava,
+        (tp: TopicPartition) => logManager.getLog(tp),
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
-          logManager.getLog(tp).foreach { log =>
+          logManager.getLog(tp).ifPresent { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },

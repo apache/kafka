@@ -29,7 +29,8 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import org.slf4j.Logger;
@@ -76,7 +77,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
 
     private class KStreamKStreamSelfJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
         private final TimeTracker timeTracker = new TimeTracker();
-        private WindowStore<K, V2> windowStore;
+        private TimestampedWindowStoreWithHeaders<K, V2> windowStore;
         private Sensor droppedRecordsSensor;
 
         @Override
@@ -107,15 +108,16 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             final boolean emitSelfRecord = inputRecordTimestamp > timeTracker.streamTime - retentionPeriod + 1;
 
             // Join current record with other
-            try (final WindowStoreIterator<V2> iter = windowStore.fetch(record.key(), timeFrom, timeTo)) {
+            try (final WindowStoreIterator<ValueTimestampHeaders<V2>> iter = windowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
-                    final KeyValue<Long, V2> otherRecord = iter.next();
+                    final KeyValue<Long, ValueTimestampHeaders<V2>> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
+                    final V2 otherValue = otherRecord.value == null ? null : otherRecord.value.value();
 
                     // Join this with other
                     context().forward(
                         record.withValue(joinerThis.apply(
-                                record.key(), record.value(), otherRecord.value))
+                                record.key(), record.value(), otherValue))
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
             }
@@ -124,11 +126,12 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             // correct ordering means it matches the output of an inner join.
             timeFrom = Math.max(0L, inputRecordTimestamp - joinOtherBeforeMs);
             timeTo = Math.max(0L, inputRecordTimestamp + joinOtherAfterMs);
-            try (final WindowStoreIterator<V2> iter2 = windowStore.fetch(record.key(), timeFrom, timeTo)) {
+            try (final WindowStoreIterator<ValueTimestampHeaders<V2>> iter2 = windowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter2.hasNext()) {
-                    final KeyValue<Long, V2> otherRecord = iter2.next();
+                    final KeyValue<Long, ValueTimestampHeaders<V2>> otherRecord = iter2.next();
                     final long otherRecordTimestamp = otherRecord.key;
                     final long maxRecordTimestamp = Math.max(inputRecordTimestamp, otherRecordTimestamp);
+                    final V2 otherValue = otherRecord.value == null ? null : otherRecord.value.value();
 
                     // This is needed so that output records follow timestamp order
                     // Join this with self
@@ -140,7 +143,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                     // Join other with current record
                     context().forward(
                         record
-                            .withValue(joinerThis.apply(record.key(), (V1) otherRecord.value, (V2) record.value()))
+                            .withValue(joinerThis.apply(record.key(), (V1) otherValue, (V2) record.value()))
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
             }

@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -103,7 +103,7 @@ public class EndTransactionMarkerTest {
             EndTransactionMarker marker = new EndTransactionMarker(type, 1);
             int offsetSize = ByteUtils.sizeOfVarint(0);
             int timestampSize = ByteUtils.sizeOfVarlong(0);
-            int keySize = ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE;
+            int keySize = type.controlRecordKeySize();
             int valueSize = marker.serializeValue().remaining();
             int headerSize = ByteUtils.sizeOfVarint(Record.EMPTY_HEADERS.length);
             int totalSize = 1 + offsetSize + timestampSize + ByteUtils.sizeOfVarint(keySize) + keySize + ByteUtils.sizeOfVarint(valueSize) + valueSize + headerSize;

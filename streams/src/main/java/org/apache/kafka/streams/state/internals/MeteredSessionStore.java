@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -63,33 +65,32 @@ public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
     implements SessionStore<K, V>, MeteredStateStore {
 
-    private final String metricsScope;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Time time;
-    private StateSerdes<K, V> serdes;
-    private StreamsMetricsImpl streamsMetrics;
-    private Sensor putSensor;
-    private Sensor fetchSensor;
-    private Sensor flushSensor;
-    private Sensor removeSensor;
-    private Sensor e2eLatencySensor;
-    private Sensor iteratorDurationSensor;
-    private InternalProcessorContext<?, ?> internalContext;
-    private TaskId taskId;
-    private Sensor restoreSensor;
+    protected final String metricsScope;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
+    protected final Time time;
+    protected StateSerdes<K, V> serdes;
+    protected StreamsMetricsImpl streamsMetrics;
+    protected Sensor putSensor;
+    protected Sensor fetchSensor;
+    protected Sensor commitSensor;
+    protected Sensor removeSensor;
+    protected Sensor e2eLatencySensor;
+    protected Sensor iteratorDurationSensor;
+    protected InternalProcessorContext<?, ?> internalContext;
+    protected TaskId taskId;
+    protected Sensor restoreSensor;
 
-    private final LongAdder numOpenIterators = new LongAdder();
-    private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    protected final LongAdder numOpenIterators = new LongAdder();
+    protected final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
-    @SuppressWarnings("rawtypes")
-    private final Map<Class, QueryHandler> queryHandlers =
-            mkMap(
-                    mkEntry(
-                            WindowRangeQuery.class,
-                            (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
-                    )
-            );
+    private final Map<Class<?>, QueryHandler<?>> queryHandlers =
+        mkMap(
+            mkEntry(
+                WindowRangeQuery.class,
+                (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+            )
+        );
 
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
@@ -118,10 +119,14 @@ public class MeteredSessionStore<K, V>
         super.init(stateStoreContext, root);
     }
 
+    @SuppressWarnings("deprecation")
     private void registerMetrics() {
         putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        // flushSensor is deprecated per KIP-1035 and will be removed in the next major release.
+        // Here we just register the sensor without recording
+        StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        commitSensor = StateStoreMetrics.commitSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         removeSensor = StateStoreMetrics.removeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
@@ -137,6 +142,24 @@ public class MeteredSessionStore<K, V>
                 }
             }
         );
+        if (!persistent()) {
+            StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                    (config, now) -> {
+                        final InMemorySessionStore inMemoryStore = findInMemorySessionStore(wrapped());
+                        return inMemoryStore != null ? inMemoryStore.numEntries() : -1L;
+                    }
+            );
+        }
+    }
+
+    private static InMemorySessionStore findInMemorySessionStore(final StateStore store) {
+        if (store instanceof InMemorySessionStore) {
+            return (InMemorySessionStore) store;
+        } else if (store instanceof WrappedStateStore) {
+            return findInMemorySessionStore(((WrappedStateStore<?, ?, ?>) store).wrapped());
+        } else {
+            return null;
+        }
     }
 
     @Override
@@ -144,11 +167,15 @@ public class MeteredSessionStore<K, V>
         restoreSensor.record(restoreTimeNs);
     }
 
+    protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
+        return WrappingNullableUtils.prepareValueSerde(valueSerde, getter);
+    }
+
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
+            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
     }
 
     @SuppressWarnings("unchecked")
@@ -159,10 +186,10 @@ public class MeteredSessionStore<K, V>
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
                 record -> listener.apply(
-                    record.withKey(SessionKeySchema.from(record.key(), serdes.keyDeserializer(), serdes.topic()))
+                    record.withKey(SessionKeySchema.from(record.key(), serdes.keyDeserializer(), record.headers(), serdes.topic()))
                         .withValue(new Change<>(
-                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, record.headers()) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, record.headers()) : null,
                             record.value().isLatest
                         ))
                 ),
@@ -243,8 +270,7 @@ public class MeteredSessionStore<K, V>
             wrapped().fetch(keyBytes(key)),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -258,8 +284,7 @@ public class MeteredSessionStore<K, V>
             wrapped().backwardFetch(keyBytes(key)),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -274,8 +299,7 @@ public class MeteredSessionStore<K, V>
             wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -289,8 +313,7 @@ public class MeteredSessionStore<K, V>
             wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -311,8 +334,7 @@ public class MeteredSessionStore<K, V>
                 latestSessionStartTime),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -333,8 +355,7 @@ public class MeteredSessionStore<K, V>
             ),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -357,8 +378,7 @@ public class MeteredSessionStore<K, V>
                 latestSessionStartTime),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -372,8 +392,7 @@ public class MeteredSessionStore<K, V>
                 wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime),
                 fetchSensor,
                 iteratorDurationSensor,
-                streamsMetrics,
-                serdes::keyFrom,
+                bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                 serdes::valueFrom,
                 time,
                 numOpenIterators,
@@ -396,8 +415,7 @@ public class MeteredSessionStore<K, V>
             ),
             fetchSensor,
             iteratorDurationSensor,
-            streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -407,7 +425,7 @@ public class MeteredSessionStore<K, V>
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, flushSensor);
+        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, commitSensor);
     }
 
     @Override
@@ -421,39 +439,40 @@ public class MeteredSessionStore<K, V>
 
     @SuppressWarnings("unchecked")
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
-        final QueryHandler handler = queryHandlers.get(query.getClass());
+        final QueryHandler<?> handler = queryHandlers.get(query.getClass());
         if (handler == null) {
             result = wrapped().query(query, positionBound, config);
             if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                result.addExecutionInfo("Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
-            result = (QueryResult<R>) handler.apply(
+            result = ((QueryHandler<R>) handler).apply(
                 query,
                 positionBound,
                 config,
                 this
             );
             if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " with serdes "
-                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                result.addExecutionInfo("Handled in " + getClass() + " with serdes " + serdes + " in " + (time.nanoseconds() - start) + "ns");
             }
         }
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+    private <R> QueryResult<R> runRangeQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
         if (typedQuery.getKey().isPresent()) {
@@ -469,8 +488,7 @@ public class MeteredSessionStore<K, V>
                         rawResult.getResult(),
                         fetchSensor,
                         iteratorDurationSensor,
-                        streamsMetrics,
-                        serdes::keyFrom,
+                        bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                         StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
@@ -498,10 +516,10 @@ public class MeteredSessionStore<K, V>
     }
 
     private Bytes keyBytes(final K key) {
-        return key == null ? null : Bytes.wrap(serdes.rawKey(key));
+        return key == null ? null : Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
-    private void maybeRecordE2ELatency() {
+    void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {

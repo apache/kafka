@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -26,9 +27,13 @@ import java.util.Set;
 public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private final Set<String> connectedProcessorNames = new HashSet<>();
     private DslStoreSuppliers dslStoreSuppliers;
+    private final DslStoreFormat defaultStoreDefaultFormat;
+    private DslStoreFormat dslStoreFormatOverwrite;
 
-    public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers) {
+    public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers,
+                                            final DslStoreFormat defaultStoreDefaultFormat) {
         this.dslStoreSuppliers = initialStoreSuppliers;
+        this.defaultStoreDefaultFormat = defaultStoreDefaultFormat;
     }
 
     @Override
@@ -40,11 +45,19 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
                 config.originals()
             );
         }
+        final String dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        if (dslStoreFormatValue.equalsIgnoreCase(StreamsConfig.DSL_STORE_FORMAT_HEADERS)) {
+            dslStoreFormatOverwrite = DslStoreFormat.HEADERS;
+        }
     }
 
     @Override
     public Set<String> connectedProcessorNames() {
         return connectedProcessorNames;
+    }
+
+    public DslStoreFormat dslStoreFormat() {
+        return dslStoreFormatOverwrite == null ? defaultStoreDefaultFormat : dslStoreFormatOverwrite;
     }
 
     protected DslStoreSuppliers dslStoreSuppliers() {

@@ -123,13 +123,18 @@ public final class QueryableStoreTypes {
 
     }
 
-    private static class TimestampedKeyValueStoreType<K, V>
+    public static class TimestampedKeyValueStoreType<K, V>
         extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedKeyValueStoreType() {
             super(Set.of(
-                TimestampedKeyValueStore.class,
                 ReadOnlyKeyValueStore.class));
+        }
+
+        @Override
+        public boolean accepts(final StateStore stateStore) {
+            return super.accepts(stateStore) &&
+                (stateStore instanceof TimestampedKeyValueStore || stateStore instanceof TimestampedKeyValueStoreWithHeaders);
         }
 
         @Override
@@ -152,13 +157,18 @@ public final class QueryableStoreTypes {
         }
     }
 
-    private static class TimestampedWindowStoreType<K, V>
+    public static class TimestampedWindowStoreType<K, V>
         extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedWindowStoreType() {
             super(Set.of(
-                TimestampedWindowStore.class,
                 ReadOnlyWindowStore.class));
+        }
+
+        @Override
+        public boolean accepts(final StateStore stateStore) {
+            return super.accepts(stateStore) &&
+                (stateStore instanceof TimestampedWindowStore || stateStore instanceof TimestampedWindowStoreWithHeaders);
         }
 
         @Override

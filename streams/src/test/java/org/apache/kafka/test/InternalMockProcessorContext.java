@@ -398,14 +398,6 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     @Override
-    public long timestamp() {
-        if (recordContext == null) {
-            return timestamp;
-        }
-        return recordContext.timestamp();
-    }
-
-    @Override
     public long currentSystemTimeMs() {
         return time.milliseconds();
     }
@@ -413,38 +405,6 @@ public class InternalMockProcessorContext<KOut, VOut>
     @Override
     public long currentStreamTimeMs() {
         throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
-    }
-
-    @Override
-    public String topic() {
-        if (recordContext == null) {
-            return null;
-        }
-        return recordContext.topic();
-    }
-
-    @Override
-    public int partition() {
-        if (recordContext == null) {
-            return -1;
-        }
-        return recordContext.partition();
-    }
-
-    @Override
-    public long offset() {
-        if (recordContext == null) {
-            return -1L;
-        }
-        return recordContext.offset();
-    }
-
-    @Override
-    public Headers headers() {
-        if (recordContext == null) {
-            return new RecordHeaders();
-        }
-        return recordContext.headers();
     }
 
     @Override
@@ -457,17 +417,11 @@ public class InternalMockProcessorContext<KOut, VOut>
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
 
-        Headers headers = new RecordHeaders();
-        if (!consistencyEnabled) {
-            headers = null;
-        } else {
-            // Add the vector clock to the header part of every record
-            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-            headers.add(new RecordHeader(
-                    ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                    PositionSerde.serialize(position).array()));
+        if (consistencyEnabled) {
+            addVectorClockToHeaders(headers, position);
         }
 
         recordCollector().send(
@@ -481,6 +435,13 @@ public class InternalMockProcessorContext<KOut, VOut>
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    private void addVectorClockToHeaders(Headers headers, Position position) {
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
     }
 
     @Override

@@ -17,9 +17,10 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
-import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.OptionalInt;
@@ -32,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CopartitionedTopicsEnforcerTest {
 
-    private static final LogContext LOG_CONTEXT = new LogContext();
+    private static final Logger LOG = LoggerFactory.getLogger(CopartitionedTopicsEnforcerTest.class);
     private static final String REPARTITION_TOPIC_1 = "repartitioned-1";
     private static final String REPARTITION_TOPIC_2 = "repartitioned-2";
     private static final String REPARTITION_TOPIC_3 = "repartitioned-3";
@@ -50,7 +51,7 @@ public class CopartitionedTopicsEnforcerTest {
     public void shouldThrowIllegalStateExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
         final Map<String, Integer> topicPartitionCounts = Map.of();
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
             enforcer.enforce(
@@ -65,7 +66,7 @@ public class CopartitionedTopicsEnforcerTest {
     public void shouldThrowTopicConfigurationExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
         final Map<String, Integer> topicPartitionCounts = Map.of(SOURCE_TOPIC_1, 2, SOURCE_TOPIC_2, 1);
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final TopicConfigurationException ex = assertThrows(TopicConfigurationException.class, () ->
             enforcer.enforce(
@@ -87,7 +88,7 @@ public class CopartitionedTopicsEnforcerTest {
             REPARTITION_TOPIC_1, 10
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> result =
             enforcer.enforce(
@@ -107,7 +108,7 @@ public class CopartitionedTopicsEnforcerTest {
             REPARTITION_TOPIC_3, 5
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> result = enforcer.enforce(
             Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, REPARTITION_TOPIC_3),
@@ -129,7 +130,7 @@ public class CopartitionedTopicsEnforcerTest {
             REPARTITION_TOPIC_2, 5
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final TopicConfigurationException ex = assertThrows(
             TopicConfigurationException.class,
@@ -156,7 +157,7 @@ public class CopartitionedTopicsEnforcerTest {
             REPARTITION_TOPIC_2, 10
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> enforced = enforcer.enforce(
             Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2),
@@ -177,7 +178,7 @@ public class CopartitionedTopicsEnforcerTest {
             SOURCE_TOPIC_1, 2
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final TopicConfigurationException ex = assertThrows(
             TopicConfigurationException.class,
@@ -201,7 +202,7 @@ public class CopartitionedTopicsEnforcerTest {
             SOURCE_TOPIC_1, 2
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> enforced = enforcer.enforce(
             Set.of(REPARTITION_TOPIC_1, SOURCE_TOPIC_1),
@@ -222,7 +223,7 @@ public class CopartitionedTopicsEnforcerTest {
             REPARTITION_TOPIC_3, 2
         );
         final CopartitionedTopicsEnforcer enforcer =
-            new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
 
         final Map<String, Integer> enforced = enforcer.enforce(
             Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, REPARTITION_TOPIC_3),
