@@ -169,7 +169,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -222,7 +222,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -288,7 +288,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -341,7 +341,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -1563,7 +1563,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     private void setupAndPopulateKeyValueStoreWithHeaders(final Properties props) throws Exception {
         final StreamsBuilder headersBuilder = new StreamsBuilder();
         headersBuilder.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))

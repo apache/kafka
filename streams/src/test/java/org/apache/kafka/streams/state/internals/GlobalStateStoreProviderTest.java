@@ -111,7 +111,7 @@ public class GlobalStateStoreProviderTest {
                 Serdes.String()).build());
         stores.put(
             "ts-kv-store-with-headers",
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.inMemoryKeyValueStore("ts-kv-store-with-headers"),
                 Serdes.String(),
                 Serdes.String()).build());
