@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -140,7 +141,7 @@ public class LogCleaner implements BrokerReconfigurable {
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
     private final LogDirFailureChannel logDirFailureChannel;
     private final Time time;
-    private final List<CleanerThread> cleaners = new ArrayList<>();
+    private final List<CleanerThread> cleaners = new CopyOnWriteArrayList<>();
 
     /**
      * Log cleaner configuration which may be dynamically updated.

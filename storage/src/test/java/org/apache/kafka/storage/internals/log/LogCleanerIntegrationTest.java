@@ -56,6 +56,7 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,6 +67,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -589,6 +592,70 @@ public class LogCleanerIntegrationTest {
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
             "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+    }
+
+    @Test
+    public void testGaugeReadsAreNotAffectedByReconfigure() throws Exception {
+        cleaner = makeCleaner(TOPIC_PARTITIONS, CLEANER_BACKOFF_MS, MIN_COMPACTION_LAG, SEGMENT_SIZE);
+        cleaner.startup();
+
+        AbstractConfig config1Thread = makeReconfigureConfig(1);
+        AbstractConfig config2Threads = makeReconfigureConfig(2);
+
+        AtomicBoolean running = new AtomicBoolean(true);
+        List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
+
+        // Simulate metric gauge reads (executed by JMX / metrics polling thread).
+        Thread gaugeThread = new Thread(() -> {
+            while (running.get()) {
+                try {
+                    cleaner.maxOverCleanerThreads(t -> t.lastStats().bufferUtilization());
+                    cleaner.deadThreadCount();
+                } catch (Exception e) {
+                    errors.add(e);
+                }
+            }
+        }, "gauge-reader");
+
+        // Simulate dynamic reconfiguration that alternates cleaner thread count between 1 and 2.
+        AtomicInteger reconfigCount = new AtomicInteger(0);
+        Thread reconfigThread = new Thread(() -> {
+            boolean useOne = true;
+            while (running.get()) {
+                try {
+                    AbstractConfig oldCfg = useOne ? config2Threads : config1Thread;
+                    AbstractConfig newCfg = useOne ? config1Thread : config2Threads;
+                    cleaner.reconfigure(oldCfg, newCfg);
+                    useOne = !useOne;
+                    reconfigCount.incrementAndGet();
+                } catch (Exception e) {
+                    errors.add(e);
+                }
+            }
+        }, "reconfigure-thread");
+
+        gaugeThread.start();
+        reconfigThread.start();
+
+        Thread.sleep(3000);
+        running.set(false);
+        gaugeThread.join(5000);
+        reconfigThread.join(30000);
+
+        assertTrue(reconfigCount.get() > 0, "Expected at least one reconfigure to complete");
+        assertTrue(errors.isEmpty(),
+                "Expected no concurrent access errors during gauge reads and reconfigure, but got: " + errors);
+    }
+
+    private AbstractConfig makeReconfigureConfig(int numThreads) {
+        // Extend CleanerConfig.CONFIG_DEF with message.max.bytes, which CleanerConfig(AbstractConfig)
+        // reads via ServerConfigs.MESSAGE_MAX_BYTES_CONFIG but which is not part of CleanerConfig's own ConfigDef.
+        ConfigDef configDef = new ConfigDef(CleanerConfig.CONFIG_DEF)
+                .define("message.max.bytes", ConfigDef.Type.INT,
+                        DEFAULT_MAX_MESSAGE_SIZE, ConfigDef.Importance.MEDIUM, "");
+        Map<String, Object> props = new HashMap<>();
+        props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, numThreads);
+        return new AbstractConfig(configDef, props);
     }
 
     private void checkLastCleaned(String topic, int partitionId, long firstDirty) throws InterruptedException {
