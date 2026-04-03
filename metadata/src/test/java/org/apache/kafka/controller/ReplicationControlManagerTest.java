@@ -2662,7 +2662,7 @@ public class ReplicationControlManagerTest {
                 new TopicPartitions().setTopic("foo").
                     setPartitions(List.of(0, 1, 2)),
                 new TopicPartitions().setTopic("bar").
-                    setPartitions(List.of(0, 1))).iterator()));
+                    setPartitions(List.of(0, 1)))));
         ControllerResult<ElectLeadersResponseData> election1Result =
             replication.electLeaders(request1);
         ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, false, Utils.mkMap(

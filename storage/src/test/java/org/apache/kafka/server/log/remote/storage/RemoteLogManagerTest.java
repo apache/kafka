@@ -2356,6 +2356,10 @@ public class RemoteLogManagerTest {
         // Verify metrics are reset to 0 on cancellation (check via accessor since JMX metrics are deregistered)
         assertEquals(0, expirationTask.retentionSizeInPercent());
         assertEquals(0, expirationTask.localRetentionSizeInPercent());
+
+        // Verify JMX metrics are actually deregistered from the Yammer registry after cancellation
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(retentionMetricName));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(localRetentionMetricName));
     }
 
     @Test

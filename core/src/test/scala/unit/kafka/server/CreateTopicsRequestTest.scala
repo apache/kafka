@@ -120,7 +120,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       data.setTopics(new CreatableTopicCollection(List(
         topicReq(topic, numPartitions = 1, replicationFactor = 1,
           config = Map("min.insync.replicas" -> "2"))
-      ).asJava.iterator()))
+      ).asJava))
 
       val request = new CreateTopicsRequest.Builder(data).build(version.asInstanceOf[Short])
       val response = sendCreateTopicRequest(request, adminSocketServer)

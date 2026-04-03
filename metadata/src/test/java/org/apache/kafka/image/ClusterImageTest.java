@@ -195,12 +195,12 @@ public class ClusterImageTest {
             setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
             setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
                 List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                    setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                    setPort(9094).setSecurityProtocol((short) 0)))).
             setFeatures(new BrokerFeatureCollection(
                 Set.of(new BrokerFeature().
                     setName(MetadataVersion.FEATURE_NAME).
                     setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                    setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())).iterator())).
+                    setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())))).
             setRack("rack3"),
             REGISTER_BROKER_RECORD.highestSupportedVersion()));
 

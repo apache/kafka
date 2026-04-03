@@ -151,7 +151,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                             internalContext.setRecordContext(currentContext);
                         }
                     } else {
-                        // it's ok to only pass header into `serializeKey`, because for the value case passed-in headers are
+                        // it's ok to only pass headers into `serializeKey`, because for the value case passed-in headers are
                         // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
                         final Headers headers = value.headers();
                         wrapped().put(serializeKey(key, headers), serializeValue(value));
@@ -196,7 +196,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                         internalContext.setRecordContext(currentContext);
                     }
                 } else {
-                    // it's ok to only pass header into `serializeKey`, because for the value case passed-in headers are
+                    // it's ok to only pass headers into `serializeKey`, because for the value case passed-in headers are
                     // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
                     final Headers headers = value.headers();
                     // `rawOldValue` returned from `wrapped().putIfAbsent(...)` is type ValueTimestampHeader
@@ -227,7 +227,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, ValueTimestampHeaders<V>>> from) {
         final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
         for (final KeyValue<K, ValueTimestampHeaders<V>> entry : from) {
-            // it's ok to only pass header into `serializeKey`, because for the value case passed-in headers are
+            // it's ok to only pass headers into `serializeKey`, because for the value case passed-in headers are
             // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
             final Headers headers = entry.value != null ? entry.value.headers() : internalContext.headers();
             byteEntries.add(KeyValue.pair(serializeKey(entry.key, headers), serializeValue(entry.value)));

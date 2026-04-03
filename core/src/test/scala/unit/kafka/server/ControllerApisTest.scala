@@ -333,26 +333,26 @@ class ControllerApisTest {
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
-            setValue("100000")).iterator())),
+            setValue("100000")))),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
-            setValue("100000")).iterator())),
+            setValue("100000")))),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
-            setValue("100000")).iterator())),
+            setValue("100000")))),
         new OldAlterConfigsResource().
           setResourceName("baz").
           setResourceType(123.toByte).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName("foo").
-            setValue("bar")).iterator())),
-        ).iterator()))
+            setValue("bar")))),
+        )))
     val request = buildRequest(new AlterConfigsRequest(requestData, 0))
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
     controllerApis.handleLegacyAlterConfigs(request)
@@ -488,29 +488,29 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("foo").
           setResourceType(ConfigResource.Type.TOPIC.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(TopicConfig.FLUSH_MS_CONFIG).
             setValue("1000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
-        ).iterator()))
+            setConfigOperation(AlterConfigOp.OpType.SET.id()))))
+        )))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()),
       new MockController.Builder().build())
@@ -557,71 +557,71 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("kafka.server.ControllerApisTest").
             setValue("DEBUG").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("foo").
           setResourceType(124.toByte).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("foo").
             setValue("bar").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub1").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub1").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo1").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo1").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
-        ).iterator()))
+            setConfigOperation(AlterConfigOp.OpType.SET.id()))))
+        )))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     val authorizer = if (denyAllAuthorizer) {
       Some(createDenyAllAuthorizer())
@@ -718,7 +718,7 @@ class ControllerApisTest {
         new CreatableTopic().setName("indescribable").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("quux").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).setNumPartitions(2).setReplicationFactor(3),
-      ).iterator()))
+      )))
     val expectedResponse = Set(new CreatableTopicResult().setName("foo").
       setErrorCode(INVALID_REQUEST.code()).
       setErrorMessage("Duplicate topic name."),
@@ -754,7 +754,7 @@ class ControllerApisTest {
     controllerApis = createControllerApis(None, controller, new Properties(), throttle)
     val topicName = "foo"
     val requestData = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
-      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
+      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1))))
     val request = new CreateTopicsRequest.Builder(requestData).build()
     val expectedResponseDataUnthrottled = Set(new CreatableTopicResult().setName(topicName).
       setErrorCode(NONE.code()).
