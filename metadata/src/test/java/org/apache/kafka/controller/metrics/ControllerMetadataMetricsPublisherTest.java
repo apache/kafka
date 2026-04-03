@@ -30,6 +30,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.ProducerIdsImage;
 import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.ClusterImageTest;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
@@ -39,8 +40,11 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 
+import com.yammer.metrics.core.MetricsRegistry;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
@@ -80,10 +84,14 @@ public class ControllerMetadataMetricsPublisherTest {
     }
 
     static MetadataImage fakeImageFromTopicsImage(TopicsImage topicsImage) {
+        return fakeImage(ClusterImage.EMPTY, topicsImage);
+    }
+
+    static MetadataImage fakeImage(ClusterImage clusterImage, TopicsImage topicsImage) {
         return new MetadataImage(
             MetadataProvenance.EMPTY,
             FeaturesImage.EMPTY,
-            ClusterImage.EMPTY,
+            clusterImage,
             topicsImage,
             ConfigurationsImage.EMPTY,
             ClientQuotasImage.EMPTY,
@@ -115,6 +123,9 @@ public class ControllerMetadataMetricsPublisherTest {
         );
         IMAGE1 = fakeImageFromTopicsImage(TOPICS_IMAGE1);
     }
+
+    static final MetadataImage SNAPSHOT_IMAGE_WITH_BROKERS =
+        fakeImage(ClusterImageTest.IMAGE1, TopicsImage.EMPTY);
 
     @Test
     public void testPublish() {
@@ -156,6 +167,59 @@ public class ControllerMetadataMetricsPublisherTest {
             assertEquals(3, env.metrics.offlinePartitionCount());
             assertEquals(4, env.metrics.preferredReplicaImbalanceCount());
             assertEquals(0, env.metrics.metadataErrorCount());
+        }
+    }
+
+    @Test
+    public void testSnapshotRegistersBrokerRegistrationStateMetrics() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockFaultHandler faultHandler = new MockFaultHandler("ControllerMetadataMetricsPublisher");
+        try {
+            try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry));
+                 ControllerMetadataMetricsPublisher publisher =
+                     new ControllerMetadataMetricsPublisher(metrics, faultHandler)) {
+                MetadataDelta delta = new MetadataDelta.Builder()
+                    .setImage(MetadataImage.EMPTY)
+                    .build();
+                publisher.onMetadataUpdate(delta, SNAPSHOT_IMAGE_WITH_BROKERS, fakeManifest(true));
+                assertEquals(1, metrics.fencedBrokerCount());
+                assertEquals(2, metrics.activeBrokerCount());
+                assertEquals(BrokerRegistrationState.FENCED.state(), metrics.brokerRegistrationState(0));
+                assertEquals(BrokerRegistrationState.ACTIVE.state(), metrics.brokerRegistrationState(1));
+                assertEquals(BrokerRegistrationState.ACTIVE.state(), metrics.brokerRegistrationState(2));
+                assertEquals(
+                    3,
+                    registry.allMetrics().keySet().stream()
+                        .filter(n -> "BrokerRegistrationState".equals(n.getName()))
+                        .count()
+                );
+                publisher.onMetadataUpdate(delta, SNAPSHOT_IMAGE_WITH_BROKERS, fakeManifest(true));
+                assertEquals(
+                    3,
+                    registry.allMetrics().keySet().stream()
+                        .filter(n -> "BrokerRegistrationState".equals(n.getName()))
+                        .count()
+                );
+                ClusterImage smallerCluster = new ClusterImage(
+                    Map.of(
+                        0, ClusterImageTest.IMAGE1.brokers().get(0),
+                        1, ClusterImageTest.IMAGE1.brokers().get(1)
+                    ),
+                    Map.of()
+                );
+                MetadataImage smallerImage = fakeImage(smallerCluster, TopicsImage.EMPTY);
+                publisher.onMetadataUpdate(delta, smallerImage, fakeManifest(true));
+                assertEquals(
+                    2,
+                    registry.allMetrics().keySet().stream()
+                        .filter(n -> "BrokerRegistrationState".equals(n.getName()))
+                        .count()
+                );
+                assertEquals(BrokerRegistrationState.UNREGISTERED.state(), metrics.brokerRegistrationState(2));
+            }
+        } finally {
+            registry.shutdown();
+            faultHandler.maybeRethrowFirstException();
         }
     }
 }
