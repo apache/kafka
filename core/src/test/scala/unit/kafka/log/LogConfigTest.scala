@@ -259,6 +259,61 @@ class LogConfigTest {
     doTestInvalidLocalLogRetentionProps(2000L, -1, 100, 1000L)
   }
 
+  @Test
+  def testInvalidRemoteCopyLagMsWhenEffectiveLocalRetentionMsIsUnlimited(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_MS_CONFIG, "-1")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "-1")
+
+    val exception = assertThrows(classOf[ConfigException], () => validateTopicLogConfig(props))
+    assertTrue(exception.getMessage.contains(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG))
+  }
+
+  @Test
+  def testInvalidRemoteCopyLagMsWhenGreaterThanEffectiveLocalRetentionMs(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_MS_CONFIG, "1000")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "1001")
+
+    val exception = assertThrows(classOf[ConfigException], () => validateTopicLogConfig(props))
+    assertTrue(exception.getMessage.contains(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG))
+  }
+
+  @Test
+  def testInvalidRemoteCopyLagBytesWhenEffectiveLocalRetentionBytesIsUnlimited(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, "-1")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "-1")
+
+    val exception = assertThrows(classOf[ConfigException], () => validateTopicLogConfig(props))
+    assertTrue(exception.getMessage.contains(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG))
+  }
+
+  @Test
+  def testInvalidRemoteCopyLagBytesWhenGreaterThanEffectiveLocalRetentionBytes(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "1001")
+
+    val exception = assertThrows(classOf[ConfigException], () => validateTopicLogConfig(props))
+    assertTrue(exception.getMessage.contains(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG))
+  }
+
+  private def validateTopicLogConfig(props: util.Map[String, String]): Unit = {
+    val kafkaProps = TestUtils.createDummyBrokerConfig()
+    kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    LogConfig.validate(util.Map.of, props, kafkaConfig.extractLogConfigMap, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled)
+  }
+
   private def doTestInvalidLocalLogRetentionProps(localRetentionMs: Long,
                                                   localRetentionBytes: Int,
                                                   retentionBytes: Int,
