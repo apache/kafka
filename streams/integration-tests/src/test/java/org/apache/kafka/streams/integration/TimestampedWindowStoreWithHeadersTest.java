@@ -199,7 +199,7 @@ public class TimestampedWindowStoreWithHeadersTest {
         // verify changelog topic properties
         final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + STORE_NAME + "-changelog";
         final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
-        assertEquals("compact", changelogTopicConfig.getProperty("cleanup.policy"));
+        assertEquals("compact,delete", changelogTopicConfig.getProperty("cleanup.policy"));
     }
 
     @Test
