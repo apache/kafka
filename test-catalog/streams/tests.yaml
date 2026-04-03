@@ -1373,6 +1373,7 @@ org.apache.kafka.streams.kstream.internals.KTableTransformValuesTest:
 - shouldTransformOnGetIfNotMaterialized
 - shouldTransformValuesWithKey
 - shouldTransformValuesWithKeyAndMaterialize
+- shouldUseContextHeadersWhenValueTimestampHeadersIsNull
 org.apache.kafka.streams.kstream.internals.MaterializedInternalTest:
 - shouldGenerateStoreNameWithPrefixIfProvidedNameIsNull
 - shouldPreferStoreSupplierWhenProvidedWithStoreTypeViaTopologyConfig
