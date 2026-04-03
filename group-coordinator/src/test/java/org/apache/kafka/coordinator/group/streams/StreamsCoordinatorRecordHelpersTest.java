@@ -255,7 +255,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordWithNullAssignmentConfig() {
         assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, null));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, null, -1L));
     }
 
     @Test
@@ -273,14 +273,15 @@ class StreamsCoordinatorRecordHelpersTest {
                     .setEpoch(42)
                     .setMetadataHash(43)
                     .setValidatedTopologyEpoch(44)
-                    .setLastAssignmentConfigs(expectedAssignmentConfigs),
+                    .setLastAssignmentConfigs(expectedAssignmentConfigs)
+                    .setCreationTimeMs(12345L),
                 (short) 0
             )
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of(
             "num.standby.replicas", "2"
-        )));
+        ), 12345L));
     }
 
     @Test
@@ -689,7 +690,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Map.of()));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Map.of(), -1L));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

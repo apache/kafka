@@ -36,6 +36,7 @@ public class ConsumerGroupBuilder {
     private final Map<String, ConsumerGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private long metadataHash = 0L;
+    private long creationTimeMs = -1L;
     private final Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>();
 
     public ConsumerGroupBuilder(String groupId, int groupEpoch) {
@@ -60,6 +61,11 @@ public class ConsumerGroupBuilder {
 
     public ConsumerGroupBuilder withMetadataHash(long metadataHash) {
         this.metadataHash = metadataHash;
+        return this;
+    }
+
+    public ConsumerGroupBuilder withCreationTimeMs(long creationTimeMs) {
+        this.creationTimeMs = creationTimeMs;
         return this;
     }
 
@@ -92,7 +98,7 @@ public class ConsumerGroupBuilder {
         );
 
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, metadataHash));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, metadataHash, creationTimeMs));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->

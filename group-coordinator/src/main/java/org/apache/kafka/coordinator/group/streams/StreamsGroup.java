@@ -163,6 +163,11 @@ public class StreamsGroup implements Group {
     protected final TimelineLong metadataHash;
 
     /**
+     * The creation time of the group. -1 if unknown (e.g. the group predates KIP-1282).
+     */
+    private final TimelineLong creationTimeMs;
+
+    /**
      * The target assignment metadata.
      */
     private final TimelineObject<TargetAssignmentMetadata> targetAssignmentMetadata;
@@ -243,6 +248,8 @@ public class StreamsGroup implements Group {
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.metadataHash = new TimelineLong(snapshotRegistry);
+        this.creationTimeMs = new TimelineLong(snapshotRegistry);
+        this.creationTimeMs.set(-1L);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -627,6 +634,24 @@ public class StreamsGroup implements Group {
      */
     public void setMetadataHash(long metadataHash) {
         this.metadataHash.set(metadataHash);
+    }
+
+    /**
+     * @return The creation time of the group. -1 if unknown.
+     */
+    public long creationTimeMs() {
+        return creationTimeMs.get();
+    }
+
+    /**
+     * Sets the group creation time. Only takes effect if it has not been set yet (i.e. current value is -1).
+     *
+     * @param creationTimeMs The creation time of the group.
+     */
+    public void setCreationTimeMs(long creationTimeMs) {
+        if (this.creationTimeMs.get() == -1L) {
+            this.creationTimeMs.set(creationTimeMs);
+        }
     }
 
     /**
@@ -1105,6 +1130,7 @@ public class StreamsGroup implements Group {
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
+            .setGroupCreationTimeMs(creationTimeMs.get(committedOffset))
             .setTopology(
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)

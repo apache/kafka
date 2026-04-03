@@ -852,10 +852,14 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            ConsumerGroup newGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            newGroup.setCreationTimeMs(time.milliseconds());
+            return newGroup;
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            ConsumerGroup newGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            newGroup.setCreationTimeMs(time.milliseconds());
+            return newGroup;
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -890,10 +894,14 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null) {
-            return new StreamsGroup(logContext, snapshotRegistry, groupId);
+            StreamsGroup newGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            newGroup.setCreationTimeMs(time.milliseconds());
+            return newGroup;
         } else if (maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a streams group.", groupId);
-            return new StreamsGroup(logContext, snapshotRegistry, groupId);
+            StreamsGroup newGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            newGroup.setCreationTimeMs(time.milliseconds());
+            return newGroup;
         } else {
             return castToStreamsGroup(group);
         }
@@ -2084,7 +2092,7 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs));
+            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs, group.creationTimeMs()));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2144,7 +2152,8 @@ public class GroupMetadataManager {
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
-            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
+            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId))
+            .setGroupCreationTimeMs(group.creationTimeMs());
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -2322,6 +2331,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
+        boolean isNewGroup = createIfNotExists && !groups.containsKey(groupId);
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -2420,6 +2430,13 @@ public class GroupMetadataManager {
             subscriptionType = result.subscriptionType;
         }
 
+        // If a new group was just created but the group epoch was not bumped (e.g., the member
+        // joined with a regex subscription that has not been resolved yet), still write a metadata
+        // record to persist the group creation time so that it survives a coordinator restart.
+        if (isNewGroup && groupEpoch == group.groupEpoch()) {
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, group.metadataHash(), group.creationTimeMs()));
+        }
+
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The delta between
         // the existing and the new target assignment is persisted to the partition.
         UpdateTargetAssignmentResult<Assignment> updateTargetAssignmentResult = maybeUpdateTargetAssignment(
@@ -2452,7 +2469,8 @@ public class GroupMetadataManager {
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs(groupId))
+            .setGroupCreationTimeMs(group.creationTimeMs());
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request. It does so when joining or rejoining the group with zero
@@ -3478,7 +3496,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash, group.creationTimeMs()));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -3805,7 +3823,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash, group.creationTimeMs()));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -4379,7 +4397,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash, group.creationTimeMs()));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
 
             // If all members are being fenced, the group becomes empty so
@@ -4504,7 +4522,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), group.lastAssignmentConfigs()));
+        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), group.lastAssignmentConfigs(), group.creationTimeMs()));
 
         // If this is the last member, the group becomes empty so we must
         // also update the assignment epoch to match the group epoch. We
@@ -5412,6 +5430,7 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
             consumerGroup.setMetadataHash(value.metadataHash());
+            consumerGroup.setCreationTimeMs(value.creationTimeMs());
         } else {
             ConsumerGroup consumerGroup;
             try {
@@ -5635,6 +5654,7 @@ public class GroupMetadataManager {
             streamsGroup.setGroupEpoch(value.epoch());
             streamsGroup.setMetadataHash(value.metadataHash());
             streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
+            streamsGroup.setCreationTimeMs(value.creationTimeMs());
 
             if (value.lastAssignmentConfigs() != null) {
                 streamsGroup.setLastAssignmentConfigs(

@@ -18,7 +18,9 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "StreamsGroupDescribeRequest",
-  "validVersions": "0",
+  // Version 1 adds GroupCreationTimeMs to StreamsGroupDescribeResponse (KIP-1282).
+  // For StreamsGroupDescribeRequest, version 1 is same as version 0.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",

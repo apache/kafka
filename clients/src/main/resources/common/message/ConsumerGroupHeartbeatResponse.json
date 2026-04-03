@@ -17,7 +17,9 @@
   "apiKey": 68,
   "type": "response",
   "name": "ConsumerGroupHeartbeatResponse",
-  "validVersions": "0-1",
+  // Version 1 adds INVALID_REGULAR_EXPRESSION error to support regex subscriptions (KIP-848).
+  // Version 2 adds GroupCreationTimeMs field (KIP-1282).
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -45,6 +47,8 @@
       "about": "The member epoch." },
     { "name": "HeartbeatIntervalMs", "type": "int32", "versions": "0+",
       "about": "The heartbeat interval in milliseconds." },
+    { "name": "GroupCreationTimeMs", "type": "int64", "versions": "2+", "default": -1, "ignorable": true,
+      "about": "The creation time of the consumer group." },
     { "name": "Assignment", "type": "Assignment", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if not provided; the assignment otherwise.", "fields": [
       { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",

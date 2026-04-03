@@ -131,6 +131,16 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
 
     for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
+      val actual = consumerGroupDescribe(
+        groupIds = List("grp-1", "grp-2"),
+        includeAuthorizedOperations = true,
+        version = version.toShort,
+      )
+
+      // groupCreationTimeMs is only present in version 2+; read it from actual so expected matches.
+      val grp1CreationTimeMs = actual.find(_.groupId == "grp-1").map(_.groupCreationTimeMs).getOrElse(-1L)
+      val grp2CreationTimeMs = actual.find(_.groupId == "grp-2").map(_.groupCreationTimeMs).getOrElse(-1L)
+
       val expected = List(
         new DescribedGroup()
           .setGroupId("grp-1")
@@ -138,6 +148,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
           .setGroupEpoch(2)
           .setAssignmentEpoch(2)
           .setAssignorName("uniform")
+          .setGroupCreationTimeMs(grp1CreationTimeMs)
           .setAuthorizedOperations(authorizedOperationsInt)
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
@@ -155,6 +166,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
           .setGroupEpoch(grp2Member2Response.memberEpoch)
           .setAssignmentEpoch(grp2Member2Response.memberEpoch)
           .setAssignorName("range")
+          .setGroupCreationTimeMs(grp2CreationTimeMs)
           .setAuthorizedOperations(authorizedOperationsInt)
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
@@ -196,12 +208,6 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
                 ).asJava))
               .setMemberType(if (version == 0) -1.toByte else 1.toByte),
           ).asJava),
-      )
-
-      val actual = consumerGroupDescribe(
-        groupIds = List("grp-1", "grp-2"),
-        includeAuthorizedOperations = true,
-        version = version.toShort,
       )
 
       assertEquals(expected, actual)

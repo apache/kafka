@@ -1185,7 +1185,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
+            .setGroupCreationTimeMs(creationTimeMs.get(committedOffset));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
@@ -1292,7 +1293,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash(), creationTimeMs()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(

@@ -17,7 +17,8 @@
   "apiKey": 89,
   "type": "response",
   "name": "StreamsGroupDescribeResponse",
-  "validVersions": "0",
+  // Version 1 adds GroupCreationTimeMs field (KIP-1282).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -105,6 +106,8 @@
             { "name": "IsClassic", "type": "bool", "versions": "0+",
               "about": "True for classic members that have not been upgraded yet." }
           ]},
+        { "name": "GroupCreationTimeMs", "type": "int64", "versions": "1+", "default": "-1", "ignorable": true,
+          "about": "The creation time of the streams group. -1 if unknown." },
         { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
           "about": "32-bit bitfield to represent authorized operations for this group." }
       ]

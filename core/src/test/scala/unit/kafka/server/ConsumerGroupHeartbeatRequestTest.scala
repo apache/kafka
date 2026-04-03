@@ -777,6 +777,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId)
       .setMemberEpoch(3)
       .setHeartbeatIntervalMs(rejoinResponse.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(rejoinResponse.data.groupCreationTimeMs)
       .setAssignment(expectedAssignment)
 
     assertEquals(expectedRejoinResponse, rejoinResponse.data)
@@ -837,6 +838,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId)
       .setMemberEpoch(stableEpoch)
       .setHeartbeatIntervalMs(firstResponse.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(firstResponse.data.groupCreationTimeMs)
       .setAssignment(expectedAssignment)
 
     assertEquals(expectedFirstResponse, firstResponse.data)
@@ -919,6 +921,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId2)
       .setMemberEpoch(member2Epoch)
       .setHeartbeatIntervalMs(firstResponse2.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(firstResponse2.data.groupCreationTimeMs)
       .setAssignment(firstResponse2.data.assignment)
 
     assertEquals(expectedFirstResponse2, firstResponse2.data)
@@ -1003,6 +1006,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId1)
       .setMemberEpoch(firstResponse1.data.memberEpoch)
       .setHeartbeatIntervalMs(firstResponse1.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(firstResponse1.data.groupCreationTimeMs)
       .setAssignment(firstResponse1.data.assignment)
 
     assertEquals(expectedFirstResponse1, firstResponse1.data)
@@ -1105,6 +1109,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId1)
       .setMemberEpoch(firstResponse1.data.memberEpoch)
       .setHeartbeatIntervalMs(firstResponse1.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(firstResponse1.data.groupCreationTimeMs)
       .setAssignment(firstResponse1.data.assignment)
 
     assertEquals(expectedFirstResponse1, firstResponse1.data)
@@ -1161,6 +1166,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId1)
       .setMemberEpoch(2)
       .setHeartbeatIntervalMs(response1.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(response1.data.groupCreationTimeMs)
       .setAssignment(expectedAssignment1)
     assertEquals(expectedResponse1, response1.data)
 
@@ -1192,6 +1198,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId2)
       .setMemberEpoch(if (isConsumerAssignmentBatchingEnabled) member1InitialEpoch else member1InitialEpoch + 1)
       .setHeartbeatIntervalMs(response2.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(response2.data.groupCreationTimeMs)
       .setAssignment(expectedAssignment2)
     assertEquals(expectedResponse2, response2.data)
 
@@ -1228,6 +1235,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId1)
       .setMemberEpoch(member1InitialEpoch)
       .setHeartbeatIntervalMs(response3.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(response3.data.groupCreationTimeMs)
       .setAssignment(expectedAssignment3)
     assertEquals(expectedResponse3, response3.data)
 
@@ -1270,6 +1278,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setMemberId(memberId2)
       .setMemberEpoch(member1NewEpoch)
       .setHeartbeatIntervalMs(response4.data.heartbeatIntervalMs)
+      .setGroupCreationTimeMs(response4.data.groupCreationTimeMs)
       .setAssignment(expectedAssignment4)
     assertEquals(expectedResponse4, response4.data)
   }

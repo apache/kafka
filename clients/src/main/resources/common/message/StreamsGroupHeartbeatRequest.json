@@ -18,7 +18,9 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "StreamsGroupHeartbeatRequest",
-  "validVersions": "0",
+  // Version 1 adds GroupCreationTimeMs in the response (KIP-1282).
+  // For StreamsGroupHeartbeatRequest, version 1 is same as version 0.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

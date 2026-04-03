@@ -1114,6 +1114,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         .setStandbyTasks(List.empty.asJava)
         .setWarmupTasks(List.empty.asJava)
         .setTaskOffsetIntervalMs(60_000)
+        .setGroupCreationTimeMs(rejoinResponse.groupCreationTimeMs())
 
       assertEquals(expectedRejoinResponse, rejoinResponse)
     } finally {

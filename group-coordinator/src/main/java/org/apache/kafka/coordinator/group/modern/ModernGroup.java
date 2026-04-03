@@ -91,6 +91,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineLong metadataHash;
 
     /**
+     * The creation time of the group. -1 if unknown (e.g. the group predates KIP-1282).
+     */
+    protected final TimelineLong creationTimeMs;
+
+    /**
      * The group's subscription type.
      * This value is set to Homogeneous by default.
      */
@@ -135,6 +140,8 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataHash = new TimelineLong(snapshotRegistry);
+        this.creationTimeMs = new TimelineLong(snapshotRegistry);
+        this.creationTimeMs.set(-1L);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -370,6 +377,24 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      */
     public void setMetadataHash(long metadataHash) {
         this.metadataHash.set(metadataHash);
+    }
+
+    /**
+     * @return The creation time of the group. -1 if unknown.
+     */
+    public long creationTimeMs() {
+        return creationTimeMs.get();
+    }
+
+    /**
+     * Sets the group creation time. Only takes effect if it has not been set yet (i.e. current value is -1).
+     *
+     * @param creationTimeMs The creation time of the group.
+     */
+    public void setCreationTimeMs(long creationTimeMs) {
+        if (this.creationTimeMs.get() == -1L) {
+            this.creationTimeMs.set(creationTimeMs);
+        }
     }
 
     public static long computeMetadataHash(

@@ -172,7 +172,8 @@ public class GroupCoordinatorRecordHelpersTest {
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(10)
-                    .setMetadataHash(10),
+                    .setMetadataHash(10)
+                    .setCreationTimeMs(12345L),
                 (short) 0
             )
         );
@@ -180,7 +181,8 @@ public class GroupCoordinatorRecordHelpersTest {
         assertEquals(expectedRecord, newConsumerGroupEpochRecord(
             "group-id",
             10,
-            10
+            10,
+            12345L
         ));
     }
 

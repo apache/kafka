@@ -17,7 +17,8 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  "validVersions": "0",
+  // Version 1 adds GroupCreationTimeMs field (KIP-1282).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -52,6 +53,8 @@
       "about": "The maximal lag a warm-up task can have to be considered caught-up." },
     { "name": "TaskOffsetIntervalMs", "type": "int32", "versions": "0+",
       "about": "The interval in which the task changelog offsets on a client are updated on the broker. The offsets are sent with the next heartbeat after this time has passed." },
+    { "name": "GroupCreationTimeMs", "versions": "1+", "type": "int64", "default": -1, "ignorable": true,
+      "about": "The creation time of the streams group." },
 
     { "name": "Status", "type":  "[]Status", "versions":  "0+",  "nullableVersions": "0+",
       "about": "Indicate zero or more status for the group." },
