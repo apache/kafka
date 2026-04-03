@@ -964,7 +964,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
 
             if (copyLagMs != LogConfig.DEFAULT_REMOTE_COPY_LAG_MS && copyLagBytes != LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES) {
-                return  notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs) && notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+                return notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs) && notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
             }
 
             if (copyLagMs != LogConfig.DEFAULT_REMOTE_COPY_LAG_MS) {
@@ -983,7 +983,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 return !exceeded;
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, take it as eligible for upload based on time", segment, e);
-                return true;
+                return false;
             }
         }
 
