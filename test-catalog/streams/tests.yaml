@@ -1579,7 +1579,9 @@ org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionReceivePro
 - shouldPropagateOnlyIfFKValAvailableV0
 - shouldPropagateOnlyIfFKValAvailableV1
 org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerdeTest:
-- ShouldSerdeWithNonNullsTest
+- shouldPassHeadersToUnderlyingDeserializer
+- shouldPassHeadersToUnderlyingSerializer
+- shouldSerdeWithNonNullsTest
 - shouldSerdeWithNullForeignValueTest
 - shouldSerdeWithNullHashTest
 - shouldSerdeWithNullsTest
@@ -4700,7 +4702,10 @@ org.apache.kafka.streams.state.internals.KeyValueStoreWrapperTest:
 - shouldReturnPersistentForHeadersStore
 - shouldReturnPersistentForVersionedStore
 - shouldThrowOnNonHeadersOrVersionedStore
+org.apache.kafka.streams.state.internals.LeftOrRightValueDeserializerTest:
+- shouldPassHeadersToUnderlyingDeserializer
 org.apache.kafka.streams.state.internals.LeftOrRightValueSerializerTest:
+- shouldPassHeadersToUnderlyingSerializer
 - shouldSerializeIntegerValue
 - shouldSerializeStringValue
 - shouldThrowIfSerializeOtherValueAsNull
@@ -6405,7 +6410,10 @@ org.apache.kafka.streams.state.internals.TimeOrderedWindowStoreUpgradeTest:
 - shouldMigrateFromWithIndexToWithIndexAndHeaders
 - shouldMigrateFromWithoutHeadersToWithHeaders
 - shouldMigrateFromWithoutIndexToWithIndexAndHeaders
+org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideDeserializerTest:
+- shouldPassHeadersToUnderlyingDeserializer
 org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerializerTest:
+- shouldPassHeadersToUnderlyingSerializer
 - shouldSerializeKeyWithJoinSideAsFalse
 - shouldSerializeKeyWithJoinSideAsTrue
 - shouldThrowIfSerializeNullData
