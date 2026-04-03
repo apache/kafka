@@ -17,20 +17,18 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
-public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytesStoreSupplier {
+public class RocksDbSessionHeadersBytesStoreSupplier implements SessionBytesStoreSupplier, HeadersBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
-    private final boolean withIndex;
 
-    public RocksDbTimeOrderedSessionBytesStoreSupplier(final String name,
-                                                       final long retentionPeriod,
-                                                       final boolean withIndex) {
+    public RocksDbSessionHeadersBytesStoreSupplier(final String name,
+                                                   final long retentionPeriod) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
-        this.withIndex = withIndex;
     }
 
     @Override
@@ -40,14 +38,14 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
 
     @Override
     public SessionStore<Bytes, byte[]> get() {
-        final RocksDBTimeOrderedSessionSegmentedBytesStore<KeyValueSegment> bytesStore =
-            new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+        return new RocksDBSessionStoreWithHeaders(
+            new SessionRocksDBSegmentedBytesStoreWithHeaders(
                 name,
+                metricsScope(),
                 retentionPeriod,
-                withIndex,
-                new KeyValueSegments(name, metricsScope(), retentionPeriod, segmentIntervalMs())
-            );
-        return new RocksDBTimeOrderedSessionStore(bytesStore);
+                segmentIntervalMs(),
+                new SessionKeySchema()
+            ));
     }
 
     @Override

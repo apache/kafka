@@ -17,17 +17,18 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
-public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytesStoreSupplier {
+public class RocksDbTimeOrderedSessionHeadersBytesStoreSupplier implements SessionBytesStoreSupplier, HeadersBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
     private final boolean withIndex;
 
-    public RocksDbTimeOrderedSessionBytesStoreSupplier(final String name,
-                                                       final long retentionPeriod,
-                                                       final boolean withIndex) {
+    public RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(final String name,
+                                                              final long retentionPeriod,
+                                                              final boolean withIndex) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.withIndex = withIndex;
@@ -40,12 +41,13 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
 
     @Override
     public SessionStore<Bytes, byte[]> get() {
-        final RocksDBTimeOrderedSessionSegmentedBytesStore<KeyValueSegment> bytesStore =
-            new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+        final RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders bytesStore =
+            new RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders(
                 name,
+                metricsScope(),
                 retentionPeriod,
-                withIndex,
-                new KeyValueSegments(name, metricsScope(), retentionPeriod, segmentIntervalMs())
+                segmentIntervalMs(),
+                withIndex
             );
         return new RocksDBTimeOrderedSessionStore(bytesStore);
     }

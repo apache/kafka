@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbSessionHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
@@ -479,7 +480,11 @@ public final class Stores {
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs, withHeaders);
+        if (withHeaders) {
+            return new RocksDbSessionHeadersBytesStoreSupplier(name, retentionPeriodMs);
+        } else {
+            return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
+        }
     }
 
     /**

@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -41,6 +42,7 @@ import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
@@ -323,6 +325,108 @@ public class PapiDslIntegrationTest {
                 () -> "",
                 (key, value, aggregate) -> value,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            ),
+            true
+        );
+    }
+
+    private void verifySession(final KTable<Windowed<String>, String> table) {
+        verifySession(table, false);
+    }
+
+    private void verifySession(final KTable<Windowed<String>, String> table, final boolean requiresFlush) {
+        table.toStream((windowedKey, value) -> windowedKey.key())
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final SessionStore<String, String> store = context().getStateStore("table-store");
+
+                    try (final KeyValueIterator<Windowed<String>, String> it = store.findSessions("key1", 0L, Long.MAX_VALUE)) {
+                        while (it.hasNext()) {
+                            final KeyValue<Windowed<String>, String> row = it.next();
+                            context().forward(new Record<>(row.key.key(), row.value, record.timestamp()));
+                        }
+                    }
+                }
+            }, "table-store")
+            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
+            final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
+
+            inputTopic.pipeInput("key1", "value1");
+
+            if (requiresFlush) {
+                inputTopic.advanceTime(Duration.ofHours(2));
+                inputTopic.pipeInput("flush", "flush");
+            }
+
+            assertEquals(KeyValue.pair("key1", "value1"), outputTopic.readKeyValue());
+        }
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionReducedKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .reduce(
+                (value, aggregate) -> value,
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionReducedOnWindowCloseKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .emitStrategy(EmitStrategy.onWindowClose())
+            .reduce(
+                (value, aggregate) -> value,
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String())
+                    .withRetention(Duration.ofHours(10L))
+            ),
+            true
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionAggregateKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                (key, left, right) -> "",
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+            )
+        );
+    }
+
+    @Test
+    public void processorShouldAccessKStreamSessionAggregateOnWindowCloseKTableStoreAsTimestampedStore() {
+        verifySession(builder
+            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+            .emitStrategy(EmitStrategy.onWindowClose())
+            .aggregate(
+                () -> "",
+                (key, value, aggregate) -> value,
+                (key, left, right) -> "",
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String())
+                    .withRetention(Duration.ofHours(10L))
             ),
             true
         );
