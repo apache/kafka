@@ -20,7 +20,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
+import java.util.{OptionalInt, Map => JMap}
 import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
@@ -93,7 +93,6 @@ class KafkaRaftManager[T](
   externalKRaftMetrics: ExternalKRaftMetrics,
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
-  bootstrapServers: JCollection[InetSocketAddress],
   localListeners: Endpoints,
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
@@ -173,7 +172,6 @@ class KafkaRaftManager[T](
       // Controllers should always flush the log on replication because they may become voters
       config.processRoles.contains(ProcessRole.ControllerRole),
       clusterId,
-      bootstrapServers,
       localListeners,
       Feature.KRAFT_VERSION.supportedVersionRange(),
       raftConfig

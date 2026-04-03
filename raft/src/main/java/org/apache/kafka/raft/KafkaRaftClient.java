@@ -241,7 +241,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         LogContext logContext,
         boolean canBecomeVoter,
         String clusterId,
-        Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
         SupportedVersionRange localSupportedKRaftVersion,
         QuorumConfig quorumConfig
@@ -259,7 +258,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             MAX_FETCH_WAIT_MS,
             canBecomeVoter,
             clusterId,
-            bootstrapServers,
             localListeners,
             localSupportedKRaftVersion,
             logContext,
@@ -281,7 +279,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         int fetchMaxWaitMs,
         boolean canBecomeVoter,
         String clusterId,
-        Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
         SupportedVersionRange localSupportedKRaftVersion,
         LogContext logContext,
@@ -313,6 +310,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
 
+        List<InetSocketAddress> bootstrapServers = QuorumConfig.parseBootstrapServers(quorumConfig.bootstrapServers());
         if (!bootstrapServers.isEmpty()) {
             // generate Node objects from network addresses by using decreasing negative ids
             AtomicInteger id = new AtomicInteger(-2);

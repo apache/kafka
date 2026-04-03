@@ -44,7 +44,6 @@ import java.util.Arrays
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collection => JCollection}
 import java.util.{Map => JMap}
 import scala.jdk.CollectionConverters._
 
@@ -98,7 +97,6 @@ class SharedServer(
   val time: Time,
   private val _metrics: Metrics,
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
-  val bootstrapServers: JCollection[InetSocketAddress],
   val faultHandlerFactory: FaultHandlerFactory,
   val socketFactory: ServerSocketFactory
 ) extends Logging {
@@ -300,7 +298,6 @@ class SharedServer(
           externalKRaftMetrics,
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
-          bootstrapServers,
           listenerEndpoints,
           raftManagerFaultHandler
         )
