@@ -958,33 +958,44 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (copyLagMs == 0 || copyLagBytes == 0) {
                 return false;
             }
-            
-            if (copyLagMs > 0 && hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs)) {
+
+            if (copyLagMs == LogConfig.DEFAULT_REMOTE_COPY_LAG_MS
+                    && copyLagBytes == LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES) {
                 return false;
             }
 
-            return copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+            if (copyLagMs != LogConfig.DEFAULT_REMOTE_COPY_LAG_MS
+                    && copyLagBytes != LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES) {
+                return  notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs)
+                        && notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+            }
+
+            if (copyLagMs != LogConfig.DEFAULT_REMOTE_COPY_LAG_MS) {
+                return notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs);
+            }
+
+            return notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
         }
 
-        private boolean hasExceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
+        private boolean notExceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
             try {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
                 boolean exceeded = segmentAgeMs >= copyLagMs;
                 logger.debug("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
                         segment, exceeded, segmentAgeMs, copyLagMs);
-                return exceeded;
+                return !exceeded;
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, take it as eligible for upload based on time", segment, e);
                 return true;
             }
         }
 
-        private boolean hasExceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
+        private boolean notExceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
             long sizeLagBytes = totalLogSize - cumulativeSize;
             boolean exceeded = sizeLagBytes >= copyLagBytes;
             logger.debug("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
                     segment, exceeded, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
-            return exceeded;
+            return !exceeded;
         }
         
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
