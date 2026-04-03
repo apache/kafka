@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -36,8 +37,8 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -134,112 +135,147 @@ public class MirrorSourceTask extends SourceTask {
         if (stopping) {
             return null;
         }
+
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            log.info("✅Polled {} records from {}.", records.count(), records.partitions());
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                TopicPartition sourcePartition = new TopicPartition(record.topic(), record.partition());
-                detectTruncation(sourcePartition, record.offset());
-                lastSeenOffsets.put(sourcePartition, record.offset());
-                SourceRecord converted = convertRecord(record);
-                sourceRecords.add(converted);
-                TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, byteSize(record.value()));
+
+            for (TopicPartition tp : records.partitions()) {
+                List<ConsumerRecord<byte[], byte[]>> partitionRecords = records.records(tp);
+
+                for (ConsumerRecord<byte[], byte[]> record : partitionRecords) {
+
+                    // 🔴 1. Detect forward-gap truncation (only detectable here)
+                    detectTruncation(tp, record.offset());
+
+                    // ✅ Update state AFTER validation
+                    lastSeenOffsets.put(tp, record.offset());
+
+                    SourceRecord converted = convertRecord(record);
+                    sourceRecords.add(converted);
+
+                    TopicPartition targetTp =
+                            new TopicPartition(converted.topic(), converted.kafkaPartition());
+
+                    metrics.recordAge(targetTp, System.currentTimeMillis() - record.timestamp());
+                    metrics.recordBytes(targetTp, byteSize(record.value()));
+                }
             }
+
             if (sourceRecords.isEmpty()) {
-                // WorkerSourceTasks expects non-zero batch size
                 return null;
-            } else {
-                log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
-                return sourceRecords;
             }
+
+            log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
+            return sourceRecords;
+
+        } catch (OffsetOutOfRangeException e) {
+
+            log.warn("[OFFSET_OUT_OF_RANGE] Detected 🔴. Evaluating scenario...", e);
+
+            // 🟡 Decide whether truncation OR reset
+            for (TopicPartition tp : e.partitions()) {
+
+                Long lastOffset = lastSeenOffsets.get(tp);
+
+                try {
+                    long beginningOffset = consumer
+                            .beginningOffsets(Collections.singleton(tp))
+                            .get(tp);
+
+                    log.warn("[OFFSET CHECK] tp={}, lastOffset={}, beginningOffset={}",
+                            tp, lastOffset, beginningOffset);
+
+                    // 🔴 CASE 1: TRUE TRUNCATION (data loss)
+                    if (lastOffset != null && lastOffset < beginningOffset) {
+
+                        log.error("[TRUNCATION DETECTED - OFFSET_OUT_OF_RANGE] tp={}, lastOffset={}, beginningOffset={}",
+                                tp, lastOffset, beginningOffset);
+
+                        throw new KafkaException(
+                                "Fail-fast: Data loss detected due to truncation for " + tp
+                                        + " lastOffset=" + lastOffset
+                                        + " beginningOffset=" + beginningOffset
+                        );
+                    }
+
+                    // 🟡 CASE 2: TOPIC RESET (safe recovery)
+                    log.warn("[TOPIC RESET DETECTED] tp={}", tp);
+
+                    consumer.seek(tp, beginningOffset);
+
+                    // reset only this partition state
+                    lastSeenOffsets.remove(tp);
+
+                } catch (KafkaException ex) {
+                    throw ex; // propagate fail-fast
+                } catch (Exception ex) {
+                    log.error("[RESET RECOVERY FAILED]", ex);
+                    throw new KafkaException("Failed during offset recovery", ex);
+                }
+            }
+
+            log.warn("[RESET RECOVERY SUCCESS] All affected partitions handled");
+
+            return null; // retry next poll
+
         } catch (WakeupException e) {
             return null;
+
         } catch (KafkaException e) {
             log.error("[FAIL-FAST] Stopping MM2 due to critical issue", e);
             throw e;
-        } catch (Throwable e)  {
+
+        } catch (Throwable e) {
             log.error("Failure during poll.", e);
-            // allow Connect to deal with the exception
             throw e;
+
         } finally {
             consumerAccess.release();
         }
     }
 
     private void detectTruncation(TopicPartition tp, long currentOffset) {
+        log.info("✅Checking offsets for tp={}, currentOffset={}, lastSeenOffset={}", tp, currentOffset, lastSeenOffsets.get(tp));
         Long lastOffset = lastSeenOffsets.get(tp);
 
         if (lastOffset == null) {
-            return;
+            return; // first record
         }
 
-        // ✅ CASE 1: NORMAL FLOW
+        // Normal case.
         if (currentOffset == lastOffset + 1) {
             return;
         }
 
-        // 🔥 CASE 2: OFFSET REGRESSION → REAL PROBLEM
-        if (currentOffset <= lastOffset) {
+        // Forward gap indicates data loss/truncation.
+        if (currentOffset > lastOffset + 1) {
+            log.error(
+                "[TRUNCATION DETECTED - GAP] topic-partition={}, expectedOffset={}, actualOffset={}",
+                tp, lastOffset + 1, currentOffset
+            );
 
-            log.error("[OFFSET REGRESSION DETECTED] topic-partition={}, lastOffset={}, currentOffset={}",
-                    tp, lastOffset, currentOffset);
-
-            // 👉 Decide scenario based on offset pattern
-
-            // ✅ RESET (offset restarted from 0)
-            if (currentOffset == 0) {
-                log.error("[TOPIC RESET DETECTED] {}", tp);
-                handleTopicReset();
-                return; // ✅ recovery, don't fail
-            }
-
-            // ❌ TRUNCATION (unexpected backward jump)
-            log.error("[TRUNCATION DETECTED] {}", tp);
-            throw new KafkaException("Backward truncation detected for " + tp);
+            throw new KafkaException(
+                "Fail-fast: Offset gap detected for " + tp
+                    + " expected=" + (lastOffset + 1)
+                    + " actual=" + currentOffset
+            );
         }
 
-        // 🔥 CASE 3: OFFSET JUMP FORWARD (rare but possible)
-        if (currentOffset > lastOffset + 1) {
-            log.error("[TRUNCATION DETECTED] topic-partition={}, lastOffset={}, currentOffset={}",
-                    tp, lastOffset, currentOffset);
+        if (currentOffset <= lastOffset) {
+            log.warn(
+                "[OFFSET REGRESSION] topic-partition={}, lastOffset={}, currentOffset={}",
+                tp, lastOffset, currentOffset
+            );
+
             throw new KafkaException(
-                    "Data loss detected (offset jump) for " + tp +
-                    " last=" + lastOffset + " current=" + currentOffset
+                "Offset regression detected for " + tp
+                    + ". Possible inconsistency."
             );
         }
     }
-
-    private void handleTopicReset() {
-
-        log.error("🔥[TOPIC RESET RECOVERY] Starting recovery...");
-
-        try {
-            Set<TopicPartition> partitions = new HashSet<>(consumer.assignment());
-
-            if (partitions.isEmpty()) {
-                log.warn("No partitions assigned during reset recovery.");
-                return;
-            }
-
-            log.error("🔥 Seeking to beginning for {}", partitions);
-
-            consumer.seekToBeginning(partitions);
-
-            // ✅ CRITICAL → reset state
-            lastSeenOffsets.clear();
-
-            log.error("🔥[RECOVERY SUCCESS] Topic reset handled");
-
-        } catch (Exception ex) {
-            log.error("🔥[RECOVERY FAILED]", ex);
-
-            // ❌ Recovery failed → now fail MM2
-            throw new KafkaException("Topic reset recovery failed", ex);
-        }
-    }
- 
+    
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {

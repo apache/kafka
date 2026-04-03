@@ -130,28 +130,26 @@ docker unpause mm2
 sleep 10
 capture_logs
 
+
 # 🔥 Detection
-if grep -q "\[TRUNCATION DETECTED\]" "$LOG_FILE"; then
+if grep -q "\[TRUNCATION DETECTED - OFFSET_OUT_OF_RANGE\]" "$LOG_FILE"; then
   log "🔎 Truncation log detected"
-  DETECT="PASS"
+  Print_result "PASS" "TEST 2 - Detection"
 else
-  DETECT="FAIL"
+  print_result "FAIL" "TEST 2 - Detection"
 fi
 
 # 🔥 Fail-fast validation
 if grep -q "\[FAIL-FAST\]" "$LOG_FILE"; then
   log "🔎 Fail-fast log detected"
   FAILFAST="PASS"
+  print_result "PASS" "TEST 2 - Fail-Fast Detection"
 else
   FAILFAST="FAIL"
+  log "🔎 No fail-fast log detected"
+  print_result "FAIL" "TEST 2 - Fail-Fast Detection"
 fi
 
-
-if [ "$DETECT" = "PASS" ] && [ "$FAILFAST" = "PASS" ]; then
-  print_result "PASS" "TEST 2"
-else
-  print_result "FAIL" "TEST 2"
-fi
 
 # =========================================================
 # Scenario 3
@@ -220,3 +218,10 @@ else
 fi
 
 log "\n🎯 ALL TESTS COMPLETED"
+
+
+
+
+
+
+
