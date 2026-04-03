@@ -200,7 +200,7 @@ public class QueryableStoreTypesWithHeadersTest {
     @Test
     public void shouldAcceptSessionStoreWithHeadersForSessionStoreType() {
         final SessionStoreWithHeaders<String, String> store =
-            Stores.sessionStoreBuilderWithHeaders(
+            Stores.sessionStoreWithHeadersBuilder(
                 Stores.inMemorySessionStore(
                     "test-session-store",
                     Duration.ofMillis(100)),

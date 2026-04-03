@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
-import org.apache.kafka.streams.state.internals.SessionStoreBuilderWithHeaders;
+import org.apache.kafka.streams.state.internals.SessionStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
@@ -75,8 +75,8 @@ public class StoreBuilderWrapper implements StoreFactory {
             return ((TimestampedWindowStoreWithHeadersBuilder<?, ?>) builder).retentionPeriod();
         } else if (builder instanceof SessionStoreBuilder) {
             return ((SessionStoreBuilder<?, ?>) builder).retentionPeriod();
-        } else if (builder instanceof SessionStoreBuilderWithHeaders) {
-            return ((SessionStoreBuilderWithHeaders<?, ?>) builder).retentionPeriod();
+        } else if (builder instanceof SessionStoreWithHeadersBuilder) {
+            return ((SessionStoreWithHeadersBuilder<?, ?>) builder).retentionPeriod();
         } else {
             throw new IllegalStateException("retentionPeriod is not supported when not a window store");
         }
@@ -112,7 +112,7 @@ public class StoreBuilderWrapper implements StoreFactory {
             || builder instanceof TimestampedWindowStoreBuilder
             || builder instanceof TimestampedWindowStoreWithHeadersBuilder
             || builder instanceof SessionStoreBuilder
-            || builder instanceof SessionStoreBuilderWithHeaders;
+            || builder instanceof SessionStoreWithHeadersBuilder;
     }
 
     @Override

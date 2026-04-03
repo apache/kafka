@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.internals.RocksDbSessionHeadersBytesStoreS
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
-import org.apache.kafka.streams.state.internals.SessionStoreBuilderWithHeaders;
+import org.apache.kafka.streams.state.internals.SessionStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -658,12 +658,12 @@ public final class Stores {
      * @param <V>           value type
      * @return an instance of {@link StoreBuilder} than can build a {@link SessionStoreWithHeaders}
      */
-    public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreBuilderWithHeaders(
+    public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreWithHeadersBuilder(
             final SessionBytesStoreSupplier supplier,
             final Serde<K> keySerde,
             final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new SessionStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new SessionStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
