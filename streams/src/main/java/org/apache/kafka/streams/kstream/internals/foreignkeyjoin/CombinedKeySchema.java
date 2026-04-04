@@ -101,11 +101,11 @@ public class CombinedKeySchema<KRight, KLeft> {
         return new CombinedKey<>(foreignKey, primaryKey);
     }
 
-    Bytes prefixBytes(final KRight key) {
+    Bytes prefixBytes(final KRight key, final Headers headers) {
         //The serialization format. Note that primaryKeySerialized is not required/used in this function.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
 
-        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic, key);
+        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic, headers, key);
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length);
         buf.putInt(foreignKeySerializedData.length);

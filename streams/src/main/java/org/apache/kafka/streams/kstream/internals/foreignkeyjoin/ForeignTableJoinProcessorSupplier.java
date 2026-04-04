@@ -120,7 +120,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
                 return;
             }
 
-            final Bytes prefixBytes = keySchema.prefixBytes(record.key());
+            final Bytes prefixBytes = keySchema.prefixBytes(record.key(), record.headers());
 
             //Perform the prefixScan and propagate the results
             try (final KeyValueIterator<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> prefixScanResults =

@@ -442,6 +442,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
             final V deserializedValue = valueSerde.innerSerde().deserializer().deserialize(
                 changelogTopic,
+                context.headers(),
                 serializedValue
             );
 

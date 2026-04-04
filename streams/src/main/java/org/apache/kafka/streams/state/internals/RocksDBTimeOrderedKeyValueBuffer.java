@@ -243,7 +243,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                     minTimestamp = bufferValue.context().timestamp();
                     minValid = true;
 
-                    final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
+                    final V value = valueSerde.deserializer().deserialize(topic, iternalContext.headers(), bufferValue.newValue());
 
                     callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
@@ -281,10 +281,10 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         }
         maybeUpdateSeqnumForDups();
         final Bytes serializedKey = Bytes.wrap(
-            PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.key()),
+            PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.headers(), record.key()),
                 record.timestamp(),
                 seqnum).get());
-        final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.value());
+        final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.headers(), record.value());
         final BufferValue buffered = new BufferValue(null, null, valueBytes, recordContext);
         store.put(serializedKey, buffered.serialize(0).array());
 

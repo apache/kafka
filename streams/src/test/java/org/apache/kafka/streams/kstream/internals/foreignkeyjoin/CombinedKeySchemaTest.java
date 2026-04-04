@@ -84,7 +84,7 @@ public class CombinedKeySchemaTest {
         final String foreignKey = "someForeignKey";
         final byte[] foreignKeySerializedData =
             Serdes.String().serializer().serialize(FK_TOPIC, foreignKey);
-        final Bytes prefix = cks.prefixBytes(foreignKey);
+        final Bytes prefix = cks.prefixBytes(foreignKey, HEADERS);
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length);
         buf.putInt(foreignKeySerializedData.length);
@@ -101,7 +101,28 @@ public class CombinedKeySchemaTest {
             () -> PK_TOPIC, Serdes.Integer()
         );
         final String foreignKey = null;
-        assertThrows(NullPointerException.class, () -> cks.prefixBytes(foreignKey));
+        assertThrows(NullPointerException.class, () -> cks.prefixBytes(foreignKey, HEADERS));
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingSerializerOnPrefixBytes() {
+        final Serializer<String> mockSerializer = mock(StringSerializer.class);
+        final Serde<String> mockSerde = mock(Serdes.StringSerde.class);
+        when(mockSerde.serializer()).thenReturn(mockSerializer);
+        when(mockSerde.deserializer()).thenReturn(Serdes.String().deserializer());
+
+        final String foreignKey = "foreignKey";
+        when(mockSerializer.serialize(FK_TOPIC, HEADERS, foreignKey)).thenReturn(foreignKey.getBytes());
+
+        final CombinedKeySchema<String, String> cks = new CombinedKeySchema<>(
+            () -> FK_TOPIC, mockSerde,
+            () -> PK_TOPIC, mockSerde
+        );
+        cks.init(mock(ProcessorContext.class));
+        cks.prefixBytes(foreignKey, HEADERS);
+
+        verify(mockSerializer).serialize(FK_TOPIC, HEADERS, foreignKey);
+        verify(mockSerializer, never()).serialize(FK_TOPIC, foreignKey);
     }
 
     @Test
