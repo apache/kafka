@@ -231,6 +231,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
                     final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
                     final K key = keySerde.deserializer().deserialize(topic,
+                        iternalContext.headers(),
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
                     if (bufferValue.context().timestamp() < minTimestamp && minValid) {
