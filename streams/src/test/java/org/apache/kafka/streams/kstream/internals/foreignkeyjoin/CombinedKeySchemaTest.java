@@ -25,8 +25,8 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
