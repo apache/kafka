@@ -541,7 +541,7 @@ public class MeteredWindowStore<K, V>
         return Bytes.wrap(serdes.rawKey(key, internalContext.headers()));
     }
 
-    protected K deserializeKey(final byte[] rawKey) {
+    private K deserializeKey(final byte[] rawKey) {
         return serdes.keyFrom(rawKey, internalContext.headers());
     }
 
