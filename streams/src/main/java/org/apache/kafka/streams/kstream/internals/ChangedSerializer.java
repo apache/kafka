@@ -79,6 +79,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         this.isUpgrade = isUpgrade(configs);
     }
+
     /**
      * @throws StreamsException if both old and new values of data are null, or if
      * both values are not null and is upgrading from a version less than 3.4

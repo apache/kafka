@@ -95,7 +95,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         }
 
         @Override
-        public byte[] serialize(final String topic, final Headers headers, final SubscriptionWrapper<KLeft> data) {
+        public byte[] serialize(final String ignored, final Headers headers, final SubscriptionWrapper<KLeft> data) {
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
 
             if (data.version() < 0) {
@@ -185,12 +185,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         }
 
         @Override
-        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final byte[] data) {
-            throw new UnsupportedOperationException("SubscriptionWrapperDeserializer requires the headers-aware version of deserialize");
-        }
-
-        @Override
-        public SubscriptionWrapper<KLeft> deserialize(final String topic, final Headers headers, final byte[] data) {
+        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final Headers headers, final byte[] data) {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
@@ -235,6 +230,11 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
             }
 
             return new SubscriptionWrapper<>(hash, inst, primaryKey, version, primaryPartition);
+        }
+
+        @Override
+        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final byte[] data) {
+            throw new UnsupportedOperationException("SubscriptionWrapperDeserializer requires the headers-aware version of deserialize");
         }
 
     }

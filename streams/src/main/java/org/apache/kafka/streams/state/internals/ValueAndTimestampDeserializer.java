@@ -94,7 +94,9 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     }
 
     static long timestamp(final byte[] rawValueAndTimestamp) {
-        return LONG_DESERIALIZER.deserialize(null, new RecordHeaders(), rawTimestamp(rawValueAndTimestamp));
+        // We know we use LongDeserializer here, so we don't need headers
+        // still use headers-aware version to be consistent in codebase
+        return LONG_DESERIALIZER.deserialize(null, null, rawTimestamp(rawValueAndTimestamp));
     }
 
     @Override
