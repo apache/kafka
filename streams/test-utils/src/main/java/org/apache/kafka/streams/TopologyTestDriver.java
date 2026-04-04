@@ -897,7 +897,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
-     * @see #getSessionStoreWithHeaders(String)
+     * @see #getSessionStoreWithHeader(String)
      */
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
@@ -1286,21 +1286,6 @@ public class TopologyTestDriver implements Closeable {
         producer.close();
         consumer.close();
         stateDirectory.clean();
-    }
-
-    static class MockChangelogRegister implements ChangelogRegister {
-        @Override
-        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) { }
-
-        @Override
-        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) { }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions) { }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions,
-                               final SuspendReason reason) { }
     }
 
     static class MockTime implements Time {
