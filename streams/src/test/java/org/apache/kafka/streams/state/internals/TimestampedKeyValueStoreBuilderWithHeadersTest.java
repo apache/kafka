@@ -44,6 +44,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -60,8 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -512,23 +513,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @Test
-    public void shouldReturnUnknownQueryTypeForKeyQueryOnHeadersStore() {
+    TimestampedKeyValueStoreWithHeaders<String, String> headersStoreMaybeWithCache(final boolean cachingEnabled) {
         when(supplier.name()).thenReturn("test-store");
         when(supplier.metricsScope()).thenReturn("metricScope");
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingEnabled()
-            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
@@ -539,15 +527,40 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             new StreamsConfig(props)
         ));
 
-        // Mock the cache hit
-        final ThreadCache cache = mock(ThreadCache.class);
-        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
-        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
-        when(entry.value()).thenReturn(entryValue);
-        when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
-        doReturn(cache).when(context).cache();
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+        
+        final TimestampedKeyValueStoreWithHeaders<String, String> store;
+        if (cachingEnabled) {
+            // Mock the cache hit
+            final ThreadCache cache = mock(ThreadCache.class);
+            final LRUCacheEntry entry = mock(LRUCacheEntry.class);
+            final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
+            lenient().when(entry.value()).thenReturn(entryValue);
+            lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
+            lenient().doReturn(cache).when(context).cache();
+
+            store = builder.withLoggingDisabled()
+                .withCachingEnabled()
+                .build();
+        } else {
+            store = builder.withLoggingDisabled()
+                .withCachingDisabled()
+                .build();
+        }
 
         store.init(context, store);
+        return store;
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnUnknownQueryTypeForKeyQueryOnHeadersStore(final boolean cachingEnabled) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
 
         try {
             final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
@@ -570,42 +583,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @Test
-    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingEnabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = spy(new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        ));
-
-        // Mock the cache hit
-        final ThreadCache cache = mock(ThreadCache.class);
-        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
-        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
-        lenient().when(entry.value()).thenReturn(entryValue);
-        lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
-        lenient().doReturn(cache).when(context).cache();
-
-        store.init(context, store);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore(final boolean cachingEnabled) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
 
         try {
             final RangeQuery<Bytes, byte[]> query = RangeQuery.withRange(
