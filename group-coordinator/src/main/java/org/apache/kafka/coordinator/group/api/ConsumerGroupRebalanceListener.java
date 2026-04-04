@@ -41,19 +41,3 @@ public interface ConsumerGroupRebalanceListener {
      */
     void onConsumerGroupRebalance(String groupId, int groupEpoch, long metadataHash);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
