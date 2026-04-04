@@ -79,7 +79,6 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         this.isUpgrade = isUpgrade(configs);
     }
-
     /**
      * @throws StreamsException if both old and new values of data are null, or if
      * both values are not null and is upgrading from a version less than 3.4
@@ -134,7 +133,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
 
     @Override
     public byte[] serialize(final String topic, final Change<T> data) {
-        return serialize(topic, null, data);
+        throw new UnsupportedOperationException("ChangedSerializer requires the headers-aware version of serialize");
     }
 
     @Override

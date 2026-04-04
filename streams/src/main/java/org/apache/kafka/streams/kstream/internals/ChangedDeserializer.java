@@ -141,7 +141,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
 
     @Override
     public Change<T> deserialize(final String topic, final byte[] data) {
-        return deserialize(topic, null, data);
+        throw new UnsupportedOperationException("ChangedDeserializer requires the headers-aware version of deserialize");
     }
 
     @Override
