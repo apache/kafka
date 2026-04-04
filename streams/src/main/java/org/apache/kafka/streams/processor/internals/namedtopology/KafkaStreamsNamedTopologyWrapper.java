@@ -443,4 +443,18 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 .collect(Collectors.toList())));
         return allLocalStorePartitionLags(allTopologyTasks);
     }
+
+    // VisibleForTesting
+    public boolean hasAnyLocalTaskForTopology(final String topologyName) {
+        synchronized (threads) {
+            return threads.stream().anyMatch(thread -> thread.hasAnyTaskForTopology(topologyName));
+        }
+    }
+    
+    // VisibleForTesting
+    public boolean allLocalTasksRunningForTopology(final String topologyName) {
+        synchronized (threads) {
+            return threads.stream().allMatch(thread -> thread.allTasksRunningForTopology(topologyName));
+        }
+    }
 }
