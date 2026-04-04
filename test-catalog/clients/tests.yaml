@@ -1829,6 +1829,7 @@ org.apache.kafka.clients.consumer.internals.FetchCollectorTest:
 - testFetchWithUnknownServerError
 - testFetchingPausedPartitionsYieldsNoRecords
 - testNoResultsIfInitializing
+- testPositionUpdatedBeforeDrainOnExhaustedFetch
 - testReadCommittedWithAbortedTransaction
 org.apache.kafka.clients.consumer.internals.FetchConfigTest:
 - testBasicFromConsumerConfig
