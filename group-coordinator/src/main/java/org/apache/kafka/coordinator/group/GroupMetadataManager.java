@@ -134,6 +134,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.api.ConsumerGroupRebalanceListener;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -332,6 +333,7 @@ public class GroupMetadataManager {
         private GroupCoordinatorMetricsShard metrics;
         private Optional<Plugin<Authorizer>> authorizerPlugin = null;
         private List<TaskAssignor> streamsGroupAssignors = null;
+        private List<ConsumerGroupRebalanceListener> rebalanceListeners = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -393,6 +395,11 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withRebalanceListeners(List<ConsumerGroupRebalanceListener> rebalanceListeners) {
+            this.rebalanceListeners = rebalanceListeners;
+            return this;
+        }
+
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -414,6 +421,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
             if (streamsGroupAssignors == null)
                 streamsGroupAssignors = List.of(new StickyTaskAssignor());
+            if (rebalanceListeners == null)
+                rebalanceListeners = List.of();
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -427,7 +436,8 @@ public class GroupMetadataManager {
                 groupConfigManager,
                 shareGroupAssignor,
                 authorizerPlugin,
-                streamsGroupAssignors
+                streamsGroupAssignors,
+                rebalanceListeners
             );
         }
     }
@@ -551,6 +561,7 @@ public class GroupMetadataManager {
      * The topic regex resolver to resolve the regex subscription topics.
      */
     private final TopicRegexResolver topicRegexResolver;
+    private final List<ConsumerGroupRebalanceListener> rebalanceListeners;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -564,7 +575,8 @@ public class GroupMetadataManager {
         GroupConfigManager groupConfigManager,
         ShareGroupPartitionAssignor shareGroupAssignor,
         Optional<Plugin<Authorizer>> authorizerPlugin,
-        List<TaskAssignor> streamsGroupAssignors
+        List<TaskAssignor> streamsGroupAssignors,
+        List<ConsumerGroupRebalanceListener> rebalanceListeners
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -587,6 +599,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
+        this.rebalanceListeners = rebalanceListeners;
         this.topicHashCache = new HashMap<>();
     }
 
@@ -595,6 +608,16 @@ public class GroupMetadataManager {
      */
     public CoordinatorMetadataImage image() {
         return metadataImage;
+    }
+
+    private void notifyConsumerGroupRebalanceListeners(String groupId, int groupEpoch, long metadataHash) {
+        for (ConsumerGroupRebalanceListener listener : rebalanceListeners) {
+            try {
+                listener.onConsumerGroupRebalance(groupId, groupEpoch, metadataHash);
+            } catch (Exception e) {
+                log.warn("[GroupId {}] Error invoking rebalance listener {}", groupId, listener.getClass().getName(), e);
+            }
+        }
     }
 
     /**
@@ -3449,6 +3472,7 @@ public class GroupMetadataManager {
                 records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
+                notifyConsumerGroupRebalanceListeners(groupId, groupEpoch, groupMetadataHash);
                 group.setMetadataRefreshDeadline(
                     time.milliseconds() + METADATA_REFRESH_INTERVAL_MS,
                     groupEpoch
@@ -3776,6 +3800,7 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
+            notifyConsumerGroupRebalanceListeners(groupId, groupEpoch, groupMetadataHash);
         }
 
         group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -4349,6 +4374,7 @@ public class GroupMetadataManager {
             int groupEpoch = group.groupEpoch() + 1;
             records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
+            notifyConsumerGroupRebalanceListeners(group.groupId(), groupEpoch, groupMetadataHash);
 
             for (ConsumerGroupMember member : members) {
                 cancelTimers(group.groupId(), member.memberId());
