@@ -106,7 +106,9 @@ public interface ClientQuotaCallback extends Configurable {
      * @return true if quotas have changed and metric configs may need to be updated
      */
     @Deprecated(since = "4.4", forRemoval = true)
-    boolean updateClusterMetadata(Cluster cluster);
+    default boolean updateClusterMetadata(Cluster cluster) {
+        return false;
+    }
 
     /**
      * Closes this instance.
