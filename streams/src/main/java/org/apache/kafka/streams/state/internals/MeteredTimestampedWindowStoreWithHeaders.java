@@ -511,11 +511,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
-    @Override
-    protected K deserializeKey(final byte[] rawKey) {
-        throw new UnsupportedOperationException("MeteredTimestampedWindowStoreWithHeaders required to pass in Headers when deserializing a key.");
-    }
-
     protected K deserializeKey(final byte[] rawKey, final Headers headers) {
         return serdes.keyFrom(rawKey, headers);
     }
