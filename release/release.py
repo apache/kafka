@@ -67,6 +67,7 @@ from runtime import (
     repo_dir,
 )
 import git
+import github
 import gpg
 import notes
 import preferences
@@ -360,6 +361,19 @@ confirm_or_fail("Have you successfully deployed the artifacts?")
 confirm_or_fail(f"Ok to push RC tag {rc_tag}?")
 git.push_ref(rc_tag)
 git.push_ref(starting_branch)
+
+# Trigger Docker image build and test workflows via GitHub Actions
+if confirm("Trigger Docker image build workflows via GitHub Actions?"):
+    github_token = preferences.get('github_token', lambda: prompt("Enter your GitHub personal access token (with 'actions' scope): "))
+    kafka_url = f"https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}.tgz"
+    for image_type in ["jvm", "native"]:
+        github.trigger_docker_build_test(github_token, dev_branch, image_type, kafka_url)
+    if confirm("Also trigger Docker RC release workflows to push RC images to DockerHub?"):
+        for image_type in ["jvm", "native"]:
+            docker_image_name = "apache/kafka-native" if image_type == "native" else "apache/kafka"
+            rc_docker_image = f"{docker_image_name}:{rc_tag}"
+            github.trigger_docker_rc_release(github_token, dev_branch, image_type, rc_docker_image, kafka_url)
+    print(f"\nDocker workflow runs can be monitored at: https://github.com/apache/kafka/actions")
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 git.reset_hard_head()
