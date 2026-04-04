@@ -2107,6 +2107,7 @@ public class GroupMetadataManager {
             records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
+            notifyConsumerGroupRebalanceListeners(groupId, "streams", "metadata_or_assignment_change", time.milliseconds());
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
 
@@ -2796,6 +2797,7 @@ public class GroupMetadataManager {
                 records.add(newShareGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
+                notifyConsumerGroupRebalanceListeners(groupId, "share", "subscription_metadata_change", time.milliseconds());
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -4417,6 +4419,7 @@ public class GroupMetadataManager {
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
         records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
+        notifyConsumerGroupRebalanceListeners(group.groupId(), "share", "member_fenced_or_left", time.milliseconds());
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
