@@ -52,7 +52,7 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     @Override
     public ValueAndTimestamp<V> deserialize(final String topic,
                                             final byte[] valueAndTimestamp) {
-        throw new UnsupportedOperationException("ValueAndTimestampDeserializer requires the headers-aware version of deserialize");
+        return deserialize(topic, new RecordHeaders(), valueAndTimestamp);
     }
 
     @Override
