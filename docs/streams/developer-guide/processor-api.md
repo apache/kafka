@@ -72,45 +72,46 @@ The following example `Processor` defines a simple word-count algorithm and the 
   * In the `punctuate()` method, iterate the local state store and send the aggregated counts to the downstream processor (we will talk about downstream processors later in this section), and commit the current stream state.
 
 
-    
-    
-    public class WordCountProcessor implements Processor<String, String, String, String> {
-        private KeyValueStore<String, Integer> kvStore;
-    
-        @Override
-        public void init(final ProcessorContext<String, String> context) {
-            context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
-                try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
-                    while (iter.hasNext()) {
-                        final KeyValue<String, Integer> entry = iter.next();
-                        context.forward(new Record<>(entry.key, entry.value.toString(), timestamp));
-                    }
-                }
-            });
-            kvStore = context.getStateStore("Counts");
-        }
-    
-        @Override
-        public void process(final Record<String, String> record) {
-            final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\W+");
-    
-            for (final String word : words) {
-                final Integer oldValue = kvStore.get(word);
-    
-                if (oldValue == null) {
-                    kvStore.put(word, 1);
-                } else {
-                    kvStore.put(word, oldValue + 1);
+
+```java
+public class WordCountProcessor implements Processor<String, String, String, String> {
+    private KeyValueStore<String, Integer> kvStore;
+
+    @Override
+    public void init(final ProcessorContext<String, String> context) {
+        context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
+            try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
+                while (iter.hasNext()) {
+                    final KeyValue<String, Integer> entry = iter.next();
+                    context.forward(new Record<>(entry.key, entry.value.toString(), timestamp));
                 }
             }
-        }
-    
-        @Override
-        public void close() {
-            // close any resources managed by this processor
-            // Note: Do not close any StateStores as these are managed by the library
+        });
+        kvStore = context.getStateStore("Counts");
+    }
+
+    @Override
+    public void process(final Record<String, String> record) {
+        final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\W+");
+
+        for (final String word : words) {
+            final Integer oldValue = kvStore.get(word);
+
+            if (oldValue == null) {
+                kvStore.put(word, 1);
+            } else {
+                kvStore.put(word, oldValue + 1);
+            }
         }
     }
+
+    @Override
+    public void close() {
+        // close any resources managed by this processor
+        // Note: Do not close any StateStores as these are managed by the library
+    }
+}
+```
 
 **Note**
 
@@ -180,20 +181,21 @@ Yes (enabled by default)
   * Use [persistentSessionStore](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore\(java.lang.String,java.time.Duration\)) when you need a persistent sessionWindowedKey-value store.
 
 
-    
-    
-    // Creating a persistent key-value store:
-    // here, we create a `KeyValueStore<String, Long>` named "persistent-counts".
-    import org.apache.kafka.streams.state.StoreBuilder;
-    import org.apache.kafka.streams.state.Stores;
-    
-    // Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.
-    StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier =
-      Stores.keyValueStoreBuilder(
-        Stores.persistentKeyValueStore("persistent-counts"),
-        Serdes.String(),
-        Serdes.Long());
-    KeyValueStore<String, Long> countStore = countStoreSupplier.build();
+
+```java
+// Creating a persistent key-value store:
+// here, we create a `KeyValueStore<String, Long>` named "persistent-counts".
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+
+// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.
+StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier =
+  Stores.keyValueStoreBuilder(
+    Stores.persistentKeyValueStore("persistent-counts"),
+    Serdes.String(),
+    Serdes.Long());
+KeyValueStore<String, Long> countStore = countStoreSupplier.build();
+```
 
 
 </td> </tr>  
@@ -223,20 +225,21 @@ Yes (enabled by default)
   * There is no built-in in-memory, versioned key-value store at this time.
 
 
-    
-    
-    // Creating an in-memory key-value store:
-    // here, we create a `KeyValueStore<String, Long>` named "inmemory-counts".
-    import org.apache.kafka.streams.state.StoreBuilder;
-    import org.apache.kafka.streams.state.Stores;
-    
-    // Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.
-    StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier =
-      Stores.keyValueStoreBuilder(
-        Stores.inMemoryKeyValueStore("inmemory-counts"),
-        Serdes.String(),
-        Serdes.Long());
-    KeyValueStore<String, Long> countStore = countStoreSupplier.build();
+
+```java
+// Creating an in-memory key-value store:
+// here, we create a `KeyValueStore<String, Long>` named "inmemory-counts".
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+
+// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.
+StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier =
+  Stores.keyValueStoreBuilder(
+    Stores.inMemoryKeyValueStore("inmemory-counts"),
+    Serdes.String(),
+    Serdes.Long());
+KeyValueStore<String, Long> countStore = countStoreSupplier.build();
+```
 
 
 </td> </tr> </table>
@@ -256,36 +259,38 @@ When you open an `Iterator` from a state store you must call `close()` on the it
 You can enable or disable fault tolerance for a state store by enabling or disabling the change logging of the store through `enableLogging()` and `disableLogging()`. You can also fine-tune the associated topic's configuration if needed.
 
 Example for disabling fault-tolerance:
-    
-    
-    import org.apache.kafka.streams.state.StoreBuilder;
-    import org.apache.kafka.streams.state.Stores;
-    
-    StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier = Stores.keyValueStoreBuilder(
-      Stores.persistentKeyValueStore("Counts"),
-        Serdes.String(),
-        Serdes.Long())
-      .withLoggingDisabled(); // disable backing up the store to a changelog topic
+
+```java
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+
+StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier = Stores.keyValueStoreBuilder(
+  Stores.persistentKeyValueStore("Counts"),
+    Serdes.String(),
+    Serdes.Long())
+  .withLoggingDisabled(); // disable backing up the store to a changelog topic
+```
 
 Attention
 
 If the changelog is disabled then the attached state store is no longer fault tolerant and it can't have any [standby replicas](config-streams.html#streams-developer-guide-standby-replicas).
 
 Here is an example for enabling fault tolerance, with additional changelog-topic configuration: You can add any log config from [kafka.log.LogConfig](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogConfig.scala). Unrecognized configs will be ignored.
-    
-    
-    import org.apache.kafka.streams.state.StoreBuilder;
-    import org.apache.kafka.streams.state.Stores;
-    
-    Map<String, String> changelogConfig = new HashMap();
-    // override min.insync.replicas
-    changelogConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")
-    
-    StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier = Stores.keyValueStoreBuilder(
-      Stores.persistentKeyValueStore("Counts"),
-        Serdes.String(),
-        Serdes.Long())
-      .withLoggingEnabled(changelogConfig); // enable changelogging, with custom changelog settings
+
+```java
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+
+Map<String, String> changelogConfig = new HashMap();
+// override min.insync.replicas
+changelogConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")
+
+StoreBuilder<KeyValueStore<String, Long>> countStoreSupplier = Stores.keyValueStoreBuilder(
+  Stores.persistentKeyValueStore("Counts"),
+    Serdes.String(),
+    Serdes.Long())
+  .withLoggingEnabled(changelogConfig); // enable changelogging, with custom changelog settings
+```
 
 ## Timestamped State Stores
 
@@ -353,18 +358,19 @@ This object can also be used to access the metadata related with the application
 Now that a processor (WordCountProcessor) and the state stores have been defined, you can construct the processor topology by connecting these processors and state stores together by using the `Topology` instance. In addition, you can add source processors with the specified Kafka topics to generate input data streams into the topology, and sink processors with the specified Kafka topics to generate output data streams out of the topology.
 
 Here is an example implementation:
-    
-    
-    Topology builder = new Topology();
-    // add the source processor node that takes Kafka topic "source-topic" as input
-    builder.addSource("Source", "source-topic")
-        // add the WordCountProcessor node which takes the source processor as its upstream processor
-        .addProcessor("Process", () -> new WordCountProcessor(), "Source")
-        // add the count store associated with the WordCountProcessor processor
-        .addStateStore(countStoreBuilder, "Process")
-        // add the sink processor node that takes Kafka topic "sink-topic" as output
-        // and the WordCountProcessor node as its upstream processor
-        .addSink("Sink", "sink-topic", "Process");
+
+```java
+Topology builder = new Topology();
+// add the source processor node that takes Kafka topic "source-topic" as input
+builder.addSource("Source", "source-topic")
+    // add the WordCountProcessor node which takes the source processor as its upstream processor
+    .addProcessor("Process", () -> new WordCountProcessor(), "Source")
+    // add the count store associated with the WordCountProcessor processor
+    .addStateStore(countStoreBuilder, "Process")
+    // add the sink processor node that takes Kafka topic "sink-topic" as output
+    // and the WordCountProcessor node as its upstream processor
+    .addSink("Sink", "sink-topic", "Process");
+```
 
 Here is a quick explanation of this example:
 
@@ -376,32 +382,33 @@ Here is a quick explanation of this example:
 
 
 In some cases, it may be more convenient to add and connect a state store at the same time as you add the processor to the topology. This can be done by implementing `ConnectedStoreProvider#stores()` on the `ProcessorSupplier` instead of calling `Topology#addStateStore()`, like this: 
-    
-    
-    Topology builder = new Topology();
-    // add the source processor node that takes Kafka "source-topic" as input
-    builder.addSource("Source", "source-topic")
-        // add the WordCountProcessor node which takes the source processor as its upstream processor.
-        // the ProcessorSupplier provides the count store associated with the WordCountProcessor
-        .addProcessor("Process", new ProcessorSupplier<String, String, String, String>() {
-            public Processor<String, String, String, String> get() {
-                return new WordCountProcessor();
-            }
-    
-            public Set<StoreBuilder<?>> stores() {
-                final StoreBuilder<KeyValueStore<String, Long>> countsStoreBuilder =
-                    Stores
-                        .keyValueStoreBuilder(
-                            Stores.persistentKeyValueStore("Counts"),
-                            Serdes.String(),
-                            Serdes.Long()
-                        );
-                return Collections.singleton(countsStoreBuilder);
-            }
-        }, "Source")
-        // add the sink processor node that takes Kafka topic "sink-topic" as output
-        // and the WordCountProcessor node as its upstream processor
-        .addSink("Sink", "sink-topic", "Process");
+
+```java
+Topology builder = new Topology();
+// add the source processor node that takes Kafka "source-topic" as input
+builder.addSource("Source", "source-topic")
+    // add the WordCountProcessor node which takes the source processor as its upstream processor.
+    // the ProcessorSupplier provides the count store associated with the WordCountProcessor
+    .addProcessor("Process", new ProcessorSupplier<String, String, String, String>() {
+        public Processor<String, String, String, String> get() {
+            return new WordCountProcessor();
+        }
+
+        public Set<StoreBuilder<?>> stores() {
+            final StoreBuilder<KeyValueStore<String, Long>> countsStoreBuilder =
+                Stores
+                    .keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore("Counts"),
+                        Serdes.String(),
+                        Serdes.Long()
+                    );
+            return Collections.singleton(countsStoreBuilder);
+        }
+    }, "Source")
+    // add the sink processor node that takes Kafka topic "sink-topic" as output
+    // and the WordCountProcessor node as its upstream processor
+    .addSink("Sink", "sink-topic", "Process");
+```
 
 This allows for a processor to "own" state stores, effectively encapsulating their usage from the user wiring the topology. Multiple processors that share a state store may provide the same store with this technique, as long as the `StoreBuilder` is the same `instance`.
 

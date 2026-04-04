@@ -170,20 +170,21 @@ Description
 Creates a KStream from the specified Kafka input topics and interprets the data as a record stream. A `KStream` represents a _partitioned_ record stream. [(details)](/{version}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#stream\(java.lang.String\))
 
 In the case of a KStream, the local KStream instance of every application instance will be populated with data from only **a subset** of the partitions of the input topic. Collectively, across all application instances, all input topic partitions are read and processed.
-    
-    
-    import org.apache.kafka.common.serialization.Serdes;
-    import org.apache.kafka.streams.StreamsBuilder;
-    import org.apache.kafka.streams.kstream.KStream;
-    
-    StreamsBuilder builder = new StreamsBuilder();
-    
-    KStream<String, Long> wordCounts = builder.stream(
-        "word-counts-input-topic", /* input topic */
-        Consumed.with(
-          Serdes.String(), /* key serde */
-          Serdes.Long()   /* value serde */
-        );
+
+```java
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.KStream;
+
+StreamsBuilder builder = new StreamsBuilder();
+
+KStream<String, Long> wordCounts = builder.stream(
+    "word-counts-input-topic", /* input topic */
+    Consumed.with(
+      Serdes.String(), /* key serde */
+      Serdes.Long()   /* value serde */
+    );
+```
 
 If you do not specify Serdes explicitly, the default Serdes from the [configuration](config-streams.html#streams-developer-guide-configuration) are used.
 
@@ -242,21 +243,22 @@ Reads the specified Kafka input topic into a GlobalKTable. The topic is interpre
 In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will be populated with data from **all** the partitions of the input topic.
 
 You must provide a name for the table (more precisely, for the internal [state store](../architecture.html#streams_architecture_state) that backs the table). This is required for supporting [interactive queries](interactive-queries.html#streams-developer-guide-interactive-queries) against the table. When a name is not provided the table will not be queryable and an internal name will be provided for the state store.
-    
-    
-    import org.apache.kafka.common.serialization.Serdes;
-    import org.apache.kafka.streams.StreamsBuilder;
-    import org.apache.kafka.streams.kstream.GlobalKTable;
-    
-    StreamsBuilder builder = new StreamsBuilder();
-    
-    GlobalKTable<String, Long> wordCounts = builder.globalTable(
-        "word-counts-input-topic",
-        Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(
-          "word-counts-global-store" /* table/store name */)
-          .withKeySerde(Serdes.String()) /* key serde */
-          .withValueSerde(Serdes.Long()) /* value serde */
-        );
+
+```java
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.GlobalKTable;
+
+StreamsBuilder builder = new StreamsBuilder();
+
+GlobalKTable<String, Long> wordCounts = builder.globalTable(
+    "word-counts-input-topic",
+    Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(
+      "word-counts-global-store" /* table/store name */)
+      .withKeySerde(Serdes.String()) /* key serde */
+      .withValueSerde(Serdes.Long()) /* value serde */
+    );
+```
 
 You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes).
 
@@ -316,22 +318,23 @@ Branch (or split) a `KStream` based on the supplied predicates into one or more 
 Predicates are evaluated in order. A record is placed to one and only one output stream on the first match: if the n-th predicate evaluates to true, the record is placed to n-th stream. If a record does not match any predicates, it will be routed to the default branch, or dropped if no default branch is created.
 
 Branching is useful, for example, to route records to different downstream topics.
-    
-    
-    KStream<String, Long> stream = ...;
-    Map<String, KStream<String, Long>> branches =
-        stream.split(Named.as("Branch-"))
-            .branch((key, value) -> key.startsWith("A"),  /* first predicate  */
-                 Branched.as("A"))
-            .branch((key, value) -> key.startsWith("B"),  /* second predicate */
-                 Branched.as("B"))
-            .defaultBranch(Branched.as("C"))              /* default branch */
-    );
-    
-    // KStream branches.get("Branch-A") contains all records whose keys start with "A"
-    // KStream branches.get("Branch-B") contains all records whose keys start with "B"
-    // KStream branches.get("Branch-C") contains all other records
-    
+
+```java
+KStream<String, Long> stream = ...;
+Map<String, KStream<String, Long>> branches =
+    stream.split(Named.as("Branch-"))
+        .branch((key, value) -> key.startsWith("A"),  /* first predicate  */
+             Branched.as("A"))
+        .branch((key, value) -> key.startsWith("B"),  /* second predicate */
+             Branched.as("B"))
+        .defaultBranch(Branched.as("C"))              /* default branch */
+);
+
+// KStream branches.get("Branch-A") contains all records whose keys start with "A"
+// KStream branches.get("Branch-B") contains all records whose keys start with "B"
+// KStream branches.get("Branch-C") contains all other records
+```
+
 
 
 </td> </tr>  
@@ -353,26 +356,27 @@ Branching is useful, for example, to route records to different downstream topic
 Broadcasting a `KStream` into multiple downstream operators.
 
 A record is sent to more than one operator by applying multiple operators to the same `KStream` instance.
-    
-    
-    KStream<String, Long> stream = ...;
-    KStream<...> stream1 = stream.map(...);
-    KStream<...> stream2 = stream.mapValue(...);
-    KStream<...> stream3 = stream.flatMap(...);
-    
+
+```java
+KStream<String, Long> stream = ...;
+KStream<...> stream1 = stream.map(...);
+KStream<...> stream2 = stream.mapValue(...);
+KStream<...> stream3 = stream.flatMap(...);
+```
 
 Multicasting a `KStream` into multiple downstream operators.
 
 In contrast to **branching** , which sends each record to at most one downstream branch, a multicast may send a record to any number of downstream `KStream` instances.
 
 A multicast is implemented as a broadcast plus filters.
-    
-    
-    KStream<String, Long> stream = ...;
-    KStream<...> stream1 = stream.filter((key, value) -> key.startsWith("A")); // contains all records whose keys start with "A"
-    KStream<...> stream2 = stream.filter((key, value) -> key.startsWith("AB")); // contains all records whose keys start with "AB" (subset of stream1)
-    KStream<...> stream3 = stream.filter((key, value) -> key.contains("B")); // contains all records whose keys contains a "B" (superset of stream2)
-    
+
+```java
+KStream<String, Long> stream = ...;
+KStream<...> stream1 = stream.filter((key, value) -> key.startsWith("A")); // contains all records whose keys start with "A"
+KStream<...> stream2 = stream.filter((key, value) -> key.startsWith("AB")); // contains all records whose keys start with "AB" (subset of stream1)
+KStream<...> stream3 = stream.filter((key, value) -> key.contains("B")); // contains all records whose keys contains a "B" (superset of stream2)
+```
+
 
 
 </td> </tr>  
@@ -393,13 +397,14 @@ A multicast is implemented as a broadcast plus filters.
 
 
 Evaluates a boolean function for each element and retains those for which the function returns true. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-))
-    
-    
-    KStream<String, Long> stream = ...;
-    
-    // A filter that selects (keeps) only positive numbers
-    KStream<String, Long> onlyPositives = stream.filter((key, value) -> value > 0);
-    
+
+```java
+KStream<String, Long> stream = ...;
+
+// A filter that selects (keeps) only positive numbers
+KStream<String, Long> onlyPositives = stream.filter((key, value) -> value > 0);
+```
+
 
 
 </td> </tr>  
@@ -420,14 +425,15 @@ Evaluates a boolean function for each element and retains those for which the fu
 
 
 Evaluates a boolean function for each element and drops those for which the function returns true. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-))
-    
-    
-    KStream<String, Long> stream = ...;
-    
-    // An inverse filter that discards any negative numbers or zero
-    KStream<String, Long> onlyPositives = stream.filterNot((key, value) -> value <= 0);
-    
-    
+
+```java
+KStream<String, Long> stream = ...;
+
+// An inverse filter that discards any negative numbers or zero
+KStream<String, Long> onlyPositives = stream.filterNot((key, value) -> value <= 0);
+```
+
+
 
 
 </td> </tr>  
@@ -449,21 +455,22 @@ Evaluates a boolean function for each element and drops those for which the func
 Takes one record and produces zero, one, or more records. You can modify the record keys and values, including their types. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-))
 
 **Marks the stream for data re-partitioning:** Applying a grouping or a join after `flatMap` will result in re-partitioning of the records. If possible use `flatMapValues` instead, which will not cause data re-partitioning.
-    
-    
-    KStream<Long, String> stream = ...;
-    KStream<String, Integer> transformed = stream.flatMap(
-         // Here, we generate two output records for each input record.
-         // We also change the key and value types.
-         // Example: (345L, "Hello") -> ("HELLO", 1000), ("hello", 9000)
-        (key, value) -> {
-          List<KeyValue<String, Integer>> result = new LinkedList<>();
-          result.add(KeyValue.pair(value.toUpperCase(), 1000));
-          result.add(KeyValue.pair(value.toLowerCase(), 9000));
-          return result;
-        }
-      );
-    
+
+```java
+KStream<Long, String> stream = ...;
+KStream<String, Integer> transformed = stream.flatMap(
+     // Here, we generate two output records for each input record.
+     // We also change the key and value types.
+     // Example: (345L, "Hello") -> ("HELLO", 1000), ("hello", 9000)
+    (key, value) -> {
+      List<KeyValue<String, Integer>> result = new LinkedList<>();
+      result.add(KeyValue.pair(value.toUpperCase(), 1000));
+      result.add(KeyValue.pair(value.toLowerCase(), 9000));
+      return result;
+    }
+  );
+```
+
 
 
 </td> </tr>  
@@ -485,12 +492,13 @@ Takes one record and produces zero, one, or more records. You can modify the rec
 Takes one record and produces zero, one, or more records, while retaining the key of the original record. You can modify the record values and the value type. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-))
 
 `flatMapValues` is preferable to `flatMap` because it will not cause data re-partitioning. However, you cannot modify the key or key type like `flatMap` does.
-    
-    
-    // Split a sentence into words.
-    KStream<byte[], String> sentences = ...;
-    KStream<byte[], String> words = sentences.flatMapValues(value -> Arrays.asList(value.split("\s+")));
-    
+
+```java
+// Split a sentence into words.
+KStream<byte[], String> sentences = ...;
+KStream<byte[], String> words = sentences.flatMapValues(value -> Arrays.asList(value.split("\s+")));
+```
+
 
 
 </td> </tr>  
@@ -516,13 +524,14 @@ Takes one record and produces zero, one, or more records, while retaining the ke
 You would use `foreach` to cause _side effects_ based on the input data (similar to `peek`) and then _stop_ _further processing_ of the input data (unlike `peek`, which is not a terminal operation).
 
 **Note on processing guarantees:** Any side effects of an action (such as writing to external systems) are not trackable by Kafka, which means they will typically not benefit from Kafka's processing guarantees.
-    
-    
-    KStream<String, Long> stream = ...;
-    
-    // Print the contents of the KStream to the local console.
-    stream.foreach((key, value) -> System.out.println(key + " => " + value));
-    
+
+```java
+KStream<String, Long> stream = ...;
+
+// Print the contents of the KStream to the local console.
+stream.foreach((key, value) -> System.out.println(key + " => " + value));
+```
+
 
 
 </td> </tr>  
@@ -552,21 +561,22 @@ Grouping is a prerequisite for aggregating a stream or a table and ensures that 
 **Grouping vs. Windowing:** A related operation is windowing, which lets you control how to "sub-group" the grouped records _of the same key_ into so-called _windows_ for stateful operations such as windowed aggregations or windowed joins.
 
 **Causes data re-partitioning if and only if the stream was marked for re-partitioning.** `groupByKey` is preferable to `groupBy` because it re-partitions data only if the stream was already marked for re-partitioning. However, `groupByKey` does not allow you to modify the key or key type like `groupBy` does.
-    
-    
-    KStream<byte[], String> stream = ...;
-    
-    // Group by the existing key, using the application's configured
-    // default serdes for keys and values.
-    KGroupedStream<byte[], String> groupedStream = stream.groupByKey();
-    
-    // When the key and/or value types do not match the configured
-    // default serdes, we must explicitly specify serdes.
-    KGroupedStream<byte[], String> groupedStream = stream.groupByKey(
-        Grouped.with(
-          Serdes.ByteArray(), /* key */
-          Serdes.String())     /* value */
-      );
+
+```java
+KStream<byte[], String> stream = ...;
+
+// Group by the existing key, using the application's configured
+// default serdes for keys and values.
+KGroupedStream<byte[], String> groupedStream = stream.groupByKey();
+
+// When the key and/or value types do not match the configured
+// default serdes, we must explicitly specify serdes.
+KGroupedStream<byte[], String> groupedStream = stream.groupByKey(
+    Grouped.with(
+      Serdes.ByteArray(), /* key */
+      Serdes.String())     /* value */
+  );
+```
 
 
 </td> </tr>  
@@ -597,28 +607,29 @@ Grouping is a prerequisite for aggregating a stream or a table and ensures that 
 **Grouping vs. Windowing:** A related operation is windowing, which lets you control how to "sub-group" the grouped records _of the same key_ into so-called _windows_ for stateful operations such as windowed aggregations or windowed joins.
 
 **Always causes data re-partitioning:** `groupBy` always causes data re-partitioning. If possible use `groupByKey` instead, which will re-partition data only if required.
-    
-    
-    KStream<byte[], String> stream = ...;
-    KTable<byte[], String> table = ...;
-    
-    // Group the stream by a new key and key type
-    KGroupedStream<String, String> groupedStream = stream.groupBy(
-        (key, value) -> value,
-        Grouped.with(
-          Serdes.String(), /* key (note: type was modified) */
-          Serdes.String())  /* value */
-      );
-    
-    // Group the table by a new key and key type, and also modify the value and value type.
-    KGroupedTable<String, Integer> groupedTable = table.groupBy(
-        (key, value) -> KeyValue.pair(value, value.length()),
-        Grouped.with(
-          Serdes.String(), /* key (note: type was modified) */
-          Serdes.Integer()) /* value (note: type was modified) */
-      );
-    
-    
+
+```java
+KStream<byte[], String> stream = ...;
+KTable<byte[], String> table = ...;
+
+// Group the stream by a new key and key type
+KGroupedStream<String, String> groupedStream = stream.groupBy(
+    (key, value) -> value,
+    Grouped.with(
+      Serdes.String(), /* key (note: type was modified) */
+      Serdes.String())  /* value */
+  );
+
+// Group the table by a new key and key type, and also modify the value and value type.
+KGroupedTable<String, Integer> groupedTable = table.groupBy(
+    (key, value) -> KeyValue.pair(value, value.length()),
+    Grouped.with(
+      Serdes.String(), /* key (note: type was modified) */
+      Serdes.Integer()) /* value (note: type was modified) */
+  );
+```
+
+
 
 
 </td> </tr>  
@@ -641,20 +652,21 @@ Grouping is a prerequisite for aggregating a stream or a table and ensures that 
 Cogrouping allows to aggregate multiple input streams in a single operation. The different (already grouped) input streams must have the same key type and may have different values types. [KGroupedStream#cogroup()](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html#cogroup) creates a new cogrouped stream with a single input stream, while [CogroupedKStream#cogroup()](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#cogroup) adds a grouped stream to an existing cogrouped stream. A `CogroupedKStream` may be [windowed](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy) before it is [aggregated](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate). 
 
 Cogroup does not cause a repartition as it has the prerequisite that the input streams are grouped. In the process of creating these groups they will have already been repartitioned if the stream was already marked for repartitioning.
-    
-    
-    KStream<byte[], String> stream = ...;
-                            KStream<byte[], String> stream2 = ...;
-    
-    // Group by the existing key, using the application's configured
-    // default serdes for keys and values.
-    KGroupedStream<byte[], String> groupedStream = stream.groupByKey();
-    KGroupedStream<byte[], String> groupedStream2 = stream2.groupByKey();
-    CogroupedKStream<byte[], String> cogroupedStream = groupedStream.cogroup(aggregator1).cogroup(groupedStream2, aggregator2);
-    
-    KTable<byte[], String> table = cogroupedStream.aggregate(initializer);
-    
-    KTable<byte[], String> table2 = cogroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(500))).aggregate(initializer);
+
+```java
+KStream<byte[], String> stream = ...;
+                        KStream<byte[], String> stream2 = ...;
+
+// Group by the existing key, using the application's configured
+// default serdes for keys and values.
+KGroupedStream<byte[], String> groupedStream = stream.groupByKey();
+KGroupedStream<byte[], String> groupedStream2 = stream2.groupByKey();
+CogroupedKStream<byte[], String> cogroupedStream = groupedStream.cogroup(aggregator1).cogroup(groupedStream2, aggregator2);
+
+KTable<byte[], String> table = cogroupedStream.aggregate(initializer);
+
+KTable<byte[], String> table2 = cogroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(500))).aggregate(initializer);
+```
 
 
 </td> </tr>  
@@ -676,15 +688,16 @@ Cogroup does not cause a repartition as it has the prerequisite that the input s
 Takes one record and produces one record. You can modify the record key and value, including their types. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-))
 
 **Marks the stream for data re-partitioning:** Applying a grouping or a join after `map` will result in re-partitioning of the records. If possible use `mapValues` instead, which will not cause data re-partitioning.
-    
-    
-    KStream<byte[], String> stream = ...;
-    
-    // Note how we change the key and the key type (similar to `selectKey`)
-    // as well as the value and the value type.
-    KStream<String, Integer> transformed = stream.map(
-        (key, value) -> KeyValue.pair(value.toLowerCase(), value.length()));
-    
+
+```java
+KStream<byte[], String> stream = ...;
+
+// Note how we change the key and the key type (similar to `selectKey`)
+// as well as the value and the value type.
+KStream<String, Integer> transformed = stream.map(
+    (key, value) -> KeyValue.pair(value.toLowerCase(), value.length()));
+```
+
 
 
 </td> </tr>  
@@ -707,12 +720,13 @@ Takes one record and produces one record. You can modify the record key and valu
 Takes one record and produces one record, while retaining the key of the original record. You can modify the record value and the value type. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-))
 
 `mapValues` is preferable to `map` because it will not cause data re-partitioning. However, it does not allow you to modify the key or key type like `map` does.
-    
-    
-    KStream<byte[], String> stream = ...;
-    
-    KStream<byte[], String> uppercased = stream.mapValues(value -> value.toUpperCase());
-    
+
+```java
+KStream<byte[], String> stream = ...;
+
+KStream<byte[], String> uppercased = stream.mapValues(value -> value.toUpperCase());
+```
+
 
 
 </td> </tr>  
@@ -734,13 +748,14 @@ Takes one record and produces one record, while retaining the key of the origina
 Merges records of two streams into one larger stream. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#merge-org.apache.kafka.streams.kstream.KStream-)) 
 
 There is no ordering guarantee between records from different streams in the merged stream. Relative order is preserved within each input stream though (ie, records within the same input stream are processed in order)
-    
-    
-    KStream<byte[], String> stream1 = ...;
-    
-    KStream<byte[], String> stream2 = ...;
-    
-    KStream<byte[], String> merged = stream1.merge(stream2);
+
+```java
+KStream<byte[], String> stream1 = ...;
+
+KStream<byte[], String> stream2 = ...;
+
+KStream<byte[], String> merged = stream1.merge(stream2);
+```
 
 
 </td> </tr>  
@@ -766,13 +781,14 @@ You would use `peek` to cause _side effects_ based on the input data (similar to
 `peek` is helpful for use cases such as logging or tracking metrics or for debugging and troubleshooting.
 
 **Note on processing guarantees:** Any side effects of an action (such as writing to external systems) are not trackable by Kafka, which means they will typically not benefit from Kafka's processing guarantees.
-    
-    
-    KStream<byte[], String> stream = ...;
-    
-    KStream<byte[], String> unmodifiedStream = stream.peek(
-        (key, value) -> System.out.println("key=" + key + ", value=" + value));
-    
+
+```java
+KStream<byte[], String> stream = ...;
+
+KStream<byte[], String> unmodifiedStream = stream.peek(
+    (key, value) -> System.out.println("key=" + key + ", value=" + value));
+```
+
 
 
 </td> </tr>  
@@ -796,14 +812,15 @@ You would use `peek` to cause _side effects_ based on the input data (similar to
 Calling `print()` is the same as calling `foreach((key, value) -> System.out.println(key + ", " + value))`
 
 `print` is mainly for debugging/testing purposes, and it will try to flush on each record print. Hence it **should not** be used for production usage if performance requirements are concerned.
-    
-    
-    KStream<byte[], String> stream = ...;
-    // print to sysout
-    stream.print();
-    
-    // print to file with a custom label
-    stream.print(Printed.toFile("streams.out").withLabel("streams"));
+
+```java
+KStream<byte[], String> stream = ...;
+// print to sysout
+stream.print();
+
+// print to file with a custom label
+stream.print(Printed.toFile("streams.out").withLabel("streams"));
+```
 
 
 </td> </tr>  
@@ -827,13 +844,14 @@ Assigns a new key - possibly of a new key type - to each record. ([details](/{ve
 Calling `selectKey(mapper)` is the same as calling `map((key, value) -> mapper(key, value), value)`.
 
 **Marks the stream for data re-partitioning:** Applying a grouping or a join after `selectKey` will result in re-partitioning of the records.
-    
-    
-    KStream<byte[], String> stream = ...;
-    
-    // Derive a new record key from the record's value.  Note how the key type changes, too.
-    KStream<String, String> rekeyed = stream.selectKey((key, value) -> value.split(" ")[0])
-    
+
+```java
+KStream<byte[], String> stream = ...;
+
+// Derive a new record key from the record's value.  Note how the key type changes, too.
+KStream<String, String> rekeyed = stream.selectKey((key, value) -> value.split(" ")[0])
+```
+
 
 
 </td> </tr>  
@@ -853,13 +871,14 @@ Calling `selectKey(mapper)` is the same as calling `map((key, value) -> mapper(k
 
 
 Get the changelog stream of this table. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#toStream--))
-    
-    
-    KTable<byte[], String> table = ...;
-    
-    // Also, a variant of `toStream` exists that allows you
-    // to select a new key for the resulting stream.
-    KStream<byte[], String> stream = table.toStream();
+
+```java
+KTable<byte[], String> table = ...;
+
+// Also, a variant of `toStream` exists that allows you
+// to select a new key for the resulting stream.
+KStream<byte[], String> stream = table.toStream();
+```
 
 
 </td> </tr>  
@@ -879,11 +898,12 @@ Get the changelog stream of this table. ([details](/{version}/javadoc/org/apache
 
 
 Convert an event stream into a table, or say a changelog stream. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#toTable--))
-    
-    
-    KStream<byte[], String> stream = ...;
-    
-    KTable<byte[], String> table = stream.toTable();
+
+```java
+KStream<byte[], String> stream = ...;
+
+KTable<byte[], String> table = stream.toTable();
+```
 
 
 </td> </tr>  
@@ -905,10 +925,11 @@ Convert an event stream into a table, or say a changelog stream. ([details](/{ve
 Manually trigger repartitioning of the stream with desired number of partitions. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#repartition--))
 
 Kafka Streams will manage the topic for `repartition()`. Generated topic is treated as internal topic, as a result data will be purged automatically as any other internal repartition topic. In addition, you can specify the desired number of partitions, which allows to easily scale in/out downstream sub-topologies. `repartition()` operation always triggers repartitioning of the stream, as a result it can be used with embedded Processor API methods (like `process()` et al.) that do not trigger auto repartitioning when key changing operation is performed beforehand. 
-    
-    
-    KStream<byte[], String> stream = ... ;
-    KStream<byte[], String> repartitionedStream = stream.repartition(Repartitioned.numberOfPartitions(10));
+
+```java
+KStream<byte[], String> stream = ... ;
+KStream<byte[], String> repartitionedStream = stream.repartition(Repartitioned.numberOfPartitions(10));
+```
 
 
 </td> </tr> </table>
@@ -945,26 +966,27 @@ Stateful transformations in the DSL.
 Here is an example of a stateful application: the WordCount algorithm.
 
 WordCount example:
-    
-    
-    // Assume the record values represent lines of text.  For the sake of this example, you can ignore
-    // whatever may be stored in the record keys.
-    KStream<String, String> textLines = ...;
-    
-    KStream<String, Long> wordCounts = textLines
-        // Split each text line, by whitespace, into words.  The text lines are the record
-        // values, i.e. you can ignore whatever data is in the record keys and thus invoke
-        // `flatMapValues` instead of the more generic `flatMap`.
-        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
-        // Group the stream by word to ensure the key of the record is the word.
-        .groupBy((key, word) -> word)
-        // Count the occurrences of each word (record key).
-        //
-        // This will change the stream type from `KGroupedStream<String, String>` to
-        // `KTable<String, Long>` (word -> count).
-        .count()
-        // Convert the `KTable<String, Long>` into a `KStream<String, Long>`.
-        .toStream();
+
+```java
+// Assume the record values represent lines of text.  For the sake of this example, you can ignore
+// whatever may be stored in the record keys.
+KStream<String, String> textLines = ...;
+
+KStream<String, Long> wordCounts = textLines
+    // Split each text line, by whitespace, into words.  The text lines are the record
+    // values, i.e. you can ignore whatever data is in the record keys and thus invoke
+    // `flatMapValues` instead of the more generic `flatMap`.
+    .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
+    // Group the stream by word to ensure the key of the record is the word.
+    .groupBy((key, word) -> word)
+    // Count the occurrences of each word (record key).
+    //
+    // This will change the stream type from `KGroupedStream<String, String>` to
+    // `KTable<String, Long>` (word -> count).
+    .count()
+    // Convert the `KTable<String, Long>` into a `KStream<String, Long>`.
+    .toStream();
+```
 
 ### Aggregating
 
@@ -1003,26 +1025,26 @@ When aggregating a _grouped stream_ , you must provide an initializer (e.g., `ag
 When aggregating a _cogrouped stream_ , the actual aggregators are provided for each input stream in the prior `cogroup()`calls, and thus you only need to provide an initializer (e.g., `aggValue = 0`) 
 
 Several variants of `aggregate` exist, see Javadocs for details.
-    
-    
-    KGroupedStream<byte[], String> groupedStream = ...;
-    KGroupedTable<byte[], String> groupedTable = ...;
-    
-    // Aggregating a KGroupedStream (note how the value type changes from String to Long)
-    KTable<byte[], Long> aggregatedStream = groupedStream.aggregate(
-        () -> 0L, /* initializer */
-        (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
-        Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("aggregated-stream-store") /* state store name */
-            .withValueSerde(Serdes.Long()); /* serde for aggregate value */
-    
-    // Aggregating a KGroupedTable (note how the value type changes from String to Long)
-    KTable<byte[], Long> aggregatedTable = groupedTable.aggregate(
-        () -> 0L, /* initializer */
-        (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
-        (aggKey, oldValue, aggValue) -> aggValue - oldValue.length(), /* subtractor */
-        Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("aggregated-table-store") /* state store name */
-    	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
-    
+
+```java
+KGroupedStream<byte[], String> groupedStream = ...;
+KGroupedTable<byte[], String> groupedTable = ...;
+
+// Aggregating a KGroupedStream (note how the value type changes from String to Long)
+KTable<byte[], Long> aggregatedStream = groupedStream.aggregate(
+    () -> 0L, /* initializer */
+    (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
+    Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("aggregated-stream-store") /* state store name */
+        .withValueSerde(Serdes.Long()); /* serde for aggregate value */
+
+// Aggregating a KGroupedTable (note how the value type changes from String to Long)
+KTable<byte[], Long> aggregatedTable = groupedTable.aggregate(
+    () -> 0L, /* initializer */
+    (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
+    (aggKey, oldValue, aggValue) -> aggValue - oldValue.length(), /* subtractor */
+    Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("aggregated-table-store") /* state store name */
+	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
+```
 
 Detailed behavior of `KGroupedStream`:
 
@@ -1068,36 +1090,36 @@ You must provide an initializer (e.g., `aggValue = 0`), "adder" aggregator (e.g.
 The windowed `aggregate` turns a `TimeWindowedKStream<K, V>` or `SessionWindowedKStream<K, V>` into a windowed `KTable<Windowed<K>, V>`.
 
 Several variants of `aggregate` exist, see Javadocs for details.
-    
-    
-    import java.time.Duration;
-    KGroupedStream<String, Long> groupedStream = ...;
-    
-    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(Duration.ofMinutes(5))
-        .aggregate(
-            () -> 0L, /* initializer */
-            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
-            Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store") /* state store name */
-            .withValueSerde(Serdes.Long())); /* serde for aggregate value */
-    
-    // Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
-    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30)))
-        .aggregate(
-            () -> 0L, /* initializer */
-            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
-            Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store") /* state store name */
-            .withValueSerde(Serdes.Long())); /* serde for aggregate value */
-    
-    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-    KTable<Windowed<String>, Long> sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
-        aggregate(
-        	() -> 0L, /* initializer */
-        	(aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
-            (aggKey, leftAggValue, rightAggValue) -> leftAggValue + rightAggValue, /* session merger */
-            Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("sessionized-aggregated-stream-store") /* state store name */
-            .withValueSerde(Serdes.Long())); /* serde for aggregate value */
-    
+
+```java
+import java.time.Duration;
+KGroupedStream<String, Long> groupedStream = ...;
+
+// Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(Duration.ofMinutes(5))
+    .aggregate(
+        () -> 0L, /* initializer */
+        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+        Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store") /* state store name */
+        .withValueSerde(Serdes.Long())); /* serde for aggregate value */
+
+// Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
+KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30)))
+    .aggregate(
+        () -> 0L, /* initializer */
+        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+        Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store") /* state store name */
+        .withValueSerde(Serdes.Long())); /* serde for aggregate value */
+
+// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+KTable<Windowed<String>, Long> sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
+    aggregate(
+    	() -> 0L, /* initializer */
+    	(aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+        (aggKey, leftAggValue, rightAggValue) -> leftAggValue + rightAggValue, /* session merger */
+        Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("sessionized-aggregated-stream-store") /* state store name */
+        .withValueSerde(Serdes.Long())); /* serde for aggregate value */
+```
 
 Detailed behavior:
 
@@ -1132,16 +1154,17 @@ See the example at the bottom of this section for a visualization of the aggrega
 **Rolling aggregation.** Counts the number of records by the grouped key. ([KGroupedStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html))
 
 Several variants of `count` exist, see Javadocs for details.
-    
-    
-    KGroupedStream<String, Long> groupedStream = ...;
-    KGroupedTable<String, Long> groupedTable = ...;
-    
-    // Counting a KGroupedStream
-    KTable<String, Long> aggregatedStream = groupedStream.count();
-    
-    // Counting a KGroupedTable
-    KTable<String, Long> aggregatedTable = groupedTable.count();
+
+```java
+KGroupedStream<String, Long> groupedStream = ...;
+KGroupedTable<String, Long> groupedTable = ...;
+
+// Counting a KGroupedStream
+KTable<String, Long> aggregatedStream = groupedStream.count();
+
+// Counting a KGroupedTable
+KTable<String, Long> aggregatedTable = groupedTable.count();
+```
 
 Detailed behavior for `KGroupedStream`:
 
@@ -1175,25 +1198,26 @@ Detailed behavior for `KGroupedTable`:
 The windowed `count` turns a `TimeWindowedKStream<K, V>` or `SessionWindowedKStream<K, V>` into a windowed `KTable<Windowed<K>, V>`.
 
 Several variants of `count` exist, see Javadocs for details.
-    
-    
-    import java.time.Duration;
-    KGroupedStream<String, Long> groupedStream = ...;
-    
-    // Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
-    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.windowedBy(
-        TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5))) /* time-based window */
-        .count();
-    
-    // Counting a KGroupedStream with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
-    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.windowedBy(
-        SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */
-        .count();
-    
-    // Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
-    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.windowedBy(
-        SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
-        .count();
+
+```java
+import java.time.Duration;
+KGroupedStream<String, Long> groupedStream = ...;
+
+// Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
+KTable<Windowed<String>, Long> aggregatedStream = groupedStream.windowedBy(
+    TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5))) /* time-based window */
+    .count();
+
+// Counting a KGroupedStream with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
+KTable<Windowed<String>, Long> aggregatedStream = groupedStream.windowedBy(
+    SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */
+    .count();
+
+// Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
+KTable<Windowed<String>, Long> aggregatedStream = groupedStream.windowedBy(
+    SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
+    .count();
+```
 
 Detailed behavior:
 
@@ -1222,20 +1246,20 @@ Detailed behavior:
 When reducing a _grouped stream_ , you must provide an "adder" reducer (e.g., `aggValue + curValue`). When reducing a _grouped table_ , you must additionally provide a "subtractor" reducer (e.g., `aggValue - oldValue`).
 
 Several variants of `reduce` exist, see Javadocs for details.
-    
-    
-    KGroupedStream<String, Long> groupedStream = ...;
-    KGroupedTable<String, Long> groupedTable = ...;
-    
-    // Reducing a KGroupedStream
-    KTable<String, Long> aggregatedStream = groupedStream.reduce(
-        (aggValue, newValue) -> aggValue + newValue /* adder */);
-    
-    // Reducing a KGroupedTable
-    KTable<String, Long> aggregatedTable = groupedTable.reduce(
-        (aggValue, newValue) -> aggValue + newValue, /* adder */
-        (aggValue, oldValue) -> aggValue - oldValue /* subtractor */);
-    
+
+```java
+KGroupedStream<String, Long> groupedStream = ...;
+KGroupedTable<String, Long> groupedTable = ...;
+
+// Reducing a KGroupedStream
+KTable<String, Long> aggregatedStream = groupedStream.reduce(
+    (aggValue, newValue) -> aggValue + newValue /* adder */);
+
+// Reducing a KGroupedTable
+KTable<String, Long> aggregatedTable = groupedTable.reduce(
+    (aggValue, newValue) -> aggValue + newValue, /* adder */
+    (aggValue, oldValue) -> aggValue - oldValue /* subtractor */);
+```
 
 Detailed behavior for `KGroupedStream`:
 
@@ -1279,32 +1303,32 @@ See the example at the bottom of this section for a visualization of the aggrega
 The windowed `reduce` turns a `TimeWindowedKStream<K, V>` or a `SessionWindowedKStream<K, V>` into a windowed `KTable<Windowed<K>, V>`.
 
 Several variants of `reduce` exist, see Javadocs for details.
-    
-    
-    import java.time.Duration;
-    KGroupedStream<String, Long> groupedStream = ...;
-    
-    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(
-      TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
-      .reduce(
-        (aggValue, newValue) -> aggValue + newValue /* adder */
-      );
-    
-    // Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace)
-    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(
-      SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */)
-      .reduce(
-        (aggValue, newValue) -> aggValue + newValue /* adder */
-      );
-    
-    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-    KTable<Windowed<String>, Long> sessionzedAggregatedStream = groupedStream.windowedBy(
-      SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
-      .reduce(
-        (aggValue, newValue) -> aggValue + newValue /* adder */
-      );
-    
+
+```java
+import java.time.Duration;
+KGroupedStream<String, Long> groupedStream = ...;
+
+// Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(
+  TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
+  .reduce(
+    (aggValue, newValue) -> aggValue + newValue /* adder */
+  );
+
+// Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace)
+KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.windowedBy(
+  SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */)
+  .reduce(
+    (aggValue, newValue) -> aggValue + newValue /* adder */
+  );
+
+// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+KTable<Windowed<String>, Long> sessionzedAggregatedStream = groupedStream.windowedBy(
+  SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
+  .reduce(
+    (aggValue, newValue) -> aggValue + newValue /* adder */
+  );
+```
 
 Detailed behavior:
 
@@ -1321,20 +1345,21 @@ See the example at the bottom of this section for a visualization of the aggrega
 </td> </tr> </table>
 
 **Example of semantics for stream aggregations:** A `KGroupedStream` -> `KTable` example is shown below. The streams and the table are initially empty. Bold font is used in the column for "KTable `aggregated`" to highlight changed state. An entry such as `(hello, 1)` denotes a record with key `hello` and value `1`. To improve the readability of the semantics table you can assume that all records are processed in timestamp order.
-    
-    
-    // Key: word, value: count
-    KStream<String, Integer> wordCounts = ...;
-    
-    KGroupedStream<String, Integer> groupedStream = wordCounts
-        .groupByKey(Grouped.with(Serdes.String(), Serdes.Integer()));
-    
-    KTable<String, Integer> aggregated = groupedStream.aggregate(
-        () -> 0, /* initializer */
-        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
-        Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("aggregated-stream-store" /* state store name */)
-          .withKeySerde(Serdes.String()) /* key serde */
-          .withValueSerde(Serdes.Integer()); /* serde for aggregate value */
+
+```java
+// Key: word, value: count
+KStream<String, Integer> wordCounts = ...;
+
+KGroupedStream<String, Integer> groupedStream = wordCounts
+    .groupByKey(Grouped.with(Serdes.String(), Serdes.Integer()));
+
+KTable<String, Integer> aggregated = groupedStream.aggregate(
+    () -> 0, /* initializer */
+    (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+    Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("aggregated-stream-store" /* state store name */)
+      .withKeySerde(Serdes.String()) /* key serde */
+      .withValueSerde(Serdes.Integer()); /* serde for aggregate value */
+```
 
 **Note**
 
@@ -1577,24 +1602,25 @@ State
 </td> </tr> </table>
 
 **Example of semantics for table aggregations:** A `KGroupedTable` -> `KTable` example is shown below. The tables are initially empty. Bold font is used in the column for "KTable `aggregated`" to highlight changed state. An entry such as `(hello, 1)` denotes a record with key `hello` and value `1`. To improve the readability of the semantics table you can assume that all records are processed in timestamp order.
-    
-    
-    // Key: username, value: user region (abbreviated to "E" for "Europe", "A" for "Asia")
-    KTable<String, String> userProfiles = ...;
-    
-    // Re-group `userProfiles`.  Don't read too much into what the grouping does:
-    // its prime purpose in this example is to show the *effects* of the grouping
-    // in the subsequent aggregation.
-    KGroupedTable<String, Integer> groupedTable = userProfiles
-        .groupBy((user, region) -> KeyValue.pair(region, user.length()), Serdes.String(), Serdes.Integer());
-    
-    KTable<String, Integer> aggregated = groupedTable.aggregate(
-        () -> 0, /* initializer */
-        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
-        (aggKey, oldValue, aggValue) -> aggValue - oldValue, /* subtractor */
-        Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("aggregated-table-store" /* state store name */)
-          .withKeySerde(Serdes.String()) /* key serde */
-          .withValueSerde(Serdes.Integer()); /* serde for aggregate value */
+
+```java
+// Key: username, value: user region (abbreviated to "E" for "Europe", "A" for "Asia")
+KTable<String, String> userProfiles = ...;
+
+// Re-group `userProfiles`.  Don't read too much into what the grouping does:
+// its prime purpose in this example is to show the *effects* of the grouping
+// in the subsequent aggregation.
+KGroupedTable<String, Integer> groupedTable = userProfiles
+    .groupBy((user, region) -> KeyValue.pair(region, user.length()), Serdes.String(), Serdes.Integer());
+
+KTable<String, Integer> aggregated = groupedTable.aggregate(
+    () -> 0, /* initializer */
+    (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+    (aggKey, oldValue, aggValue) -> aggValue - oldValue, /* subtractor */
+    Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("aggregated-table-store" /* state store name */)
+      .withKeySerde(Serdes.String()) /* key serde */
+      .withValueSerde(Serdes.Integer()); /* serde for aggregate value */
+```
 
 **Note**
 
@@ -2118,17 +2144,18 @@ There are two exceptions where co-partitioning is not required. For KStream-Glob
 KStream-KStream joins are always windowed joins, because otherwise the size of the internal state store used to perform the join - e.g., a sliding window or "buffer" - would grow indefinitely. For stream-stream joins it's important to highlight that a new input record on one side will produce a join output _for each_ matching record on the other side, and there can be _multiple_ such matching records in a given join window (cf. the row with timestamp 15 in the join semantics table below, for example).
 
 Join output records are effectively created as follows, leveraging the user-supplied `ValueJoiner`:
-    
-    
-    KeyValue<K, LV> leftRecord = ...;
-    KeyValue<K, RV> rightRecord = ...;
-    ValueJoiner<LV, RV, JV> joiner = ...;
-    
-    KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
-        leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
-        joiner.apply(leftRecord.value, rightRecord.value)
-      );  
-  
+
+```java
+KeyValue<K, LV> leftRecord = ...;
+KeyValue<K, RV> rightRecord = ...;
+ValueJoiner<LV, RV, JV> joiner = ...;
+
+KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
+    leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
+    joiner.apply(leftRecord.value, rightRecord.value)
+  );
+```
+
 <table>  
 <tr>  
 <th>
@@ -2161,21 +2188,21 @@ Performs an INNER JOIN of this stream with another stream. Even though this oper
 **Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).**
 
 Several variants of `join` exist, see the Javadocs for details.
-    
-    
-    import java.time.Duration;
-    KStream<String, Long> left = ...;
-    KStream<String, Double> right = ...;
-    
-    KStream<String, String> joined = left.join(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
-        JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
-        Joined.with(
-          Serdes.String(), /* key */
-          Serdes.Long(),   /* left value */
-          Serdes.Double())  /* right value */
-      );
-    
+
+```java
+import java.time.Duration;
+KStream<String, Long> left = ...;
+KStream<String, Double> right = ...;
+
+KStream<String, String> joined = left.join(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
+    Joined.with(
+      Serdes.String(), /* key */
+      Serdes.Long(),   /* left value */
+      Serdes.Double())  /* right value */
+  );
+```
 
 Detailed behavior:
 
@@ -2214,21 +2241,21 @@ Performs a LEFT JOIN of this stream with another stream. Even though this operat
 **Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).**
 
 Several variants of `leftJoin` exists, see the Javadocs for details.
-    
-    
-    import java.time.Duration;
-    KStream<String, Long> left = ...;
-    KStream<String, Double> right = ...;
-    
-    KStream<String, String> joined = left.leftJoin(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
-        JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
-        Joined.with(
-          Serdes.String(), /* key */
-          Serdes.Long(),   /* left value */
-          Serdes.Double())  /* right value */
-      );
-    
+
+```java
+import java.time.Duration;
+KStream<String, Long> left = ...;
+KStream<String, Double> right = ...;
+
+KStream<String, String> joined = left.leftJoin(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
+    Joined.with(
+      Serdes.String(), /* key */
+      Serdes.Long(),   /* left value */
+      Serdes.Double())  /* right value */
+  );
+```
 
 Detailed behavior:
 
@@ -2269,21 +2296,21 @@ Performs an OUTER JOIN of this stream with another stream. Even though this oper
 **Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).**
 
 Several variants of `outerJoin` exists, see the Javadocs for details.
-    
-    
-    import java.time.Duration;
-    KStream<String, Long> left = ...;
-    KStream<String, Double> right = ...;
-    
-    KStream<String, String> joined = left.outerJoin(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
-        JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
-        Joined.with(
-          Serdes.String(), /* key */
-          Serdes.Long(),   /* left value */
-          Serdes.Double())  /* right value */
-      );
-    
+
+```java
+import java.time.Duration;
+KStream<String, Long> left = ...;
+KStream<String, Double> right = ...;
+
+KStream<String, String> joined = left.outerJoin(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
+    Joined.with(
+      Serdes.String(), /* key */
+      Serdes.Long(),   /* left value */
+      Serdes.Double())  /* right value */
+  );
+```
 
 Detailed behavior:
 
@@ -2916,17 +2943,18 @@ G
 KTable-KTable equi-joins are always _non-windowed_ joins. They are designed to be consistent with their counterparts in relational databases. The changelog streams of both KTables are materialized into local state stores to represent the latest snapshot of their table duals. The join result is a new KTable that represents the changelog stream of the join operation.
 
 Join output records are effectively created as follows, leveraging the user-supplied `ValueJoiner`:
-    
-    
-    KeyValue<K, LV> leftRecord = ...;
-    KeyValue<K, RV> rightRecord = ...;
-    ValueJoiner<LV, RV, JV> joiner = ...;
-    
-    KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
-        leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
-        joiner.apply(leftRecord.value, rightRecord.value)
-      );  
-  
+
+```java
+KeyValue<K, LV> leftRecord = ...;
+KeyValue<K, RV> rightRecord = ...;
+ValueJoiner<LV, RV, JV> joiner = ...;
+
+KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
+    leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
+    joiner.apply(leftRecord.value, rightRecord.value)
+  );
+```
+
 <table>  
 <tr>  
 <th>
@@ -2955,15 +2983,16 @@ Description
 Performs an INNER JOIN of this table with another table. The result is an ever-updating KTable that represents the "current" result of the join. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
-    
-    
-    KTable<String, Long> left = ...;
-    KTable<String, Double> right = ...;
-    
-    KTable<String, String> joined = left.join(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-      );
-    
+
+```java
+KTable<String, Long> left = ...;
+KTable<String, Double> right = ...;
+
+KTable<String, String> joined = left.join(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+  );
+```
+
 
 Detailed behavior:
 
@@ -3000,15 +3029,15 @@ See the semantics overview at the bottom of this section for a detailed descript
 Performs a LEFT JOIN of this table with another table. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
-    
-    
-    KTable<String, Long> left = ...;
-    KTable<String, Double> right = ...;
-    
-    KTable<String, String> joined = left.leftJoin(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-      );
-    
+
+```java
+KTable<String, Long> left = ...;
+KTable<String, Double> right = ...;
+
+KTable<String, String> joined = left.leftJoin(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+  );
+```
 
 Detailed behavior:
 
@@ -3047,15 +3076,16 @@ See the semantics overview at the bottom of this section for a detailed descript
 Performs an OUTER JOIN of this table with another table. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
-    
-    
-    KTable<String, Long> left = ...;
-    KTable<String, Double> right = ...;
-    
-    KTable<String, String> joined = left.outerJoin(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-      );
-    
+
+```java
+KTable<String, Long> left = ...;
+KTable<String, Double> right = ...;
+
+KTable<String, String> joined = left.outerJoin(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+  );
+```
+
 
 Detailed behavior:
 
@@ -3521,24 +3551,27 @@ Description
 
 
 Performs a foreign-key INNER JOIN of this table with another table. The result is an ever-updating KTable that represents the "current" result of the join. [(details)](/%7B%7Bversion%7D%7D/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
-    
-    
-    KTable<String, Long> left = ...;
-                    KTable<Long, Double> right = ...;
-    //This foreignKeyExtractor simply uses the left-value to map to the right-key.
-    Function<Long, Long> foreignKeyExtractor = (v) -> v;
-    //Alternative: with access to left table key
-    BiFunction<String, Long, Long> foreignKeyExtractor = (k, v) -> v;
-    
-                    KTable<String, String> joined = left.join(right, foreignKeyExtractor,
-                        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-                      );
+
+```java
+KTable<String, Long> left = ...;
+                KTable<Long, Double> right = ...;
+//This foreignKeyExtractor simply uses the left-value to map to the right-key.
+Function<Long, Long> foreignKeyExtractor = (v) -> v;
+//Alternative: with access to left table key
+BiFunction<String, Long, Long> foreignKeyExtractor = (k, v) -> v;
+
+                KTable<String, String> joined = left.join(right, foreignKeyExtractor,
+                    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+                  );
+```
 
 Detailed behavior:
 
   * The join is _key-based_ , i.e. with the join predicate: 
-        
-        foreignKeyExtractor.apply(leftRecord.value) == rightRecord.key
+
+```java
+foreignKeyExtractor.apply(leftRecord.value) == rightRecord.key
+```
 
   * The join will be triggered under the conditions listed below whenever new input is received. When it is triggered, the user-supplied `ValueJoiner` will be called to produce join output records.
 
@@ -3569,24 +3602,27 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 
 Performs a foreign-key LEFT JOIN of this table with another table. [(details)](/%7B%7Bversion%7D%7D/javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
-    
-    
-    KTable<String, Long> left = ...;
-                    KTable<Long, Double> right = ...;
-    //This foreignKeyExtractor simply uses the left-value to map to the right-key.
-    Function<Long, Long> foreignKeyExtractor = (v) -> v;
-    //Alternative: with access to left table key
-    BiFunction<String, Long, Long> foreignKeyExtractor = (k, v) -> v;
-    
-                    KTable<String, String> joined = left.leftJoin(right, foreignKeyExtractor,
-                        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-                      );
+
+```java
+KTable<String, Long> left = ...;
+                KTable<Long, Double> right = ...;
+//This foreignKeyExtractor simply uses the left-value to map to the right-key.
+Function<Long, Long> foreignKeyExtractor = (v) -> v;
+//Alternative: with access to left table key
+BiFunction<String, Long, Long> foreignKeyExtractor = (k, v) -> v;
+
+                KTable<String, String> joined = left.leftJoin(right, foreignKeyExtractor,
+                    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+                  );
+```
 
 Detailed behavior:
 
   * The join is _key-based_ , i.e. with the join predicate: 
-        
-        foreignKeyExtractor.apply(leftRecord.value) == rightRecord.key
+
+```java
+foreignKeyExtractor.apply(leftRecord.value) == rightRecord.key
+```
 
   * The join will be triggered under the conditions listed below whenever new input is received. When it is triggered, the user-supplied `ValueJoiner` will be called to produce join output records.
 
@@ -3839,17 +3875,18 @@ LEFT JOIN
 KStream-KTable joins are always _non-windowed_ joins. They allow you to perform _table lookups_ against a KTable (changelog stream) upon receiving a new record from the KStream (record stream). An example use case would be to enrich a stream of user activities (KStream) with the latest user profile information (KTable).
 
 Join output records are effectively created as follows, leveraging the user-supplied `ValueJoiner`:
-    
-    
-    KeyValue<K, LV> leftRecord = ...;
-    KeyValue<K, RV> rightRecord = ...;
-    ValueJoiner<LV, RV, JV> joiner = ...;
-    
-    KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
-        leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
-        joiner.apply(leftRecord.value, rightRecord.value)
-      );  
-  
+
+```java
+KeyValue<K, LV> leftRecord = ...;
+KeyValue<K, RV> rightRecord = ...;
+ValueJoiner<LV, RV, JV> joiner = ...;
+
+KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
+    leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
+    joiner.apply(leftRecord.value, rightRecord.value)
+  );
+```
+
 <table>  
 <tr>  
 <th>
@@ -3882,18 +3919,18 @@ Performs an INNER JOIN of this stream with the table, effectively doing a table 
 **Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.**
 
 Several variants of `join` exists, see the Javadocs for details.
-    
-    
-    KStream<String, Long> left = ...;
-    KTable<String, Double> right = ...;
-    
-    KStream<String, String> joined = left.join(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
-        Joined.keySerde(Serdes.String()) /* key */
-          .withValueSerde(Serdes.Long()) /* left value */
-          .withGracePeriod(Duration.ZERO) /* grace period */
-      );
-    
+
+```java
+KStream<String, Long> left = ...;
+KTable<String, Double> right = ...;
+
+KStream<String, String> joined = left.join(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
+    Joined.keySerde(Serdes.String()) /* key */
+      .withValueSerde(Serdes.Long()) /* left value */
+      .withGracePeriod(Duration.ZERO) /* grace period */
+  );
+```
 
 Detailed behavior:
 
@@ -3936,18 +3973,18 @@ Performs a LEFT JOIN of this stream with the table, effectively doing a table lo
 **Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.**
 
 Several variants of `leftJoin` exists, see the Javadocs for details.
-    
-    
-    KStream<String, Long> left = ...;
-    KTable<String, Double> right = ...;
-    
-    KStream<String, String> joined = left.leftJoin(right,
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
-        Joined.keySerde(Serdes.String()) /* key */
-          .withValueSerde(Serdes.Long()) /* left value */
-          .withGracePeriod(Duration.ZERO) /* grace period */
-      );
-    
+
+```java
+KStream<String, Long> left = ...;
+KTable<String, Double> right = ...;
+
+KStream<String, String> joined = left.leftJoin(right,
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue, /* ValueJoiner */
+    Joined.keySerde(Serdes.String()) /* key */
+      .withValueSerde(Serdes.Long()) /* left value */
+      .withGracePeriod(Duration.ZERO) /* grace period */
+  );
+```
 
 Detailed behavior:
 
@@ -4326,17 +4363,18 @@ At a high-level, KStream-GlobalKTable joins are very similar to KStream-KTable j
 
 
 Join output records are effectively created as follows, leveraging the user-supplied `ValueJoiner`:
-    
-    
-    KeyValue<K, LV> leftRecord = ...;
-    KeyValue<K, RV> rightRecord = ...;
-    ValueJoiner<LV, RV, JV> joiner = ...;
-    
-    KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
-        leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
-        joiner.apply(leftRecord.value, rightRecord.value)
-      );  
-  
+
+```java
+KeyValue<K, LV> leftRecord = ...;
+KeyValue<K, RV> rightRecord = ...;
+ValueJoiner<LV, RV, JV> joiner = ...;
+
+KeyValue<K, JV> joinOutputRecord = KeyValue.pair(
+    leftRecord.key, /* by definition, leftRecord.key == rightRecord.key */
+    joiner.apply(leftRecord.value, rightRecord.value)
+  );
+```
+
 <table>  
 <tr>  
 <th>
@@ -4367,16 +4405,16 @@ Performs an INNER JOIN of this stream with the global table, effectively doing a
 The `GlobalKTable` is fully bootstrapped upon (re)start of a `KafkaStreams` instance, which means the table is fully populated with all the data in the underlying topic that is available at the time of the startup. The actual data processing begins only once the bootstrapping has completed.
 
 **Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.**
-    
-    
-    KStream<String, Long> left = ...;
-    GlobalKTable<Integer, Double> right = ...;
-    
-    KStream<String, String> joined = left.join(right,
-        (leftKey, leftValue) -> leftKey.length(), /* derive a (potentially) new key by which to lookup against the table */
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-      );
-    
+
+```java
+KStream<String, Long> left = ...;
+GlobalKTable<Integer, Double> right = ...;
+
+KStream<String, String> joined = left.join(right,
+    (leftKey, leftValue) -> leftKey.length(), /* derive a (potentially) new key by which to lookup against the table */
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+  );
+```
 
 Detailed behavior:
 
@@ -4411,16 +4449,16 @@ Performs a LEFT JOIN of this stream with the global table, effectively doing a t
 The `GlobalKTable` is fully bootstrapped upon (re)start of a `KafkaStreams` instance, which means the table is fully populated with all the data in the underlying topic that is available at the time of the startup. The actual data processing begins only once the bootstrapping has completed.
 
 **Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.**
-    
-    
-    KStream<String, Long> left = ...;
-    GlobalKTable<Integer, Double> right = ...;
-    
-    KStream<String, String> joined = left.leftJoin(right,
-        (leftKey, leftValue) -> leftKey.length(), /* derive a (potentially) new key by which to lookup against the table */
-        (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
-      );
-    
+
+```java
+KStream<String, Long> left = ...;
+GlobalKTable<Integer, Double> right = ...;
+
+KStream<String, String> joined = left.leftJoin(right,
+    (leftKey, leftValue) -> leftKey.length(), /* derive a (potentially) new key by which to lookup against the table */
+    (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue /* ValueJoiner */
+  );
+```
 
 Detailed behavior:
 
@@ -4528,16 +4566,17 @@ Hopping time windows are windows based on time intervals. They model fixed-sized
 **Hopping windows vs. sliding windows:** Hopping windows are sometimes called "sliding windows" in other stream processing tools. Kafka Streams follows the terminology in academic literature, where the semantics of sliding windows are different to those of hopping windows.
 
 The following code defines a hopping window with a size of 5 minutes and an advance interval of 1 minute:
-    
-    
-    import java.time.Duration;
-    import org.apache.kafka.streams.kstream.TimeWindows;
-    
-    // A hopping time window with a size of 5 minutes and an advance interval of 1 minute.
-    // The window's name -- the string parameter -- is used to e.g. name the backing state store.
-    Duration windowSize = Duration.ofMinutes(5);
-    Duration advance = Duration.ofMinutes(1);
-    TimeWindows.ofSizeWithNoGrace(windowSize).advanceBy(advance);
+
+```java
+import java.time.Duration;
+import org.apache.kafka.streams.kstream.TimeWindows;
+
+// A hopping time window with a size of 5 minutes and an advance interval of 1 minute.
+// The window's name -- the string parameter -- is used to e.g. name the backing state store.
+Duration windowSize = Duration.ofMinutes(5);
+Duration advance = Duration.ofMinutes(1);
+TimeWindows.ofSizeWithNoGrace(windowSize).advanceBy(advance);
+```
 
 ![](/43/images/streams-time-windows-hopping.png)
 
@@ -4558,19 +4597,20 @@ This diagram shows windowing a stream of data records with tumbling windows. Win
 Tumbling time windows are _aligned to the epoch_ , with the lower interval bound being inclusive and the upper bound being exclusive. "Aligned to the epoch" means that the first window starts at timestamp zero. For example, tumbling windows with a size of 5000ms have predictable window boundaries `[0;5000),[5000;10000),...` -- and **not** `[1000;6000),[6000;11000),...` or even something "random" like `[1452;6452),[6452;11452),...`.
 
 The following code defines a tumbling window with a size of 5 minutes:
-    
-    
-    import java.time.Duration;
-    import org.apache.kafka.streams.kstream.TimeWindows;
-    
-    // A tumbling time window with a size of 5 minutes (and, by definition, an implicit
-    // advance interval of 5 minutes), and grace period of 1 minute.
-    Duration windowSize = Duration.ofMinutes(5);
-    Duration gracePeriod = Duration.ofMinutes(1);
-    TimeWindows.ofSizeAndGrace(windowSize, gracePeriod);
-    
-    // The above is equivalent to the following code:
-    TimeWindows.ofSizeAndGrace(windowSize, gracePeriod).advanceBy(windowSize);
+
+```java
+import java.time.Duration;
+import org.apache.kafka.streams.kstream.TimeWindows;
+
+// A tumbling time window with a size of 5 minutes (and, by definition, an implicit
+// advance interval of 5 minutes), and grace period of 1 minute.
+Duration windowSize = Duration.ofMinutes(5);
+Duration gracePeriod = Duration.ofMinutes(1);
+TimeWindows.ofSizeAndGrace(windowSize, gracePeriod);
+
+// The above is equivalent to the following code:
+TimeWindows.ofSizeAndGrace(windowSize, gracePeriod).advanceBy(windowSize);
+```
 
 #### Sliding time windows
 
@@ -4579,14 +4619,15 @@ Sliding windows are actually quite different from hopping and tumbling windows. 
 A sliding window models a fixed-size window that slides continuously over the time axis. In this model, two data records are said to be included in the same window if (in the case of symmetric windows) the difference of their timestamps is within the window size. As a sliding window moves along the time axis, records may fall into multiple snapshots of the sliding window, but each unique combination of records appears only in one sliding window snapshot.
 
 The following code defines a sliding window with a time difference of 10 minutes and a grace period of 30 minutes:
-    
-    
-    import org.apache.kafka.streams.kstream.SlidingWindows;
-    
-    // A sliding time window with a time difference of 10 minutes and grace period of 30 minutes
-    Duration timeDifference = Duration.ofMinutes(10);
-    Duration gracePeriod = Duration.ofMinutes(30);
-    SlidingWindows.ofTimeDifferenceAndGrace(timeDifference, gracePeriod);
+
+```java
+import org.apache.kafka.streams.kstream.SlidingWindows;
+
+// A sliding time window with a time difference of 10 minutes and grace period of 30 minutes
+Duration timeDifference = Duration.ofMinutes(10);
+Duration gracePeriod = Duration.ofMinutes(30);
+SlidingWindows.ofTimeDifferenceAndGrace(timeDifference, gracePeriod);
+```
 
 ![](/43/images/streams-sliding-windows.png)
 
@@ -4608,13 +4649,14 @@ Session windows are different from the other window types in that:
 The prime area of application for session windows is **user behavior analysis**. Session-based analyses can range from simple metrics (e.g. count of user visits on a news website or social platform) to more complex metrics (e.g. customer conversion funnel and event flows).
 
 The following code defines a session window with an inactivity gap of 5 minutes:
-    
-    
-    import java.time.Duration;
-    import org.apache.kafka.streams.kstream.SessionWindows;
-    
-    // A session window with an inactivity gap of 5 minutes.
-    SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5));
+
+```java
+import java.time.Duration;
+import org.apache.kafka.streams.kstream.SessionWindows;
+
+// A session window with an inactivity gap of 5 minutes.
+SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5));
+```
 
 Given the previous session window example, here's what would happen on an input stream of six records. When the first three records arrive (upper part of in the diagram below), we'd have three sessions (see lower part) after having processed those records: two for the green record key, with one session starting and ending at the 0-minute mark (only due to the illustration it looks as if the session goes from 0 to 1), and another starting and ending at the 6-minute mark; and one session for the blue record key, starting and ending at the 2-minute mark.
 
@@ -4636,17 +4678,18 @@ Suppose that you have an hourly windowed count of events per user. If you want t
 
 Kafka Streams offers a clean way to define this logic: after defining your windowed computation, you can suppress the intermediate results, emitting the final count for each user when the window is **closed**. 
 
-For example:
-    
-    
-    KGroupedStream<UserId, Event> grouped = ...;
-    grouped
-        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ofMinutes(10)))
-        .count()
-        .suppress(Suppressed.untilWindowCloses(unbounded()))
-        .filter((windowedUserId, count) -> count < 3)
-        .toStream()
-        .foreach((windowedUserId, count) -> sendAlert(windowedUserId.window(), windowedUserId.key(), count));
+For example: 
+
+```java
+KGroupedStream<UserId, Event> grouped = ...;
+grouped
+    .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ofMinutes(10)))
+    .count()
+    .suppress(Suppressed.untilWindowCloses(unbounded()))
+    .filter((windowedUserId, count) -> count < 3)
+    .toStream()
+    .foreach((windowedUserId, count) -> sendAlert(windowedUserId.window(), windowedUserId.key(), count));
+```
 
 The key parts of this program are: 
 
@@ -4761,55 +4804,55 @@ Stateful
   * **Real-World Context:** In a production monitoring system, categorizing logs by severity ensures ERROR logs are sent to a critical incident management system, WARN logs are analyzed for potential risks, and INFO logs are stored for basic reporting purposes.
 
 
-    
-    
-    public class CategorizingLogsBySeverityExample {
-        private static final String ERROR_LOGS_TOPIC = "error-logs-topic";
-        private static final String INPUT_LOGS_TOPIC = "input-logs-topic";
-        private static final String UNKNOWN_LOGS_TOPIC = "unknown-logs-topic";
-        private static final String WARN_LOGS_TOPIC = "warn-logs-topic";
-    
-        public static void categorizeWithProcess(final StreamsBuilder builder) {
-            final KStream<String, String> logStream = builder.stream(INPUT_LOGS_TOPIC);
-            logStream.process(LogSeverityProcessor::new)
-                    .to((key, value, recordContext) -> {
-                        // Determine the target topic dynamically
-                        if ("ERROR".equals(key)) return ERROR_LOGS_TOPIC;
-                        if ("WARN".equals(key)) return WARN_LOGS_TOPIC;
-                        return UNKNOWN_LOGS_TOPIC;
-                    });
-        }
-    
-        private static class LogSeverityProcessor extends ContextualProcessor<String, String, String, String> {
-            @Override
-            public void process(final Record<String, String> record) {
-                if (record.value() == null) {
-                    return; // Skip null values
-                }
-    
-                // Assume the severity is the first word in the log message
-                // For example: "ERROR: Disk not found" -> "ERROR"
-                final int colonIndex = record.value().indexOf(':');
-                final String severity = colonIndex > 0 ? record.value().substring(0, colonIndex).trim() : "UNKNOWN";
-    
-                // Route logs based on severity
-                switch (severity) {
-                    case "ERROR":
-                        context().forward(record.withKey(ERROR_LOGS_TOPIC));
-                        break;
-                    case "WARN":
-                        context().forward(record.withKey(WARN_LOGS_TOPIC));
-                        break;
-                    case "INFO":
-                        // INFO logs are ignored
-                        break;
-                    default:
-                        // Forward to an "unknown" topic for logs with unrecognized severities
-                        context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
-                }
+```java
+public class CategorizingLogsBySeverityExample {
+    private static final String ERROR_LOGS_TOPIC = "error-logs-topic";
+    private static final String INPUT_LOGS_TOPIC = "input-logs-topic";
+    private static final String UNKNOWN_LOGS_TOPIC = "unknown-logs-topic";
+    private static final String WARN_LOGS_TOPIC = "warn-logs-topic";
+
+    public static void categorizeWithProcess(final StreamsBuilder builder) {
+        final KStream<String, String> logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.process(LogSeverityProcessor::new)
+                .to((key, value, recordContext) -> {
+                    // Determine the target topic dynamically
+                    if ("ERROR".equals(key)) return ERROR_LOGS_TOPIC;
+                    if ("WARN".equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    private static class LogSeverityProcessor extends ContextualProcessor<String, String, String, String> {
+        @Override
+        public void process(final Record<String, String> record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: "ERROR: Disk not found" -> "ERROR"
+            final int colonIndex = record.value().indexOf(':');
+            final String severity = colonIndex > 0 ? record.value().substring(0, colonIndex).trim() : "UNKNOWN";
+
+            // Route logs based on severity
+            switch (severity) {
+                case "ERROR":
+                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
+                    break;
+                case "WARN":
+                    context().forward(record.withKey(WARN_LOGS_TOPIC));
+                    break;
+                case "INFO":
+                    // INFO logs are ignored
+                    break;
+                default:
+                    // Forward to an "unknown" topic for logs with unrecognized severities
+                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
             }
         }
     }
+}
+```
 
 #### Replacing Slang in Text Messages
 
@@ -4817,39 +4860,39 @@ Stateful
   * **Real-World Context:** In customer support chat systems, normalizing text by replacing slang with formal equivalents ensures that automated sentiment analysis tools work accurately and provide reliable insights.
 
 
-    
-    
-    public class ReplacingSlangTextInMessagesExample {
-        private static final Map<String, String> SLANG_DICTIONARY = Map.of(
-                "u", "you",
-                "brb", "be right back",
-                "omg", "oh my god",
-                "btw", "by the way"
-        );
-        private static final String INPUT_MESSAGES_TOPIC = "input-messages-topic";
-        private static final String OUTPUT_MESSAGES_TOPIC = "output-messages-topic";
-    
-        public static void replaceWithProcessValues(final StreamsBuilder builder) {
-            KStream<String, String> messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
-            messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
-        }
-    
-        private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor<String, String, String> {
-            @Override
-            public void process(final FixedKeyRecord<String, String> record) {
-                if (record.value() == null) {
-                    return; // Skip null values
-                }
-    
-                // Replace slang words in the message
-                final String[] words = record.value().split("\s+");
-                for (final String word : words) {
-                    String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
-                    context().forward(record.withValue(replacedWord));
-                }
+```java
+public class ReplacingSlangTextInMessagesExample {
+    private static final Map<String, String> SLANG_DICTIONARY = Map.of(
+            "u", "you",
+            "brb", "be right back",
+            "omg", "oh my god",
+            "btw", "by the way"
+    );
+    private static final String INPUT_MESSAGES_TOPIC = "input-messages-topic";
+    private static final String OUTPUT_MESSAGES_TOPIC = "output-messages-topic";
+
+    public static void replaceWithProcessValues(final StreamsBuilder builder) {
+        KStream<String, String> messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor<String, String, String> {
+        @Override
+        public void process(final FixedKeyRecord<String, String> record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = record.value().split("\s+");
+            for (final String word : words) {
+                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
+                context().forward(record.withValue(replacedWord));
             }
         }
     }
+}
+```
 
 #### Cumulative Discounts for a Loyalty Program
 
@@ -4857,69 +4900,69 @@ Stateful
   * **Real-World Context:** In a retail loyalty program, tracking cumulative customer spending enables dynamic rewards, such as issuing a discount when a customer's total purchases exceed a predefined limit. 
 
 
-    
-    
-    public class CumulativeDiscountsForALoyaltyProgramExample {
-        private static final double DISCOUNT_THRESHOLD = 100.0;
-        private static final String CUSTOMER_SPENDING_STORE = "customer-spending-store";
-        private static final String DISCOUNT_NOTIFICATION_MESSAGE =
-                "Discount applied! You have received a reward for your purchases.";
-        private static final String DISCOUNT_NOTIFICATIONS_TOPIC = "discount-notifications-topic";
-        private static final String PURCHASE_EVENTS_TOPIC = "purchase-events-topic";
-    
-        public static void applyDiscountWithProcess(final StreamsBuilder builder) {
-            // Define the state store for tracking cumulative spending
-            builder.addStateStore(
-                    Stores.keyValueStoreBuilder(
-                            Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
-                            Serdes.String(),
-                            Serdes.Double()
-                    )
-            );
-            final KStream<String, Double> purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
-            // Apply the Processor with the state store
-            final KStream<String, String> notificationStream =
-                    purchaseStream.process(CumulativeDiscountProcessor::new, CUSTOMER_SPENDING_STORE);
-            // Send the notifications to the output topic
-            notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+```java
+public class CumulativeDiscountsForALoyaltyProgramExample {
+    private static final double DISCOUNT_THRESHOLD = 100.0;
+    private static final String CUSTOMER_SPENDING_STORE = "customer-spending-store";
+    private static final String DISCOUNT_NOTIFICATION_MESSAGE =
+            "Discount applied! You have received a reward for your purchases.";
+    private static final String DISCOUNT_NOTIFICATIONS_TOPIC = "discount-notifications-topic";
+    private static final String PURCHASE_EVENTS_TOPIC = "purchase-events-topic";
+
+    public static void applyDiscountWithProcess(final StreamsBuilder builder) {
+        // Define the state store for tracking cumulative spending
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
+                        Serdes.String(),
+                        Serdes.Double()
+                )
+        );
+        final KStream<String, Double> purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
+        // Apply the Processor with the state store
+        final KStream<String, String> notificationStream =
+                purchaseStream.process(CumulativeDiscountProcessor::new, CUSTOMER_SPENDING_STORE);
+        // Send the notifications to the output topic
+        notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+    }
+
+    private static class CumulativeDiscountProcessor implements Processor<String, Double, String, String> {
+        private KeyValueStore<String, Double> spendingStore;
+        private ProcessorContext<String, String> context;
+
+        @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+            // Retrieve the state store for cumulative spending
+            spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
         }
-    
-        private static class CumulativeDiscountProcessor implements Processor<String, Double, String, String> {
-            private KeyValueStore<String, Double> spendingStore;
-            private ProcessorContext<String, String> context;
-    
-            @Override
-            public void init(final ProcessorContext<String, String> context) {
-                this.context = context;
-                // Retrieve the state store for cumulative spending
-                spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
+
+        @Override
+        public void process(final Record<String, Double> record) {
+            if (record.value() == null) {
+                return; // Skip null purchase amounts
             }
-    
-            @Override
-            public void process(final Record<String, Double> record) {
-                if (record.value() == null) {
-                    return; // Skip null purchase amounts
-                }
-    
-                // Get the current spending total for the customer
-                Double currentSpending = spendingStore.get(record.key());
-                if (currentSpending == null) {
-                    currentSpending = 0.0;
-                }
-                // Update the cumulative spending
-                currentSpending += record.value();
-                spendingStore.put(record.key(), currentSpending);
-    
-                // Check if the customer qualifies for a discount
-                if (currentSpending >= DISCOUNT_THRESHOLD) {
-                    // Reset the spending after applying the discount
-                    spendingStore.put(record.key(), currentSpending - DISCOUNT_THRESHOLD);
-                    // Send a discount notification
-                    context.forward(record.withValue(DISCOUNT_NOTIFICATION_MESSAGE));
-                }
+
+            // Get the current spending total for the customer
+            Double currentSpending = spendingStore.get(record.key());
+            if (currentSpending == null) {
+                currentSpending = 0.0;
+            }
+            // Update the cumulative spending
+            currentSpending += record.value();
+            spendingStore.put(record.key(), currentSpending);
+
+            // Check if the customer qualifies for a discount
+            if (currentSpending >= DISCOUNT_THRESHOLD) {
+                // Reset the spending after applying the discount
+                spendingStore.put(record.key(), currentSpending - DISCOUNT_THRESHOLD);
+                // Send a discount notification
+                context.forward(record.withValue(DISCOUNT_NOTIFICATION_MESSAGE));
             }
         }
     }
+}
+```
 
 #### Traffic Radar Monitoring Car Count
 
@@ -4927,63 +4970,63 @@ Stateful
   * **Real-World Context:** A car counting system can be useful for determining measures for widening or controlling traffic depending on the number of cars passing through the monitored stretch.
 
 
-    
-    
-    public class TrafficRadarMonitoringCarCountExample {
-        private static final String DAILY_COUNT_STORE = "price-state-store";
-        private static final String DAILY_COUNT_TOPIC = "price-state-topic";
-        private static final String RADAR_COUNT_TOPIC = "car-radar-topic";
-    
-        public static void countWithProcessValues(final StreamsBuilder builder) {
-            // Define a state store for tracking daily car counts
-            builder.addStateStore(
-                    Stores.keyValueStoreBuilder(
-                            Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
-                            Serdes.String(),
-                            Serdes.Long()
-                    )
-            );
-            final KStream<Void, String> radarStream = builder.stream(RADAR_COUNT_TOPIC);
-            // Apply the FixedKeyProcessor with the state store
-            radarStream.processValues(DailyCarCountProcessor::new, DAILY_COUNT_STORE)
-                    .to(DAILY_COUNT_TOPIC);
+```java
+public class TrafficRadarMonitoringCarCountExample {
+    private static final String DAILY_COUNT_STORE = "price-state-store";
+    private static final String DAILY_COUNT_TOPIC = "price-state-topic";
+    private static final String RADAR_COUNT_TOPIC = "car-radar-topic";
+
+    public static void countWithProcessValues(final StreamsBuilder builder) {
+        // Define a state store for tracking daily car counts
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
+                        Serdes.String(),
+                        Serdes.Long()
+                )
+        );
+        final KStream<Void, String> radarStream = builder.stream(RADAR_COUNT_TOPIC);
+        // Apply the FixedKeyProcessor with the state store
+        radarStream.processValues(DailyCarCountProcessor::new, DAILY_COUNT_STORE)
+                .to(DAILY_COUNT_TOPIC);
+    }
+
+    private static class DailyCarCountProcessor implements FixedKeyProcessor<Void, String, String> {
+        private FixedKeyProcessorContext<Void, String> context;
+        private KeyValueStore<String, Long> stateStore;
+        private static final DateTimeFormatter DATE_FORMATTER =
+                DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
+
+        @Override
+        public void init(final FixedKeyProcessorContext<Void, String> context) {
+            this.context = context;
+            stateStore = context.getStateStore(DAILY_COUNT_STORE);
         }
-    
-        private static class DailyCarCountProcessor implements FixedKeyProcessor<Void, String, String> {
-            private FixedKeyProcessorContext<Void, String> context;
-            private KeyValueStore<String, Long> stateStore;
-            private static final DateTimeFormatter DATE_FORMATTER =
-                    DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
-    
-            @Override
-            public void init(final FixedKeyProcessorContext<Void, String> context) {
-                this.context = context;
-                stateStore = context.getStateStore(DAILY_COUNT_STORE);
+
+        @Override
+        public void process(final FixedKeyRecord<Void, String> record) {
+            if (record.value() == null) {
+                return; // Skip null events
             }
-    
-            @Override
-            public void process(final FixedKeyRecord<Void, String> record) {
-                if (record.value() == null) {
-                    return; // Skip null events
-                }
-    
-                // Derive the current day from the event timestamp
-                final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
-                final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
-                // Retrieve the current count for the day
-                Long dailyCount = stateStore.get(currentDay);
-                if (dailyCount == null) {
-                    dailyCount = 0L;
-                }
-                // Increment the count
-                dailyCount++;
-                stateStore.put(currentDay, dailyCount);
-    
-                // Emit the current day's count
-                context.forward(record.withValue(String.format("Day: %s, Car Count: %s", currentDay, dailyCount)));
+
+            // Derive the current day from the event timestamp
+            final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
+            final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
+            // Retrieve the current count for the day
+            Long dailyCount = stateStore.get(currentDay);
+            if (dailyCount == null) {
+                dailyCount = 0L;
             }
+            // Increment the count
+            dailyCount++;
+            stateStore.put(currentDay, dailyCount);
+
+            // Emit the current day's count
+            context.forward(record.withValue(String.format("Day: %s, Car Count: %s", currentDay, dailyCount)));
         }
     }
+}
+```
 
 ### Keynotes
 
@@ -5011,14 +5054,15 @@ The following deprecated methods are no longer available in Kafka Streams:
 The Processor API now serves as a unified replacement for all these methods. It simplifies the API surface while maintaining support for both stateless and stateful operations.
 
 **CAUTION:** If you are using `KStream.transformValues()` or `KStream.flatTransformValues()` and you have the "merge repartition topics" optimization enabled, rewriting your program to `KStream.processValues()` might not be safe due to [KAFKA-19668](https://issues.apache.org/jira/browse/KAFKA-19668). For this case, you should not upgrade to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 or 4.1.1 instead, which contain a fix. Note, that the fix is not enabled by default for backward compatibility reasons, and you would need to enable the fix by setting config `__enable.process.processValue.fix__ = true` and pass it into `StreamsBuilder()` constructor.
-    
-    
-    final Properties properties = new Properties();
-    properties.put(StreamsConfig.APPLICATION_ID_CONFIG, ...);
-    properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ...);
-    properties.put(TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX, true);
-    
-    final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(properties)));
+
+```java
+final Properties properties = new Properties();
+properties.put(StreamsConfig.APPLICATION_ID_CONFIG, ...);
+properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ...);
+properties.put(TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX, true);
+
+final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(properties)));
+```
 
 It is recommended, that you compare the output of `Topology.describe()` for the old and new topology, to verify if the rewrite to `processValues()` is correct, and that it does not introduce any incompatibilities. You should also test the upgrade in a non-production environment.
 
@@ -5116,401 +5160,405 @@ Stateful
 #### Categorizing Logs by Severity
 
 Below, methods `categorizeWithFlatTransform` and `categorizeWithProcess` show how you can migrate from `flatTransform` to `process`.
-    
-    
-    public class CategorizingLogsBySeverityExample {
-        private static final String ERROR_LOGS_TOPIC = "error-logs-topic";
-        private static final String INPUT_LOGS_TOPIC = "input-logs-topic";
-        private static final String UNKNOWN_LOGS_TOPIC = "unknown-logs-topic";
-        private static final String WARN_LOGS_TOPIC = "warn-logs-topic";
-    
-        public static void categorizeWithFlatTransform(final StreamsBuilder builder) {
-            final KStream<String, String> logStream = builder.stream(INPUT_LOGS_TOPIC);
-            logStream.flatTransform(LogSeverityTransformer::new)
-                    .to((key, value, recordContext) -> {
-                        // Determine the target topic dynamically
-                        if ("ERROR".equals(key)) return ERROR_LOGS_TOPIC;
-                        if ("WARN".equals(key)) return WARN_LOGS_TOPIC;
-                        return UNKNOWN_LOGS_TOPIC;
-                    });
+
+```java
+public class CategorizingLogsBySeverityExample {
+    private static final String ERROR_LOGS_TOPIC = "error-logs-topic";
+    private static final String INPUT_LOGS_TOPIC = "input-logs-topic";
+    private static final String UNKNOWN_LOGS_TOPIC = "unknown-logs-topic";
+    private static final String WARN_LOGS_TOPIC = "warn-logs-topic";
+
+    public static void categorizeWithFlatTransform(final StreamsBuilder builder) {
+        final KStream<String, String> logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.flatTransform(LogSeverityTransformer::new)
+                .to((key, value, recordContext) -> {
+                    // Determine the target topic dynamically
+                    if ("ERROR".equals(key)) return ERROR_LOGS_TOPIC;
+                    if ("WARN".equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    public static void categorizeWithProcess(final StreamsBuilder builder) {
+        final KStream<String, String> logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.process(LogSeverityProcessor::new)
+                .to((key, value, recordContext) -> {
+                    // Determine the target topic dynamically
+                    if ("ERROR".equals(key)) return ERROR_LOGS_TOPIC;
+                    if ("WARN".equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    private static class LogSeverityTransformer implements Transformer<String, String, Iterable<KeyValue<String, String>>> {
+        @Override
+        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
         }
-    
-        public static void categorizeWithProcess(final StreamsBuilder builder) {
-            final KStream<String, String> logStream = builder.stream(INPUT_LOGS_TOPIC);
-            logStream.process(LogSeverityProcessor::new)
-                    .to((key, value, recordContext) -> {
-                        // Determine the target topic dynamically
-                        if ("ERROR".equals(key)) return ERROR_LOGS_TOPIC;
-                        if ("WARN".equals(key)) return WARN_LOGS_TOPIC;
-                        return UNKNOWN_LOGS_TOPIC;
-                    });
+
+        @Override
+        public Iterable<KeyValue<String, String>> transform(String key, String value) {
+            if (value == null) {
+                return Collections.emptyList(); // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: "ERROR: Disk not found" -> "ERROR"
+            int colonIndex = value.indexOf(':');
+            String severity = colonIndex > 0 ? value.substring(0, colonIndex).trim() : "UNKNOWN";
+
+            // Create appropriate KeyValue pair based on severity
+            return switch (severity) {
+                case "ERROR" -> List.of(new KeyValue<>("ERROR", value));
+                case "WARN" -> List.of(new KeyValue<>("WARN", value));
+                case "INFO" -> Collections.emptyList(); // INFO logs are ignored
+                default -> List.of(new KeyValue<>("UNKNOWN", value));
+            };
         }
-    
-        private static class LogSeverityTransformer implements Transformer<String, String, Iterable<KeyValue<String, String>>> {
-            @Override
-            public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
-            }
-    
-            @Override
-            public Iterable<KeyValue<String, String>> transform(String key, String value) {
-                if (value == null) {
-                    return Collections.emptyList(); // Skip null values
-                }
-    
-                // Assume the severity is the first word in the log message
-                // For example: "ERROR: Disk not found" -> "ERROR"
-                int colonIndex = value.indexOf(':');
-                String severity = colonIndex > 0 ? value.substring(0, colonIndex).trim() : "UNKNOWN";
-    
-                // Create appropriate KeyValue pair based on severity
-                return switch (severity) {
-                    case "ERROR" -> List.of(new KeyValue<>("ERROR", value));
-                    case "WARN" -> List.of(new KeyValue<>("WARN", value));
-                    case "INFO" -> Collections.emptyList(); // INFO logs are ignored
-                    default -> List.of(new KeyValue<>("UNKNOWN", value));
-                };
-            }
-    
-            @Override
-            public void close() {
-            }
+
+        @Override
+        public void close() {
         }
-    
-        private static class LogSeverityProcessor extends ContextualProcessor<String, String, String, String> {
-            @Override
-            public void process(final Record<String, String> record) {
-                if (record.value() == null) {
-                    return; // Skip null values
-                }
-    
-                // Assume the severity is the first word in the log message
-                // For example: "ERROR: Disk not found" -> "ERROR"
-                final int colonIndex = record.value().indexOf(':');
-                final String severity = colonIndex > 0 ? record.value().substring(0, colonIndex).trim() : "UNKNOWN";
-    
-                // Route logs based on severity
-                switch (severity) {
-                    case "ERROR":
-                        context().forward(record.withKey(ERROR_LOGS_TOPIC));
-                        break;
-                    case "WARN":
-                        context().forward(record.withKey(WARN_LOGS_TOPIC));
-                        break;
-                    case "INFO":
-                        // INFO logs are ignored
-                        break;
-                    default:
-                        // Forward to an "unknown" topic for logs with unrecognized severities
-                        context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
-                }
+    }
+
+    private static class LogSeverityProcessor extends ContextualProcessor<String, String, String, String> {
+        @Override
+        public void process(final Record<String, String> record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: "ERROR: Disk not found" -> "ERROR"
+            final int colonIndex = record.value().indexOf(':');
+            final String severity = colonIndex > 0 ? record.value().substring(0, colonIndex).trim() : "UNKNOWN";
+
+            // Route logs based on severity
+            switch (severity) {
+                case "ERROR":
+                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
+                    break;
+                case "WARN":
+                    context().forward(record.withKey(WARN_LOGS_TOPIC));
+                    break;
+                case "INFO":
+                    // INFO logs are ignored
+                    break;
+                default:
+                    // Forward to an "unknown" topic for logs with unrecognized severities
+                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
             }
         }
     }
+}
+```
 
 #### Replacing Slang in Text Messages
 
 Below, methods `replaceWithFlatTransformValues` and `replaceWithProcessValues` show how you can migrate from `flatTransformValues` to `processValues`.
-    
-    
-    public class ReplacingSlangTextInMessagesExample {
-        private static final Map<String, String> SLANG_DICTIONARY = Map.of(
-                "u", "you",
-                "brb", "be right back",
-                "omg", "oh my god",
-                "btw", "by the way"
-        );
-        private static final String INPUT_MESSAGES_TOPIC = "input-messages-topic";
-        private static final String OUTPUT_MESSAGES_TOPIC = "output-messages-topic";
-    
-        public static void replaceWithFlatTransformValues(final StreamsBuilder builder) {
-            KStream<String, String> messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
-            messageStream.flatTransformValues(SlangReplacementTransformer::new).to(OUTPUT_MESSAGES_TOPIC);
+
+```java
+public class ReplacingSlangTextInMessagesExample {
+    private static final Map<String, String> SLANG_DICTIONARY = Map.of(
+            "u", "you",
+            "brb", "be right back",
+            "omg", "oh my god",
+            "btw", "by the way"
+    );
+    private static final String INPUT_MESSAGES_TOPIC = "input-messages-topic";
+    private static final String OUTPUT_MESSAGES_TOPIC = "output-messages-topic";
+
+    public static void replaceWithFlatTransformValues(final StreamsBuilder builder) {
+        KStream<String, String> messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.flatTransformValues(SlangReplacementTransformer::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    public static void replaceWithProcessValues(final StreamsBuilder builder) {
+        KStream<String, String> messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    private static class SlangReplacementTransformer implements ValueTransformer<String, Iterable<String>> {
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
         }
-    
-        public static void replaceWithProcessValues(final StreamsBuilder builder) {
-            KStream<String, String> messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
-            messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
+
+        @Override
+        public Iterable<String> transform(final String value) {
+            if (value == null) {
+                return Collections.emptyList(); // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = value.split("\s+");
+            return Arrays.asList(
+                    Arrays.stream(words)
+                            .map(word -> SLANG_DICTIONARY.getOrDefault(word, word))
+                            .toArray(String[]::new)
+            );
         }
-    
-        private static class SlangReplacementTransformer implements ValueTransformer<String, Iterable<String>> {
-    
-            @Override
-            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-            }
-    
-            @Override
-            public Iterable<String> transform(final String value) {
-                if (value == null) {
-                    return Collections.emptyList(); // Skip null values
-                }
-    
-                // Replace slang words in the message
-                final String[] words = value.split("\s+");
-                return Arrays.asList(
-                        Arrays.stream(words)
-                                .map(word -> SLANG_DICTIONARY.getOrDefault(word, word))
-                                .toArray(String[]::new)
-                );
-            }
-    
-            @Override
-            public void close() {
-            }
+
+        @Override
+        public void close() {
         }
-    
-        private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor<String, String, String> {
-            @Override
-            public void process(final FixedKeyRecord<String, String> record) {
-                if (record.value() == null) {
-                    return; // Skip null values
-                }
-    
-                // Replace slang words in the message
-                final String[] words = record.value().split("\s+");
-                for (final String word : words) {
-                    String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
-                    context().forward(record.withValue(replacedWord));
-                }
+    }
+
+    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor<String, String, String> {
+        @Override
+        public void process(final FixedKeyRecord<String, String> record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = record.value().split("\s+");
+            for (final String word : words) {
+                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
+                context().forward(record.withValue(replacedWord));
             }
         }
     }
+}
+```
 
 #### Cumulative Discounts for a Loyalty Program
 
 Below, methods `applyDiscountWithTransform` and `applyDiscountWithProcess` show how you can migrate from `transform` to `process`.
-    
-    
-    public class CumulativeDiscountsForALoyaltyProgramExample {
-        private static final double DISCOUNT_THRESHOLD = 100.0;
-        private static final String CUSTOMER_SPENDING_STORE = "customer-spending-store";
-        private static final String DISCOUNT_NOTIFICATION_MESSAGE =
-                "Discount applied! You have received a reward for your purchases.";
-        private static final String DISCOUNT_NOTIFICATIONS_TOPIC = "discount-notifications-topic";
-        private static final String PURCHASE_EVENTS_TOPIC = "purchase-events-topic";
-    
-        public static void applyDiscountWithTransform(final StreamsBuilder builder) {
-            // Define the state store for tracking cumulative spending
-            builder.addStateStore(
-                    Stores.keyValueStoreBuilder(
-                            Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
-                            Serdes.String(),
-                            Serdes.Double()
-                    )
-            );
-            final KStream<String, Double> purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
-            // Apply the Transformer with the state store
-            final KStream<String, String> notificationStream =
-                    purchaseStream.transform(CumulativeDiscountTransformer::new, CUSTOMER_SPENDING_STORE);
-            // Send the notifications to the output topic
-            notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+
+```java
+public class CumulativeDiscountsForALoyaltyProgramExample {
+    private static final double DISCOUNT_THRESHOLD = 100.0;
+    private static final String CUSTOMER_SPENDING_STORE = "customer-spending-store";
+    private static final String DISCOUNT_NOTIFICATION_MESSAGE =
+            "Discount applied! You have received a reward for your purchases.";
+    private static final String DISCOUNT_NOTIFICATIONS_TOPIC = "discount-notifications-topic";
+    private static final String PURCHASE_EVENTS_TOPIC = "purchase-events-topic";
+
+    public static void applyDiscountWithTransform(final StreamsBuilder builder) {
+        // Define the state store for tracking cumulative spending
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
+                        Serdes.String(),
+                        Serdes.Double()
+                )
+        );
+        final KStream<String, Double> purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
+        // Apply the Transformer with the state store
+        final KStream<String, String> notificationStream =
+                purchaseStream.transform(CumulativeDiscountTransformer::new, CUSTOMER_SPENDING_STORE);
+        // Send the notifications to the output topic
+        notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+    }
+
+    public static void applyDiscountWithProcess(final StreamsBuilder builder) {
+        // Define the state store for tracking cumulative spending
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
+                        org.apache.kafka.common.serialization.Serdes.String(),
+                        org.apache.kafka.common.serialization.Serdes.Double()
+                )
+        );
+        final KStream<String, Double> purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
+        // Apply the Processor with the state store
+        final KStream<String, String> notificationStream =
+                purchaseStream.process(CumulativeDiscountProcessor::new, CUSTOMER_SPENDING_STORE);
+        // Send the notifications to the output topic
+        notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+    }
+
+    private static class CumulativeDiscountTransformer implements Transformer<String, Double, KeyValue<String, String>> {
+        private KeyValueStore<String, Double> spendingStore;
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+            // Retrieve the state store for cumulative spending
+            spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
         }
-    
-        public static void applyDiscountWithProcess(final StreamsBuilder builder) {
-            // Define the state store for tracking cumulative spending
-            builder.addStateStore(
-                    Stores.keyValueStoreBuilder(
-                            Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
-                            org.apache.kafka.common.serialization.Serdes.String(),
-                            org.apache.kafka.common.serialization.Serdes.Double()
-                    )
-            );
-            final KStream<String, Double> purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
-            // Apply the Processor with the state store
-            final KStream<String, String> notificationStream =
-                    purchaseStream.process(CumulativeDiscountProcessor::new, CUSTOMER_SPENDING_STORE);
-            // Send the notifications to the output topic
-            notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+
+        @Override
+        public KeyValue<String, String> transform(final String key, final Double value) {
+            if (value == null) {
+                return null; // Skip null purchase amounts
+            }
+
+            // Get the current spending total for the customer
+            Double currentSpending = spendingStore.get(key);
+            if (currentSpending == null) {
+                currentSpending = 0.0;
+            }
+            // Update the cumulative spending
+            currentSpending += value;
+            spendingStore.put(key, currentSpending);
+
+            // Check if the customer qualifies for a discount
+            if (currentSpending >= DISCOUNT_THRESHOLD) {
+                // Reset the spending after applying the discount
+                spendingStore.put(key, currentSpending - DISCOUNT_THRESHOLD);
+                // Return a notification message
+                return new KeyValue<>(key, DISCOUNT_NOTIFICATION_MESSAGE);
+            }
+            return null; // No discount, so no output for this record
         }
-    
-        private static class CumulativeDiscountTransformer implements Transformer<String, Double, KeyValue<String, String>> {
-            private KeyValueStore<String, Double> spendingStore;
-    
-            @Override
-            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-                // Retrieve the state store for cumulative spending
-                spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
-            }
-    
-            @Override
-            public KeyValue<String, String> transform(final String key, final Double value) {
-                if (value == null) {
-                    return null; // Skip null purchase amounts
-                }
-    
-                // Get the current spending total for the customer
-                Double currentSpending = spendingStore.get(key);
-                if (currentSpending == null) {
-                    currentSpending = 0.0;
-                }
-                // Update the cumulative spending
-                currentSpending += value;
-                spendingStore.put(key, currentSpending);
-    
-                // Check if the customer qualifies for a discount
-                if (currentSpending >= DISCOUNT_THRESHOLD) {
-                    // Reset the spending after applying the discount
-                    spendingStore.put(key, currentSpending - DISCOUNT_THRESHOLD);
-                    // Return a notification message
-                    return new KeyValue<>(key, DISCOUNT_NOTIFICATION_MESSAGE);
-                }
-                return null; // No discount, so no output for this record
-            }
-    
-            @Override
-            public void close() {
-            }
+
+        @Override
+        public void close() {
         }
-    
-        private static class CumulativeDiscountProcessor implements Processor<String, Double, String, String> {
-            private KeyValueStore<String, Double> spendingStore;
-            private ProcessorContext<String, String> context;
-    
-            @Override
-            public void init(final ProcessorContext<String, String> context) {
-                this.context = context;
-                // Retrieve the state store for cumulative spending
-                spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
+    }
+
+    private static class CumulativeDiscountProcessor implements Processor<String, Double, String, String> {
+        private KeyValueStore<String, Double> spendingStore;
+        private ProcessorContext<String, String> context;
+
+        @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+            // Retrieve the state store for cumulative spending
+            spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
+        }
+
+        @Override
+        public void process(final Record<String, Double> record) {
+            if (record.value() == null) {
+                return; // Skip null purchase amounts
             }
-    
-            @Override
-            public void process(final Record<String, Double> record) {
-                if (record.value() == null) {
-                    return; // Skip null purchase amounts
-                }
-    
-                // Get the current spending total for the customer
-                Double currentSpending = spendingStore.get(record.key());
-                if (currentSpending == null) {
-                    currentSpending = 0.0;
-                }
-                // Update the cumulative spending
-                currentSpending += record.value();
-                spendingStore.put(record.key(), currentSpending);
-    
-                // Check if the customer qualifies for a discount
-                if (currentSpending >= DISCOUNT_THRESHOLD) {
-                    // Reset the spending after applying the discount
-                    spendingStore.put(record.key(), currentSpending - DISCOUNT_THRESHOLD);
-                    // Send a discount notification
-                    context.forward(record.withValue(DISCOUNT_NOTIFICATION_MESSAGE));
-                }
+
+            // Get the current spending total for the customer
+            Double currentSpending = spendingStore.get(record.key());
+            if (currentSpending == null) {
+                currentSpending = 0.0;
+            }
+            // Update the cumulative spending
+            currentSpending += record.value();
+            spendingStore.put(record.key(), currentSpending);
+
+            // Check if the customer qualifies for a discount
+            if (currentSpending >= DISCOUNT_THRESHOLD) {
+                // Reset the spending after applying the discount
+                spendingStore.put(record.key(), currentSpending - DISCOUNT_THRESHOLD);
+                // Send a discount notification
+                context.forward(record.withValue(DISCOUNT_NOTIFICATION_MESSAGE));
             }
         }
     }
+}
+```
 
 #### Traffic Radar Monitoring Car Count
 
 Below, methods `countWithTransformValues` and `countWithProcessValues` show how you can migrate from `transformValues` to `processValues`.
-    
-    
-    public class TrafficRadarMonitoringCarCountExample {
-        private static final String DAILY_COUNT_STORE = "price-state-store";
-        private static final String DAILY_COUNT_TOPIC = "price-state-topic";
-        private static final String RADAR_COUNT_TOPIC = "car-radar-topic";
-    
-        public static void countWithTransformValues(final StreamsBuilder builder) {
-            // Define a state store for tracking daily car counts
-            builder.addStateStore(
-                    Stores.keyValueStoreBuilder(
-                            Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
-                            org.apache.kafka.common.serialization.Serdes.String(),
-                            org.apache.kafka.common.serialization.Serdes.Long()
-                    )
-            );
-            final KStream<Void, String> radarStream = builder.stream(RADAR_COUNT_TOPIC);
-            // Apply the ValueTransformer with the state store
-            radarStream.transformValues(DailyCarCountTransformer::new, DAILY_COUNT_STORE)
-                    .to(DAILY_COUNT_TOPIC);
+
+```java
+public class TrafficRadarMonitoringCarCountExample {
+    private static final String DAILY_COUNT_STORE = "price-state-store";
+    private static final String DAILY_COUNT_TOPIC = "price-state-topic";
+    private static final String RADAR_COUNT_TOPIC = "car-radar-topic";
+
+    public static void countWithTransformValues(final StreamsBuilder builder) {
+        // Define a state store for tracking daily car counts
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
+                        org.apache.kafka.common.serialization.Serdes.String(),
+                        org.apache.kafka.common.serialization.Serdes.Long()
+                )
+        );
+        final KStream<Void, String> radarStream = builder.stream(RADAR_COUNT_TOPIC);
+        // Apply the ValueTransformer with the state store
+        radarStream.transformValues(DailyCarCountTransformer::new, DAILY_COUNT_STORE)
+                .to(DAILY_COUNT_TOPIC);
+    }
+
+    public static void countWithProcessValues(final StreamsBuilder builder) {
+        // Define a state store for tracking daily car counts
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
+                        org.apache.kafka.common.serialization.Serdes.String(),
+                        org.apache.kafka.common.serialization.Serdes.Long()
+                )
+        );
+        final KStream<Void, String> radarStream = builder.stream(RADAR_COUNT_TOPIC);
+        // Apply the FixedKeyProcessor with the state store
+        radarStream.processValues(DailyCarCountProcessor::new, DAILY_COUNT_STORE)
+                .to(DAILY_COUNT_TOPIC);
+    }
+
+    private static class DailyCarCountTransformer implements ValueTransformerWithKey<Void, String, String> {
+        private KeyValueStore<String, Long> stateStore;
+        private static final DateTimeFormatter DATE_FORMATTER =
+                DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+            // Access the state store
+            stateStore = context.getStateStore(DAILY_COUNT_STORE);
         }
-    
-        public static void countWithProcessValues(final StreamsBuilder builder) {
-            // Define a state store for tracking daily car counts
-            builder.addStateStore(
-                    Stores.keyValueStoreBuilder(
-                            Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
-                            org.apache.kafka.common.serialization.Serdes.String(),
-                            org.apache.kafka.common.serialization.Serdes.Long()
-                    )
-            );
-            final KStream<Void, String> radarStream = builder.stream(RADAR_COUNT_TOPIC);
-            // Apply the FixedKeyProcessor with the state store
-            radarStream.processValues(DailyCarCountProcessor::new, DAILY_COUNT_STORE)
-                    .to(DAILY_COUNT_TOPIC);
+
+        @Override
+        public String transform(Void readOnlyKey, String value) {
+            if (value == null) {
+                return null; // Skip null events
+            }
+
+            // Derive the current day from the event timestamp
+            final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
+            final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
+            // Retrieve the current count for the day
+            Long dailyCount = stateStore.get(currentDay);
+            if (dailyCount == null) {
+                dailyCount = 0L;
+            }
+            // Increment the count
+            dailyCount++;
+            stateStore.put(currentDay, dailyCount);
+
+            // Return the current day's count
+            return String.format("Day: %s, Car Count: %s", currentDay, dailyCount);
         }
-    
-        private static class DailyCarCountTransformer implements ValueTransformerWithKey<Void, String, String> {
-            private KeyValueStore<String, Long> stateStore;
-            private static final DateTimeFormatter DATE_FORMATTER =
-                    DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
-    
-            @Override
-            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-                // Access the state store
-                stateStore = context.getStateStore(DAILY_COUNT_STORE);
-            }
-    
-            @Override
-            public String transform(Void readOnlyKey, String value) {
-                if (value == null) {
-                    return null; // Skip null events
-                }
-    
-                // Derive the current day from the event timestamp
-                final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
-                final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
-                // Retrieve the current count for the day
-                Long dailyCount = stateStore.get(currentDay);
-                if (dailyCount == null) {
-                    dailyCount = 0L;
-                }
-                // Increment the count
-                dailyCount++;
-                stateStore.put(currentDay, dailyCount);
-    
-                // Return the current day's count
-                return String.format("Day: %s, Car Count: %s", currentDay, dailyCount);
-            }
-    
-            @Override
-            public void close() {
-            }
-        }
-    
-        private static class DailyCarCountProcessor implements FixedKeyProcessor<Void, String, String> {
-            private FixedKeyProcessorContext<Void, String> context;
-            private KeyValueStore<String, Long> stateStore;
-            private static final DateTimeFormatter DATE_FORMATTER =
-                    DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
-    
-            @Override
-            public void init(final FixedKeyProcessorContext<Void, String> context) {
-                this.context = context;
-                stateStore = context.getStateStore(DAILY_COUNT_STORE);
-            }
-    
-            @Override
-            public void process(final FixedKeyRecord<Void, String> record) {
-                if (record.value() == null) {
-                    return; // Skip null events
-                }
-    
-                // Derive the current day from the event timestamp
-                final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
-                final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
-                // Retrieve the current count for the day
-                Long dailyCount = stateStore.get(currentDay);
-                if (dailyCount == null) {
-                    dailyCount = 0L;
-                }
-                // Increment the count
-                dailyCount++;
-                stateStore.put(currentDay, dailyCount);
-    
-                // Emit the current day's count
-                context.forward(record.withValue(String.format("Day: %s, Car Count: %s", currentDay, dailyCount)));
-            }
+
+        @Override
+        public void close() {
         }
     }
+
+    private static class DailyCarCountProcessor implements FixedKeyProcessor<Void, String, String> {
+        private FixedKeyProcessorContext<Void, String> context;
+        private KeyValueStore<String, Long> stateStore;
+        private static final DateTimeFormatter DATE_FORMATTER =
+                DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
+
+        @Override
+        public void init(final FixedKeyProcessorContext<Void, String> context) {
+            this.context = context;
+            stateStore = context.getStateStore(DAILY_COUNT_STORE);
+        }
+
+        @Override
+        public void process(final FixedKeyRecord<Void, String> record) {
+            if (record.value() == null) {
+                return; // Skip null events
+            }
+
+            // Derive the current day from the event timestamp
+            final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
+            final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
+            // Retrieve the current count for the day
+            Long dailyCount = stateStore.get(currentDay);
+            if (dailyCount == null) {
+                dailyCount = 0L;
+            }
+            // Increment the count
+            dailyCount++;
+            stateStore.put(currentDay, dailyCount);
+
+            // Emit the current day's count
+            context.forward(record.withValue(String.format("Day: %s, Car Count: %s", currentDay, dailyCount)));
+        }
+    }
+}
+```
 
 ### Keynotes
 
@@ -5538,72 +5586,72 @@ It is worth mentioning that, in addition to the methods mentioned above, the `pr
 By automating the detection of popular pages, the system eliminates the need for manual monitoring and ensures timely actions to capitalize on the content's performance.
 
 
+```java
 
-    
-    
-    public class PopularPageEmailAlertExample {
-        private static final String ALERTS_EMAIL = "alerts@yourcompany.com";
-        private static final String PAGE_VIEWS_TOPIC = "page-views-topic";
-    
-        public static void alertWithOldProcess(StreamsBuilder builder) {
-            KStream<String, Long> pageViews = builder.stream(PAGE_VIEWS_TOPIC);
-            // Filter pages with exactly 1000 views and process them using the old API
-            pageViews.filter((pageId, viewCount) -> viewCount == 1000)
-                    .process(PopularPageEmailAlertOld::new);
+public class PopularPageEmailAlertExample {
+    private static final String ALERTS_EMAIL = "alerts@yourcompany.com";
+    private static final String PAGE_VIEWS_TOPIC = "page-views-topic";
+
+    public static void alertWithOldProcess(StreamsBuilder builder) {
+        KStream<String, Long> pageViews = builder.stream(PAGE_VIEWS_TOPIC);
+        // Filter pages with exactly 1000 views and process them using the old API
+        pageViews.filter((pageId, viewCount) -> viewCount == 1000)
+                .process(PopularPageEmailAlertOld::new);
+    }
+
+    public static void alertWithNewProcess(StreamsBuilder builder) {
+        KStream<String, Long> pageViews = builder.stream(PAGE_VIEWS_TOPIC);
+        // Filter pages with exactly 1000 views and process them using the new API
+        pageViews.filter((pageId, viewCount) -> viewCount == 1000)
+                .process(PopularPageEmailAlertNew::new);
+    }
+
+    private static class PopularPageEmailAlertOld extends AbstractProcessor<String, Long> {
+        @Override
+        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
+            super.init(context);
+            System.out.println("Initialized email client for: " + ALERTS_EMAIL);
         }
-    
-        public static void alertWithNewProcess(StreamsBuilder builder) {
-            KStream<String, Long> pageViews = builder.stream(PAGE_VIEWS_TOPIC);
-            // Filter pages with exactly 1000 views and process them using the new API
-            pageViews.filter((pageId, viewCount) -> viewCount == 1000)
-                    .process(PopularPageEmailAlertNew::new);
-        }
-    
-        private static class PopularPageEmailAlertOld extends AbstractProcessor<String, Long> {
-            @Override
-            public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
-                super.init(context);
-                System.out.println("Initialized email client for: " + ALERTS_EMAIL);
-            }
-    
-            @Override
-            public void process(String key, Long value) {
-                if (value == null) return;
-    
-                if (value == 1000) {
-                    // Send an email alert
-                    System.out.printf("ALERT (Old API): Page %s has reached 1000 views. Sending email to %s%n", key, ALERTS_EMAIL);
-                }
-            }
-    
-            @Override
-            public void close() {
-                System.out.println("Tearing down email client for: " + ALERTS_EMAIL);
+
+        @Override
+        public void process(String key, Long value) {
+            if (value == null) return;
+
+            if (value == 1000) {
+                // Send an email alert
+                System.out.printf("ALERT (Old API): Page %s has reached 1000 views. Sending email to %s%n", key, ALERTS_EMAIL);
             }
         }
-    
-        private static class PopularPageEmailAlertNew implements Processor<String, Long, Void, Void> {
-            @Override
-            public void init(ProcessorContext<Void, Void> context) {
-                System.out.println("Initialized email client for: " + ALERTS_EMAIL);
-            }
-    
-            @Override
-            public void process(Record<String, Long> record) {
-                if (record.value() == null) return;
-    
-                if (record.value() == 1000) {
-                    // Send an email alert
-                    System.out.printf("ALERT (New API): Page %s has reached 1000 views. Sending email to %s%n", record.key(), ALERTS_EMAIL);
-                }
-            }
-    
-            @Override
-            public void close() {
-                System.out.println("Tearing down email client for: " + ALERTS_EMAIL);
-            }
+
+        @Override
+        public void close() {
+            System.out.println("Tearing down email client for: " + ALERTS_EMAIL);
         }
     }
+
+    private static class PopularPageEmailAlertNew implements Processor<String, Long, Void, Void> {
+        @Override
+        public void init(ProcessorContext<Void, Void> context) {
+            System.out.println("Initialized email client for: " + ALERTS_EMAIL);
+        }
+
+        @Override
+        public void process(Record<String, Long> record) {
+            if (record.value() == null) return;
+
+            if (record.value() == 1000) {
+                // Send an email alert
+                System.out.printf("ALERT (New API): Page %s has reached 1000 views. Sending email to %s%n", record.key(), ALERTS_EMAIL);
+            }
+        }
+
+        @Override
+        public void close() {
+            System.out.println("Tearing down email client for: " + ALERTS_EMAIL);
+        }
+    }
+}
+```
 
 Naming Operators in a Streams DSL application Kafka Streams allows you to [name processors](dsl-topology-naming.html) created via the Streams DSL 
 
@@ -5616,14 +5664,15 @@ However, some applications need to take other actions, such as calling out to ex
 Rather than achieving this as a side-effect of the [KTable record cache](memory-mgmt.html#streams-developer-guide-memory-management-record-cache), you can directly impose a rate limit via the `KTable#suppress` operator. 
 
 For example: 
-    
-    
-    KGroupedTable<String, String> groupedTable = ...;
-    groupedTable
-        .count()
-        .suppress(untilTimeLimit(ofMinutes(5), maxBytes(1_000_000L).emitEarlyWhenFull()))
-        .toStream()
-        .foreach((key, count) -> updateCountsDatabase(key, count));
+
+```java
+KGroupedTable<String, String> groupedTable = ...;
+groupedTable
+    .count()
+    .suppress(untilTimeLimit(ofMinutes(5), maxBytes(1_000_000L).emitEarlyWhenFull()))
+    .toStream()
+    .foreach((key, count) -> updateCountsDatabase(key, count));
+```
 
 This configuration ensures that `updateCountsDatabase` gets events for each `key` no more than once every 5 minutes. Note that the latest state for each key has to be buffered in memory for that 5-minute period. You have the option to control the maximum amount of memory to use for this buffer (in this case, 1MB). There is also an option to impose a limit in terms of number of records (or to leave both limits unspecified). 
 
@@ -5706,17 +5755,18 @@ When to provide serdes explicitly:
 A variant of `to` exists that enables you to specify how the data is produced by using a `Produced` instance to specify, for example, a `StreamPartitioner` that gives you control over how output records are distributed across the partitions of the output topic.
 
 Another variant of `to` exists that enables you to dynamically choose which topic to send to for each record via a `TopicNameExtractor` instance.
-    
-    
-    KStream<String, Long> stream = ...;
-    
-    // Write the stream to the output topic, using the configured default key
-    // and value serdes.
-    stream.to("my-stream-output-topic");
-    
-    // Write the stream to the output topic, using explicit key and value serdes,
-    // (thus overriding the defaults in the config properties).
-    stream.to("my-stream-output-topic", Produced.with(Serdes.String(), Serdes.Long());
+
+```java
+KStream<String, Long> stream = ...;
+
+// Write the stream to the output topic, using the configured default key
+// and value serdes.
+stream.to("my-stream-output-topic");
+
+// Write the stream to the output topic, using explicit key and value serdes,
+// (thus overriding the defaults in the config properties).
+stream.to("my-stream-output-topic", Produced.with(Serdes.String(), Serdes.Long());
+```
 
 **Causes data re-partitioning if any of the following conditions is true:**
 
@@ -5786,20 +5836,22 @@ The library also has several utility abstractions and modules that the user need
 
 
 The library is cross-built with Scala 2.12 and 2.13. To reference the library compiled against Scala 2.13 include the following in your maven `pom.xml` add the following:
-    
-    
-    <dependency>
-      <groupId>org.apache.kafka</groupId>
-      <artifactId>kafka-streams-scala_2.13</artifactId>
-      <version>4.3.0</version>
-    </dependency>
+
+```xml
+<dependency>
+  <groupId>org.apache.kafka</groupId>
+  <artifactId>kafka-streams-scala_2.13</artifactId>
+  <version>4.3.0</version>
+</dependency>
+```
 
 To use the library compiled against Scala 2.12 replace the `artifactId` with `kafka-streams-scala_2.12`.
 
 When using SBT then you can reference the correct library using the following:
-    
-    
-    libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "4.3.0"
+
+```scala
+libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "4.3.0"
+```
 
 ## Sample Usage
 
@@ -5808,42 +5860,43 @@ The library works by wrapping the original Java abstractions of Kafka Streams wi
 Here's an example of the classic WordCount program that uses the Scala `StreamsBuilder` that builds an instance of `KStream` which is a wrapper around Java `KStream`. Then we reify to a table and get a `KTable`, which, again is a wrapper around Java `KTable`.
 
 The net result is that the following code is structured just like using the Java API, but with Scala and with far fewer type annotations compared to using the Java API directly from Scala. The difference in type annotation usage is more obvious when given an example. Below is an example WordCount implementation that will be used to demonstrate the differences between the Scala and Java API.
-    
-    
-    import java.time.Duration
-    import java.util.Properties
-    
-    import org.apache.kafka.streams.kstream.Materialized
-    import org.apache.kafka.streams.scala.ImplicitConversions._
-    import org.apache.kafka.streams.scala._
-    import org.apache.kafka.streams.scala.kstream._
-    import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
-    
-    object WordCountApplication extends App {
-      import Serdes._
-    
-      val props: Properties = {
-        val p = new Properties()
-        p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
-        p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
-        p
-      }
-    
-      val builder: StreamsBuilder = new StreamsBuilder
-      val textLines: KStream[String, String] = builder.stream[String, String]("TextLinesTopic")
-      val wordCounts: KTable[String, Long] = textLines
-        .flatMapValues(textLine => textLine.toLowerCase.split("\W+"))
-        .groupBy((_, word) => word)
-        .count(Materialized.as("counts-store"))
-      wordCounts.toStream.to("WordsWithCountsTopic")
-    
-      val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
-      streams.start()
-    
-      sys.ShutdownHookThread {
-         streams.close(Duration.ofSeconds(10))
-      }
-    }
+
+```scala
+import java.time.Duration
+import java.util.Properties
+
+import org.apache.kafka.streams.kstream.Materialized
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala._
+import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
+
+object WordCountApplication extends App {
+  import Serdes._
+
+  val props: Properties = {
+    val p = new Properties()
+    p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
+    p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
+    p
+  }
+
+  val builder: StreamsBuilder = new StreamsBuilder
+  val textLines: KStream[String, String] = builder.stream[String, String]("TextLinesTopic")
+  val wordCounts: KTable[String, Long] = textLines
+    .flatMapValues(textLine => textLine.toLowerCase.split("\W+"))
+    .groupBy((_, word) => word)
+    .count(Materialized.as("counts-store"))
+  wordCounts.toStream.to("WordsWithCountsTopic")
+
+  val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
+  streams.start()
+
+  sys.ShutdownHookThread {
+     streams.close(Duration.ofSeconds(10))
+  }
+}
+```
 
 In the above code snippet, we don't have to provide any Serdes, `Grouped`, `Produced`, `Consumed` or `Joined` explicitly. They will also not be dependent on any Serdes specified in the config. **In fact all Serdes specified in the config will be ignored by the Scala APIs**. All Serdes and `Grouped`, `Produced`, `Consumed` or `Joined` will be handled through implicit Serdes as discussed later in the Implicit Serdes section. The complete independence from configuration based Serdes is what makes this library completely typesafe. Any missing instances of Serdes, `Grouped`, `Produced`, `Consumed` or `Joined` will be flagged as a compile time error.
 
@@ -5856,31 +5909,32 @@ The library uses the power of [Scala implicit parameters](https://docs.scala-lan
 The library also bundles all implicit Serdes of the commonly used primitive types in a Scala module - so just import the module vals and have all Serdes in scope. A similar strategy of modular implicits can be adopted for any user-defined Serdes as well (User-defined Serdes are discussed in the next section).
 
 Here's an example:
-    
-    
-    // DefaultSerdes brings into scope implicit Serdes (mostly for primitives)
-    // that will set up all Grouped, Produced, Consumed and Joined instances.
-    // So all APIs below that accept Grouped, Produced, Consumed or Joined will
-    // get these instances automatically
-    import Serdes._
-    
-    val builder = new StreamsBuilder()
-    
-    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
-    
-    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
-    
-    // The following code fragment does not have a single instance of Grouped,
-    // Produced, Consumed or Joined supplied explicitly.
-    // All of them are taken care of by the implicit Serdes imported by DefaultSerdes
-    val clicksPerRegion: KTable[String, Long] =
-      userClicksStream
-        .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
-        .map((_, regionWithClicks) => regionWithClicks)
-        .groupByKey
-        .reduce(_ + _)
-    
-    clicksPerRegion.toStream.to(outputTopic)
+
+```scala
+// DefaultSerdes brings into scope implicit Serdes (mostly for primitives)
+// that will set up all Grouped, Produced, Consumed and Joined instances.
+// So all APIs below that accept Grouped, Produced, Consumed or Joined will
+// get these instances automatically
+import Serdes._
+
+val builder = new StreamsBuilder()
+
+val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
+
+val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
+
+// The following code fragment does not have a single instance of Grouped,
+// Produced, Consumed or Joined supplied explicitly.
+// All of them are taken care of by the implicit Serdes imported by DefaultSerdes
+val clicksPerRegion: KTable[String, Long] =
+  userClicksStream
+    .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
+    .map((_, regionWithClicks) => regionWithClicks)
+    .groupByKey
+    .reduce(_ + _)
+
+clicksPerRegion.toStream.to(outputTopic)
+```
 
 Quite a few things are going on in the above code snippet that may warrant a few lines of elaboration:
 
@@ -5894,40 +5948,41 @@ Quite a few things are going on in the above code snippet that may warrant a few
 ## User-Defined Serdes
 
 When the default primitive Serdes are not enough and we need to define custom Serdes, the usage is exactly the same as above. Just define the implicit Serdes and start building the stream transformation. Here's an example with `AvroSerde`:
-    
-    
-    // domain object as a case class
-    case class UserClicks(clicks: Long)
-    
-    // An implicit Serde implementation for the values we want to
-    // serialize as avro
-    implicit val userClicksSerde: Serde[UserClicks] = new AvroSerde
-    
-    // Primitive Serdes
-    import Serdes._
-    
-    // And then business as usual ..
-    
-    val userClicksStream: KStream[String, UserClicks] = builder.stream(userClicksTopic)
-    
-    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
-    
-    // Compute the total per region by summing the individual click counts per region.
-    val clicksPerRegion: KTable[String, Long] =
-     userClicksStream
-    
-       // Join the stream against the table.
-       .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
-    
-       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-       .map((_, regionWithClicks) => regionWithClicks)
-    
-       // Compute the total per region by summing the individual click counts per region.
-       .groupByKey
-       .reduce(_ + _)
-    
-    // Write the (continuously updating) results to the output topic.
-    clicksPerRegion.toStream.to(outputTopic)
+
+```scala
+// domain object as a case class
+case class UserClicks(clicks: Long)
+
+// An implicit Serde implementation for the values we want to
+// serialize as avro
+implicit val userClicksSerde: Serde[UserClicks] = new AvroSerde
+
+// Primitive Serdes
+import Serdes._
+
+// And then business as usual ..
+
+val userClicksStream: KStream[String, UserClicks] = builder.stream(userClicksTopic)
+
+val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
+
+// Compute the total per region by summing the individual click counts per region.
+val clicksPerRegion: KTable[String, Long] =
+ userClicksStream
+
+   // Join the stream against the table.
+   .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
+
+   // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
+   .map((_, regionWithClicks) => regionWithClicks)
+
+   // Compute the total per region by summing the individual click counts per region.
+   .groupByKey
+   .reduce(_ + _)
+
+// Write the (continuously updating) results to the output topic.
+clicksPerRegion.toStream.to(outputTopic)
+```
 
 A complete example of user-defined Serdes can be found in a test class within the library.
 
