@@ -2526,7 +2526,8 @@ public class RemoteLogManagerTest {
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
 
         time.sleep(1000L);
-        when(segment1.largestTimestamp()).thenReturn(time.milliseconds() - 100L);
+        // segment1: time lag exceeded (101ms >= 100ms), size lag not exceeded (50bytes < 60bytes) => upload.
+        when(segment1.largestTimestamp()).thenReturn(time.milliseconds() - 101L);
         when(segment2.largestTimestamp()).thenReturn(time.milliseconds() - 20L);
         RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
         List<RemoteLogManager.EnrichedLogSegment> expected =
