@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.Replicas;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -40,8 +39,8 @@ import java.util.stream.Collectors;
 public final class TopicDelta {
     private final TopicImage image;
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
-    private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new LinkedHashMap<>();
-    private final Map<Integer, Integer> partitionToElrElectionCount = new LinkedHashMap<>();
+    private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
+    private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
 
     public TopicDelta(TopicImage image) {
         this.image = image;
