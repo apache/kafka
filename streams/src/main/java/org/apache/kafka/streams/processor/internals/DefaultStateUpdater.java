@@ -878,6 +878,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for state updater thread to shut down");
             }
         }
     }
@@ -956,6 +958,7 @@ public class DefaultStateUpdater implements StateUpdater {
             }
             return result;
         } catch (final InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
         return result;
     }
