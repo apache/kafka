@@ -507,11 +507,11 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         return false;
     }
 
-    protected Bytes serializeKey(final K key, final Headers headers) {
+    private Bytes serializeKey(final K key, final Headers headers) {
         return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
-    protected K deserializeKey(final byte[] rawKey, final Headers headers) {
+    private K deserializeKey(final byte[] rawKey, final Headers headers) {
         return serdes.keyFrom(rawKey, headers);
     }
 

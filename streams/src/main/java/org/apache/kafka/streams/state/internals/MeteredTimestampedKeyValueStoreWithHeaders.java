@@ -664,7 +664,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         throw new UnsupportedOperationException("MeteredTimestampedKeyValueStoreWithHeaders required to pass in Headers when serializing a key.");
     }
 
-    protected Bytes serializeKey(final K key, final Headers headers) {
+    private Bytes serializeKey(final K key, final Headers headers) {
         return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
@@ -673,7 +673,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         throw new UnsupportedOperationException("MeteredTimestampedKeyValueStoreWithHeaders required to pass in Headers when deserializing a key.");
     }
 
-    protected K deserializeKey(final byte[] rawKey, final Headers headers) {
+    private K deserializeKey(final byte[] rawKey, final Headers headers) {
         return serdes.keyFrom(rawKey, headers);
     }
 }
