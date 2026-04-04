@@ -186,7 +186,7 @@ class AutoTopicCreationManagerTest {
     topicCreator.setResponseForWithoutPrincipal(response)
 
     // First call to create topic - should trigger the topic creator
-    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal)
+    createTopicAndVerifyResult(Errors.LEADER_NOT_AVAILABLE, topicName, isInternal)
 
     assertEquals(1, topicCreator.withoutPrincipalCallCount, "Should have called createTopicWithoutPrincipal once")
 
@@ -195,7 +195,7 @@ class AutoTopicCreationManagerTest {
     topicCreator.setResponseForWithoutPrincipal(response)
 
     // Second call - should also trigger topicCreator because inflight is cleared after first call completes
-    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal)
+    createTopicAndVerifyResult(Errors.LEADER_NOT_AVAILABLE, topicName, isInternal)
 
     assertEquals(1, topicCreator.withoutPrincipalCallCount, "Should have called createTopicWithoutPrincipal once more")
 

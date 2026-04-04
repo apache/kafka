@@ -234,7 +234,7 @@ class DefaultAutoTopicCreationManager(
 
     val creatableTopicResponses = creatableTopics.keySet.toSeq.map { topic =>
       new MetadataResponseTopic()
-        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+        .setErrorCode(Errors.LEADER_NOT_AVAILABLE.code)
         .setName(topic)
         .setIsInternal(Topic.isInternal(topic))
     }
@@ -318,7 +318,7 @@ class DefaultAutoTopicCreationManager(
       val validationError: Option[Errors] = if (!isValidTopicName(topic)) {
         Some(Errors.INVALID_TOPIC_EXCEPTION)
       } else if (!inflightTopics.add(topic)) {
-        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        Some(Errors.LEADER_NOT_AVAILABLE)
       } else {
         None
       }
