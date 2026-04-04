@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
@@ -184,7 +185,14 @@ public class ReconfigurableQuorumIntegrationTest {
                 });
 
                 retryOnExceptionWithTimeout(30_000, 1_000, () ->
-                    admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port))).all().get());
+                    admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port))).all().get(30, TimeUnit.SECONDS));
+                retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002, 3003), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3001, 3002, 3003}) {
+                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
+                    }
+                });
             }
         }
     }
@@ -297,7 +305,14 @@ public class ReconfigurableQuorumIntegrationTest {
 
                 retryOnExceptionWithTimeout(30_000, 1_000, () ->
                     admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port)),
-                        new AddRaftVoterOptions().setClusterId(Optional.of("test-cluster"))).all().get());
+                        new AddRaftVoterOptions().setClusterId(Optional.of("test-cluster"))).all().get(30, TimeUnit.SECONDS));
+                retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
+                    }
+                });
             }
         }
     }
