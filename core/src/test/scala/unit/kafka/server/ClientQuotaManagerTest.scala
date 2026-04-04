@@ -571,6 +571,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): Map[String, String] = Collections.emptyMap()
 
       override def quotaLimit(quotaType: ClientQuotaType, metricTags: Map[String, String]): java.lang.Double = 1
+      @SuppressWarnings(Array("removal"))
       override def updateClusterMetadata(cluster: Cluster): Boolean = false
 
       override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {

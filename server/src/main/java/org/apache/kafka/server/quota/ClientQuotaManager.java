@@ -796,6 +796,7 @@ public class ClientQuotaManager {
             return overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
         }
 
+        @SuppressWarnings("removal")
         @Override
         public boolean updateClusterMetadata(Cluster cluster) {
             // The default quota callback does not use any cluster metadata

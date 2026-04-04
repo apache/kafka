@@ -1779,6 +1779,7 @@ public class KRaftClusterTest {
             return true;
         }
 
+        @SuppressWarnings("removal")
         @Override
         public boolean updateClusterMetadata(Cluster cluster) {
             return false;
