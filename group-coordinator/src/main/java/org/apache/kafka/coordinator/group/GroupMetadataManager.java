@@ -610,10 +610,10 @@ public class GroupMetadataManager {
         return metadataImage;
     }
 
-    private void notifyConsumerGroupRebalanceListeners(String groupId, int groupEpoch, long metadataHash) {
+    private void notifyConsumerGroupRebalanceListeners(String groupId, String groupType, String reason, long eventTimeMs) {
         for (ConsumerGroupRebalanceListener listener : rebalanceListeners) {
             try {
-                listener.onConsumerGroupRebalance(groupId, groupEpoch, metadataHash);
+                listener.onConsumerGroupRebalance(groupId, groupType, reason, eventTimeMs);
             } catch (Exception e) {
                 log.warn("[GroupId {}] Error invoking rebalance listener {}", groupId, listener.getClass().getName(), e);
             }
@@ -3472,7 +3472,7 @@ public class GroupMetadataManager {
                 records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
-                notifyConsumerGroupRebalanceListeners(groupId, groupEpoch, groupMetadataHash);
+                notifyConsumerGroupRebalanceListeners(groupId, "consumer", "regex_refresh", time.milliseconds());
                 group.setMetadataRefreshDeadline(
                     time.milliseconds() + METADATA_REFRESH_INTERVAL_MS,
                     groupEpoch
@@ -3800,7 +3800,7 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
-            notifyConsumerGroupRebalanceListeners(groupId, groupEpoch, groupMetadataHash);
+            notifyConsumerGroupRebalanceListeners(groupId, "consumer", "subscription_metadata_change", time.milliseconds());
         }
 
         group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -4374,7 +4374,7 @@ public class GroupMetadataManager {
             int groupEpoch = group.groupEpoch() + 1;
             records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
-            notifyConsumerGroupRebalanceListeners(group.groupId(), groupEpoch, groupMetadataHash);
+            notifyConsumerGroupRebalanceListeners(group.groupId(), "consumer", "member_fenced_or_left", time.milliseconds());
 
             for (ConsumerGroupMember member : members) {
                 cancelTimers(group.groupId(), member.memberId());

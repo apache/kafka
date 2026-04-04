@@ -20,12 +20,7 @@ package org.apache.kafka.coordinator.group.api;
  * A callback interface that users can implement to get notified when a consumer group rebalance occurs.
  * <p>
  * This listener is invoked on the broker side (GroupCoordinator) when a consumer group's epoch is bumped,
- * which indicates that a rebalance has occurred. This can happen when:
- * <ul>
- *   <li>Members join or leave the group</li>
- *   <li>Member subscriptions change</li>
- *   <li>Topic metadata changes (e.g., partition count changes)</li>
- * </ul>
+ * which indicates that a rebalance has occurred.
  * <p>
  * Implementations of this interface can be used for monitoring, alerting, or logging purposes
  * to track which consumer groups are experiencing rebalances.
@@ -36,8 +31,9 @@ public interface ConsumerGroupRebalanceListener {
      * Called when a consumer group rebalance occurs.
      *
      * @param groupId The ID of the consumer group that rebalanced
-     * @param groupEpoch The new group epoch after the rebalance
-     * @param metadataHash The metadata hash of the group after the rebalance
+     * @param groupType The type of group that rebalanced
+     * @param reason The rebalance reason
+     * @param eventTimeMs The event timestamp in milliseconds
      */
-    void onConsumerGroupRebalance(String groupId, int groupEpoch, long metadataHash);
+    void onConsumerGroupRebalance(String groupId, String groupType, String reason, long eventTimeMs);
 }
