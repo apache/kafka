@@ -39,7 +39,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
 
     public KeyValueStoreMaterializer(
-            final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
         super(materialized, DslStoreFormat.TIMESTAMPED);
     }

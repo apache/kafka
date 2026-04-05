@@ -105,7 +105,7 @@ public class SlidingWindowStoreMaterializerTest {
             new MaterializedInternal<>(Materialized.as("store"), nameProvider, STORE_PREFIX);
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         final StateStore logging = caching.wrapped();
 
         assertInstanceOf(MeteredTimestampedWindowStoreWithHeaders.class, store);
@@ -121,7 +121,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertInstanceOf(ChangeLoggingTimestampedWindowBytesStoreWithHeaders.class, logging);
     }
 
@@ -133,7 +133,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertInstanceOf(CachingWindowStore.class, caching);
         assertFalse(caching.wrapped() instanceof ChangeLoggingTimestampedWindowBytesStoreWithHeaders);
     }
@@ -146,7 +146,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        final StateStore wrapped = ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertFalse(wrapped instanceof CachingWindowStore);
         assertFalse(wrapped instanceof ChangeLoggingTimestampedWindowBytesStoreWithHeaders);
     }
@@ -159,7 +159,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         final StateStore logging = caching.wrapped();
         assertEquals(innerWindowStore.name(), store.name());
         assertInstanceOf(MeteredTimestampedWindowStoreWithHeaders.class, store);
@@ -175,7 +175,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertEquals(innerWindowStore.name(), store.name());
         assertInstanceOf(ChangeLoggingTimestampedWindowBytesStoreWithHeaders.class, logging);
     }
@@ -188,7 +188,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertEquals(innerWindowStore.name(), store.name());
         assertInstanceOf(CachingWindowStore.class, caching);
         assertFalse(caching.wrapped() instanceof ChangeLoggingTimestampedWindowBytesStoreWithHeaders);
@@ -202,7 +202,7 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        final StateStore wrapped = ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertEquals(innerWindowStore.name(), store.name());
         assertFalse(wrapped instanceof CachingWindowStore);
         assertFalse(wrapped instanceof ChangeLoggingTimestampedWindowBytesStoreWithHeaders);
@@ -218,14 +218,15 @@ public class SlidingWindowStoreMaterializerTest {
 
         final TimestampedWindowStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
-        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         assertInstanceOf(MeteredTimestampedWindowStoreWithHeaders.class, store);
         assertInstanceOf(ChangeLoggingTimestampedWindowBytesStoreWithHeaders.class, logging);
     }
 
     @SuppressWarnings("unchecked")
     private TimestampedWindowStoreWithHeaders<String, String> getHeadersStore(
-        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized) {
+        final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized
+    ) {
         final SlidingWindowStoreMaterializer<String, String> materializer =
             new SlidingWindowStoreMaterializer<>(materialized, windows, emitStrategy);
         materializer.configure(streamsConfig);

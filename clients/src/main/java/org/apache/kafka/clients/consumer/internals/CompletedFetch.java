@@ -78,7 +78,8 @@ public class CompletedFetch {
     private boolean corruptLastRecord = false;
     private long nextFetchOffset;
     private Optional<Integer> lastEpoch;
-    private boolean isConsumed = false;
+    private volatile boolean isConsumed = false;
+    private boolean exhausted = false;
     private boolean initialized = false;
 
     CompletedFetch(Logger log,
@@ -119,6 +120,10 @@ public class CompletedFetch {
 
     public boolean isConsumed() {
         return isConsumed;
+    }
+
+    boolean isExhausted() {
+        return exhausted;
     }
 
 
@@ -192,7 +197,7 @@ public class CompletedFetch {
                     // fetching the same batch repeatedly).
                     if (currentBatch != null)
                         nextFetchOffset = currentBatch.nextOffset();
-                    drain();
+                    exhausted = true;
                     return null;
                 }
 

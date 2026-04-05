@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -60,6 +61,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
     private static final String FK = "fk1";
     private static final String PK1 = "pk1";
     private static final String PK2 = "pk2";
+    private static final Headers HEADERS = new RecordHeaders();
 
     private static final Supplier<String> PK_SERDE_TOPIC_SUPPLIER = () -> "pk-topic";
     private static final CombinedKeySchema<String, String> COMBINED_KEY_SCHEMA = new CombinedKeySchema<>(
@@ -110,7 +112,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -161,7 +163,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -213,7 +215,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -265,7 +267,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -317,7 +319,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, null);
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -369,7 +371,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, null);
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -421,7 +423,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, null);
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
@@ -473,7 +475,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, null);
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(FK, PK1, HEADERS);
         stateStore.put(key, oldValue);
         processor.init(context);
 
