@@ -713,6 +713,8 @@ org.apache.kafka.streams.kstream.internals.ChangedSerdeTest:
 - serializerShouldThrowIfGivenAChangeWithBothNewAndOldValuesAsNull
 - serializerShouldThrowIfGivenAChangeWithBothNonNullNewAndOldValuesAndIsUpgrade
 - shouldDeserializeReservedVersions3Through5
+- shouldPassHeadersToUnderlyingDeserializer
+- shouldPassHeadersToUnderlyingSerializer
 - shouldSerializeAndDeserializeChangeWithNonNullNewAndOldValues
 - shouldSerializeAndDeserializeChangeWithNonNullNewValueAndNullOldValue
 - shouldSerializeAndDeserializeChangeWithNullNewValueAndNonNullOldValue
@@ -1546,6 +1548,9 @@ org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchemaTest:
 - nullPrefixKeySerdeTest
 - nullPrimaryKeySerdeTest
 - prefixKeySerdeTest
+- shouldPassHeadersToUnderlyingDeserializersOnFromBytes
+- shouldPassHeadersToUnderlyingSerializerOnPrefixBytes
+- shouldPassHeadersToUnderlyingSerializersOnToBytes
 org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplierTests:
 - shouldIgnoreRecordWithNullKey
 - shouldNotMatchForeignKeysHavingThisFKAsPrefix
@@ -1626,6 +1631,8 @@ org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProces
 - leftJoinShouldPropagateNewRecordOfUnchangedFK
 - leftJoinShouldPropagateNothingWhenOldAndNewLeftValueIsNull
 org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest:
+- shouldPassHeadersToUnderlyingDeserializer
+- shouldPassHeadersToUnderlyingSerializer
 - shouldSerdeNullHashV0Test
 - shouldSerdeNullHashV1Test
 - shouldSerdeNullPrimaryPartitionOnV0Test
@@ -6561,9 +6568,12 @@ org.apache.kafka.streams.state.internals.UtilsTest:
 - testRawTimestampedValueWithSerdes
 - testRawTimestampedValueWithoutTimestamp
 - testReadBytes
+org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializerTest:
+- shouldPassHeadersToUnderlyingDeserializer
 org.apache.kafka.streams.state.internals.ValueAndTimestampSerializerTest:
 - shouldDropSerializedValueIfEqualWithGreaterTimestamp
 - shouldKeepSerializedValueIfOutOfOrder
+- shouldPassHeadersToUnderlyingSerializer
 - shouldReturnNullWhenTheInternalSerializerReturnsNull
 - shouldSerializeNonNullDataUsingTheInternalSerializer
 - shouldSerializeNullDataAsNull
