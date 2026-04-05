@@ -117,9 +117,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
             if (currentTask == null) {
                 try {
                     taskManager.awaitProcessableTasks(shutdownRequested::get);
-                } catch (final InterruptedException ignored) {
+                } catch (final InterruptedException e) {
                     Thread.currentThread().interrupt();
                     // The event loop will check shutdownRequested on the next iteration
+                    log.warn("TaskExecutorThread was interrupted while waiting", e);
                 }
             } else {
                 boolean progressed = false;

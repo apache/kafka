@@ -231,7 +231,7 @@ public class TopologyMetadata {
                         version.topologyCV.await();
                     } catch (final InterruptedException e) {
                         Thread.currentThread().interrupt();
-                        log.error("StreamThread was interrupted while waiting on empty topology", e);
+                        log.warn("StreamThread was interrupted while waiting on empty topology", e);
                     }
                 }
             } finally {

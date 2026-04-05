@@ -957,8 +957,9 @@ public class DefaultStateUpdater implements StateUpdater {
                 now = time.milliseconds();
             }
             return result;
-        } catch (final InterruptedException ignored) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
+            log.warn("StateUpdaterThread was interrupted while waiting", e);
         }
         return result;
     }
