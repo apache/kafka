@@ -311,6 +311,7 @@ org.apache.kafka.storage.internals.log.LogCleanerIntegrationTest:
 - testCleanerWithMessageFormatV0V1V2
 - testCleaningNestedMessagesWithV0V1
 - testCleansCombinedCompactAndDeleteTopic
+- testGaugeReadsAreNotAffectedByReconfigure
 - testIsThreadFailed
 - testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics
 - testMaxLogCompactionLag
