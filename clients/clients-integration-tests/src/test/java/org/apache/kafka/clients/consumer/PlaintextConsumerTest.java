@@ -1825,16 +1825,12 @@ public class PlaintextConsumerTest {
 
     @ClusterTest
     public void testClassicConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
-        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
-        ));
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
     public void testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
-        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
-        ));
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CONSUMER);
     }
 
     /**
@@ -1842,13 +1838,14 @@ public class PlaintextConsumerTest {
      * {@code enable.auto.commit} is enabled. A second consumer using the same group ID
      * should see no committed offsets after the first consumer unsubscribes.
      */
-    private void testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(Map<String, Object> consumerConfig) throws Exception {
+    private void testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol groupProtocol) throws Exception {
         var numRecords = 10;
         var groupId = "unsubscribe-no-commit-test";
         sendRecords(cluster, TP, numRecords);
 
         // Consumer 1: subscribe, consume records, then unsubscribe (without explicit commit)
-        Map<String, Object> config = new HashMap<>(consumerConfig);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
         config.put(GROUP_ID_CONFIG, groupId);
         config.put(ENABLE_AUTO_COMMIT_CONFIG, true);
         config.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -1862,9 +1859,8 @@ public class PlaintextConsumerTest {
         }
 
         // Consumer 2: use the same group ID to check committed offsets
-        Map<String, Object> verifyConfig = new HashMap<>(consumerConfig);
-        verifyConfig.put(GROUP_ID_CONFIG, groupId);
-        verifyConfig.put(ENABLE_AUTO_COMMIT_CONFIG, false);
+        Map<String, Object> verifyConfig = new HashMap<>();
+        verifyConfig.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
 
         try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(verifyConfig)) {
             consumer2.assign(List.of(TP));
