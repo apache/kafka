@@ -56,7 +56,6 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -65,10 +64,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -600,51 +598,29 @@ public class LogCleanerIntegrationTest {
         cleaner.startup();
 
         AbstractConfig config1Thread = makeReconfigureConfig(1);
-        AbstractConfig config2Threads = makeReconfigureConfig(2);
+        AbstractConfig config2Thread = makeReconfigureConfig(2);
 
-        AtomicBoolean running = new AtomicBoolean(true);
-        List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
-
-        // Simulate metric gauge reads (executed by JMX / metrics polling thread).
-        Thread gaugeThread = new Thread(() -> {
-            while (running.get()) {
-                try {
-                    cleaner.maxOverCleanerThreads(t -> t.lastStats().bufferUtilization());
-                    cleaner.deadThreadCount();
-                } catch (Exception e) {
-                    errors.add(e);
-                }
+        var checkError = CompletableFuture.runAsync(() -> {
+            var endtime = System.currentTimeMillis() + Duration.ofSeconds(5).toMillis();
+            while (System.currentTimeMillis() < endtime) {
+                cleaner.maxOverCleanerThreads(t -> t.lastStats().bufferUtilization());
+                cleaner.deadThreadCount();
             }
-        }, "gauge-reader");
+        });
 
-        // Simulate dynamic reconfiguration that alternates cleaner thread count between 1 and 2.
-        AtomicInteger reconfigCount = new AtomicInteger(0);
-        Thread reconfigThread = new Thread(() -> {
-            boolean useOne = true;
-            while (running.get()) {
-                try {
-                    AbstractConfig oldCfg = useOne ? config2Threads : config1Thread;
-                    AbstractConfig newCfg = useOne ? config1Thread : config2Threads;
-                    cleaner.reconfigure(oldCfg, newCfg);
-                    useOne = !useOne;
-                    reconfigCount.incrementAndGet();
-                } catch (Exception e) {
-                    errors.add(e);
-                }
+        var updateCleaner = CompletableFuture.runAsync(() -> {
+            var useOne = true;
+            var endtime = System.currentTimeMillis() + Duration.ofSeconds(5).toMillis();
+            while (System.currentTimeMillis() < endtime) {
+                AbstractConfig oldCfg = useOne ? config2Thread : config1Thread;
+                AbstractConfig newCfg = useOne ? config1Thread : config2Thread;
+                cleaner.reconfigure(oldCfg, newCfg);
+                useOne = !useOne;
             }
-        }, "reconfigure-thread");
+        });
 
-        gaugeThread.start();
-        reconfigThread.start();
-
-        Thread.sleep(3000);
-        running.set(false);
-        gaugeThread.join(5000);
-        reconfigThread.join(30000);
-
-        assertTrue(reconfigCount.get() > 0, "Expected at least one reconfigure to complete");
-        assertTrue(errors.isEmpty(),
-                "Expected no concurrent access errors during gauge reads and reconfigure, but got: " + errors);
+        checkError.join();
+        updateCleaner.join();
     }
 
     private AbstractConfig makeReconfigureConfig(int numThreads) {
