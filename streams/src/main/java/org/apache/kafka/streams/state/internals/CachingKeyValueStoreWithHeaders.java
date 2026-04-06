@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class CachingKeyValueStoreWithHeaders extends CachingKeyValueStore {
 
     CachingKeyValueStoreWithHeaders(final KeyValueStore<Bytes, byte[]> underlying, final CacheType cacheType) {
-        super(underlying, cacheType);
+        super(underlying, CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS);
     }
 
     @Override
