@@ -1858,11 +1858,8 @@ public class PlaintextConsumerTest {
         }
 
         // Consumer 2: use the same group ID to check committed offsets
-        Map<String, Object> verifyConfig = new HashMap<>();
-        verifyConfig.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
-
-        try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(verifyConfig)) {
-            consumer2.assign(List.of(TP));
+        try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(config)) {
+            consumer2.subscribe(List.of(TOPIC));
             OffsetAndMetadata committed = consumer2.committed(Set.of(TP)).get(TP);
             assertNull(committed,
                     "unsubscribe() should not commit offsets even when auto-commit is enabled");
