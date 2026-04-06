@@ -51,7 +51,7 @@ import java.util.stream.Stream;
 
 @SuppressWarnings("NPathComplexity")
 public class TestKitNodes {
-    private static final Logger log = LoggerFactory.getLogger(TestKitNodes.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TestKitNodes.class);
 
     /**
      * Create a temporary directory with the prefix {@code kafka-}. The directory is
@@ -70,7 +70,7 @@ public class TestKitNodes {
             try {
                 Utils.delete(file);
             } catch (IOException e) {
-                log.error("Error deleting {}", file.getAbsolutePath(), e);
+                LOGGER.error("Error deleting {}", file.getAbsolutePath(), e);
             }
         });
 
