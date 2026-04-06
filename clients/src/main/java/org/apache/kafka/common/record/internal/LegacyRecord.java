@@ -21,8 +21,8 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Checksums;
-import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.DataOutputStream;
 import java.io.IOException;

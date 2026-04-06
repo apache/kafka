@@ -26,8 +26,8 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.DataOutputStream;
 import java.io.IOException;

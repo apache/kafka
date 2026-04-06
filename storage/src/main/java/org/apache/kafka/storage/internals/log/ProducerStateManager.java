@@ -23,8 +23,8 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.ProducerSnapshot;
 
 import org.slf4j.Logger;

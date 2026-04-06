@@ -17,8 +17,8 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.Closeable;
 import java.io.DataOutputStream;
