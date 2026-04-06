@@ -37,7 +37,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -338,10 +337,10 @@ public class ShareSessionHandlerTest {
 
         // If we started with an ID, only a new ID will count towards replaced.
         // The old topic ID partition should be forgotten, and the new one should be fetched.
-        assertEquals(Collections.singletonList(tp), reqForgetList(requestData2, topicNames));
+        assertEquals(List.of(tp), reqForgetList(requestData2, topicNames));
         assertMapsEqual(reqMap(new TopicIdPartition(topicId2, 0, "foo")),
                 handler.sessionPartitionMap());
-        assertListEquals(Collections.singletonList(tp2), reqFetchList(requestData2, topicNames));
+        assertListEquals(List.of(tp2), reqFetchList(requestData2, topicNames));
 
         // Should have the same session ID, and next epoch and can use topic IDs if it ended with topic IDs.
         assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
@@ -376,7 +375,7 @@ public class ShareSessionHandlerTest {
         // Remove the topic from the session by setting acknowledgements only - this is not asking to fetch records
         ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
         handler.addPartitionToAcknowledgeOnly(foo0, Acknowledgements.empty());
-        assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
+        assertEquals(List.of(foo0), reqForgetList(requestData2, topicNames));
 
         // Should have the same session ID, next epoch, and same ID usage
         assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
@@ -410,7 +409,7 @@ public class ShareSessionHandlerTest {
 
         // Remove the topic from the session
         ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
-        assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
+        assertEquals(List.of(foo0), reqForgetList(requestData2, topicNames));
 
         // Should have the same session ID, next epoch, and same ID usage
         assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
@@ -475,7 +474,7 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(foo0, acknowledgements);
 
         // As we start with a ShareAcknowledge on epoch 0, we expect a null response.
-        assertNull(handler.newShareAcknowledgeBuilder(groupId, shareFetchConfig));
+        assertNull(handler.newShareAcknowledgeBuilder(groupId));
 
         // Attempt a new ShareFetch
         TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");

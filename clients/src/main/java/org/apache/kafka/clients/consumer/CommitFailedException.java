@@ -20,18 +20,27 @@ import org.apache.kafka.common.KafkaException;
 
 /**
  * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails
- * with an unrecoverable error. This can happen when a group rebalance completes before the commit
- * could be successfully applied. In this case, the commit cannot generally be retried because some
- * of the partitions may have already been assigned to another member in the group.
+ * with an unrecoverable error. This exception is generated on the client side, typically when
+ * a group rebalance completes before the commit could be successfully applied. In this case,
+ * the commit cannot generally be retried because some of the partitions may have already been
+ * assigned to another member in the group.
  */
 public class CommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new CommitFailedException with the specified detail message.
+     *
+     * @param message The error message
+     */
     public CommitFailedException(final String message) {
         super(message);
     }
 
+    /**
+     * Constructs a new CommitFailedException with a default message explaining the cause of the commit failure.
+     */
     public CommitFailedException() {
         super("Commit cannot be completed since the group has already " +
                 "rebalanced and assigned the partitions to another member. This means that the time " +

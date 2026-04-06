@@ -370,17 +370,18 @@ Log compaction ensures that Kafka will always retain at least the last known val
 So far we have described only the simpler approach to data retention where old log data is discarded after a fixed period of time or when the log reaches some predetermined size. This works well for temporal event data such as logging where each record stands alone. However an important class of data streams are the log of changes to keyed, mutable data (for example, the changes to a database table). 
 
 Let's discuss a concrete example of such a stream. Say we have a topic containing user email addresses; every time a user updates their email address we send a message to this topic using their user id as the primary key. Now say we send the following messages over some time period for a user with id 123, each message corresponding to a change in email address (messages for other ids are omitted): 
-    
-    
-    123 => bill@microsoft.com
-            .
-            .
-            .
-    123 => bill@gatesfoundation.org
-            .
-            .
-            .
-    123 => bill@gmail.com
+
+```text
+123 => bill@microsoft.com
+        .
+        .
+        .
+123 => bill@gatesfoundation.org
+        .
+        .
+        .
+123 => bill@gmail.com
+```
 
 Log compaction gives us a more granular retention mechanism so that we are guaranteed to retain at least the last update for each primary key (e.g. `bill@gmail.com`). By doing this we guarantee that the log contains a full snapshot of the final value for every key not just keys that changed recently. This means downstream consumers can restore their own state off this topic without us having to retain a complete log of all changes. 
 
@@ -436,19 +437,22 @@ Log compaction is handled by the log cleaner, a pool of background threads that 
 ### Configuring The Log Cleaner
 
 The log cleaner is enabled by default. This will start the pool of cleaner threads. To enable log cleaning on a particular topic, add the log-specific property 
-    
-    
-    log.cleanup.policy=compact
+
+```properties
+log.cleanup.policy=compact
+```
 
 The `log.cleanup.policy` property is a broker configuration setting defined in the broker's `server.properties` file; it affects all of the topics in the cluster that do not have a configuration override in place as documented [here](/documentation.html#brokerconfigs). The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag. 
-    
-    
-    log.cleaner.min.compaction.lag.ms
+
+```properties
+log.cleaner.min.compaction.lag.ms
+```
 
 This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag. The log cleaner can be configured to ensure a maximum delay after which the uncompacted "head" of the log becomes eligible for log compaction. 
-    
-    
-    log.cleaner.max.compaction.lag.ms
+
+```properties
+log.cleaner.max.compaction.lag.ms
+```
 
 This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted. Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
 

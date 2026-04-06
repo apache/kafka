@@ -27,6 +27,9 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -35,6 +38,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -59,13 +64,17 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -100,6 +109,9 @@ public class GlobalKTableIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
+        TestGlobalProcessingExceptionHandler.handlerInvoked.set(false);
+        TestGlobalProcessingExceptionHandler.shouldResume = false;
+        
         builder = new StreamsBuilder();
         final String safeTestName = safeUniqueTestName(testInfo);
         createTopics(safeTestName);
@@ -342,13 +354,149 @@ public class GlobalKTableIntegrationTest {
         kafkaStreams.close();
     }
 
+    private void createBuilderWithFailedProcessor() {
+        builder = new StreamsBuilder();
+        builder.addGlobalStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore("test-global-store"),
+                        Serdes.Long(),
+                        Serdes.String()
+                ),
+                globalTableTopic,
+                Consumed.with(Serdes.Long(), Serdes.String()),
+                () -> new ContextualProcessor<Long, String, Void, Void>() {
+                    @Override
+                    public void process(final Record<Long, String> record) {
+                        if (record.key().equals(2L)) {
+                            throw new RuntimeException("Test processing exception");
+                        }
+                    }
+                }
+        );
+    }
+
+    @Test
+    public void testProcessingExceptionHandlerContinueEnabledRestorationPhase() throws Exception {
+        createBuilderWithFailedProcessor();
+        // enable processing exception handler invoked config
+        TestGlobalProcessingExceptionHandler.shouldResume = true;
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+            TestGlobalProcessingExceptionHandler.class);
+
+        produceInitialGlobalTableValues();
+        startStreams();
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+
+        assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
+    }
+
+    @Test
+    public void testProcessingExceptionHandlerFailEnabledRestorationPhase() throws Exception {
+        createBuilderWithFailedProcessor();
+        // enable processing exception handler invoked config
+        TestGlobalProcessingExceptionHandler.shouldResume = false;
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+                TestGlobalProcessingExceptionHandler.class);
+
+        produceInitialGlobalTableValues();
+        assertThrows(StreamsException.class, () -> {
+            startStreams();
+        });
+        assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
+
+    }
+
+    @Test
+    public void testProcessingExceptionHandlerDisabledRestorationPhase() throws Exception {
+        createBuilderWithFailedProcessor();
+        // disable processing exception handler invoked config
+        TestGlobalProcessingExceptionHandler.shouldResume = false;
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+                TestGlobalProcessingExceptionHandler.class);
+
+        produceInitialGlobalTableValues();
+        assertThrows(StreamsException.class, () -> {
+            startStreams();
+        });
+        assertFalse(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
+
+    }
+
+    @Test
+    public void testProcessingExceptionHandlerContinueEnabledRunTimePhase() throws Exception {
+        createBuilderWithFailedProcessor();
+        // enable processing exception handler invoked config
+        TestGlobalProcessingExceptionHandler.shouldResume = true;
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+                TestGlobalProcessingExceptionHandler.class);
+
+        startStreams();
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+        produceInitialGlobalTableValues();
+        
+        TestUtils.waitForCondition(
+            () -> TestGlobalProcessingExceptionHandler.handlerInvoked.get(),
+            Duration.ofSeconds(30).toMillis(),
+            "Handler was not invoked for key 2L"
+        );
+    }
+
+    @Test
+    public void testProcessingExceptionHandlerFailEnabledRunTimePhase() throws Exception {
+        createBuilderWithFailedProcessor();
+        // enable processing exception handler invoked config
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+                TestGlobalProcessingExceptionHandler.class);
+
+        startStreams();
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+        produceInitialGlobalTableValues();
+        waitForApplicationState(singletonList(kafkaStreams), State.ERROR, Duration.ofSeconds(30));
+        assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
+    }
+
+    @Test
+    public void testProcessingExceptionHandlerDisabledRunTimePhase() throws Exception {
+        createBuilderWithFailedProcessor();
+        // disable processing exception handler invoked config
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+                TestGlobalProcessingExceptionHandler.class);
+
+        startStreams();
+        waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+        produceInitialGlobalTableValues();
+        waitForApplicationState(singletonList(kafkaStreams), State.ERROR, Duration.ofSeconds(30));
+        assertFalse(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
+    }
+
+    public static class TestGlobalProcessingExceptionHandler implements ProcessingExceptionHandler {
+        static AtomicBoolean handlerInvoked = new AtomicBoolean(false);
+        static boolean shouldResume = false;
+
+        @Override
+        public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            handlerInvoked.set(true);
+            return shouldResume ? Response.resume() : Response.fail();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+        }
+    }
+
     private void createTopics(final String safeTestName) throws Exception {
         streamTopic = "stream-" + safeTestName;
         globalTableTopic = "globalTable-" + safeTestName;
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
-    
+
     private void startStreams() {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();

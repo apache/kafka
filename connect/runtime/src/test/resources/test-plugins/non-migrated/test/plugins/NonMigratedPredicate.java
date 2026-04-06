@@ -48,4 +48,9 @@ public class NonMigratedPredicate implements Predicate {
     @Override
     public void close() {
     }
+
+    @Override
+    public String version() {
+        return "1.0.0";
+    }
 }
