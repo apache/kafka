@@ -176,12 +176,6 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .defineInternal(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            BOOLEAN,
-            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
-            null,
-            MEDIUM,
-            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(SHARE_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -235,12 +229,6 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .defineInternal(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            BOOLEAN,
-            GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
-            null,
-            MEDIUM,
-            GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -271,12 +259,6 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .defineInternal(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            BOOLEAN,
-            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
-            null,
-            MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
@@ -293,7 +275,6 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, Optional.of(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG)),
         Map.entry(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG)),
         Map.entry(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
-        Map.entry(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
 
         // Share group configs
         Map.entry(SHARE_SESSION_TIMEOUT_MS_CONFIG, Optional.of(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG)),
@@ -305,7 +286,6 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(SHARE_ISOLATION_LEVEL_CONFIG, Optional.empty()),
         Map.entry(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, Optional.empty()),
         Map.entry(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
-        Map.entry(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
 
         // Streams group configs
         Map.entry(STREAMS_SESSION_TIMEOUT_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG)),
@@ -313,7 +293,6 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG)),
         Map.entry(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG)),
         Map.entry(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
-        Map.entry(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
         Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG))
     );
 
@@ -335,9 +314,7 @@ public final class GroupConfig extends AbstractConfig {
         this.consumerAssignmentIntervalMs = props.containsKey(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG) ?
             Optional.of(getInt(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
-        this.consumerAssignorOffloadEnable = props.containsKey(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG) ?
-            Optional.of(getBoolean(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)) :
-            Optional.empty();
+        this.consumerAssignorOffloadEnable = Optional.empty();
         this.shareSessionTimeoutMs = getInt(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         this.shareHeartbeatIntervalMs = getInt(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
@@ -350,9 +327,7 @@ public final class GroupConfig extends AbstractConfig {
         this.shareAssignmentIntervalMs = props.containsKey(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG) ?
             Optional.of(getInt(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
-        this.shareAssignorOffloadEnable = props.containsKey(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG) ?
-            Optional.of(getBoolean(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)) :
-            Optional.empty();
+        this.shareAssignorOffloadEnable = Optional.empty();
         this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
@@ -363,9 +338,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsAssignmentIntervalMs = props.containsKey(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG) ?
             Optional.of(getInt(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
-        this.streamsAssignorOffloadEnable = props.containsKey(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG) ?
-            Optional.of(getBoolean(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)) :
-            Optional.empty();
+        this.streamsAssignorOffloadEnable = Optional.empty();
         this.streamsTaskOffsetIntervalMs = getInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
         this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);

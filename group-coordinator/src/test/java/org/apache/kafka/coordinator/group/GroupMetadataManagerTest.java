@@ -21183,34 +21183,16 @@ public class GroupMetadataManagerTest {
             2000, 1500, 1000, 500
         );
         testDynamicBrokerAndGroupConfig(
-            GroupMetadataManager::consumerGroupAssignorOffloadEnable,
-            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            GroupConfig.CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            true, false, true, false
-        );
-        testDynamicBrokerAndGroupConfig(
             GroupMetadataManager::shareGroupAssignmentIntervalMs,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
             2000, 1500, 1000, 500
         );
         testDynamicBrokerAndGroupConfig(
-            GroupMetadataManager::shareGroupAssignorOffloadEnable,
-            GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            GroupConfig.SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            true, false, true, false
-        );
-        testDynamicBrokerAndGroupConfig(
             GroupMetadataManager::streamsGroupAssignmentIntervalMs,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
             GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
             2000, 1500, 1000, 500
-        );
-        testDynamicBrokerAndGroupConfig(
-            GroupMetadataManager::streamsGroupAssignorOffloadEnable,
-            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-            true, false, true, false
         );
     }
 
