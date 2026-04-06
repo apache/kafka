@@ -1848,7 +1848,6 @@ public class PlaintextConsumerTest {
         config.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
         config.put(GROUP_ID_CONFIG, groupId);
         config.put(ENABLE_AUTO_COMMIT_CONFIG, true);
-        config.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(config)) {
             consumer1.subscribe(List.of(TOPIC));
