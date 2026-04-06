@@ -2011,7 +2011,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // safely collect records from the buffer.
         if (inflightPoll != null && !inflightPoll.isReconciliationCheckComplete()) {
             // If the background hasn't had the time to check for pending reconciliation,
-            // we need to wait for that check before moving on (instead of returning empty righ away,
+            // we need to wait for that check before moving on (instead of returning empty right away,
             // which will lead to blocking on buffer data)
             long timeoutMs = inflightPoll.deadlineMs() - time.milliseconds();
             if (timeoutMs > 0) {
