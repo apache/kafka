@@ -375,6 +375,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
+    private final StreamsThreadMetricsDelegatingReporter metricsReporter;
 
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
@@ -511,8 +512,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
 
-        final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
-        streamsMetrics.metricsRegistry().addReporter(reporter);
+        final StreamsThreadMetricsDelegatingReporter metricsReporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
+        streamsMetrics.metricsRegistry().addReporter(metricsReporter);
 
         final StreamThread streamThread = new StreamThread(
             time,
@@ -536,7 +537,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler,
             cache::resize,
             mainConsumerSetup.streamsRebalanceData,
-            streamsMetadataState
+            streamsMetadataState,
+            metricsReporter
         );
 
         return streamThread.updateThreadMetadata(adminClientId(clientId));
@@ -785,7 +787,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
-                        final StreamsMetadataState streamsMetadataState
+                        final StreamsMetadataState streamsMetadataState,
+                        final StreamsThreadMetricsDelegatingReporter metricsReporter
                         ) {
         super(threadId);
         this.stateLock = new Object();
@@ -807,6 +810,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
+        this.metricsReporter = metricsReporter;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -1964,6 +1968,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         streamsMetrics.removeAllThreadLevelSensors(getName());
         streamsMetrics.removeAllThreadLevelMetrics(getName());
+        streamsMetrics.metricsRegistry().removeReporter(metricsReporter);
 
         setState(State.DEAD);
 
@@ -2169,5 +2174,9 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Optional<StreamsRebalanceData> streamsRebalanceData() {
         return streamsRebalanceData;
+    }
+
+    StreamsMetricsImpl streamsMetrics() {
+        return streamsMetrics;
     }
 }
