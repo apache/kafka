@@ -50,7 +50,6 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
@@ -386,11 +385,8 @@ public class GroupCoordinatorConfig {
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
         CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-        CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
         SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-        SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
-        STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-        STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG
+        STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG
     );
     
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -434,7 +430,6 @@ public class GroupCoordinatorConfig {
         .define(CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
-        .defineInternal(CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, null, MEDIUM, CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         // Interval config used for testing purposes.
         .defineInternal(CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, INT, CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_DEFAULT, atLeast(10 * 1000), MEDIUM, CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_DOC)
 
@@ -450,7 +445,6 @@ public class GroupCoordinatorConfig {
         .define(SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
-        .defineInternal(SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, null, MEDIUM, SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .defineInternal(SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT, atLeast(1), LOW, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC)
 
         // Streams group configs
@@ -467,7 +461,6 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
-        .defineInternal(STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, null, MEDIUM, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC);
 
@@ -1137,7 +1130,7 @@ public class GroupCoordinatorConfig {
      * Whether to offload consumer group assignment to a group coordinator background thread.
      */
     public boolean consumerGroupAssignorOffloadEnable() {
-        return config.getBoolean(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
+        return CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT;
     }
 
     /**
@@ -1228,7 +1221,7 @@ public class GroupCoordinatorConfig {
      * Whether to offload share group assignment to a group coordinator background thread.
      */
     public boolean shareGroupAssignorOffloadEnable() {
-        return config.getBoolean(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
+        return SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT;
     }
 
     /**
@@ -1333,7 +1326,7 @@ public class GroupCoordinatorConfig {
      * Whether to offload streams group assignment to a group coordinator background thread.
      */
     public boolean streamsGroupAssignorOffloadEnable() {
-        return config.getBoolean(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
+        return STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT;
     }
 
     /**

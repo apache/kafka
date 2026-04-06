@@ -202,17 +202,14 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 500);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 400);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, 600);
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 15 * 60 * 1000);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 250);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 150);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, 350);
-        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 5000);
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 125);
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 25);
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, 225);
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
         configs.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, 2 * 1024 * 1024);
 
         GroupCoordinatorConfig config = createConfig(configs);
@@ -246,17 +243,14 @@ public class GroupCoordinatorConfigTest {
         assertEquals(500, config.consumerGroupAssignmentIntervalMs());
         assertEquals(400, config.consumerGroupMinAssignmentIntervalMs());
         assertEquals(600, config.consumerGroupMaxAssignmentIntervalMs());
-        assertEquals(false, config.consumerGroupAssignorOffloadEnable());
         assertEquals(15 * 60 * 1000, config.consumerGroupRegexRefreshIntervalMs());
         assertEquals(250, config.shareGroupAssignmentIntervalMs());
         assertEquals(150, config.shareGroupMinAssignmentIntervalMs());
         assertEquals(350, config.shareGroupMaxAssignmentIntervalMs());
-        assertEquals(false, config.shareGroupAssignorOffloadEnable());
         assertEquals(5000, config.streamsGroupInitialRebalanceDelayMs());
         assertEquals(125, config.streamsGroupAssignmentIntervalMs());
         assertEquals(25, config.streamsGroupMinAssignmentIntervalMs());
         assertEquals(225, config.streamsGroupMaxAssignmentIntervalMs());
-        assertEquals(false, config.streamsGroupAssignorOffloadEnable());
         assertEquals(2 * 1024 * 1024, config.cachedBufferMaxBytes());
     }
 
