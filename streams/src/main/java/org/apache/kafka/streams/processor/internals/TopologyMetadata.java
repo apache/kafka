@@ -232,6 +232,7 @@ public class TopologyMetadata {
                     } catch (final InterruptedException e) {
                         Thread.currentThread().interrupt();
                         log.warn("StreamThread was interrupted while waiting on empty topology", e);
+                        break;
                     }
                 }
             } finally {
