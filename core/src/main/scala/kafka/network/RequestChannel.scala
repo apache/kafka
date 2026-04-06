@@ -22,7 +22,6 @@ import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import kafka.network
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
@@ -35,6 +34,7 @@ import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.network.{RequestConvertToJson, Session}
+import org.apache.kafka.server.config.AbstractKafkaConfig
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -170,7 +170,7 @@ object RequestChannel extends Logging {
           newData.resources().forEach(resource => {
             val resourceType = ConfigResource.Type.forId(resource.resourceType())
             resource.configs().forEach(config => {
-              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+              config.setValue(AbstractKafkaConfig.loggableValue(resourceType, config.name(), config.value()))
             })
           })
           new AlterConfigsRequest(newData, alterConfigs.version())
@@ -180,7 +180,7 @@ object RequestChannel extends Logging {
           newData.resources().forEach(resource => {
             val resourceType = ConfigResource.Type.forId(resource.resourceType())
             resource.configs().forEach(config => {
-              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+              config.setValue(AbstractKafkaConfig.loggableValue(resourceType, config.name(), config.value()))
             })
           })
           new IncrementalAlterConfigsRequest.Builder(newData).build(alterConfigs.version())

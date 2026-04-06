@@ -18,7 +18,6 @@ package kafka.server.share;
 
 import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -52,9 +51,11 @@ import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -2923,7 +2924,7 @@ public class SharePartitionManagerTest {
             .withPartitionCache(partitionCache)
             .build();
         assertEquals(4, partitionCache.size());
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, false);
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
         // Because we are toggling to a share version which does not support share groups, the cache inside share partitions must be cleared.
         assertEquals(0, partitionCache.size());
         //Check if all share partitions have been fenced.
@@ -2931,24 +2932,6 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp1).markFenced();
         Mockito.verify(sp2).markFenced();
         Mockito.verify(sp3).markFenced();
-    }
-
-    @Test
-    public void testOnShareVersionToggleWhenEnabledFromConfig() {
-        SharePartition sp0 = mock(SharePartition.class);
-        // Mock the share partitions corresponding to the topic partitions.
-        SharePartitionCache partitionCache = new SharePartitionCache();
-        partitionCache.put(
-            new SharePartitionKey("grp", new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))), sp0
-        );
-        sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withPartitionCache(partitionCache)
-            .build();
-        assertEquals(1, partitionCache.size());
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, true);
-        // Though share version is toggled to off, but it's enabled from config, hence the cache should not be cleared.
-        assertEquals(1, partitionCache.size());
-        Mockito.verify(sp0, times(0)).markFenced();
     }
 
     @Test
@@ -3023,7 +3006,7 @@ public class SharePartitionManagerTest {
         assertEquals(1, partitionCache.size());
 
         // Clean up share session and partition cache.
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, false);
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
         assertEquals(0, cache.size());
         assertEquals(0, partitionCache.size());
 
@@ -3305,7 +3288,7 @@ public class SharePartitionManagerTest {
                 MAX_IN_FLIGHT_MESSAGES,
                 REMOTE_FETCH_MAX_WAIT_MS,
                 persister,
-                mock(GroupConfigManager.class),
+                new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
                 brokerTopicStats
             );

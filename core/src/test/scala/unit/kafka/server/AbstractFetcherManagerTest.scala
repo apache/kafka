@@ -32,6 +32,7 @@ import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.ResultWithPartitions
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._

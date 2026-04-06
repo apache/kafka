@@ -83,7 +83,9 @@
   <allow pkg="org.apache.kafka.raft" />
 
   <subpackage name="server">
+    <allow class="kafka.server.KafkaBroker" />
     <allow pkg="javax.crypto" />
+    <allow class="org.apache.kafka.controller.ReplicationControlManager" />
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.network" />

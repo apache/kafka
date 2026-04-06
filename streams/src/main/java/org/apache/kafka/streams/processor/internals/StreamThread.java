@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
@@ -558,6 +559,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     processId,
                     config,
                     parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
+                    parseRackId((String) config.originals().get(CommonClientConfigs.CLIENT_RACK_CONFIG)),
                     topologyMetadata
                 )
             );
@@ -671,9 +673,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
+    private static Optional<String> parseRackId(final String rackId) {
+        if (rackId == null || rackId.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(rackId);
+    }
+
     private static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
+                                                                 final Optional<String> rackId,
                                                                  final TopologyMetadata topologyMetadata) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
@@ -682,6 +692,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return new StreamsRebalanceData(
             processId,
             endpoint,
+            rackId,
             subtopologies,
             config.getClientTags()
         );

@@ -31,19 +31,22 @@ type: docs
 [Docker](https://www.docker.com/) is a popular container runtime. Docker images for the JVM based Apache Kafka can be found on [Docker Hub](https://hub.docker.com/r/apache/kafka) and are available from version 3.7.0. 
 
 Docker image can be pulled from Docker Hub using the following command: 
-    
-    
-    $ docker pull apache/kafka:4.3.0
+
+```bash
+$ docker pull apache/kafka:4.3.0
+```
 
 If you want to fetch the latest version of the Docker image use following command: 
-    
-    
-    $ docker pull apache/kafka:latest
+
+```bash
+$ docker pull apache/kafka:latest
+```
 
 To start the Kafka container using this Docker image with default configs and on default port 9092: 
-    
-    
-    $ docker run -p 9092:9092 apache/kafka:4.3.0
+
+```bash
+$ docker run -p 9092:9092 apache/kafka:4.3.0
+```
 
 ## GraalVM Based Native Apache Kafka Docker Image
 
@@ -51,19 +54,22 @@ Docker images for the GraalVM Based Native Apache Kafka can be found on [Docker 
 NOTE: This image is experimental and intended for local development and testing purposes only; it is not recommended for production use. 
 
 Docker image can be pulled from Docker Hub using the following command: 
-    
-    
-    $ docker pull apache/kafka-native:4.3.0
+
+```bash
+$ docker pull apache/kafka-native:4.3.0
+```
 
 If you want to fetch the latest version of the Docker image use following command: 
-    
-    
-    $ docker pull apache/kafka-native:latest
+
+```bash
+$ docker pull apache/kafka-native:latest
+```
 
 To start the Kafka container using this Docker image with default configs and on default port 9092: 
-    
-    
-    $ docker run -p 9092:9092 apache/kafka-native:4.3.0
+
+```bash
+$ docker run -p 9092:9092 apache/kafka-native:4.3.0
+```
 
 ## Usage guide
 

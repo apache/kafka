@@ -257,9 +257,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         };
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
-            String output = ToolsTestUtils.captureStandardOut(() -> {
-                new StreamsResetter().execute(parameters);
-            });
+            String output = ToolsTestUtils.captureStandardOut(() -> new StreamsResetter().execute(parameters));
             assertTrue(output.contains("Option --config-file has been deprecated and will be removed in a future version. Use --command-config instead."));
 
             ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
@@ -308,9 +306,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
             // Mock Exit because CommandLineUtils.checkInvalidArgs calls exit
             Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
 
-            String output = ToolsTestUtils.captureStandardErr(() -> {
-                new StreamsResetter().execute(parameters);
-            });
+            String output = ToolsTestUtils.captureStandardErr(() -> new StreamsResetter().execute(parameters));
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[config-file]", "[command-config]")));

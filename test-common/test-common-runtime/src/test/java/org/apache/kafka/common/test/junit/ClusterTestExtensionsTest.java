@@ -232,6 +232,7 @@ public class ClusterTestExtensionsTest {
         assertEquals(supportedGroupProtocols, clusterInstance.supportedGroupProtocols());
     }
 
+    @SuppressWarnings("removal")
     @ClusterTests({
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),

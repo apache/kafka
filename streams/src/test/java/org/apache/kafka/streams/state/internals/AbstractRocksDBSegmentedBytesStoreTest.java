@@ -710,6 +710,21 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
     }
 
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldLoadPositionFromFile(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+    }
+
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         final Headers headers = new RecordHeaders();
@@ -896,15 +911,16 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                        stateSerdes.valueDeserializer().deserialize("dummy", new RecordHeaders(), next.value)
                     );
                     results.add(deserialized);
                 } else if (schema instanceof SessionKeySchema) {
                     final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
                         SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), new RecordHeaders(), "dummy"),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                        stateSerdes.valueDeserializer().deserialize("dummy", new RecordHeaders(), next.value)
                     );
                     results.add(deserialized);
                 } else {
