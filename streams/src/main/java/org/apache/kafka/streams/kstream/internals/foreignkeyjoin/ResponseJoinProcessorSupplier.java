@@ -110,7 +110,7 @@ public class ResponseJoinProcessorSupplier<KLeft, VLeft, VRight, VOut>
 
                 final long[] currentHash = currentValueWithTimestamp == null ?
                     null :
-                    Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, currentValueWithTimestamp.value()));
+                    Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, record.headers(), currentValueWithTimestamp.value()));
 
                 final long[] messageHash = record.value().originalValueHash();
 

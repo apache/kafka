@@ -220,8 +220,8 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
@@ -442,7 +442,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectNonExistentStoreName(final TestInfo testInfo) throws InterruptedException {
+    public void shouldRejectNonExistentStoreName(final TestInfo testInfo) {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
@@ -480,7 +480,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectWronglyTypedStore(final TestInfo testInfo) throws InterruptedException {
+    public void shouldRejectWronglyTypedStore(final TestInfo testInfo) {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
@@ -521,7 +521,7 @@ public class QueryableStateIntegrationTest {
                     "Cannot get state store " + storeName + " because the queryable store type" +
                         " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
                         " does not accept the actual store type" +
-                        " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeaders]."
+                        " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore]."
                 )
             );
         }
@@ -734,8 +734,8 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldBeAbleToQueryFilterState() throws Exception {
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, Long>> batch1 = new HashSet<>(
@@ -800,8 +800,8 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldBeAbleToQueryMapValuesState() throws Exception {
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, String>> batch1 = new HashSet<>(
@@ -852,8 +852,8 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldBeAbleToQueryKeysWithGivenPrefix() throws Exception {
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, String>> batch1 = new HashSet<>(
@@ -897,7 +897,7 @@ public class QueryableStateIntegrationTest {
             IntegrationTestUtils.getStore("queryMapValues", kafkaStreams, keyValueStore());
 
         int index = 0;
-        try (final KeyValueIterator<String, Long> range = myMapStore.prefixScan("go", Serdes.String().serializer())) {
+        try (final KeyValueIterator<String, Long> range = myMapStore.prefixScan("go", new StringSerializer())) {
             while (range.hasNext()) {
                 assertEquals(expectedPrefixScanResult.get(index++), range.next());
             }
@@ -906,8 +906,8 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldBeAbleToQueryMapValuesAfterFilterState() throws Exception {
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
         final Set<KeyValue<String, String>> batch1 = new HashSet<>(
@@ -1220,7 +1220,6 @@ public class QueryableStateIntegrationTest {
 
     private void waitUntilAtLeastNumRecordProcessed(final String topic,
                                                     final int numRecs) throws Exception {
-        final long timeout = DEFAULT_TIMEOUT_MS;
         final Properties config = new Properties();
         config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "queryable-state-consumer");
@@ -1231,7 +1230,8 @@ public class QueryableStateIntegrationTest {
             config,
             topic,
             numRecs,
-            timeout);
+            DEFAULT_TIMEOUT_MS
+        );
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
@@ -1250,7 +1250,7 @@ public class QueryableStateIntegrationTest {
     /**
      * A class that periodically produces records in a separate thread
      */
-    private class ProducerRunnable implements Runnable {
+    private static class ProducerRunnable implements Runnable {
         private final String topic;
         private final List<String> inputValues;
         private final int numIterations;

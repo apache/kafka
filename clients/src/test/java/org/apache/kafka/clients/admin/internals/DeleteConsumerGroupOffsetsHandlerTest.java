@@ -114,8 +114,8 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                             new OffsetDeleteResponsePartition()
                                 .setPartitionIndex(t0p0.partition())
                                 .setErrorCode(error.code())
-                        ).iterator()))
-                ).iterator()));
+                        )))
+                )));
         }
         return response;
     }
@@ -131,8 +131,8 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                             new OffsetDeleteResponsePartition()
                                 .setPartitionIndex(t0p0.partition())
                                 .setErrorCode(error.code())
-                        ).iterator()))
-                ).iterator()))
+                        )))
+                )))
         );
     }
 

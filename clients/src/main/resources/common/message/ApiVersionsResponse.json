@@ -29,7 +29,9 @@
   // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
   //
   // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion from being 0.
-  "validVersions": "0-4",
+  //
+  // Version 5 introduces ClusterId and NodeId checking and REBOOTSTRAP_REQUIRED error (KIP-1242).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",

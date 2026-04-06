@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
@@ -56,9 +57,14 @@ public class TimestampedKeyAndJoinSideDeserializer<K> implements WrappingNullabl
 
     @Override
     public TimestampedKeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
+        throw new UnsupportedOperationException("TimestampedKeyAndJoinSideDeserializer requires the headers-aware version of deserialize");
+    }
+
+    @Override
+    public TimestampedKeyAndJoinSide<K> deserialize(final String topic, final Headers headers, final byte[] data) {
         final boolean isLeft = data[StateSerdes.TIMESTAMP_SIZE] == 1;
-        final K key = keyDeserializer.deserialize(topic, rawKey(data));
-        final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp(data));
+        final K key = keyDeserializer.deserialize(topic, headers, rawKey(data));
+        final long timestamp = timestampDeserializer.deserialize(topic, headers, rawTimestamp(data));
 
         return isLeft ? TimestampedKeyAndJoinSide.makeLeft(key, timestamp) :
                 TimestampedKeyAndJoinSide.makeRight(key, timestamp);

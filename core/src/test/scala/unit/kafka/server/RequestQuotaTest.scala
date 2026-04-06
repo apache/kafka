@@ -363,7 +363,7 @@ class RequestQuotaTest extends BaseRequestTest {
                 new JoinGroupRequestProtocolCollection(
                   util.List.of(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("consumer-range")
-                    .setMetadata("test".getBytes())).iterator()
+                    .setMetadata("test".getBytes()))
                 )
               )
               .setRebalanceTimeoutMs(100)
@@ -414,7 +414,7 @@ class RequestQuotaTest extends BaseRequestTest {
             new CreateTopicsRequestData().setTopics(
               new CreatableTopicCollection(util.Set.of(
                 new CreatableTopic().setName("topic-2").setNumPartitions(1).
-                  setReplicationFactor(1.toShort)).iterator())))
+                  setReplicationFactor(1.toShort)))))
 
         case ApiKeys.DELETE_TOPICS =>
           new DeleteTopicsRequest.Builder(
@@ -601,7 +601,7 @@ class RequestQuotaTest extends BaseRequestTest {
                   .setName("test-topic")
                   .setPartitions(util.List.of(
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
-                      .setPartitionIndex(0)))).iterator())))
+                      .setPartitionIndex(0)))))))
 
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS =>
           new DescribeClientQuotasRequest.Builder(ClientQuotaFilter.all())
@@ -654,7 +654,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
             .setTopics(new DescribeProducersRequestData.TopicRequestCollection(util.List.of(new DescribeProducersRequestData.TopicRequest()
               .setName("test-topic")
-              .setPartitionIndexes(util.List.of[Integer](1, 2, 3))).iterator())))
+              .setPartitionIndexes(util.List.of[Integer](1, 2, 3))))))
 
         case ApiKeys.BROKER_REGISTRATION =>
           new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())

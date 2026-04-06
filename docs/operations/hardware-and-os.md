@@ -76,9 +76,10 @@ In Linux, data written to the filesystem is maintained in [pagecache](https://en
 Pdflush has a configurable policy that controls how much dirty data can be maintained in cache and for how long before it must be written back to disk. This policy is described [here](https://web.archive.org/web/20160518040713/http://www.westnet.com/~gsmith/content/linux-pdflush.htm). When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data. 
 
 You can see the current state of OS memory usage by doing 
-    
-    
-    $ cat /proc/meminfo
+
+```bash
+$ cat /proc/meminfo
+```
 
 The meaning of these values are described in the link above. 
 
@@ -129,22 +130,25 @@ EXT4 is a serviceable choice of filesystem for the Kafka data directories, howev
 When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in `metadata.log.dir` \-- or the first log directory, if `metadata.log.dir` is not configured. See the documentation for `metadata.log.dir` for details.
 
 If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the kafka-metadata-quorum.sh tool to describe the replication status:
-    
-    
-    $ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
-    NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTimestamp	Status
-    1     	dDo1k_pRSD-VmReEpu383g	966         	0  	1732367153528     	1732367153528        	Leader
-    2     	wQWaQMJYpcifUPMBGeRHqg	966         	0  	1732367153304     	1732367153304        	Observer
-    ...     ...             ...     ...                     ...                     ...
+
+```bash
+$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
+NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTimestamp	Status
+1     	dDo1k_pRSD-VmReEpu383g	966         	0  	1732367153528     	1732367153528        	Leader
+2     	wQWaQMJYpcifUPMBGeRHqg	966         	0  	1732367153304     	1732367153304        	Observer
+...     ...             ...     ...                     ...                     ...
+```
 
 Check and wait until the `Lag` is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the `LastFetchTimestamp` and `LastCaughtUpTimestamp` are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the kafka-storage.sh command.
-    
-    
-    $ bin/kafka-storage.sh format --cluster-id uuid --config config/server.properties
+
+```bash
+$ bin/kafka-storage.sh format --cluster-id uuid --config config/server.properties
+```
 
 It is possible for the `bin/kafka-storage.sh format` command above to fail with a message like `Log directory ... is already formatted`. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the `bin/kafka-storage.sh format` command with the `--ignore-formatted` option.
 
 Start the KRaft controller after formatting the log directories.
-    
-    
-    $ bin/kafka-server-start.sh config/server.properties
+
+```bash
+$ bin/kafka-server-start.sh config/server.properties
+```

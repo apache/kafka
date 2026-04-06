@@ -1116,11 +1116,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
-            accessor.flush(columnFamily, offsetColumnFamilyHandle);
-        }
-
-        @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
                                final WriteBatchInterface batch) throws RocksDBException {
