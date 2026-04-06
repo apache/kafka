@@ -59,9 +59,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkProperties;
 
 /**
  * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor}

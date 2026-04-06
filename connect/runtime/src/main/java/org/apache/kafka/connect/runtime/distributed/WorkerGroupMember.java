@@ -37,7 +37,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
+import static org.apache.kafka.common.utils.internals.Utils.UncheckedCloseable;
 
 /**
  * This class manages the coordination process with brokers for the Connect cluster group membership. It ties together

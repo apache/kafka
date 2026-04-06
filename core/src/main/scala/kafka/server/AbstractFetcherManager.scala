@@ -18,8 +18,8 @@
 package kafka.server
 
 import kafka.utils.Logging
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.PartitionFetchState

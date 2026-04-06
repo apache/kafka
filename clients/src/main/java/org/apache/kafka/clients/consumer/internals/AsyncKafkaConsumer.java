@@ -156,9 +156,9 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLo
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
-import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.swallow;
+import static org.apache.kafka.common.utils.internals.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.isBlank;
+import static org.apache.kafka.common.utils.internals.Utils.swallow;
 
 /**
  * This {@link Consumer} implementation uses an {@link ApplicationEventHandler event handler} to process

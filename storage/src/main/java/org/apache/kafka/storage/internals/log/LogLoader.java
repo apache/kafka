@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.InvalidOffsetException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 

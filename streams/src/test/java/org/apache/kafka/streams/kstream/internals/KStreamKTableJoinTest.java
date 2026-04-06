@@ -51,8 +51,8 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;

@@ -17,7 +17,7 @@
 package org.apache.kafka.common.memory;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

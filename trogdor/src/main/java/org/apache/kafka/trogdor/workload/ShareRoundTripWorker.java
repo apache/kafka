@@ -27,7 +27,7 @@ import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 

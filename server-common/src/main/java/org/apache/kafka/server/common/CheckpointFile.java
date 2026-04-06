@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;

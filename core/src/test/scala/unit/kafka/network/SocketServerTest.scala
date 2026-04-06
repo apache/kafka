@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils._
+import org.apache.kafka.common.utils.{internals, _}
 import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
@@ -132,7 +132,7 @@ class SocketServerTest {
   }
 
   def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader): Unit = {
-    val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
+    val serializedBytes = internals.Utils.toArray(request.serializeWithHeader(header))
     sendRequest(socket, serializedBytes)
   }
 
@@ -243,13 +243,13 @@ class SocketServerTest {
       .setTransactionalId(null))
       .build(apiVersion)
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-    Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
+    internals.Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
   }
 
   private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
     val request = new ApiVersionsRequest.Builder().build(version)
     val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
-    Utils.toArray(request.serializeWithHeader(header))
+    internals.Utils.toArray(request.serializeWithHeader(header))
   }
 
   @Test
@@ -343,7 +343,7 @@ class SocketServerTest {
     val version: Short = 0
     val header = new RequestHeader(ApiKeys.VOTE, version, "", correlationId)
     val request = new VoteRequest.Builder(new VoteRequestData()).build(version)
-    val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
+    val serializedBytes = internals.Utils.toArray(request.serializeWithHeader(header))
 
     val socket = connect()
 
@@ -966,7 +966,7 @@ class SocketServerTest {
         .setTransactionalId(null))
         .build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-      val serializedBytes = Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
+      val serializedBytes = internals.Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
 
       sendRequest(sslSocket, serializedBytes)
       processRequest(overrideServer.dataPlaneRequestChannel)

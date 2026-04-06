@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Checksums;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.io.DataOutputStream;
@@ -29,7 +29,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
-import static org.apache.kafka.common.utils.Utils.wrapNullable;
+import static org.apache.kafka.common.utils.internals.Utils.wrapNullable;
 
 /**
  * This class represents the serialized key and value along with the associated CRC and other fields

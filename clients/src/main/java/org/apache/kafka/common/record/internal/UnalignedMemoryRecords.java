@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.network.TransferableChannel;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

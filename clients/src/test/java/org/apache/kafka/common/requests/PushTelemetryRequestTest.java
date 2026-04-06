@@ -23,7 +23,7 @@ import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.telemetry.internals.MetricKey;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

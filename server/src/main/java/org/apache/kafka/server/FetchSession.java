@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 

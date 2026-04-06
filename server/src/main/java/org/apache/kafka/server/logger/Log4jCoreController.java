@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.logger;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;

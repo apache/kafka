@@ -22,8 +22,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
-import static org.apache.kafka.common.utils.Utils.getNullableArray;
-import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
+import static org.apache.kafka.common.utils.internals.Utils.getNullableArray;
+import static org.apache.kafka.common.utils.internals.Utils.getNullableSizePrefixedArray;
 
 public final class BufferValue {
     private static final int NULL_VALUE_SENTINEL = -1;

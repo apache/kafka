@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 

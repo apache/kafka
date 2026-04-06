@@ -55,7 +55,7 @@ import java.util.function.Supplier;
 import javax.security.auth.spi.LoginModule;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.closeQuietly;
 
 /**
  * Background thread runnable that consumes {@link ApplicationEvent} and produces {@link BackgroundEvent}. It

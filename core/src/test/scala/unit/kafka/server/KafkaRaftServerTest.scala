@@ -16,11 +16,11 @@
  */
 package kafka.server
 
+import org.apache.kafka.common.utils.internals.Utils
 import java.io.File
 import java.nio.file.Files
 import java.util.{Optional, Properties}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}

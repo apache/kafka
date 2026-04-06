@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;

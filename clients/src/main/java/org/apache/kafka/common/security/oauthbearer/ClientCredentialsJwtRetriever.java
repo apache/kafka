@@ -23,7 +23,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRet
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

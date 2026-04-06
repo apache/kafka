@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}

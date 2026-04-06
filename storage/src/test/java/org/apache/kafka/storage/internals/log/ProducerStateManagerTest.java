@@ -25,7 +25,7 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
 

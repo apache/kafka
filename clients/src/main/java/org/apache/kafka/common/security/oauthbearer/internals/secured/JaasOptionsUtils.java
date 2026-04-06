@@ -25,7 +25,7 @@ import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

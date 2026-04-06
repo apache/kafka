@@ -50,8 +50,8 @@ import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.SEND_BUFFER_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.common.utils.Utils.loadProps;
-import static org.apache.kafka.common.utils.Utils.propsToStringMap;
+import static org.apache.kafka.common.utils.internals.Utils.loadProps;
+import static org.apache.kafka.common.utils.internals.Utils.propsToStringMap;
 import static org.apache.kafka.server.util.CommandLineUtils.parseKeyValueArgs;
 
 public class ConsoleProducer {

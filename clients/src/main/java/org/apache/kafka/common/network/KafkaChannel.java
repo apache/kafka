@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.IOException;
 import java.net.InetAddress;

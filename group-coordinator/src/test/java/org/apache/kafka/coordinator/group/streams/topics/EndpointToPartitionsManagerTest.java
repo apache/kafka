@@ -44,7 +44,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopologyWithCommonEpoch;
 import static org.junit.jupiter.api.Assertions.assertEquals;

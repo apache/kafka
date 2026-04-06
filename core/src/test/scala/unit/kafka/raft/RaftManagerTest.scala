@@ -30,7 +30,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{Endpoints, KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole

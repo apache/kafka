@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;

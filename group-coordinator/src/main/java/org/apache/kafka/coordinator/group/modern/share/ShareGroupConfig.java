@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import java.util.Arrays;

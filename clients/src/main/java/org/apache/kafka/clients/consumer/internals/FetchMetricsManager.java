@@ -30,8 +30,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 
 /**
  * The {@link FetchMetricsManager} class provides wrapper methods to record lag, lead, latency, and fetch metrics.

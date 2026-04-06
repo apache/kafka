@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.Collections;
 import java.util.Objects;

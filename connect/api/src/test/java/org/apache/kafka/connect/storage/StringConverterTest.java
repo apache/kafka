@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 

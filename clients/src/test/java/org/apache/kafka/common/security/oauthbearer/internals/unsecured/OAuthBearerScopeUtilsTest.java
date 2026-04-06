@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.junit.jupiter.api.Test;
 

@@ -19,7 +19,7 @@ package org.apache.kafka.tiered.storage.utils;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageTraverser;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset;
 

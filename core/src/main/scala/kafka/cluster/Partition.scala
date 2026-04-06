@@ -33,7 +33,8 @@ import org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.internal.{FileRecords, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.server.LogDeleteRecordsResult

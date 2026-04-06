@@ -20,7 +20,7 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.internal.CompressionType;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.Collections;
 import java.util.HashMap;

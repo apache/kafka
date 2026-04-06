@@ -39,7 +39,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.closeQuietly;
 
 /**
  * {@code RequestManagers} provides a means to pass around the set of {@link RequestManager} instances in the system.

@@ -27,7 +27,7 @@ import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.util.Scheduler;
 
 import org.slf4j.Logger;
@@ -51,7 +51,7 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.require;
+import static org.apache.kafka.common.utils.internals.Utils.require;
 import static org.apache.kafka.storage.internals.log.LogFileUtils.CLEANED_FILE_SUFFIX;
 import static org.apache.kafka.storage.internals.log.LogFileUtils.DELETED_FILE_SUFFIX;
 import static org.apache.kafka.storage.internals.log.LogFileUtils.DELETE_DIR_SUFFIX;

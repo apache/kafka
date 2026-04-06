@@ -27,14 +27,14 @@ import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.utils.Utils.wrapNullable;
+import static org.apache.kafka.common.utils.internals.Utils.wrapNullable;
 
 /**
  * This class is used to write new log data in memory, i.e. this is the write path for {@link MemoryRecords}.

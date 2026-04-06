@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 
 import java.io.IOException;

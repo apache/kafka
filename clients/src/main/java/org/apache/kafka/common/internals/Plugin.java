@@ -20,7 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

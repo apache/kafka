@@ -18,7 +18,6 @@ package org.apache.kafka.common.utils.internals;
 
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;

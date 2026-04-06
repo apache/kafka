@@ -17,7 +17,7 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

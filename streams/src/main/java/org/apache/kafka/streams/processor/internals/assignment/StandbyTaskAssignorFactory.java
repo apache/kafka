@@ -22,8 +22,8 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 
 class StandbyTaskAssignorFactory {
     private StandbyTaskAssignorFactory() {}

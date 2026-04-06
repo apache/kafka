@@ -33,7 +33,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.oauthbearer.{JwtRetriever, OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertNotNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest

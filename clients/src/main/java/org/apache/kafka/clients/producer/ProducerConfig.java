@@ -30,7 +30,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

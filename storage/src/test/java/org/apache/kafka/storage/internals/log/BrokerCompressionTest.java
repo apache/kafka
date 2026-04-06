@@ -23,7 +23,7 @@ import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.storage.log.FetchIsolation;

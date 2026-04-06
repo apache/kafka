@@ -27,7 +27,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.test.TestUtils.assertFutureThrows

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;

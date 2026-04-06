@@ -48,7 +48,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.common.utils.Utils.propsToMap;
+import static org.apache.kafka.common.utils.internals.Utils.propsToMap;
 
 /**
  * A client that consumes records from a Kafka cluster.

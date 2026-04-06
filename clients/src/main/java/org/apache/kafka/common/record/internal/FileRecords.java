@@ -20,7 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.Closeable;
 import java.io.File;

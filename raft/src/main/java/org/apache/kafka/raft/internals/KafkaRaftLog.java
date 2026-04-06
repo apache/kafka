@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogAppendInfo;
 import org.apache.kafka.raft.LogFetchInfo;

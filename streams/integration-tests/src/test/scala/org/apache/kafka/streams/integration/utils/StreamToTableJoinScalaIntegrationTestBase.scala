@@ -19,7 +19,8 @@ package org.apache.kafka.streams.integration.utils
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.{MockTime, Utils}
+import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.streams._
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api._

@@ -20,7 +20,7 @@ import kafka.api.IntegrationTestHarness;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.common.replica.ReplicaSelector;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;

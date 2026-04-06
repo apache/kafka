@@ -21,7 +21,7 @@ import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 
 import java.io.File;

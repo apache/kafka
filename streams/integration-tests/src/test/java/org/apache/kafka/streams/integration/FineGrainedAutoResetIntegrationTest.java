@@ -58,7 +58,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.common.utils.internals.Utils.mkProperties;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;

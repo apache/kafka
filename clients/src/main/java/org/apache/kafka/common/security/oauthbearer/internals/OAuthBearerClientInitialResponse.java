@@ -17,7 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;

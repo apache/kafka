@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ShareGroupDescribeRequest, ShareGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.security.authorizer.AclEntry

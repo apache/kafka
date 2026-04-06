@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.{DescribeClusterRequest, RequestContext}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 

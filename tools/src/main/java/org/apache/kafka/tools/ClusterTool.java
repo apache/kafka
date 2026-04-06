@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.DescribeClusterOptions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;

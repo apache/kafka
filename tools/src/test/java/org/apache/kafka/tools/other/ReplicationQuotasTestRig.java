@@ -34,7 +34,7 @@ import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;

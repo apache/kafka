@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
@@ -56,8 +56,8 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
-import static org.apache.kafka.common.utils.Utils.maybeCloseQuietly;
-import static org.apache.kafka.common.utils.Utils.require;
+import static org.apache.kafka.common.utils.internals.Utils.maybeCloseQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.require;
 
 /**
  * The group coordinator configurations.

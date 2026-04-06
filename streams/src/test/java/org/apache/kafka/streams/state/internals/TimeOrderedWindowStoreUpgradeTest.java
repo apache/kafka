@@ -39,7 +39,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Properties;
 
-import static org.apache.kafka.common.utils.Utils.delete;
+import static org.apache.kafka.common.utils.internals.Utils.delete;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**

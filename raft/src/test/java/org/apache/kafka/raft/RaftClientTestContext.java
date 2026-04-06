@@ -62,7 +62,7 @@ import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.Feature;

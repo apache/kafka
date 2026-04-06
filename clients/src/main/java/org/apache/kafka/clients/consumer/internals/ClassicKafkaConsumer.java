@@ -96,9 +96,9 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
-import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.swallow;
+import static org.apache.kafka.common.utils.internals.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.isBlank;
+import static org.apache.kafka.common.utils.internals.Utils.swallow;
 
 /**
  * A client that consumes records from a Kafka cluster using the {@link GroupProtocol#CLASSIC classic group protocol}.

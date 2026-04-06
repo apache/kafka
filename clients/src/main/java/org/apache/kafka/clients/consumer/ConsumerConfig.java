@@ -35,7 +35,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -37,7 +37,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import static org.apache.kafka.common.utils.Utils.diff;
+import static org.apache.kafka.common.utils.internals.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST;
 import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_TRAFFIC_COST;
 

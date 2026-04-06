@@ -51,8 +51,8 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TOPIC_PREFIX;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_PREFIX;

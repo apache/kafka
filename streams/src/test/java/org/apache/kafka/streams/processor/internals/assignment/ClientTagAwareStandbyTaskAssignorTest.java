@@ -35,8 +35,8 @@ import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
