@@ -142,6 +142,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected StateStoreContext context;
     protected Position position;
+    private TaskId taskId;
 
     public RocksDBStore(final String name,
                         final String metricsScope) {
@@ -167,9 +168,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
+        this.taskId = stateStoreContext.taskId();
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
-        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir(), stateStoreContext.taskId());
+        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
         StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), position);
 
         // value getter should always read directly from rocksDB
@@ -187,7 +189,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @SuppressWarnings("unchecked")
-    void openDB(final Map<String, Object> configs, final File stateDir, final TaskId taskId) {
+    void openDB(final Map<String, Object> configs, final File stateDir) {
         final boolean eosEnabled = Objects.equals(configs.get(PROCESSING_GUARANTEE_CONFIG), EXACTLY_ONCE_V2);
         // initialize the default rocksdb options
         final DBOptions dbOptions = new DBOptions();
@@ -284,6 +286,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } else {
             userSpecifiedStatistics = true;
         }
+    }
+
+    void setTaskId(final TaskId taskId) {
+        this.taskId = taskId;
     }
 
     private void addValueProvidersToMetricsRecorder() {

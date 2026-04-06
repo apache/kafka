@@ -42,7 +42,8 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
     @Override
     protected void openSegmentDB(final KeyValueSegment segment, final StateStoreContext context) {
-        segment.openDB(context.appConfigs(), context.stateDir(), context.taskId());
+        segment.setTaskId(context.taskId());
+        segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override

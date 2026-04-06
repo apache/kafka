@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
@@ -56,8 +55,8 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
     }
 
     @Override
-    public void openDB(final Map<String, Object> configs, final File stateDir, final TaskId taskId) {
-        super.openDB(configs, stateDir, taskId);
+    public void openDB(final Map<String, Object> configs, final File stateDir) {
+        super.openDB(configs, stateDir);
     }
 
     @Override

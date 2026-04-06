@@ -42,7 +42,8 @@ class SessionSegmentsWithHeaders extends AbstractSegments<SessionSegmentWithHead
 
     @Override
     protected void openSegmentDB(final SessionSegmentWithHeaders segment, final StateStoreContext context) {
-        segment.openDB(context.appConfigs(), context.stateDir(), context.taskId());
+        segment.setTaskId(context.taskId());
+        segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override

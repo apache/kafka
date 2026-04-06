@@ -65,7 +65,7 @@ public class TimestampedSegmentTest {
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 
-        segment.openDB(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")), directory, new TaskId(0, 0));
+        segment.openDB(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")), directory);
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());
