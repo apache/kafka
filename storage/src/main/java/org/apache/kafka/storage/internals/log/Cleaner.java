@@ -638,7 +638,7 @@ public class Cleaner {
      *
      * @return A list of grouped segments
      */
-    public List<List<LogSegment>> groupSegmentsBySize(List<LogSegment> segments, int maxSize, int maxIndexSize, long firstUncleanableOffset) throws IOException {
+    public List<List<LogSegment>> groupSegmentsBySize(List<LogSegment> segments, long maxSize, int maxIndexSize, long firstUncleanableOffset) throws IOException {
         List<List<LogSegment>> grouped = new ArrayList<>();
 
         while (!segments.isEmpty()) {

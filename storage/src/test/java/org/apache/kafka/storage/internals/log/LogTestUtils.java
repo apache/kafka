@@ -528,7 +528,7 @@ public class LogTestUtils {
             return this;
         }
 
-        public LogConfigBuilder segmentBytes(int segmentBytes) {
+        public LogConfigBuilder segmentBytes(long segmentBytes) {
             configs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes);
             return this;
         }

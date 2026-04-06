@@ -60,7 +60,7 @@ object LogTestUtils {
   }
 
   def createLogConfig(segmentMs: Long = LogConfig.DEFAULT_SEGMENT_MS,
-                      segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
+                      segmentBytes: Long = LogConfig.DEFAULT_SEGMENT_BYTES,
                       retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
                       localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
                       retentionBytes: Long = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
@@ -76,7 +76,7 @@ object LogTestUtils {
                       remoteLogDeleteOnDisable: Boolean = DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes: java.lang.Long)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes: java.lang.Long)

@@ -122,7 +122,7 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
 
-    public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
+    public static final long DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
     public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
     public static final long DEFAULT_RETENTION_MS = 24 * 7 * 60 * 60 * 1000L;
@@ -147,7 +147,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.LOG_DIR_CONFIG, LIST, ServerLogConfigs.LOG_DIR_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, ServerLogConfigs.LOG_DIR_DOC)
             .define(ServerLogConfigs.LOG_DIRS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(false, true), HIGH, ServerLogConfigs.LOG_DIRS_DOC)
             .define(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, LIST, ServerLogConfigs.CORDONED_LOG_DIRS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, true), MEDIUM, ServerLogConfigs.CORDONED_LOG_DIRS_DOC)
-            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
+            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, LONG, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
 
             .define(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, ServerLogConfigs.LOG_ROLL_TIME_MILLIS_DOC)
             .define(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, INT, (int) TimeUnit.MILLISECONDS.toHours(DEFAULT_SEGMENT_MS), atLeast(1), HIGH, ServerLogConfigs.LOG_ROLL_TIME_HOURS_DOC)
@@ -185,7 +185,7 @@ public class LogConfig extends AbstractConfig {
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
+                define(TopicConfig.SEGMENT_BYTES_CONFIG, LONG, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
                         TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
@@ -249,7 +249,7 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC)
-                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
+                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, LONG, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -258,8 +258,8 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    private final int segmentSize;
-    private final Integer internalSegmentSize;
+    private final long segmentSize;
+    private final Long internalSegmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
@@ -303,8 +303,8 @@ public class LogConfig extends AbstractConfig {
         this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
-        this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
-        this.internalSegmentSize = getInt(INTERNAL_SEGMENT_BYTES_CONFIG);
+        this.segmentSize = getLong(TopicConfig.SEGMENT_BYTES_CONFIG);
+        this.internalSegmentSize = getLong(INTERNAL_SEGMENT_BYTES_CONFIG);
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
@@ -359,7 +359,7 @@ public class LogConfig extends AbstractConfig {
         };
     }
 
-    public int segmentSize() {
+    public long segmentSize() {
         if (internalSegmentSize == null) return segmentSize;
         return internalSegmentSize;
     }
@@ -385,7 +385,7 @@ public class LogConfig extends AbstractConfig {
 
     public int initFileSize() {
         if (preallocate)
-            return segmentSize();
+            return (int) Math.min(segmentSize(), Integer.MAX_VALUE);
         else
             return 0;
     }
