@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,7 +87,7 @@ public class BytesTest {
     public void wrapReturnsBytesBackedBySameArray() {
         byte[] raw = new byte[]{0x01, 0x02, 0x03};
         Bytes wrapped = Bytes.wrap(raw);
-        assertArrayEquals(raw, wrapped.get());
+        assertSame(raw, wrapped.get());
     }
 
     @Test
