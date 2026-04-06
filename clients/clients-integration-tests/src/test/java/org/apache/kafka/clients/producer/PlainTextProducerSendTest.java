@@ -20,7 +20,9 @@ import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
@@ -175,14 +177,27 @@ public class PlainTextProducerSendTest {
     }
 
     @ClusterTest
-    public void testSendToPartition() throws InterruptedException {
-        try (var producer = clusterInstance.producer(); Consumer<Object, Object> consumer = clusterInstance.consumer()) {
-            clusterInstance.createTopic(topic, 2, (short) 2);
+    public void testSendToPartitionOverClassicProtocol() {
+        try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name()))) {
+            testSendToPartition(consumer);
+        }
+    }
+
+    @ClusterTest
+    public void testSendToPartitionOverConsumerProtocol() {
+        try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()))) {
+            testSendToPartition(consumer);
+        }
+    }
+
+    private void testSendToPartition(Consumer<Object, Object> consumer) {
+        try (var producer = clusterInstance.producer()) {
+            assertDoesNotThrow(() -> clusterInstance.createTopic(topic, 2, (short) 2));
             int partition = 1;
             ClientsTestUtils.sendRecordsAndVerify(producer, topic, partition, numRecords, 0);
 
             consumer.assign(List.of(new TopicPartition(topic, partition)));
-            List<ConsumerRecord<Object, Object>> records = ClientsTestUtils.consumeRecords(consumer, numRecords);
+            List<ConsumerRecord<Object, Object>> records = assertDoesNotThrow(() -> ClientsTestUtils.consumeRecords(consumer, numRecords));
             for (int i = 0; i < numRecords; i++) {
                 assertEquals(topic, records.get(i).topic());
                 assertEquals(partition, records.get(i).partition());
@@ -196,11 +211,23 @@ public class PlainTextProducerSendTest {
     }
 
     @ClusterTest
-    public void testSendToPartitionWithFollowerShutdownShouldNotTimeout() throws InterruptedException, ExecutionException {
-        int follower = 1;
+    public void testSendToPartitionWithFollowerShutdownShouldNotTimeoutInClassicProtocol() {
+        try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name()))) {
+            testSendToPartitionWithFollowerShutdownShouldNotTimeout(consumer);
+        }
+    }
 
-        try (var producer = clusterInstance.producer(); Consumer<Object, Object> consumer = clusterInstance.consumer()) {
-            clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(0, follower)));
+    @ClusterTest
+    public void testSendToPartitionWithFollowerShutdownShouldNotTimeoutInConsumerProtocol() {
+        try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()))) {
+            testSendToPartitionWithFollowerShutdownShouldNotTimeout(consumer);
+        }
+    }
+
+    private void testSendToPartitionWithFollowerShutdownShouldNotTimeout(Consumer<Object, Object> consumer) {
+        int follower = 1;
+        try (var producer = clusterInstance.producer()) {
+            assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(0, follower))));
             int partition = 0;
             long now = System.currentTimeMillis();
             List<Future<RecordMetadata>> futures = new ArrayList<>();
@@ -210,14 +237,15 @@ public class PlainTextProducerSendTest {
 
             clusterInstance.shutdownBroker(follower);
             for (int i = 0; i < numRecords; i++) {
-                RecordMetadata metadata = futures.get(i).get();
+                var future = futures.get(i);
+                RecordMetadata metadata = assertDoesNotThrow(() -> future.get());
                 assertEquals(i, metadata.offset());
                 assertEquals(topic, metadata.topic());
                 assertEquals(partition, metadata.partition());
             }
 
             consumer.assign(List.of(new TopicPartition(topic, partition)));
-            List<ConsumerRecord<Object, Object>> records = ClientsTestUtils.consumeRecords(consumer, numRecords);
+            List<ConsumerRecord<Object, Object>> records = assertDoesNotThrow(() -> ClientsTestUtils.consumeRecords(consumer, numRecords));
             for (int i = 0; i < numRecords; i++) {
                 assertEquals(topic, records.get(i).topic());
                 assertEquals(partition, records.get(i).partition());
@@ -284,45 +312,56 @@ public class PlainTextProducerSendTest {
         }
     }
 
+    @ClusterTest
+    public void testCloseWithZeroTimeoutFromSenderThreadOverClassicProtocol() {
+        try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name()))) {
+            testCloseWithZeroTimeoutFromSenderThread(consumer);
+        }
+    }
+
+    @ClusterTest
+    public void testCloseWithZeroTimeoutFromSenderThreadOverConsumerProtocol() {
+        try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()))) {
+            testCloseWithZeroTimeoutFromSenderThread(consumer);
+        }
+    }
+
     /**
      * Test close with zero and non-zero timeout from sender thread
      */
-    @ClusterTest
-    public void testCloseWithZeroTimeoutFromSenderThread() throws InterruptedException {
-        clusterInstance.createTopic(topic, 1, (short) 2);
+    private void testCloseWithZeroTimeoutFromSenderThread(Consumer<Object, Object> consumer) {
+        assertDoesNotThrow(() -> clusterInstance.createTopic(topic, 1, (short) 2));
         int partition = 0;
-        try (Consumer<Object, Object> consumer = clusterInstance.consumer()) {
-            consumer.assign(List.of(new TopicPartition(topic, partition)));
-            ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, partition, null, "value".getBytes(StandardCharsets.UTF_8));
-            for (int i = 0; i < 50; i++) {
-                final boolean sendRecords = i == 0;
-                try (var producer = clusterInstance.producer(Map.of(
-                    ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
-                ))) {
-                    // send message to partition 0
-                    // Only send the records in the first callback since we close the producer in the callback and no records
-                    // can be sent afterwards.
-                    List<Future<RecordMetadata>> futures = new ArrayList<>();
-                    for (int j = 0; j < numRecords; j++) {
-                        futures.add(producer.send(record, ((metadata, exception) -> {
-                            // Trigger another batch in accumulator before close the producer. These messages should
-                            // not be sent.
-                            if (sendRecords) {
-                                for (int k = 0; k < numRecords; k++) {
-                                    producer.send(record);
-                                }
+        consumer.assign(List.of(new TopicPartition(topic, partition)));
+        ProducerRecord<Object, Object> record = new ProducerRecord<>(topic, partition, null, "value".getBytes(StandardCharsets.UTF_8));
+        for (int i = 0; i < 50; i++) {
+            final boolean sendRecords = i == 0;
+            try (var producer = clusterInstance.producer(Map.of(
+                ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE
+            ))) {
+                // send message to partition 0
+                // Only send the records in the first callback since we close the producer in the callback and no records
+                // can be sent afterwards.
+                List<Future<RecordMetadata>> futures = new ArrayList<>();
+                for (int j = 0; j < numRecords; j++) {
+                    futures.add(producer.send(record, ((metadata, exception) -> {
+                        // Trigger another batch in accumulator before close the producer. These messages should
+                        // not be sent.
+                        if (sendRecords) {
+                            for (int k = 0; k < numRecords; k++) {
+                                producer.send(record);
                             }
-                            // The close call will be called by all the message callbacks. This tests idempotence of the close call.
-                            producer.close(Duration.ZERO);
-                            // Test close with non zero timeout. Should not block at all.
-                            producer.close();
-                        })));
-                    }
-                    assertTrue(futures.stream().noneMatch(Future::isDone));
-                    producer.flush();
-                    assertTrue(futures.stream().allMatch(Future::isDone));
-                    ClientsTestUtils.consumeRecords(consumer, numRecords);
+                        }
+                        // The close call will be called by all the message callbacks. This tests idempotence of the close call.
+                        producer.close(Duration.ZERO);
+                        // Test close with non zero timeout. Should not block at all.
+                        producer.close();
+                    })));
                 }
+                assertTrue(futures.stream().noneMatch(Future::isDone));
+                producer.flush();
+                assertTrue(futures.stream().allMatch(Future::isDone));
+                assertDoesNotThrow(() -> ClientsTestUtils.consumeRecords(consumer, numRecords));
             }
         }
     }
