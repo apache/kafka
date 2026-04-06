@@ -65,7 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -513,19 +512,29 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    TimestampedKeyValueStoreWithHeaders<String, String> headersStoreMaybeWithCache(final boolean cachingEnabled) {
+    private static ThreadCache mockCacheHit() {
+        final ThreadCache cache = mock(ThreadCache.class);
+        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
+        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
+        lenient().when(entry.value()).thenReturn(entryValue);
+        lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
+        return cache;
+    }
+
+    private TimestampedKeyValueStoreWithHeaders<String, String> headersStoreMaybeWithCache(final boolean cachingEnabled) {
         when(supplier.name()).thenReturn("test-store");
         when(supplier.metricsScope()).thenReturn("metricScope");
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
 
         final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = spy(new InternalMockProcessorContext<>(
+        final ThreadCache cache = mockCacheHit();
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(props)
-        ));
+            null,
+            cache
+        );
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
             supplier,
@@ -536,14 +545,6 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         
         final TimestampedKeyValueStoreWithHeaders<String, String> store;
         if (cachingEnabled) {
-            // Mock the cache hit
-            final ThreadCache cache = mock(ThreadCache.class);
-            final LRUCacheEntry entry = mock(LRUCacheEntry.class);
-            final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
-            lenient().when(entry.value()).thenReturn(entryValue);
-            lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
-            lenient().doReturn(cache).when(context).cache();
-
             store = builder.withLoggingDisabled()
                 .withCachingEnabled()
                 .build();
