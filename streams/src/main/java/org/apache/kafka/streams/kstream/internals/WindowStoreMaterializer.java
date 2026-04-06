@@ -36,9 +36,9 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
     private final long retentionPeriod;
 
     public WindowStoreMaterializer(
-            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
-            final Windows<?> windows,
-            final EmitStrategy emitStrategy
+        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
+        final Windows<?> windows,
+        final EmitStrategy emitStrategy
     ) {
         super(materialized, DslStoreFormat.TIMESTAMPED);
         this.windows = windows;

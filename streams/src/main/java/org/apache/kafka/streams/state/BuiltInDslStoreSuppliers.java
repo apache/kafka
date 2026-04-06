@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionHeadersBytesStoreSupplier;
 
 /**
  * Collection of builtin {@link DslStoreSuppliers} for Kafka Streams. Today we
@@ -106,11 +107,19 @@ public class BuiltInDslStoreSuppliers {
         @Override
         public SessionBytesStoreSupplier sessionStore(final DslSessionParams params) {
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
-                return new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                if (params.storeFormat() == DslStoreFormat.HEADERS) {
+                    return new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(
                         params.name(),
                         params.retentionPeriod().toMillis(),
-                        true,
-                        params.storeFormat() == DslStoreFormat.HEADERS);
+                        true
+                    );
+                } else {
+                    return new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                        params.name(),
+                        params.retentionPeriod().toMillis(),
+                        true
+                    );
+                }
             }
 
             if (params.storeFormat() == DslStoreFormat.HEADERS) {

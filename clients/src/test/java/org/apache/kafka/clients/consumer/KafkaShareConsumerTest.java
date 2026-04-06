@@ -405,7 +405,7 @@ public class KafkaShareConsumerTest {
             .setPartitions(List.of(partData));
         return new ShareAcknowledgeResponse(
             new ShareAcknowledgeResponseData()
-                .setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(topicResponse).iterator()))
+                .setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(topicResponse)))
         );
     }
 }
