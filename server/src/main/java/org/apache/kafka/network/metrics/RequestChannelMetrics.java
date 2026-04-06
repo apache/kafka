@@ -19,7 +19,7 @@ package org.apache.kafka.network.metrics;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.protocol.ApiKeys;
 
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -30,7 +30,7 @@ public class RequestChannelMetrics {
     private final Map<String, RequestMetrics> metricsMap;
 
     public RequestChannelMetrics(Set<ApiKeys> enabledApis) {
-        metricsMap = new LinkedHashMap<>();
+        metricsMap = new HashMap<>();
         for (ApiKeys apiKey : enabledApis) {
             metricsMap.put(apiKey.name, new RequestMetrics(apiKey.name));
         }

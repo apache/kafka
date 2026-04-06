@@ -58,8 +58,8 @@ public final class BrokerTopicMetrics {
     // For backward compatibility, we keep the old package name as metric group name.
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "BrokerTopicMetrics");
     private final Map<String, String> tags;
-    private final Map<String, MeterWrapper> metricTypeMap = new java.util.LinkedHashMap<>();
-    private final Map<String, GaugeWrapper> metricGaugeTypeMap = new java.util.LinkedHashMap<>();
+    private final Map<String, MeterWrapper> metricTypeMap = new java.util.HashMap<>();
+    private final Map<String, GaugeWrapper> metricGaugeTypeMap = new java.util.HashMap<>();
 
     public BrokerTopicMetrics(boolean remoteStorageEnabled) {
         this(Optional.empty(), remoteStorageEnabled);

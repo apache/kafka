@@ -25,7 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,7 +66,7 @@ public class JmxReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
     private String prefix;
-    private final Map<String, KafkaMbean> mbeans = new LinkedHashMap<>();
+    private final Map<String, KafkaMbean> mbeans = new HashMap<>();
     private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
@@ -220,7 +220,7 @@ public class JmxReporter implements MetricsReporter {
         private final Map<String, KafkaMetric> metrics;
 
         KafkaMbean(String mbeanName) throws MalformedObjectNameException {
-            this.metrics = new LinkedHashMap<>();
+            this.metrics = new HashMap<>();
             this.objectName = new ObjectName(mbeanName);
         }
 

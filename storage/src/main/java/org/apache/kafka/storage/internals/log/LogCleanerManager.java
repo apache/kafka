@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,7 +99,7 @@ public class LogCleanerManager {
      */
     private final Condition pausedCleaningCond = lock.newCondition();
 
-    private final Map<String, List<Map<String, String>>> gaugeMetricNameWithTag = new LinkedHashMap<>();
+    private final Map<String, List<Map<String, String>>> gaugeMetricNameWithTag = new HashMap<>();
 
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
 

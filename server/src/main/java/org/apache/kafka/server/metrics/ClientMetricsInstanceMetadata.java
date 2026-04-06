@@ -19,7 +19,7 @@ package org.apache.kafka.server.metrics;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.RequestContext;
 
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -35,7 +35,7 @@ public class ClientMetricsInstanceMetadata {
         Objects.requireNonNull(clientInstanceId);
         Objects.requireNonNull(requestContext);
 
-        attributesMap = new LinkedHashMap<>();
+        attributesMap = new HashMap<>();
 
         attributesMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
         attributesMap.put(ClientMetricsConfigs.CLIENT_ID, requestContext.clientId());

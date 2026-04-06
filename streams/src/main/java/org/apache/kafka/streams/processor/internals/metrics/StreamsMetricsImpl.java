@@ -38,6 +38,7 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -92,12 +93,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Version version;
     private final Deque<MetricName> clientLevelMetrics = new LinkedList<>();
     private final Deque<String> clientLevelSensors = new LinkedList<>();
-    private final Map<String, Deque<MetricName>> threadLevelMetrics = new LinkedHashMap<>();
-    private final Map<String, Deque<String>> threadLevelSensors = new LinkedHashMap<>();
-    private final Map<String, Deque<String>> taskLevelSensors = new LinkedHashMap<>();
-    private final Map<String, Deque<String>> nodeLevelSensors = new LinkedHashMap<>();
-    private final Map<String, Deque<String>> topicLevelSensors = new LinkedHashMap<>();
-    private final Map<String, Deque<String>> cacheLevelSensors = new LinkedHashMap<>();
+    private final Map<String, Deque<MetricName>> threadLevelMetrics = new HashMap<>();
+    private final Map<String, Deque<String>> threadLevelSensors = new HashMap<>();
+    private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
+    private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
+    private final Map<String, Deque<String>> topicLevelSensors = new HashMap<>();
+    private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
     private final ConcurrentMap<String, Deque<String>> storeLevelSensors = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Deque<MetricName>> storeLevelMetrics = new ConcurrentHashMap<>();
 
@@ -174,7 +175,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
-        this.parentSensors = new LinkedHashMap<>();
+        this.parentSensors = new HashMap<>();
     }
 
     public Version version() {

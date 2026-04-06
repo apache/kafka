@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -155,7 +154,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
         this.metrics = metrics;
         this.metricNameCalculator = metricNameCalculator;
         this.maxEntries = maxEntries;
-        this.gauges = new LinkedHashMap<>(1);
+        this.gauges = new HashMap<>(1);
         this.removable = new HashSet<>();
         this.pending = new ConcurrentLinkedDeque<>();
         this.modifyMetricsLock = new ReentrantLock();

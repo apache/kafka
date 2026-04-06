@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -129,7 +129,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
     }
 
     public static Map<String, Object> defaultConfigsMap() {
-        Map<String, Object> clientMetricsProps = new LinkedHashMap<>();
+        Map<String, Object> clientMetricsProps = new HashMap<>();
         clientMetricsProps.put(METRICS_CONFIG, METRICS_DEFAULT);
         clientMetricsProps.put(INTERVAL_MS_CONFIG, INTERVAL_MS_DEFAULT);
         clientMetricsProps.put(MATCH_CONFIG, MATCH_DEFAULT);
@@ -193,7 +193,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
             return Map.of();
         }
 
-        Map<String, Pattern> patternsMap = new LinkedHashMap<>();
+        Map<String, Pattern> patternsMap = new HashMap<>();
         patterns.forEach(pattern -> {
             String[] nameValuePair = pattern.split("=");
             if (nameValuePair.length != 2) {

@@ -121,7 +121,7 @@ public class UnifiedLog implements AutoCloseable {
 
     /* A lock that guards all modifications to the log */
     private final Object lock = new Object();
-    private final Map<String, Map<String, String>> metricNames = new LinkedHashMap<>();
+    private final Map<String, Map<String, String>> metricNames = new HashMap<>();
     private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
 
     // localLog The LocalLog instance containing non-empty log segments recovered from disk
