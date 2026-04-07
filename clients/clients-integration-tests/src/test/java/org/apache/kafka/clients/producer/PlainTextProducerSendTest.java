@@ -259,7 +259,7 @@ public class PlainTextProducerSendTest {
     }
 
     @ClusterTest
-    public void testSendBeforeAndAfterPartitionExpansion() throws InterruptedException, ExecutionException {
+    public void testSendBeforeAndAfterPartitionExpansion() throws InterruptedException {
         try (var producer = clusterInstance.producer(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000))) {
             clusterInstance.createTopic(topic, 1, (short) 2);
             int partition0 = 0;
@@ -550,7 +550,7 @@ public class PlainTextProducerSendTest {
     // where requests are failed immediately without blocking if metadata is not available
     // or buffer is full.
     @ClusterTest
-    public void testNonBlockingProducer() throws InterruptedException, ExecutionException {
+    public void testNonBlockingProducer() throws InterruptedException {
         try (var producer = clusterInstance.producer(Map.of(
             ProducerConfig.MAX_BLOCK_MS_CONFIG, 0,
             ProducerConfig.LINGER_MS_CONFIG, 15000,
@@ -576,7 +576,7 @@ public class PlainTextProducerSendTest {
             }, "Can't get metadata");
 
             producer.flush();
-            byte[] value = new byte[1400];
+            byte[] value = new byte[1000];
             Future<RecordMetadata> successFuture = producer.send(new ProducerRecord<>(topic, 0, "key".getBytes(), value));
             assertFalse(successFuture.isDone());
             TestUtils.assertFutureThrows(BufferExhaustedException.class, producer.send(new ProducerRecord<>(topic, 0, "key".getBytes(), value)));
