@@ -1393,6 +1393,24 @@ public class NetworkClient implements KafkaClient {
             if (timeToNextUpdate > 0)
                 return timeToNextUpdate;
 
+            if (stickyNode != null) {
+                Node freshNode = metadataUpdater.fetchNodes().stream()
+                        .filter(n -> n.idString().equals(stickyNode.idString()))
+                        .findFirst().orElse(null);
+
+                if (freshNode == null) {
+                    log.debug("Telemetry stickyNode {} is no longer in metadata, clearing it.", stickyNode);
+                    stickyNode = null;
+                    return reconnectBackoffMs;
+                }
+
+                if (!freshNode.equals(stickyNode)) {
+                    log.info("Telemetry stickyNode address changed from {} to {}, updating stickyNode.",
+                            stickyNode, freshNode);
+                    stickyNode = freshNode;
+                }
+            }
+
             // Per KIP-714, let's continue to re-use the same broker for as long as possible.
             if (stickyNode == null) {
                 stickyNode = leastLoadedNode(now).node();
