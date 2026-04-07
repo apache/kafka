@@ -626,7 +626,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // Best-effort async auto-commit for previously-assigned partitions.
                 // assign() does not block waiting for the commit to complete.
                 if (coordinator != null)
-                    this.coordinator.maybeAutoCommitOnAssignment();
+                    this.coordinator.maybeAutoCommitOffsetsAsync();
 
                 log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))

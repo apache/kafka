@@ -1250,21 +1250,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
-    private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
+    public RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
         if (autoCommitEnabled)
             return autoCommitOffsetsAsync();
         return null;
-    }
-
-    /**
-     * Best-effort, non-blocking auto-commit used when assign() is called.
-     * Fires once without blocking. The auto-commit timer is not reset so the
-     * next periodic commit fires on its natural schedule.
-     */
-    public void maybeAutoCommitOnAssignment() {
-        if (autoCommitEnabled) {
-            autoCommitOffsetsAsync();
-        }
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
