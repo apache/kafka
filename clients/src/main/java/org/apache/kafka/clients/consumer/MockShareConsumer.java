@@ -54,6 +54,9 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     private boolean closed;
     private Uuid clientInstanceId;
 
+    /**
+     * Constructs a new MockShareConsumer for testing.
+     */
     public MockShareConsumer() {
         this.subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         this.records = new HashMap<>();

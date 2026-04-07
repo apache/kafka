@@ -300,12 +300,12 @@ class NetworkPartitionMetadataClientTest {
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
-        NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
             node,
             futures,
             builder);
         // Pass null as clientResponse.
-        networkPartitionMetadataClient.handleResponse(pendingReqeust, null);
+        networkPartitionMetadataClient.handleResponse(pendingRequest, null);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
@@ -326,11 +326,11 @@ class NetworkPartitionMetadataClientTest {
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
-        NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
             node,
             futures,
             builder);
-        networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
+        networkPartitionMetadataClient.handleResponse(pendingRequest, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
@@ -352,11 +352,11 @@ class NetworkPartitionMetadataClientTest {
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
-        NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
             node,
             futures,
             builder);
-        networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
+        networkPartitionMetadataClient.handleResponse(pendingRequest, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());

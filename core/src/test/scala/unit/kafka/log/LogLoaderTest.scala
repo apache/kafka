@@ -31,7 +31,7 @@ import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.common.message.AbortedTxn
-import org.apache.kafka.storage.internals.log.{CleanerConfig, EpochEntry, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, EpochEntry, LocalLog, LogCleaner, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogManager, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
@@ -44,14 +44,14 @@ import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
 import java.io.{BufferedWriter, File, FileWriter, IOException}
-import java.lang.{Long => JLong}
+import java.lang.{Boolean => JBoolean, Long => JLong}
 import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Optional, OptionalLong, Properties}
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Iterable, Map, mutable}
+import scala.collection.{Iterable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
 
@@ -111,30 +111,31 @@ class LogLoaderTest {
                               logDirFailureChannel: LogDirFailureChannel
                              ): LogManager = {
       new LogManager(
-        logDirs = logDirs.map(_.getAbsoluteFile),
-        initialOfflineDirs = Array.empty[File],
-        configRepository = new MockConfigRepository(),
-        initialDefaultConfig = logConfig,
-        cleanerConfig = new CleanerConfig(false),
-        recoveryThreadsPerDataDir = 4,
-        flushCheckMs = 1000L,
-        flushRecoveryOffsetCheckpointMs = 10000L,
-        flushStartOffsetCheckpointMs = 10000L,
-        retentionCheckMs = 1000L,
-        maxTransactionTimeoutMs = maxTransactionTimeoutMs,
-        producerStateManagerConfig = producerStateManagerConfig,
-        producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-        scheduler = time.scheduler,
-        brokerTopicStats = new BrokerTopicStats(),
-        logDirFailureChannel = logDirFailureChannel,
-        time = time,
-        remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
-        initialTaskDelayMs = config.logInitialTaskDelayMs) {
+        logDirs.map(_.getAbsoluteFile).asJava,
+        util.List.of,
+        new MockConfigRepository(),
+        logConfig,
+        new CleanerConfig(false),
+        4,
+        1000L,
+        10000L,
+        10000L,
+        1000L,
+        maxTransactionTimeoutMs,
+        producerStateManagerConfig,
+        producerIdExpirationCheckIntervalMs,
+        time.scheduler,
+        new BrokerTopicStats(),
+        logDirFailureChannel,
+        time,
+        config.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
+        config.logInitialTaskDelayMs,
+        (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)) {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: util.Map[TopicPartition, JLong],
                              logStartOffsets: util.Map[TopicPartition, JLong], defaultConfig: LogConfig,
-                             topicConfigs: Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Integer],
-                             shouldBeStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
+                             topicConfigs: util.Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Integer],
+                             shouldBeStrayKraftLog: util.function.Function[UnifiedLog, JBoolean]): UnifiedLog = {
           if (simulateError.hasError) {
             simulateError.errorType match {
               case ErrorTypes.KafkaStorageExceptionWithIOExceptionCause =>
@@ -149,7 +150,7 @@ class LogLoaderTest {
           }
           cleanShutdownInterceptedValue = hadCleanShutdown
           val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
-          val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
+          val config = topicConfigs.getOrDefault(topicPartition.topic, defaultConfig)
           val logRecoveryPoint = recoveryPoints.getOrDefault(topicPartition, 0L)
           val logStartOffset = logStartOffsets.getOrDefault(topicPartition, 0L)
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
@@ -175,13 +176,13 @@ class LogLoaderTest {
     def initializeLogManagerForSimulatingErrorTest(logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(logDirs.size)
                                                   ): (LogManager, Executable) = {
       val logManager: LogManager = interceptedLogManager(logConfig, logDirs, logDirFailureChannel)
-      log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = Optional.empty)
+      log = logManager.getOrCreateLog(topicPartition, true, false, Optional.empty)
 
       assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "log dir should not be offline before load logs")
 
       val runLoadLogs: Executable = () => {
         val defaultConfig = logManager.currentDefaultConfig
-        logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty), _ => false)
+        logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, util.Set.of), _ => false)
       }
 
       (logManager, runLoadLogs)
@@ -195,13 +196,13 @@ class LogLoaderTest {
       cleanShutdownFileHandler.write(0L)
       cleanShutdownInterceptedValue = false
       var defaultConfig = logManager.currentDefaultConfig
-      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty), _ => false)
+      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, util.Set.of), _ => false)
       assertTrue(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
       assertFalse(cleanShutdownFileHandler.exists(), "Clean shutdown file must not exist after loadLogs has completed")
       // Load logs without clean shutdown file
       cleanShutdownInterceptedValue = true
       defaultConfig = logManager.currentDefaultConfig
-      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty), _ => false)
+      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, util.Set.of), _ => false)
       assertFalse(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
       assertFalse(cleanShutdownFileHandler.exists(), "Clean shutdown file must not exist after loadLogs has completed")
       // Create clean shutdown file and then simulate error while loading logs such that log loading does not complete.
@@ -238,7 +239,7 @@ class LogLoaderTest {
       simulateError.hasError = false
       cleanShutdownInterceptedValue = true
       val defaultConfig = logManager.currentDefaultConfig
-      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty), _ => false)
+      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, util.Set.of), _ => false)
       assertFalse(cleanShutdownInterceptedValue, "Unexpected value for clean shutdown flag")
       logManager.shutdown()
     }

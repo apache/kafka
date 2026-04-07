@@ -203,7 +203,7 @@ public class ForeignTableJoinProcessorSupplierTests {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(fk, pk);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(fk, pk, new RecordHeaders());
         stateStore.put(key, oldValue);
     }
 

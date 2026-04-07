@@ -371,8 +371,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                         final Record<?, ?> deserializedRecord;
                         try {
                             deserializedRecord = new Record<>(
-                                reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
-                                reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
+                                reprocessFactory.keyDeserializer().deserialize(record.topic(), record.headers(), record.key()),
+                                reprocessFactory.valueDeserializer().deserialize(record.topic(), record.headers(), record.value()),
                                 record.timestamp(),
                                 record.headers());
                         } catch (final Exception deserializationException) {

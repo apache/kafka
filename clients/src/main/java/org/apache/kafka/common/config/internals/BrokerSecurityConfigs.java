@@ -25,7 +25,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
@@ -61,7 +60,7 @@ public class BrokerSecurityConfigs {
             " configuration.";
 
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
-    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList(DEFAULT_SSL_PRINCIPAL_MAPPING_RULES);
+    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = List.of(DEFAULT_SSL_PRINCIPAL_MAPPING_RULES);
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
             "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
@@ -95,7 +94,7 @@ public class BrokerSecurityConfigs {
             + "</ul>";
 
     public static final String SASL_ENABLED_MECHANISMS_CONFIG = "sasl.enabled.mechanisms";
-    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = Collections.singletonList(SaslConfigs.GSSAPI_MECHANISM);
+    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = List.of(SaslConfigs.GSSAPI_MECHANISM);
     public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
             + "The list may contain any mechanism for which a security provider is available. "
             + "Only GSSAPI is enabled by default.";

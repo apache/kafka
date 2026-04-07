@@ -237,6 +237,43 @@ public class KTableTransformValuesTest {
     }
 
     @Test
+    public void shouldUseContextHeadersWhenValueTimestampHeadersIsNull() {
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+
+        when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
+        when(parentGetterSupplier.get()).thenReturn(parentGetter);
+        when(parentGetter.get("Key")).thenReturn(null);
+
+        final RecordHeaders contextHeaders = new RecordHeaders();
+        contextHeaders.add("test-header", "test-value".getBytes());
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            42L,
+            23L,
+            -1,
+            "foo",
+            contextHeaders
+        );
+        when(context.recordContext()).thenReturn(recordContext);
+        doNothing().when(context).setRecordContext(new ProcessorRecordContext(
+            -1L,
+            -1L,
+            -1,
+            null,
+            new RecordHeaders()
+        ));
+        doNothing().when(context).setRecordContext(recordContext);
+
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        getter.init(context);
+
+        final ValueTimestampHeaders<String> result = getter.get("Key");
+
+        assertThat(result.value(), is("Key->null!"));
+        assertThat(result.headers(), is(contextHeaders));
+    }
+
+    @Test
     public void shouldGetFromStateStoreIfMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);

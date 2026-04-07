@@ -1634,47 +1634,70 @@ class LogCleanerTest extends Logging {
   }
 
   @Test
-  def testSegmentWithOffsetOverflow(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
+  def testCleanedSegmentSizeOverflow(): Unit = {
+    // Put one record per source segment so each filterTo() call reads exactly one batch.
+    // After cleaning source segment 0 into currentCleaned, cleaning source segment 1 would push
+    // currentCleaned over maxCleanedSegmentSize, triggering overflow and
+    // rolling to a second cleaned segment.
     val logProps = new Properties()
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
-    logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 1000: java.lang.Integer)
-    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    LogTestUtils.initializeLogDirWithOverflowedSegment(dir)
+    log.appendAsLeader(record(0, 0), 0)
+    log.roll()
+    log.appendAsLeader(record(1, 1), 0)
+    log.roll()
 
-    val log = makeLog(config = config, recoveryPoint = Long.MaxValue)
-    val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
-      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
-    }
+    val sourceSegments = log.logSegments.asScala.take(2).toSeq
+    val singleBatchSize = sourceSegments.head.log.batches.asScala.map(_.sizeInBytes).max
+    // maxCleanedSize allows exactly 1 batch; adding a 2nd batch overflows.
+    val maxCleanedSize = singleBatchSize.toLong + 1L
 
-    val numSegmentsInitial = log.logSegments.size
-    val allKeys = LogTestUtils.keysInLog(log).toList
-    val expectedKeysAfterCleaning = new mutable.ArrayBuffer[Long]()
-
-    // pretend we want to clean every alternate key
+    // No deletions; both records are retained.
+    val cleaner = makeCleaner(Int.MaxValue, maxCleanedSegmentSize = maxCleanedSize)
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
-    for (k <- 1 until allKeys.size by 2) {
-      expectedKeysAfterCleaning += allKeys(k - 1)
-      offsetMap.put(key(allKeys(k)), Long.MaxValue)
-    }
 
-    // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
-    assertThrows(classOf[LogCleaningAbortedException], () =>
-      cleaner.cleanSegments(log, util.List.of(segmentWithOverflow), offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-        new CleanedTransactionMetadata, -1, segmentWithOverflow.readNextOffset)
-    )
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    assertEquals(allKeys, LogTestUtils.keysInLog(log))
-    assertFalse(LogTestUtils.hasOffsetOverflow(log))
+    // Before: sourceSegment0, sourceSegment1, activeSegment = 3 total
+    val segmentCountBefore = log.logSegments.size
 
-    // Clean each segment now that split is complete.
-    val upperBoundOffset = log.logSegments.asScala.last.readNextOffset
-    for (segmentToClean <- log.logSegments.asScala)
-      cleaner.cleanSegments(log, util.List.of(segmentToClean), offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-        new CleanedTransactionMetadata, -1, upperBoundOffset)
-    assertEquals(expectedKeysAfterCleaning, LogTestUtils.keysInLog(log))
-    assertFalse(LogTestUtils.hasOffsetOverflow(log))
+    cleaner.cleanSegments(log, sourceSegments.asJava, offsetMap, 0L,
+      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, sourceSegments.last.readNextOffset)
+
+    // With overflow, 2 source segments → 2 cleaned segments; net segment count unchanged.
+    // Without overflow, 2 source → 1 cleaned; net count would be segmentCountBefore - 1.
+    assertEquals(segmentCountBefore, log.logSegments.size)
+    assertEquals(List(0L, 1L), LogTestUtils.keysInLog(log).toList)
+    log.close()
+  }
+
+  @Test
+  def testCleanedSegmentOffsetOverflow(): Unit = {
+    // Put one record per source segment so each filterTo() call reads exactly one batch.
+    // After cleaning source segment 0 into currentCleaned (offset 0), cleaning source segment 1
+    // would push the offset range of currentCleaned over maxCleanedOffsetRange, triggering
+    // overflow and rolling to a second cleaned segment.
+    val logProps = new Properties()
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    log.appendAsLeader(record(0, 0), 0)
+    log.roll()
+    log.appendAsLeader(record(1, 1), 0)
+    log.roll()
+
+    val sourceSegments = log.logSegments.asScala.take(2).toSeq
+    // Allow an offset range of 0: after offset 0 is written, any record at offset > 0 overflows.
+    val cleaner = makeCleaner(Int.MaxValue, maxCleanedOffsetRange = 0L)
+    val offsetMap = new FakeOffsetMap(Int.MaxValue)
+
+    val segmentCountBefore = log.logSegments.size
+
+    cleaner.cleanSegments(log, sourceSegments.asJava, offsetMap, 0L,
+      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, sourceSegments.last.readNextOffset)
+
+    assertEquals(segmentCountBefore, log.logSegments.size,
+      "offset overflow should produce 2 cleaned segments, keeping total segment count the same")
+    assertEquals(List(0L, 1L), LogTestUtils.keysInLog(log).toList)
     log.close()
   }
 
@@ -2270,7 +2293,8 @@ class LogCleanerTest extends Logging {
     )
   }
 
-  private def makeCleaner(capacity: Int, checkDone: Consumer[TopicPartition] = _ => (), maxMessageSize: Int = 64*1024) =
+  private def makeCleaner(capacity: Int, checkDone: Consumer[TopicPartition] = _ => (), maxMessageSize: Int = 64*1024,
+                          maxCleanedSegmentSize: Long = Int.MaxValue, maxCleanedOffsetRange: Long = Int.MaxValue) =
     new Cleaner(0,
                 new FakeOffsetMap(capacity),
                 maxMessageSize,
@@ -2278,7 +2302,9 @@ class LogCleanerTest extends Logging {
                 0.75,
                 throttler,
                 time,
-                checkDone)
+                checkDone,
+                maxCleanedSegmentSize,
+                maxCleanedOffsetRange)
 
   private def writeToLog(log: UnifiedLog, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq)

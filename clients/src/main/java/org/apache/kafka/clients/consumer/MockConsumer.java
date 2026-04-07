@@ -319,6 +319,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         return new ConsumerRecords<>(results, nextOffsetAndMetadata);
     }
 
+    /**
+     * Adds a record to be returned when {@link #poll(Duration)} is called.
+     *
+     * @param record the record to add
+     * @throws IllegalStateException if the partition is not assigned to the consumer
+     */
     public synchronized void addRecord(ConsumerRecord<K, V> record) {
         ensureNotClosed();
         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
@@ -341,10 +347,20 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.maxPollRecords = maxPollRecords;
     }
 
+    /**
+     * Sets an exception to throw when {@link #poll(Duration)} is called.
+     *
+     * @param exception the exception to throw
+     */
     public synchronized void setPollException(KafkaException exception) {
         this.pollException = exception;
     }
 
+    /**
+     * Sets an exception to throw when offset-related methods are called.
+     *
+     * @param exception the exception to throw
+     */
     public synchronized void setOffsetsException(KafkaException exception) {
         this.offsetsException = exception;
     }
@@ -440,6 +456,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.requestOffsetReset(partitions, AutoOffsetResetStrategy.EARLIEST);
     }
 
+    /**
+     * Updates the beginning offsets for the specified partitions.
+     *
+     * @param newOffsets the beginning offsets to set
+     */
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
         beginningOffsets.putAll(newOffsets);
     }
@@ -450,14 +471,27 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.requestOffsetReset(partitions, AutoOffsetResetStrategy.LATEST);
     }
 
+    /**
+     * Updates the end offsets for the specified partitions.
+     *
+     * @param newOffsets the end offsets to set
+     */
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         endOffsets.putAll(newOffsets);
     }
 
+    /**
+     * Updates the duration-based reset offsets for the specified partitions.
+     *
+     * @param newOffsets the duration offsets to set
+     */
     public synchronized void updateDurationOffsets(final Map<TopicPartition, Long> newOffsets) {
         durationResetOffsets.putAll(newOffsets);
     }
 
+    /**
+     * Disables telemetry for this mock consumer.
+     */
     public void disableTelemetry() {
         telemetryDisabled = true;
     }
@@ -469,6 +503,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
     }
 
+    /**
+     * Sets the client instance ID for this mock consumer.
+     *
+     * @param instanceId the client instance ID
+     */
     public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
     }
@@ -510,6 +549,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         return partitions;
     }
 
+    /**
+     * Updates the partition information for the specified topic.
+     *
+     * @param topic the topic to update
+     * @param partitions the partition information
+     */
     public synchronized void updatePartitions(String topic, List<PartitionInfo> partitions) {
         ensureNotClosed();
         this.partitions.put(topic, partitions);
@@ -581,6 +626,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.closed = true;
     }
 
+    /**
+     * Returns whether this consumer has been closed.
+     *
+     * @return true if closed, false otherwise
+     */
     public synchronized boolean closed() {
         return this.closed;
     }
@@ -606,6 +656,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    /**
+     * Schedules a no-op task to be executed during a poll invocation.
+     */
     public synchronized void scheduleNopPollTask() {
         schedulePollTask(() -> { });
     }
@@ -703,18 +756,36 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         shouldRebalance = true;
     }
 
+    /**
+     * Returns whether a rebalance has been triggered via {@link #enforceRebalance()}.
+     *
+     * @return true if rebalance is pending, false otherwise
+     */
     public boolean shouldRebalance() {
         return shouldRebalance;
     }
 
+    /**
+     * Resets the rebalance flag set by {@link #enforceRebalance()}.
+     */
     public void resetShouldRebalance() {
         shouldRebalance = false;
     }
 
+    /**
+     * Returns the timeout used in the last {@link #poll(Duration)} call.
+     *
+     * @return the last poll timeout, or null if poll has not been called
+     */
     public Duration lastPollTimeout() {
         return lastPollTimeout;
     }
 
+    /**
+     * Returns the metrics registered via {@link #registerMetricForSubscription(KafkaMetric)}.
+     *
+     * @return an unmodifiable list of added metrics
+     */
     public List<KafkaMetric> addedMetrics() {
         return Collections.unmodifiableList(addedMetrics);
     }

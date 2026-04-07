@@ -1586,8 +1586,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 new DeleteRecordsPartitionResult().setPartitionIndex(topicPartition.partition)
                   .setLowWatermark(partitionResult.lowWatermark)
                   .setErrorCode(partitionResult.errorCode)
-              }.toList.asJava.iterator()))
-          }.toList.asJava.iterator()))))
+              }.toList.asJava))
+          }.toList.asJava))))
     }
 
     if (authorizedForDeleteTopicOffsets.isEmpty)
@@ -2241,7 +2241,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
         val partitions =
           if (describeLogDirsDirRequest.isAllTopicPartitions)
-            replicaManager.logManager.allLogs.map(_.topicPartition).toSet
+            replicaManager.logManager.allLogs.asScala.map(_.topicPartition).toSet
           else
             describeLogDirsDirRequest.data.topics.asScala.flatMap(
               logDirTopic => logDirTopic.partitions.asScala.map(partitionIndex =>

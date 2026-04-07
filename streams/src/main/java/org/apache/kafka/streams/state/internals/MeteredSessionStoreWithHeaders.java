@@ -304,7 +304,6 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                     rawResult.getResult(),
                     fetchSensor,
                     iteratorDurationSensor,
-                    streamsMetrics,
                     bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                     byteArray -> {
                         final AggregationWithHeaders<AGG> awh =

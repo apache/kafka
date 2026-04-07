@@ -133,7 +133,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
+              val groupConfig = GroupConfig.fromProps(config.extractGroupConfigMap, groupProps)
               createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation)(_, _))
             }
 
@@ -161,15 +161,24 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   private def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val allNames = brokerSynonyms(name)
     val configEntryType = GroupConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
-      val list = configSynonyms(name, allNames, isSensitive)
+      val list = GroupConfig.brokerSynonym(name).toScala match {
+        case Some(brokerName) =>
+          configSynonyms(brokerName, brokerSynonyms(brokerName), isSensitive)
+        case None =>
+          // No broker synonym, fall back to GroupConfig defaults
+          Option(GroupConfig.CONFIG_DEF.defaultValues().get(name))
+            .map(v => List(new DescribeConfigsResponseData.DescribeConfigsSynonym()
+              .setName(name)
+              .setValue(if (isSensitive) null else ConfigDef.convertToString(v, configEntryType.orNull))
+              .setSource(ConfigSource.DEFAULT_CONFIG.id)))
+            .getOrElse(List.empty)
+      }
       if (!groupProps.containsKey(name))
-        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
-          .setSource(ConfigSource.DEFAULT_CONFIG.id) +: list
+        list
       else
         new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
           .setSource(ConfigSource.GROUP_CONFIG.id) +: list

@@ -436,8 +436,8 @@ public class LogConfig extends AbstractConfig {
         return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }
 
-    public static List<String> configNames() {
-        return CONFIG.names().stream().sorted().toList();
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 
     public static List<String> nonInternalConfigNames() {
@@ -456,7 +456,7 @@ public class LogConfig extends AbstractConfig {
      * Check that property names are valid
      */
     public static void validateNames(Map<String, String> props) {
-        List<String> names = configNames();
+        Set<String> names = configNames();
         for (String name : props.keySet())
             if (!names.contains(name))
                 throw new InvalidConfigurationException("Unknown topic config name: " + name);

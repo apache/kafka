@@ -20,7 +20,6 @@ package kafka.server
 import com.yammer.metrics.core.{Gauge, Meter, Timer}
 import kafka.cluster.PartitionTest.MockPartitionListener
 import kafka.cluster.Partition
-import kafka.log.LogManager
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
@@ -80,7 +79,7 @@ import org.apache.kafka.server.util.timer.{MockTimer, SystemTimer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadResult, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogManager, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadResult, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -379,7 +378,7 @@ class ReplicaManagerTest {
           new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       } else {
         val mockLog = mock(classOf[UnifiedLog])
-        when(spyLogManager.getLog(topicPartition, isFuture = true)).thenReturn(Option.apply(mockLog))
+        when(spyLogManager.getLog(topicPartition, true)).thenReturn(Optional.of(mockLog))
         when(mockLog.topicId).thenReturn(Optional.of(topicId))
         when(mockLog.parentDir).thenReturn(dir2.getAbsolutePath)
       }
@@ -452,7 +451,7 @@ class ReplicaManagerTest {
   @Test
   def checkRemoveMetricsCountMatchRegisterCount(): Unit = {
     val mockLogMgr = mock(classOf[LogManager])
-    doReturn(Seq.empty, Seq.empty).when(mockLogMgr).liveLogDirs
+    doReturn(util.List.of, util.List.of).when(mockLogMgr).liveLogDirs
 
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
@@ -502,11 +501,11 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderDelta, leaderImage)
 
       val partition = replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
-      assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
+      assertEquals(1, replicaManager.logManager.liveLogDirs.asScala.filterNot(_ == partition.log.get.dir.getParentFile).size)
 
       val previousReplicaFolder = partition.log.get.dir.getParentFile
       // find the live and different folder
-      val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).head
+      val newReplicaFolder = replicaManager.logManager.liveLogDirs.asScala.filterNot(_ == partition.log.get.dir.getParentFile).head
       assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
       // make sure the future log is created
@@ -2561,15 +2560,15 @@ class ReplicaManagerTest {
     // Expect to call LogManager.truncateTo exactly once
     val topicPartitionObj = new TopicPartition(topic, topicPartition)
     val mockLogMgr: LogManager = mock(classOf[LogManager])
-    when(mockLogMgr.liveLogDirs).thenReturn(config.logDirs.asScala.map(new File(_).getAbsoluteFile))
+    when(mockLogMgr.liveLogDirs).thenReturn(config.logDirs.asScala.map(new File(_).getAbsoluteFile).asJava)
     when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any(), any())).thenReturn(mockLog)
-    when(mockLogMgr.getLog(topicPartitionObj, isFuture = false)).thenReturn(Some(mockLog))
-    when(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).thenReturn(None)
+    when(mockLogMgr.getLog(topicPartitionObj, false)).thenReturn(Optional.of(mockLog))
+    when(mockLogMgr.getLog(topicPartitionObj, true)).thenReturn(Optional.empty)
     val allLogs = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
     allLogs.put(topicPartitionObj, mockLog)
-    when(mockLogMgr.allLogs).thenReturn(allLogs.values.asScala)
+    when(mockLogMgr.allLogs).thenReturn(util.Set.copyOf(allLogs.values))
     when(mockLogMgr.isLogDirOnline(anyString)).thenReturn(true)
-    when(mockLogMgr.directoryId(anyString)).thenReturn(None)
+    when(mockLogMgr.directoryId(anyString)).thenReturn(Optional.empty)
 
     val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
@@ -4014,7 +4013,7 @@ class ReplicaManagerTest {
     val replicaManager = createReplicaManager()
     try {
       val tp = new TopicPartition(topic, 0)
-      val dir = replicaManager.logManager.liveLogDirs.head.getAbsolutePath
+      val dir = replicaManager.logManager.liveLogDirs.iterator.next.getAbsolutePath
       val errors = replicaManager.alterReplicaLogDirs(Map(tp -> dir))
       assertEquals(Errors.REPLICA_NOT_AVAILABLE, errors(tp))
     } finally {
@@ -4026,7 +4025,7 @@ class ReplicaManagerTest {
   def testAlterReplicaLogDirsToCordonedDir(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
     val logMgr = Mockito.spy(TestUtils.createLogManager(config.logDirs.asScala.map(new File(_))))
-    when(logMgr.cordonedLogDirs()).thenReturn(config.logDirs.asScala.toSet)
+    when(logMgr.cordonedLogDirs()).thenReturn(config.logDirs.asScala.toSet.asJava)
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -4291,7 +4290,7 @@ class ReplicaManagerTest {
       assertEquals(bar1, barPart.topicPartition)
 
       val mockLog = mock(classOf[UnifiedLog])
-      when(replicaManager.logManager.getLog(bar1)).thenReturn(Some(mockLog))
+      when(replicaManager.logManager.getLog(bar1)).thenReturn(Optional.of(mockLog))
       when(mockLog.topicId).thenReturn(Optional.of(BAR_UUID))
       replicaManager.markPartitionOffline(bar1)
 
@@ -4310,7 +4309,7 @@ class ReplicaManagerTest {
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
-      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
+      val directoryIds = replicaManager.logManager.directoryIdsSet.asScala.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
@@ -4358,7 +4357,7 @@ class ReplicaManagerTest {
     try {
 
       // Test applying delta as leader
-      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
+      val directoryIds = replicaManager.logManager.directoryIdsSet.asScala.toList
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
@@ -4702,7 +4701,7 @@ class ReplicaManagerTest {
       // Check that the partition was removed
       assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
-      assertEquals(None, replicaManager.logManager.getLog(topicPartition))
+      assertEquals(Optional.empty, replicaManager.logManager.getLog(topicPartition))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4750,7 +4749,7 @@ class ReplicaManagerTest {
       // Check that the partition was removed
       assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
-      assertEquals(None, replicaManager.logManager.getLog(topicPartition))
+      assertEquals(Optional.empty, replicaManager.logManager.getLog(topicPartition))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4797,7 +4796,7 @@ class ReplicaManagerTest {
       // Check that the partition was removed
       assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
-      assertEquals(None, replicaManager.logManager.getLog(topicPartition))
+      assertEquals(Optional.empty, replicaManager.logManager.getLog(topicPartition))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4844,7 +4843,7 @@ class ReplicaManagerTest {
       // Check that the partition was removed
       assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
-      assertEquals(None, replicaManager.logManager.getLog(topicPartition))
+      assertEquals(Optional.empty, replicaManager.logManager.getLog(topicPartition))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5530,7 +5529,7 @@ class ReplicaManagerTest {
     props.put("log.dirs", Seq(path1, path2, path3).mkString(","))
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), cleanerConfig = new CleanerConfig(true))
-    mockLogMgr.startup(Set())
+    mockLogMgr.startup(util.Set.of)
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -5565,7 +5564,7 @@ class ReplicaManagerTest {
       // Move the replica to the second log directory.
       val partition = replicaManager.getPartitionOrException(tp)
       val firstLogDir = partition.log.get.dir.getParentFile
-      val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == firstLogDir).head
+      val newReplicaFolder = replicaManager.logManager.liveLogDirs.asScala.filterNot(_ == firstLogDir).head
       replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
 
       // Make sure the future log is created with the correct topic ID.
@@ -5573,7 +5572,7 @@ class ReplicaManagerTest {
       assertEquals(Optional.of(topicId), futureLog.topicId)
 
       // Move the replica to the third log directory
-      val finalReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(it => it == firstLogDir || it == newReplicaFolder).head
+      val finalReplicaFolder = replicaManager.logManager.liveLogDirs.asScala.filterNot(it => it == firstLogDir || it == newReplicaFolder).head
       replicaManager.alterReplicaLogDirs(Map(tp -> finalReplicaFolder.getAbsolutePath))
 
       TestUtils.waitUntilTrue(() => {
@@ -5613,7 +5612,7 @@ class ReplicaManagerTest {
 
       // Move the replica to the second log directory.
       val partition = replicaManager.getPartitionOrException(tp)
-      val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).head
+      val newReplicaFolder = replicaManager.logManager.liveLogDirs.asScala.filterNot(_ == partition.log.get.dir.getParentFile).head
       replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
 
       // Make sure the future log is created with the correct topic ID.
@@ -5884,7 +5883,7 @@ class ReplicaManagerTest {
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
-      val directoryIds = rm.logManager.directoryIdsSet.toList
+      val directoryIds = rm.logManager.directoryIdsSet.asScala.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
@@ -5917,7 +5916,7 @@ class ReplicaManagerTest {
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
-      val directoryIds = rm.logManager.directoryIdsSet.toList
+      val directoryIds = rm.logManager.directoryIdsSet.asScala.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
