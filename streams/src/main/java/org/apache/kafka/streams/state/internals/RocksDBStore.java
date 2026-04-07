@@ -260,12 +260,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
                     position.merge(existingPositionOrEmpty);
                 }
-            } catch (final ProcessorStateException fatal) {
-                final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
-                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(fatalMessage, fatal));
-            } catch (final RocksDBException e) {
+            } catch (final ProcessorStateException e) {
+                final String message = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
+                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(message, e));
+            }  catch (final StreamsException fatal) {
+                final String fatalMessage = "Fatal error while opening store " + name;
+                throw new ProcessorStateException(fatalMessage, fatal);
+            } catch (final RocksDBException fatal) {
                 final String fatalMessage = "Error opening store " + name;
-                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(fatalMessage));
+                throw new ProcessorStateException(fatalMessage, fatal);
             }
         } catch (final RuntimeException e) {
             closeNativeResources();
