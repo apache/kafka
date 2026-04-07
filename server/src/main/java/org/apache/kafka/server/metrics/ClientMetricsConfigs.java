@@ -136,7 +136,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         return clientMetricsProps;
     }
 
-    public static Set<String> names() {
+    public static Set<String> configNames() {
         return CONFIG.names();
     }
 
@@ -152,7 +152,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
     private static void validateConfigs(Map<?, ?> configs) {
         // Make sure that all the configs are valid
         configs.forEach((key, value) -> {
-            if (!names().contains(key)) {
+            if (!configNames().contains(key)) {
                 throw new InvalidRequestException("Unknown client metrics configuration: " + key);
             }
         });

@@ -1586,8 +1586,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 new DeleteRecordsPartitionResult().setPartitionIndex(topicPartition.partition)
                   .setLowWatermark(partitionResult.lowWatermark)
                   .setErrorCode(partitionResult.errorCode)
-              }.toList.asJava.iterator()))
-          }.toList.asJava.iterator()))))
+              }.toList.asJava))
+          }.toList.asJava))))
     }
 
     if (authorizedForDeleteTopicOffsets.isEmpty)

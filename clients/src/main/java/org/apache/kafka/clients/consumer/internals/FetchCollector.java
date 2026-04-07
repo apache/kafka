@@ -186,6 +186,12 @@ public class FetchCollector<K, V> {
                     positionAdvanced = true;
                 }
 
+                // Drain after position update to ensure the background thread sees the updated position
+                // before it sees isConsumed=true. This prevents duplicate fetch requests for the old offset.
+                if (nextInLineFetch.isExhausted()) {
+                    nextInLineFetch.drain();
+                }
+
                 Long partitionLag = subscriptions.partitionLag(tp, fetchConfig.isolationLevel);
                 if (partitionLag != null)
                     metricsManager.recordPartitionLag(tp, partitionLag);

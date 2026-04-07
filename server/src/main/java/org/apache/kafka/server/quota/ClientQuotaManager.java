@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.quota;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -794,12 +793,6 @@ public class ClientQuotaManager {
 
             // /config/clients/<default>
             return overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
-        }
-
-        @Override
-        public boolean updateClusterMetadata(Cluster cluster) {
-            // The default quota callback does not use any cluster metadata
-            return false;
         }
 
         @Override

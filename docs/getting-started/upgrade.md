@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.4.0
+
+### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
+
+### Notable changes in 4.4.0
+
+  * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
+
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0

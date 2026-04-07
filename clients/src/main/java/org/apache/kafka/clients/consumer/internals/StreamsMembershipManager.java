@@ -1134,7 +1134,7 @@ public class StreamsMembershipManager implements RequestManager {
         LocalAssignment currentTargetAssignment = targetAssignment;
         tasksRevokedAndAssigned.whenComplete((__, callbackError) -> {
             if (callbackError != null) {
-                log.error("Reconciliation failed: callback invocation failed for tasks {}",
+                log.error("Reconciliation failed for tasks {}",
                     currentTargetAssignment, callbackError);
                 markReconciliationCompleted();
             } else {
@@ -1212,7 +1212,7 @@ public class StreamsMembershipManager implements RequestManager {
             if (callbackError == null) {
                 subscriptionState.enablePartitionsAwaitingCallback(partitionsToAssign);
             } else {
-                if (!partitionsToAssignNotPreviouslyOwned.isEmpty()) {
+                if (!partitionsToAssignNotPreviouslyOwned.isEmpty() && subscriptionState.assignedPartitions().containsAll(partitionsToAssignNotPreviouslyOwned)) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
                             "requiring initializing positions after onTasksAssigned callback failed.",
                         partitionsToAssignNotPreviouslyOwned, callbackError);

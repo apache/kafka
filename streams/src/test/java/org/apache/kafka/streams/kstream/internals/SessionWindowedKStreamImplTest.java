@@ -378,7 +378,7 @@ public class SessionWindowedKStreamImplTest {
             Materialized.as("store")));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
         setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
@@ -395,7 +395,7 @@ public class SessionWindowedKStreamImplTest {
         assertThrows(NullPointerException.class, () -> stream.reduce(null, Materialized.as("store")));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
         setup(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false);
@@ -429,7 +429,7 @@ public class SessionWindowedKStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final StateStore store = driver.getAllStateStores().get("aggregated");
-            final WrappedStateStore changeLogging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+            final WrappedStateStore<?, ?, ?> changeLogging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
             assertThat(store, instanceOf(MeteredSessionStore.class));
             if (withHeaders) {
                 assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStoreWithHeaders.class));

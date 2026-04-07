@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
@@ -42,6 +43,7 @@ import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
@@ -51,6 +53,8 @@ import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEven
 import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsTasksAssignedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicRe2JPatternSubscriptionChangeEvent;
@@ -150,6 +154,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
@@ -160,6 +165,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1747,6 +1753,52 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
+     * Verifies that at most one {@link AsyncPollEvent} is in-flight at a time. When {@code poll()} runs
+     * multiple loop iterations (e.g. empty fetches), it must not enqueue a new event while the previous
+     * one is still in-flight. This prevents unnecessary queueing. See KAFKA-20315.
+     */
+    @Test
+    public void testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight() {
+        // Build a consumer with a mocked FetchBuffer so we can deterministically advance MockTime and avoid
+        // tight spinning while poll() waits.
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions);
+
+        final String topicName = "topic1";
+        final TopicPartition tp = new TopicPartition(topicName, 0);
+
+        // Satisfy poll() preconditions without needing assign() (which would require stubbing addAndGet()).
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Make pollForFetches() "wait" by advancing mock time.
+        doReturn(100L).when(applicationEventHandler).maximumTimeToWait();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            ((MockTime) time).sleep(pollTimer.remainingMs());
+            return null;
+        }).when(fetchBuffer).awaitWakeup(any(Timer.class));
+
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+
+        // Leave AsyncPollEvent in-flight (do not complete it) so the next loop iteration sees inflightPoll != null
+        doAnswer(invocation -> null).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ofMillis(450));
+        assertTrue(result.isEmpty());
+
+        // Ensure we actually exercised the "wait for fetches" path (i.e., more than a trivial single pass).
+        verify(fetchBuffer, atLeastOnce()).awaitWakeup(any(Timer.class));
+
+        // Only one AsyncPollEvent must have been added despite multiple poll loop iterations.
+        verify(applicationEventHandler, times(1)).add(isA(AsyncPollEvent.class));
+    }
+
+    /**
      * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
@@ -2283,6 +2335,79 @@ public class AsyncKafkaConsumerTest {
             assertTrue(thrownException.getCause().getMessage().contains("Test streams listener exception"));
             verify(mockStreamsListener).onTasksRevoked(any());
         }
+    }
+
+    /**
+     * Tests that when the app thread fails to update the assignment as part of a reconciliation,
+     * it sends an event with error to the background thread before throwing on poll.
+     * This ensures the background reconciliation is completed exceptionally.
+     */
+    @Test
+    public void testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails() {
+        final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
+
+        consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singletonList("topic"), new CounterConsumerRebalanceListener(
+            Optional.empty(), Optional.empty(), Optional.empty()));
+
+        // Make ApplyAssignmentEvent fail
+        when(applicationEventHandler.addAndGet(any(ApplyAssignmentEvent.class)))
+            .thenThrow(applyAssignmentError);
+
+        // Add PartitionsAssignedEvent to background queue
+        backgroundEventQueue.add(new PartitionsAssignedEvent(Set.of(), new TreeSet<>()));
+
+        completeAsyncPollEventSuccessfully();
+
+        // Poll should throw because it couldn't update the assignment to run callbacks
+        assertSame(applyAssignmentError, assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO)));
+
+        // Verify that ConsumerRebalanceListenerCallbackCompletedEvent with error was sent
+        ArgumentCaptor<ConsumerRebalanceListenerCallbackCompletedEvent> eventCaptor =
+            ArgumentCaptor.forClass(ConsumerRebalanceListenerCallbackCompletedEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        assertTrue(eventCaptor.getValue().error().isPresent());
+        assertSame(applyAssignmentError, eventCaptor.getValue().error().get());
+        assertEquals(ON_PARTITIONS_ASSIGNED, eventCaptor.getValue().methodName());
+    }
+
+    /**
+     * Tests that when the app thread fails to update the assignment as part of a reconciliation,
+     * it sends an event with error to the background thread before throwing on poll.
+     * This ensures the background reconciliation is completed exceptionally.
+     */
+    @Test
+    public void testStreamsTasksAssignedEventSendsErrorWhenApplyAssignmentFails() {
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
+
+        consumer = newConsumerWithStreamRebalanceData(
+            requiredConsumerConfigAndGroupId("streamsGroup"), streamsRebalanceData);
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singletonList("topic"), mock(StreamsRebalanceListener.class));
+
+        // Make ApplyAssignmentEvent fail
+        when(applicationEventHandler.addAndGet(any(ApplyAssignmentEvent.class)))
+            .thenThrow(applyAssignmentError);
+
+        // Add StreamsTasksAssignedEvent to background queue
+        backgroundEventQueue.add(new StreamsTasksAssignedEvent(
+            new TreeSet<>(), new TreeSet<>(),
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), true)));
+
+        completeAsyncPollEventSuccessfully();
+
+        // Poll should throw because it failed to update assignment to run callbacks
+        assertSame(applyAssignmentError, assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO)));
+
+        // Verify that StreamsOnTasksAssignedCallbackCompletedEvent with error was sent
+        ArgumentCaptor<StreamsOnTasksAssignedCallbackCompletedEvent> eventCaptor =
+            ArgumentCaptor.forClass(StreamsOnTasksAssignedCallbackCompletedEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        assertTrue(eventCaptor.getValue().error().isPresent());
+        assertSame(applyAssignmentError, eventCaptor.getValue().error().get());
     }
 
     private void completeAsyncPollEventSuccessfully() {

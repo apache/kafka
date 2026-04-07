@@ -2166,7 +2166,7 @@ public class GroupMetadataManager {
             response.setEndpointInformationEpoch(group.endpointInformationEpoch());
         }
 
-        Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
+        Map<String, CreatableTopic> internalTopicsToBeCreated = Map.of();
         if (updatedConfiguredTopology.topicConfigurationException().isPresent()) {
             TopicConfigurationException exception = updatedConfiguredTopology.topicConfigurationException().get();
             internalTopicsToBeCreated = updatedConfiguredTopology.internalTopicsToBeCreated();

@@ -59,7 +59,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(1)
-                            .setRecords(memoryRecords)))).iterator()))
+                            .setRecords(memoryRecords))))))
             .setAcks((short) -1)
             .setTimeoutMs(10)).build();
         assertTrue(RequestUtils.hasTransactionalRecords(request));
@@ -88,7 +88,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(1)
-                            .setRecords(memoryRecords)))).iterator()))
+                            .setRecords(memoryRecords))))))
             .setAcks((short) -1)
             .setTimeoutMs(10)).build();
         assertTrue(RequestTestUtils.hasIdempotentRecords(request));
@@ -107,7 +107,7 @@ public class ProduceRequestTest {
                             .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
                             .setPartitionData(Collections.singletonList(
                                     new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
-                    .iterator()))
+                    ))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000),
             false);
@@ -128,7 +128,7 @@ public class ProduceRequestTest {
                                                 .setName("topic")  // TopicId will default to Uuid.ZERO and client will get UNKNOWN_TOPIC_ID error.
                                                 .setPartitionData(Collections.singletonList(
                                                         new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
-                                .iterator()))
+                                ))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000),
                 false);
@@ -157,7 +157,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
-                                .setRecords(MemoryRecords.readableRecords(buffer))))).iterator()))
+                                .setRecords(MemoryRecords.readableRecords(buffer)))))))
             .setAcks((short) 1)
             .setTimeoutMs(5000));
         assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
@@ -172,7 +172,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
-                            .setRecords(MemoryRecords.EMPTY)))).iterator()))
+                            .setRecords(MemoryRecords.EMPTY))))))
             .setAcks((short) 1)
             .setTimeoutMs(5000));
         assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
@@ -192,7 +192,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
-                            .setRecords(builder.build())))).iterator()))
+                            .setRecords(builder.build()))))))
             .setAcks((short) 1)
             .setTimeoutMs(5000));
         assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
@@ -212,7 +212,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))
-                .iterator()))
+                ))
             .setAcks((short) 1)
             .setTimeoutMs(5000));
         assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
@@ -232,7 +232,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))
-                .iterator()))
+                ))
             .setAcks((short) 1)
             .setTimeoutMs(1000);
         // Can't create ProduceRequest instance with version within [3, 7)
@@ -265,7 +265,7 @@ public class ProduceRequestTest {
                     new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
                             .setPartitionData(Collections.singletonList(
                                     new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
-                    .iterator()))
+                    ))
                 .setAcks((short) -1)
                 .setTimeoutMs(5000),
             true);
@@ -294,7 +294,7 @@ public class ProduceRequestTest {
                     new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
                             .setPartitionData(Collections.singletonList(
                                     new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonIdempotentRecords))))
-                    .iterator()))
+                    ))
                 .setAcks((short) -1)
                 .setTimeoutMs(5000),
             true);
@@ -313,7 +313,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(1)
                         .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord))))
-            ).iterator()))
+            )))
             .setAcks((short) -1)
             .setTimeoutMs(10));
         assertEquals(ApiKeys.PRODUCE.oldestVersion(), builder.oldestAllowedVersion());
@@ -334,7 +334,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(1)
                         .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord)))))
-                .iterator()))
+                ))
             .setAcks((short) -1)
             .setTimeoutMs(10)).build();
     }
