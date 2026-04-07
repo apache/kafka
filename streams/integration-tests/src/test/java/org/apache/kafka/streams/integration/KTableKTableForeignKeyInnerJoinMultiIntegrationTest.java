@@ -119,7 +119,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     @BeforeEach
-    public void before() throws IOException, InterruptedException {
+    public void before() throws Exception {
         final String stateDirBasePath = TestUtils.tempDirectory().getPath();
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
         streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
@@ -163,7 +163,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     @AfterEach
-    public void after() throws IOException, InterruptedException {
+    public void after() throws Exception {
         if (streams != null) {
             streams.close(Duration.ofSeconds(60));
             streams = null;

@@ -228,10 +228,12 @@ public class JoinGracePeriodDurabilityIntegrationTest {
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.of(0), toProduce);
     }
 
-    private KafkaStreams startStream(final Properties streamsConfig,
-                             final StreamsBuilder builder,
-                             final boolean clean,
-                             final boolean withHeaders) {
+    private KafkaStreams startStream(
+        final Properties streamsConfig,
+        final StreamsBuilder builder,
+        final boolean clean,
+        final boolean withHeaders) {
+
         if (withHeaders) {
             streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
