@@ -69,9 +69,9 @@ import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnC
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsTasksAssignedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
@@ -148,6 +148,7 @@ import static org.apache.kafka.clients.consumer.internals.AbstractMembershipMana
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
@@ -205,12 +206,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     process((PartitionsRemovedEvent) event);
                     break;
 
-                case STREAMS_ON_TASKS_REVOKED_CALLBACK_NEEDED:
-                    processStreamsOnTasksRevokedCallbackNeededEvent((StreamsOnTasksRevokedCallbackNeededEvent) event);
+                case STREAMS_TASKS_ASSIGNED:
+                    process((StreamsTasksAssignedEvent) event);
                     break;
 
-                case STREAMS_ON_TASKS_ASSIGNED_CALLBACK_NEEDED:
-                    processStreamsOnTasksAssignedCallbackNeededEvent((StreamsOnTasksAssignedCallbackNeededEvent) event);
+                case STREAMS_ON_TASKS_REVOKED_CALLBACK_NEEDED:
+                    processStreamsOnTasksRevokedCallbackNeededEvent((StreamsOnTasksRevokedCallbackNeededEvent) event);
                     break;
 
                 case STREAMS_ON_ALL_TASKS_LOST_CALLBACK_NEEDED:
@@ -256,7 +257,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 event.assignedPartitions(),
                 event.addedPartitions()
             );
-            applicationEventHandler.addAndGet(applyEvent);
+            try {
+                applicationEventHandler.addAndGet(applyEvent);
+            } catch (Exception e) {
+                // Send error to the background thread, so it can complete the ongoing reconciliation (failed to update assignment to run callbacks)
+                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(e, "Failed to apply the new assignment");
+                applicationEventHandler.add(new ConsumerRebalanceListenerCallbackCompletedEvent(ON_PARTITIONS_ASSIGNED, event.future(), Optional.of(error)));
+                throw error;
+            }
         }
 
         private void process(final PartitionsRemovedEvent event) {
@@ -287,16 +295,40 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         }
 
-        private void processStreamsOnTasksAssignedCallbackNeededEvent(final StreamsOnTasksAssignedCallbackNeededEvent event) {
-            StreamsOnTasksAssignedCallbackCompletedEvent invokedEvent = invokeOnTasksAssignedCallback(event.assignment(), event.future());
+        private void processStreamsOnAllTasksLostCallbackNeededEvent(final StreamsOnAllTasksLostCallbackNeededEvent event) {
+            StreamsOnAllTasksLostCallbackCompletedEvent invokedEvent = invokeOnAllTasksLostCallback(event.future());
             applicationEventHandler.add(invokedEvent);
             if (invokedEvent.error().isPresent()) {
                 throw invokedEvent.error().get();
             }
         }
 
-        private void processStreamsOnAllTasksLostCallbackNeededEvent(final StreamsOnAllTasksLostCallbackNeededEvent event) {
-            StreamsOnAllTasksLostCallbackCompletedEvent invokedEvent = invokeOnAllTasksLostCallback(event.future());
+        /**
+         * Processing this event will perform the actions needed in the app thread when new partitions are assigned for Streams:
+         * - apply assignment changes (ensuring they happen in the background but triggered within the app thread poll)
+         * - run onTasksAssigned callback
+         * - notify background thread so it can carry on (e.g., send ack to the broker)
+         */
+        private void process(final StreamsTasksAssignedEvent event) {
+            // Apply assignment via ApplyAssignmentEvent and wait for it to complete
+            ApplyAssignmentEvent applyEvent = new ApplyAssignmentEvent(
+                event.assignedPartitions(),
+                event.addedPartitions()
+            );
+            try {
+                applicationEventHandler.addAndGet(applyEvent);
+            } catch (Exception e) {
+                // Send error to the background thread, so it can complete the ongoing reconciliation (failed to update assignment to run callbacks)
+                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(e, "Failed to apply the new assignment");
+                applicationEventHandler.add(new StreamsOnTasksAssignedCallbackCompletedEvent(event.future(), Optional.of(error)));
+                throw error;
+            }
+
+            // Invoke the onTasksAssigned callback and notify the background thread
+            StreamsOnTasksAssignedCallbackCompletedEvent invokedEvent = invokeOnTasksAssignedCallback(
+                event.assignment(),
+                event.future()
+            );
             applicationEventHandler.add(invokedEvent);
             if (invokedEvent.error().isPresent()) {
                 throw invokedEvent.error().get();
@@ -649,8 +681,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.clientTelemetryReporter = Optional.empty();
 
-        ConsumerMetrics metricsRegistry = new ConsumerMetrics();
-        this.fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        FetchMetricsRegistry fetchMetricsRegistry = new FetchMetricsRegistry(CONSUMER_METRIC_GROUP_PREFIX);
+        this.fetchMetricsManager = new FetchMetricsManager(metrics, fetchMetricsRegistry);
         this.fetchCollector = new FetchCollector<>(logContext,
                 metadata,
                 subscriptions,

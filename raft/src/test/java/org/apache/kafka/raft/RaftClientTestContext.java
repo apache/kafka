@@ -1354,7 +1354,7 @@ public final class RaftClientTestContext {
         assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
         assertEquals(replicaKey.directoryId().get(), addRaftVoterRequestData.voterDirectoryId());
         assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
-        assertEquals(false, addRaftVoterRequestData.ackWhenCommitted());
+        assertFalse(addRaftVoterRequestData.ackWhenCommitted());
 
         return request;
     }
@@ -2337,7 +2337,7 @@ public final class RaftClientTestContext {
         }
 
         void readBatch(BatchReader<String> reader) {
-            try {
+            try (reader) {
                 while (reader.hasNext()) {
                     long nextOffset = lastCommitOffset().isPresent() ?
                         lastCommitOffset().getAsLong() + 1 : 0L;
@@ -2349,8 +2349,6 @@ public final class RaftClientTestContext {
                             ". We expected an offset at least as large as " + nextOffset);
                     commits.add(batch);
                 }
-            } finally {
-                reader.close();
             }
         }
 
@@ -2424,10 +2422,6 @@ public final class RaftClientTestContext {
         KIP_1166_PROTOCOL,
         // autoJoin support
         KIP_1186_PROTOCOL;
-
-        boolean isKRaftSupported() {
-            return isAtLeast(KIP_595_PROTOCOL);
-        }
 
         boolean isReconfigSupported() {
             return isAtLeast(KIP_853_PROTOCOL);

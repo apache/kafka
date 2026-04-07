@@ -17,7 +17,7 @@
 package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ShareGroupListener;
 import org.apache.kafka.test.TestUtils;

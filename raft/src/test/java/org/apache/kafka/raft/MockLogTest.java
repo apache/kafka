@@ -48,7 +48,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -1134,7 +1133,7 @@ public class MockLogTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2})
-    public void testReadRespectsMaxSizeInBytes(int expectedBatches) throws IOException {
+    public void testReadRespectsMaxSizeInBytes(int expectedBatches) {
         int recordsPerBatch = 5;
         appendBatch(recordsPerBatch, 1);
         appendBatch(recordsPerBatch, 1);
@@ -1211,7 +1210,7 @@ public class MockLogTest {
                 log.endOffset().offset(),
                 Compression.NONE,
                 epoch,
-                records.toArray(new SimpleRecord[records.size()])
+                records.toArray(new SimpleRecord[0])
             ),
             epoch
         );

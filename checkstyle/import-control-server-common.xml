@@ -58,9 +58,12 @@
     </subpackage>
 
     <subpackage name="metadata">
+        <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.message" />
-        <allow pkg="org.apache.kafka.server.common" />
         <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.metadata.properties" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.test" />
     </subpackage>
 
     <subpackage name="security">

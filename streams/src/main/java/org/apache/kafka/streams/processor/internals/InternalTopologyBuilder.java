@@ -1122,6 +1122,7 @@ public class InternalTopologyBuilder {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void buildProcessorNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
                                     final Map<String, StateStore> stateStoreMap,
                                     final ProcessorNodeFactory<?, ?, ?, ?> factory,
@@ -1456,6 +1457,7 @@ public class InternalTopologyBuilder {
         return decorateTopic(topic);
     }
 
+    @SuppressWarnings("deprecation")
     private String decorateTopic(final String topic) {
         if (applicationId == null) {
             throw new TopologyException("there are internal topics and "

@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
-import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory;
@@ -41,6 +40,7 @@ import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -58,6 +58,7 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -65,7 +66,6 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
@@ -100,7 +100,7 @@ public class CheckpointBench {
 
 
     @Setup(Level.Trial)
-    public void setup() {
+    public void setup() throws IOException {
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
         Properties configs = BenchmarkConfigUtils.createDummyBrokerConfig();
         this.brokerProperties = KafkaConfig.fromProps(configs);
@@ -174,7 +174,7 @@ public class CheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : CollectionConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : logManager.liveLogDirs()) {
             Utils.delete(dir);
         }
     }

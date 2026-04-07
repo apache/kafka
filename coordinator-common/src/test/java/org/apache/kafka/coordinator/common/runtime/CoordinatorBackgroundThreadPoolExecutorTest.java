@@ -39,7 +39,7 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
         CoordinatorRuntimeMetrics metrics = mock(CoordinatorRuntimeMetrics.class);
         Time mockTime = new MockTime();
         CoordinatorBackgroundThreadPoolExecutor threadPoolExecutor = new CoordinatorBackgroundThreadPoolExecutor(
-            "threaad-pool-",
+            "thread-pool-",
             2,
             mockTime,
             metrics
