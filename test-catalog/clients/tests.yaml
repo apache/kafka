@@ -5387,10 +5387,14 @@ org.apache.kafka.common.utils.ByteBufferOutputStreamTest:
 org.apache.kafka.common.utils.ByteBufferUnmapperTest:
 - testUnmap
 org.apache.kafka.common.utils.BytesTest:
-- testBytesLexicographicCases
-- testIncrement
-- testIncrementUpperBoundary
-- testIncrementWithSubmap
+- compareToReflectsLexicographicUnsignedOrdering
+- constructorThrowsForNullInput
+- equalsReflectsContentIdentityAndType
+- getReturnsUnderlyingArray
+- hashCodeIsConsistentAndContentBased
+- wrapEmptyArrayProducesEmptyBytes
+- wrapReturnsBytesBackedBySameArray
+- wrapReturnsNullForNullInput
 org.apache.kafka.common.utils.ChecksumsTest:
 - testUpdateByteBuffer
 - testUpdateByteBufferWithOffsetPosition
@@ -5552,9 +5556,13 @@ org.apache.kafka.common.utils.annotation.ApiKeyVersionsProviderTest:
 - testProvideArgumentsWithExplicitRange
 - testToVersionTooNewThrowsException
 org.apache.kafka.common.utils.internals.ByteUtilsTest:
+- testBytesLexicographicCases
 - testCorrectnessReadUnsignedVarint
 - testCorrectnessWriteUnsignedVarint
 - testDouble
+- testIncrement
+- testIncrementUpperBoundary
+- testIncrementWithSubmap
 - testInvalidVarint
 - testInvalidVarlong
 - testReadInt
