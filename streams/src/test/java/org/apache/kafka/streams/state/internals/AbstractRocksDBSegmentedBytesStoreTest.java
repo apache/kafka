@@ -25,8 +25,12 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -34,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -54,6 +59,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.rocksdb.ColumnFamilyDescriptor;
+import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
+import org.rocksdb.Options;
+import org.rocksdb.RocksDB;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -70,6 +81,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SimpleTimeZone;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -82,6 +94,7 @@ import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -97,6 +110,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     final long retention = 1000;
     final long segmentInterval = 60_000L;
     final String storeName = "bytes-store";
+    private final Serializer<String> stringSerializer = new StringSerializer();
+    private final Deserializer<String> stringDeserializer = new StringDeserializer();
+    private final Serializer<Long> longSerializer = new LongSerializer();
 
     public SegmentedBytesStore.KeySchema schema;
 
@@ -133,19 +149,35 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext<>(
-            stateDir,
-            Serdes.String(),
-            Serdes.Long(),
-            new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-        );
+        context = getProcessorContext();
         bytesStore.init(context, bytesStore);
     }
 
     @AfterEach
     public void close() {
         bytesStore.close();
+    }
+
+    private InternalMockProcessorContext<?, ?> getProcessorContext() {
+        return new InternalMockProcessorContext<>(
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new MockRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+    }
+
+    private InternalMockProcessorContext<?, ?> getEOSProcessorContext() {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        return new InternalMockProcessorContext<>(
+                stateDir,
+                Serdes.String(),
+                Serdes.Long(),
+                new MockRecordCollector(),
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new StreamsConfig(streamsProps));
     }
 
     abstract AbstractRocksDBSegmentedBytesStore<S> getBytesStore();
@@ -512,6 +544,57 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         before(schema);
         context.transitionToStandby(null);
         shouldRestoreToByteStore();
+    }
+
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState(final SegmentedBytesStore.KeySchema schema) throws Exception {
+        before(schema);
+        final InternalMockProcessorContext<?, ?> eosContext = getEOSProcessorContext();
+        bytesStore = getBytesStore();
+        bytesStore.init(eosContext, bytesStore);
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(30));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
+        bytesStore.close();
+        bytesStore = getBytesStore();
+        overwritePersistedStoreStatusToOpen();
+        final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class, () -> bytesStore.init(eosContext, bytesStore));
+        assertEquals("Tasks [0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
+    }
+
+    private void overwritePersistedStoreStatusToOpen() throws Exception {
+        final DBOptions dbOptions = new DBOptions();
+        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+        final Long openState = 1L;
+
+
+        final String dbPath = new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath();
+        final List<ColumnFamilyDescriptor> existingColumnFamilies = RocksDB.listColumnFamilies(new Options(), dbPath).stream()
+                .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
+                .collect(Collectors.toList());
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(existingColumnFamilies.size());
+        RocksDB db = null;
+        ColumnFamilyHandle offsetsColumnFamily = null;
+        try {
+            db = RocksDB.open(
+                    dbOptions,
+                    new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath(),
+                    existingColumnFamilies,
+                    columnFamilies);
+            final byte[] statusKey = stringSerializer.serialize(null, "status");
+
+            offsetsColumnFamily = columnFamilies.get(columnFamilies.size() - 1);
+            db.put(offsetsColumnFamily, statusKey, longSerializer.serialize(null, openState));
+        } finally {
+            if (db != null) {
+                db.close();
+            }
+            for (final ColumnFamilyHandle columnFamily : columnFamilies) {
+                columnFamily.close();
+            }
+            dbOptions.close();
+            columnFamilyOptions.close();
+        }
     }
 
     private void shouldRestoreToByteStore() {
