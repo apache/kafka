@@ -52,6 +52,22 @@ public class MetadataQuorumCommandUnitTest {
     }
 
     @Test
+    public void testRemoveControllerDryRunWithUnregister() {
+        List<String> outputs = List.of(
+            ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "remove-controller",
+                    "--controller-id", "2",
+                    "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
+                    "--dry-run",
+                    "--unregister"))).split("\n"));
+        assertTrue(outputs.contains("DRY RUN of removing  KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
+            "Failed to find expected output in stdout: " + outputs);
+        assertTrue(outputs.contains("DRY RUN of unregistering  KRaft controller 2"),
+            "Failed to find expected unregister output in stdout: " + outputs);
+    }
+
+    @Test
     public void testGetControllerIdWithoutId() {
         Properties props = new Properties();
         props.setProperty("process.roles", "controller");

@@ -154,7 +154,8 @@ public class MetadataQuorumCommand {
                 case "remove-controller" -> handleRemoveController(admin,
                     namespace.getInt("controller_id"),
                     namespace.getString("controller_directory_id"),
-                    namespace.getBoolean("dry_run"));
+                    namespace.getBoolean("dry_run"),
+                    namespace.getBoolean("unregister"));
                 default -> throw new IllegalStateException(format("Unknown command: %s", command));
             }
         } finally {
@@ -476,13 +477,19 @@ public class MetadataQuorumCommand {
             .addArgument("--dry-run")
             .help("True if we should print what would be done, but not do it.")
             .action(Arguments.storeTrue());
+
+        removeControllerParser
+            .addArgument("--unregister")
+            .help("If set, also unregister the controller after removing it from the voter set.")
+            .action(Arguments.storeTrue());
     }
 
     static void handleRemoveController(
         Admin admin,
         int controllerId,
         String controllerDirectoryIdString,
-        boolean dryRun
+        boolean dryRun,
+        boolean unregister
     ) throws TerseException, ExecutionException, InterruptedException {
         if (controllerId < 0) {
             throw new TerseException("Invalid negative --controller-id: " + controllerId);
@@ -501,5 +508,13 @@ public class MetadataQuorumCommand {
             dryRun ? "DRY RUN of removing " : "Removed ",
             controllerId,
             directoryId);
+        if (unregister) {
+            if (!dryRun) {
+                admin.unregisterController(controllerId).all().get();
+            }
+            System.out.printf("%s KRaft controller %d%n",
+                dryRun ? "DRY RUN of unregistering " : "Unregistered ",
+                controllerId);
+        }
     }
 }

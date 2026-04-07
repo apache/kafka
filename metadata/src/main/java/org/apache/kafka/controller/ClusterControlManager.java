@@ -501,6 +501,23 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, null);
     }
 
+    ControllerResult<Void> unregisterController(int controllerId) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
+            throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
+                    "support controller unregistration.");
+        }
+        if (controllerRegistrations.get(controllerId) == null) {
+            throw new BrokerIdNotRegisteredException("Controller ID " + controllerId +
+                " is not currently registered");
+        }
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
+            setBrokerId(controllerId).
+            setBrokerEpoch(ControllerRegistration.UNREGISTER_CONTROLLER_SENTINEL_EPOCH),
+                (short) 0));
+        return ControllerResult.atomicOf(records, null);
+    }
+
     BrokerFeature processRegistrationFeature(
         int brokerId,
         FinalizedControllerFeatures finalizedFeatures,
@@ -612,6 +629,10 @@ public class ClusterControlManager {
     }
 
     public void replay(UnregisterBrokerRecord record) {
+        if (ControllerRegistration.isUnregisterController(record)) {
+            replayUnregisterController(record);
+            return;
+        }
         registerBrokerRecordOffsets.remove(record.brokerId());
         int brokerId = record.brokerId();
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
@@ -625,6 +646,18 @@ public class ClusterControlManager {
             if (heartbeatManager != null) heartbeatManager.remove(brokerId);
             updateDirectories(brokerId, registration.directories(), null);
             brokerRegistrations.remove(brokerId);
+            log.info("Replayed {}", record);
+        }
+    }
+
+    private void replayUnregisterController(UnregisterBrokerRecord record) {
+        int controllerId = record.brokerId();
+        ControllerRegistration registration = controllerRegistrations.get(controllerId);
+        if (registration == null) {
+            throw new RuntimeException(String.format("Unable to replay %s: no controller " +
+                "registration found for that id", record));
+        } else {
+            controllerRegistrations.remove(controllerId);
             log.info("Replayed {}", record);
         }
     }

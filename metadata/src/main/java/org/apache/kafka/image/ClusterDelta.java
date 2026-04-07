@@ -88,7 +88,11 @@ public final class ClusterDelta {
     }
 
     public void replay(UnregisterBrokerRecord record) {
-        changedBrokers.put(record.brokerId(), Optional.empty());
+        if (ControllerRegistration.isUnregisterController(record)) {
+            changedControllers.put(record.brokerId(), Optional.empty());
+        } else {
+            changedBrokers.put(record.brokerId(), Optional.empty());
+        }
     }
 
     public void replay(RegisterControllerRecord record) {

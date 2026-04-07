@@ -73,9 +73,11 @@ public class ClusterTool {
                 .help("Get information about the ID of a cluster.");
         Subparser unregisterParser = subparsers.addParser("unregister")
                 .help("Unregister a broker.");
+        Subparser unregisterControllerParser = subparsers.addParser("unregister-controller")
+                .help("Unregister a controller.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
-        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints)) {
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, unregisterControllerParser, listEndpoints)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -96,6 +98,11 @@ public class ClusterTool {
                 .action(store())
                 .required(true)
                 .help("The ID of the broker to unregister.");
+        unregisterControllerParser.addArgument("--controller-id", "-i")
+                .type(Integer.class)
+                .action(store())
+                .required(true)
+                .help("The ID of the controller to unregister.");
         listEndpoints.addArgument("--include-fenced-brokers")
                 .action(storeTrue())
                 .help("Whether to include fenced brokers when listing broker endpoints");
@@ -127,6 +134,12 @@ public class ClusterTool {
             case "unregister": {
                 try (Admin adminClient = Admin.create(properties)) {
                     unregisterCommand(System.out, adminClient, namespace.getInt("id"));
+                }
+                break;
+            }
+            case "unregister-controller": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    unregisterControllerCommand(System.out, adminClient, namespace.getInt("controller_id"));
                 }
                 break;
             }
@@ -163,6 +176,20 @@ public class ClusterTool {
             Throwable cause = ee.getCause();
             if (cause instanceof UnsupportedVersionException) {
                 stream.println("The target cluster does not support the broker unregistration API.");
+            } else {
+                throw ee;
+            }
+        }
+    }
+
+    static void unregisterControllerCommand(PrintStream stream, Admin adminClient, int id) throws Exception {
+        try {
+            adminClient.unregisterController(id).all().get();
+            stream.println("Controller " + id + " is no longer registered.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof UnsupportedVersionException) {
+                stream.println("The target cluster does not support the controller unregistration API.");
             } else {
                 throw ee;
             }

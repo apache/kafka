@@ -166,6 +166,7 @@ import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterControllerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -245,6 +246,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
+import org.apache.kafka.common.requests.UnregisterControllerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
@@ -10028,6 +10030,100 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testUnregisterControllerSuccess() throws InterruptedException, ExecutionException {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.NONE, 0));
+            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerFailure() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.NONE, 0));
+
+            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
+
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutAndFailureRetry() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+
+            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutMaxRetry() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            env.kafkaClient().setNodeApiVersions(
+                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
+
+            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutMaxWait() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
+
+            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId, new UnregisterControllerOptions().timeoutMs(10));
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+        }
+    }
+
+    @Test
     public void testDescribeProducers() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -10711,6 +10807,13 @@ public class KafkaAdminClientTest {
 
     private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setThrottleTimeMs(throttleTimeMs));
+    }
+
+    private UnregisterControllerResponse prepareUnregisterControllerResponse(Errors error, int throttleTimeMs) {
+        return new UnregisterControllerResponse(new UnregisterControllerResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(error.message())
                 .setThrottleTimeMs(throttleTimeMs));

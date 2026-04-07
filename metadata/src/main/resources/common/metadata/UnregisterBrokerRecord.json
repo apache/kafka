@@ -21,8 +21,8 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The broker id." },
+      "about": "The broker or controller id." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
-      "about": "The broker epoch." }
+      "about": "The broker epoch, or Long.MIN_VALUE if a controller is being unregistered." }
   ]
 }

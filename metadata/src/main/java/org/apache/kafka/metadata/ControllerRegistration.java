@@ -23,6 +23,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerEndpoint;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerFeature;
+import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -40,6 +41,11 @@ import java.util.stream.Collectors;
  * An immutable class which represents controller registrations.
  */
 public class ControllerRegistration {
+    public static final long UNREGISTER_CONTROLLER_SENTINEL_EPOCH = Long.MIN_VALUE;
+    public static boolean isUnregisterController(UnregisterBrokerRecord record) {
+        return record.brokerEpoch() == UNREGISTER_CONTROLLER_SENTINEL_EPOCH;
+    }
+
     public static class Builder {
         private int id;
         private Uuid incarnationId;

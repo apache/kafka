@@ -20,6 +20,7 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -269,8 +270,12 @@ public class RecordTestUtils {
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
+                        setMaxSupportedVersion(MetadataVersion.LATEST_PRODUCTION.featureLevel())
                 ).iterator()
             ));
+    }
+
+    public static UnregisterBrokerRecord createTestControllerUnregistration(int id) {
+        return new UnregisterBrokerRecord().setBrokerId(id).setBrokerEpoch(Long.MIN_VALUE);
     }
 }

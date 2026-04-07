@@ -19,7 +19,7 @@ package kafka.server
 
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.message.ControllerRegistrationResponseData
-import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord, UnregisterBrokerRecord}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ControllerRegistrationResponse
 import org.apache.kafka.common.utils.ExponentialBackoff
@@ -103,7 +103,8 @@ class ControllerRegistrationManagerTest {
     prevImage: MetadataImage,
     manager: ControllerRegistrationManager,
     metadataVersion: MetadataVersion,
-    registrationModifier: RegisterControllerRecord => Option[RegisterControllerRecord]
+    registrationModifier: RegisterControllerRecord => Option[RegisterControllerRecord],
+    unregisterModifier: UnregisterBrokerRecord => Option[UnregisterBrokerRecord]
   ): MetadataImage = {
     val delta = new MetadataDelta.Builder().
       setImage(prevImage).
@@ -117,6 +118,11 @@ class ControllerRegistrationManagerTest {
       for (i <- Seq(1, 2, 3)) {
         registrationModifier(RecordTestUtils.createTestControllerRegistration(i, false)).foreach {
           registration => delta.replay(registration)
+        }
+      }
+      for (i <- Seq(1, 2, 3)) {
+        unregisterModifier(RecordTestUtils.createTestControllerUnregistration(i)).foreach {
+          unregistration => delta.replay(unregistration)
         }
       }
     }
@@ -181,7 +187,9 @@ class ControllerRegistrationManagerTest {
       val image = doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         metadataVersion,
-        r => if (r.controllerId() == 1) None else Some(r))
+        r => if (r.controllerId() == 1) None else Some(r),
+        _ => None
+      )
       if (!metadataVersionSupportsRegistration) {
         assertFalse(registeredInLog(manager))
         assertEquals((false, 0, 0), rpcStats(manager))
@@ -199,7 +207,9 @@ class ControllerRegistrationManagerTest {
         doMetadataUpdate(image,
           manager,
           metadataVersion,
-          r => Some(r))
+          r => Some(r),
+          _ => None
+        )
         assertTrue(registeredInLog(manager))
       }
     } finally {
@@ -217,7 +227,9 @@ class ControllerRegistrationManagerTest {
       doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         MetadataVersion.IBP_3_7_IV0,
-        r => Some(r.setIncarnationId(new Uuid(456, r.controllerId()))))
+        r => Some(r.setIncarnationId(new Uuid(456, r.controllerId()))),
+        _ => None
+      )
       manager.start(context.mockChannelManager)
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         assertEquals((true, 0, 0), rpcStats(manager))
@@ -235,7 +247,9 @@ class ControllerRegistrationManagerTest {
       doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         MetadataVersion.IBP_3_7_IV0,
-        r => Some(r.setIncarnationId(new Uuid(457, r.controllerId()))))
+        r => Some(r.setIncarnationId(new Uuid(457, r.controllerId()))),
+        _ => None
+      )
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
         context.mockChannelManager.poll()
         assertEquals((true, 1, 0), rpcStats(manager))
@@ -257,7 +271,9 @@ class ControllerRegistrationManagerTest {
       doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         MetadataVersion.IBP_3_7_IV0,
-        r => if (r.controllerId() == 1) None else Some(r))
+        r => if (r.controllerId() == 1) None else Some(r),
+        _ => None
+      )
       assertEquals((true, 0, 0), rpcStats(manager))
 
       // the first response will trigger a retry
@@ -296,7 +312,9 @@ class ControllerRegistrationManagerTest {
       doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         MetadataVersion.IBP_3_7_IV0,
-        r => if (r.controllerId() == 1) None else Some(r))
+        r => if (r.controllerId() == 1) None else Some(r),
+        _ => None
+      )
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 0
       assertEquals((true, 0, 0), rpcStats(manager))
       assertEquals(1, context.mockChannelManager.unsentQueue.size())
@@ -314,6 +332,91 @@ class ControllerRegistrationManagerTest {
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 1
       assertEquals((true, 0, 1), rpcStats(manager))
       assertEquals(1, context.mockChannelManager.unsentQueue.size())
+    } finally {
+      manager.close()
+    }
+  }
+
+  @Test
+  def testReRegistrationAfterUnregister(): Unit = {
+    val context = new RegistrationTestContext(configProperties)
+    val manager = newControllerRegistrationManager(context)
+    try {
+      context.controllerNodeProvider.node.set(controller1)
+      manager.start(context.mockChannelManager)
+
+      // initial state with controller registered in log
+      val image = doMetadataUpdate(MetadataImage.EMPTY,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        r => Some(r),
+        _ => None
+      )
+      assertTrue(registeredInLog(manager))
+
+      // Now unregister the controller via an UnregisterBrokerRecord.
+      doMetadataUpdate(image,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        _ => None,
+        r => if (r.brokerId() == 1) Some(r) else None
+      )
+      assertFalse(registeredInLog(manager))
+
+      // The local manager should send a new registration RPC.
+      assertEquals((true, 0, 0), rpcStats(manager))
+    } finally {
+      manager.close()
+    }
+  }
+
+  @Test
+  def testReRegistrationAfterDifferentIncarnationId(): Unit = {
+    val context = new RegistrationTestContext(configProperties)
+    val manager = newControllerRegistrationManager(context)
+    try {
+      context.controllerNodeProvider.node.set(controller1)
+      manager.start(context.mockChannelManager)
+
+      // Register the controller.
+      val image = doMetadataUpdate(MetadataImage.EMPTY,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        r => if (r.controllerId() == 1) None else Some(r),
+        _ => None
+      )
+      assertEquals((true, 0, 0), rpcStats(manager))
+      context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
+        new ControllerRegistrationResponseData()), controller1)
+      context.mockChannelManager.poll()
+      assertEquals((false, 1, 0), rpcStats(manager))
+      assertFalse(registeredInLog(manager))
+
+      // Metadata update shows our registration is persisted.
+      val image2 = doMetadataUpdate(image,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        r => Some(r),
+        _ => None
+      )
+      assertTrue(registeredInLog(manager))
+
+      // Now a different incarnation registers with the same controller ID.
+      val differentIncarnationId = new Uuid(999999L, 1)
+      doMetadataUpdate(image2,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        r => Some(r.setIncarnationId(
+          if (r.controllerId() == 1) differentIncarnationId
+          else new Uuid(3465346L, r.controllerId()))),
+        _ => None
+      )
+
+      // The manager should detect the wrong incarnation and set registeredInLog to false.
+      assertFalse(registeredInLog(manager))
+
+      // It should send a new registration RPC to reclaim its registration.
+      assertEquals((true, 1, 0), rpcStats(manager))
     } finally {
       manager.close()
     }
