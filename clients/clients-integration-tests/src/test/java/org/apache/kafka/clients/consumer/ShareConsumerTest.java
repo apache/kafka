@@ -4544,13 +4544,9 @@ public class ShareConsumerTest {
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() ->
                 TestUtils.waitForCondition(() -> {
-                    try {
-                        Config config = adminClient.describeConfigs(List.of(configResource)).all().get().get(configResource);
-                        ConfigEntry entry = config.get(configKey);
-                        return entry != null && entry.value().equals(newValue);
-                    } catch (Exception e) {
-                        return false;
-                    }
+                    Config config = adminClient.describeConfigs(List.of(configResource)).all().get().get(configResource);
+                    ConfigEntry entry = config.get(configKey);
+                    return entry != null && entry.value().equals(newValue);
                 }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
         }
     }
