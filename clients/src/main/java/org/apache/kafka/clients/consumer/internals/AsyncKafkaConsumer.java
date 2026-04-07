@@ -1943,9 +1943,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private Fetch<K, V> pollForFetches(Timer timer) {
-        long pollTimeout = isCommittedOffsetsManagementEnabled()
-                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
-                : timer.remainingMs();
 
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = collectFetch();
@@ -1953,6 +1950,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
+        long pollTimeout = isCommittedOffsetsManagementEnabled()
+                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
+                : timer.remainingMs();
         // With the non-blocking poll design, it's possible that at this point the background thread is
         // concurrently working to update positions. Therefore, a _copy_ of the current assignment is retrieved
         // and iterated looking for any partitions with invalid positions. This is done to avoid being stuck
