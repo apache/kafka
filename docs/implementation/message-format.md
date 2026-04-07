@@ -81,7 +81,7 @@ version: int16 (current version is 0)
 type: int16 (the control record types are in the table below)
 ```
 
-The following control record types are currently defined:
+The following control record types are currently defined for regular topics:
 
 <table>
 <tr>
@@ -126,79 +126,9 @@ COMMIT
 Marks a transaction as committed.
 </td>
 </tr>
-<tr>
-<td>
-
-2
-</td>
-<td>
-
-LEADER_CHANGE
-</td>
-<td>
-
-Records a KRaft leader change.
-</td>
-</tr>
-<tr>
-<td>
-
-3
-</td>
-<td>
-
-SNAPSHOT_HEADER
-</td>
-<td>
-
-Marks the beginning of a KRaft snapshot.
-</td>
-</tr>
-<tr>
-<td>
-
-4
-</td>
-<td>
-
-SNAPSHOT_FOOTER
-</td>
-<td>
-
-Marks the end of a KRaft snapshot.
-</td>
-</tr>
-<tr>
-<td>
-
-5
-</td>
-<td>
-
-KRAFT_VERSION
-</td>
-<td>
-
-Records the finalized kraft.version supported by all replicas.
-</td>
-</tr>
-<tr>
-<td>
-
-6
-</td>
-<td>
-
-KRAFT_VOTERS
-</td>
-<td>
-
-Records the set of voters at a specific offset.
-</td>
-</tr>
 </table>
 
-Types 0 and 1 are used as end-of-transaction markers for the transactional messaging protocol. Types 2 through 6 are used internally by the KRaft consensus protocol. The schema of the value in the control record is dependent on the type. The value is opaque to clients.
+Types 0 and 1 are used as end-of-transaction markers for the transactional messaging protocol. Types 2 through 6 are used internally by the KRaft consensus protocol.
 
 ## Record
 
