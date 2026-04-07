@@ -172,7 +172,9 @@ public final class ClientQuotasImage {
             for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
                 String entityType = exactMatchEntry.getKey();
                 String entityName = exactMatchEntry.getValue();
-                Map<ClientQuotaEntity, ClientQuotaImage> matches = entitiesByTypeAndName.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Map.of());
+                var nameMap = entitiesByTypeAndName.get(entityType);
+                var matches = Map.<ClientQuotaEntity, ClientQuotaImage>of();
+                if (nameMap != null) matches = nameMap.getOrDefault(entityName, Map.of());
                 if (candidates == null) {
                     candidates = new HashMap<>(matches);
                 } else {

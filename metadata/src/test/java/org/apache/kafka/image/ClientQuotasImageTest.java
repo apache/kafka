@@ -291,6 +291,23 @@ public class ClientQuotasImageTest {
         assertNull(response.entries().get(0).entity().get(0).entityName());
     }
 
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {ClientQuotaEntity.USER, ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.IP})
+    public void testDescribeDefaultMatchWithNoData(String entityType) {
+        ClientQuotasImage image = new ClientQuotasImage(Map.of());
+
+        DescribeClientQuotasRequestData request = new DescribeClientQuotasRequestData()
+            .setComponents(List.of(
+                new DescribeClientQuotasRequestData.ComponentData()
+                    .setEntityType(entityType)
+                    .setMatchType(MATCH_TYPE_DEFAULT)
+                    .setMatch(null)
+            ));
+
+        DescribeClientQuotasResponseData response = image.describe(request);
+        assertEquals(0, response.entries().size());
+    }
+
     @Test
     public void testDescribeNonStrictEmptyRequest() {
         Map<ClientQuotaEntity, ClientQuotaImage> entities = Map.of(
