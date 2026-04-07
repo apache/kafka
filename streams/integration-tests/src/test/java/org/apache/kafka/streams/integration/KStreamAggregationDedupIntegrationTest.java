@@ -134,9 +134,7 @@ public class KStreamAggregationDedupIntegrationTest {
                 .toStream()
                 .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -170,9 +168,7 @@ public class KStreamAggregationDedupIntegrationTest {
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -211,9 +207,7 @@ public class KStreamAggregationDedupIntegrationTest {
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 

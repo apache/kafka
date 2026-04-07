@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
@@ -60,9 +61,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled, false);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         leftStream.join(rightTable, valueJoiner, JOINED).to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.String()));
 
@@ -105,9 +104,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled, true);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftStream.leftJoin(rightTable, valueJoiner, JOINED).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(

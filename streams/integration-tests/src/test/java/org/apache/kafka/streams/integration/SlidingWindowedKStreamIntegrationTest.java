@@ -163,9 +163,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -238,9 +236,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -337,9 +333,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 

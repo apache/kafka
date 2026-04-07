@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.test.TestRecord;
@@ -53,9 +54,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-selfJoin");
         streamsConfig.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -100,9 +99,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -156,9 +153,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-repartitioned");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -214,9 +209,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -271,9 +264,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-repartitioned");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -330,9 +321,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -388,9 +377,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -448,9 +435,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner");
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,

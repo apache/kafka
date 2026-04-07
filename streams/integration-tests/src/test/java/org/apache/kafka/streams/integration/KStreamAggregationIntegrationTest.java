@@ -179,9 +179,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -242,9 +240,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -318,9 +314,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Integer()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -372,9 +366,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.Integer()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -474,9 +466,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         shouldCountHelper(testInfo);
     }
@@ -490,9 +480,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         shouldCountHelper(testInfo);
     }
@@ -509,9 +497,7 @@ public class KStreamAggregationIntegrationTest {
             .count()
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start()).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -559,9 +545,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -674,9 +658,7 @@ public class KStreamAggregationIntegrationTest {
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.Integer()));
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -849,9 +831,7 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -898,9 +878,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(13);
         final String userSessionsStore = "UserSessionsStore";
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -1059,9 +1037,7 @@ public class KStreamAggregationIntegrationTest {
                 latch.countDown();
             });
 
-        if (withHeaders) {
-            streamsConfiguration.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));

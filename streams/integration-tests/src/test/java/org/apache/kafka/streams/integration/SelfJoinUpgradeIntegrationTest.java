@@ -131,9 +131,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -161,9 +159,7 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams = null;
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -203,9 +199,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -232,9 +226,7 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams = null;
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 

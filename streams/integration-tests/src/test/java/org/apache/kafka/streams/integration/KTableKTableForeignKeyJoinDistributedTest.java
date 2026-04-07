@@ -165,10 +165,8 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         final Properties streamsConfiguration1 = getStreamsConfiguration(safeTestName);
         final Properties streamsConfiguration2 = getStreamsConfiguration(safeTestName);
 
-        if (withHeaders) {
-            streamsConfiguration1.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-            streamsConfiguration2.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration1, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration2, withHeaders);
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

@@ -118,9 +118,7 @@ public class JoinStoreIntegrationTest {
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
-        if (withHeaders) {
-            STREAMS_CONFIG.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(STREAMS_CONFIG, withHeaders);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (newState == KafkaStreams.State.RUNNING) {
@@ -158,9 +156,7 @@ public class JoinStoreIntegrationTest {
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
-        if (withHeaders) {
-            STREAMS_CONFIG.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(STREAMS_CONFIG, withHeaders);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
             final Admin admin = Admin.create(ADMIN_CONFIG)) {

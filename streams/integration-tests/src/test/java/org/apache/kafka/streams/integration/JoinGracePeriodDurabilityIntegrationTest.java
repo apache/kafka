@@ -234,9 +234,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
         final boolean clean,
         final boolean withHeaders) {
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         return getStartedStreams(streamsConfig, builder, clean);
     }
 }

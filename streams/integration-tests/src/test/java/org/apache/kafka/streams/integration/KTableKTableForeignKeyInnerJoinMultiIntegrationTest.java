@@ -194,11 +194,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final String queryableName = innerJoinType + "-store1";
         final String queryableNameTwo = innerJoinType + "-store2";
 
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-            streamsConfigTwo.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-            streamsConfigThree.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
