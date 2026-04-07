@@ -148,7 +148,6 @@ public final class DefaultTaskManager implements TaskManager {
                 }
             } catch (final InterruptedException ignored) {
                 Thread.currentThread().interrupt();
-                // we interrupt the thread for shut down and pause.
                 log.debug("Await unblocked: Interrupted while waiting for processable tasks");
                 return true;
             }
