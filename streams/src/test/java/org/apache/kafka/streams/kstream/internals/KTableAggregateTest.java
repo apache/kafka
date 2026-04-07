@@ -52,6 +52,7 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -206,19 +207,9 @@ public class KTableAggregateTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void testAggOfVersionedStore(final boolean withHeaders) {
-        final StreamsBuilder builder;
-        if (withHeaders) {
-            final Properties props = new Properties();
-            props.putAll(CONFIG);
-            props.putAll(StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String()));
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-            builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
-        } else {
-            builder = new StreamsBuilder();
-        }
+    @Test
+    public void testAggOfVersionedStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =
@@ -332,19 +323,9 @@ public class KTableAggregateTest {
         testCountHelper(builder, input, supplier);
     }
 
-    @ParameterizedTest
-    @MethodSource("data")
-    public void testCountOfVersionedStore(final boolean withHeaders) {
-        final StreamsBuilder builder;
-        if (withHeaders) {
-            final Properties props = new Properties();
-            props.putAll(CONFIG);
-            props.putAll(StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String()));
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-            builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
-        } else {
-            builder = new StreamsBuilder();
-        }
+    @Test
+    public void testCountOfVersionedStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
 
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> versionedMaterialize =

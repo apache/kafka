@@ -254,10 +254,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @MethodSource("data")
     public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
         setup(inputType, enableCaching, withHeaders);
-        // This test expects caching behavior for accurate result counts
-        if (!enableCaching && !emitFinal) {
-            return;
-        }
+//        // This test expects caching behavior for accurate result counts
+//        if (!enableCaching && !emitFinal) {
+//            return;
+//        }
         final String sessionId = "mel";
         long now = 0;
         processor.process(new Record<>(sessionId, "first", now));
