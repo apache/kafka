@@ -558,6 +558,11 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),

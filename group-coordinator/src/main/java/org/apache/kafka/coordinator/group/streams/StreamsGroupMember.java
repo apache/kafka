@@ -287,7 +287,7 @@ public record StreamsGroupMember(String memberId,
                 .setClientId("")
                 .setClientHost("")
                 .setProcessId("")
-                .setClientTags(Collections.emptyMap())
+                .setClientTags(Map.of())
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(0)
                 .setPreviousMemberEpoch(0)

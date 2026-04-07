@@ -57,6 +57,15 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     private StateStore store;
 
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
+        // Try timestamped store
+        try {
+            headersStore = new KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter<>(context.getStateStore(storeName));
+            store = headersStore;
+            return;
+        } catch (final ClassCastException e) {
+            // not timestamped store, try headers
+        }
+
         // Try headers-aware timestamped store
         try {
             headersStore = context.getStateStore(storeName);
@@ -117,6 +126,10 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
     public StateStore store() {
         return store;
+    }
+
+    public boolean isHeadersStore() {
+        return !(headersStore instanceof KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter);
     }
 
     public boolean isVersionedStore() {

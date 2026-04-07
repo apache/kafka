@@ -146,7 +146,7 @@ public class ConnectProtocol {
                 new JoinGroupRequestProtocol()
                         .setName(EAGER.protocol())
                         .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
-                .iterator());
+                );
     }
 
     /**

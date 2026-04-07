@@ -64,6 +64,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.LongStream;
@@ -589,6 +590,48 @@ public class LogCleanerIntegrationTest {
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
             "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+    }
+
+    @Test
+    public void testGaugeReadsAreNotAffectedByReconfigure() throws Exception {
+        cleaner = makeCleaner(TOPIC_PARTITIONS, CLEANER_BACKOFF_MS, MIN_COMPACTION_LAG, SEGMENT_SIZE);
+        cleaner.startup();
+
+        AbstractConfig config1Thread = makeReconfigureConfig(1);
+        AbstractConfig config2Thread = makeReconfigureConfig(2);
+
+        var checkError = CompletableFuture.runAsync(() -> {
+            var endtime = System.currentTimeMillis() + Duration.ofSeconds(5).toMillis();
+            while (System.currentTimeMillis() < endtime) {
+                cleaner.maxOverCleanerThreads(t -> t.lastStats().bufferUtilization());
+                cleaner.deadThreadCount();
+            }
+        });
+
+        var updateCleaner = CompletableFuture.runAsync(() -> {
+            var useOne = true;
+            var endtime = System.currentTimeMillis() + Duration.ofSeconds(5).toMillis();
+            while (System.currentTimeMillis() < endtime) {
+                AbstractConfig oldCfg = useOne ? config2Thread : config1Thread;
+                AbstractConfig newCfg = useOne ? config1Thread : config2Thread;
+                cleaner.reconfigure(oldCfg, newCfg);
+                useOne = !useOne;
+            }
+        });
+
+        checkError.join();
+        updateCleaner.join();
+    }
+
+    private AbstractConfig makeReconfigureConfig(int numThreads) {
+        // Extend CleanerConfig.CONFIG_DEF with message.max.bytes, which CleanerConfig(AbstractConfig)
+        // reads via ServerConfigs.MESSAGE_MAX_BYTES_CONFIG but which is not part of CleanerConfig's own ConfigDef.
+        ConfigDef configDef = new ConfigDef(CleanerConfig.CONFIG_DEF)
+                .define("message.max.bytes", ConfigDef.Type.INT,
+                        DEFAULT_MAX_MESSAGE_SIZE, ConfigDef.Importance.MEDIUM, "");
+        Map<String, Object> props = new HashMap<>();
+        props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, numThreads);
+        return new AbstractConfig(configDef, props);
     }
 
     private void checkLastCleaned(String topic, int partitionId, long firstDirty) throws InterruptedException {

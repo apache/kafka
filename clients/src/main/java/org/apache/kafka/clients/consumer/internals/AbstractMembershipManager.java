@@ -1198,7 +1198,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 // Keeping newly added partitions as non-fetchable after the callback failure.
                 // They will be retried on the next reconciliation loop, until it succeeds or the
                 // broker removes them from the assignment.
-                if (!addedPartitions.isEmpty()) {
+                if (!addedPartitions.isEmpty() && subscriptions.assignedPartitions().containsAll(addedPartitions)) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
                             "requiring initializing positions after onPartitionsAssigned callback failed.",
                         addedPartitions, exception);

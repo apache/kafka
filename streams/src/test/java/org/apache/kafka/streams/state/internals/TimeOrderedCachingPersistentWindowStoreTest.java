@@ -171,8 +171,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 ofHours(1L),
                 ofMinutes(1),
                 false,
-                hasIndex,
-                false
+                hasIndex
             ), Serdes.String(), Serdes.String())
             .withCachingEnabled();
 

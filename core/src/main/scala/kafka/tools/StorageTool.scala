@@ -32,6 +32,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.util.TerseFailure
 
 import java.util
 import scala.collection.mutable

@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.internals.BytesUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -120,17 +120,17 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
                 return;
             }
 
-            final Bytes prefixBytes = keySchema.prefixBytes(record.key());
+            final Bytes prefixBytes = keySchema.prefixBytes(record.key(), record.headers());
 
             //Perform the prefixScan and propagate the results
             try (final KeyValueIterator<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> prefixScanResults =
-                     subscriptionStore.range(prefixBytes, BytesUtils.increment(prefixBytes))) {
+                     subscriptionStore.range(prefixBytes, ByteUtils.increment(prefixBytes))) {
 
                 while (prefixScanResults.hasNext()) {
                     final KeyValue<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> next = prefixScanResults.next();
                     // have to check the prefix because the range end is inclusive :(
                     if (prefixEquals(next.key.get(), prefixBytes.get())) {
-                        final CombinedKey<KRight, KLeft> combinedKey = keySchema.fromBytes(next.key);
+                        final CombinedKey<KRight, KLeft> combinedKey = keySchema.fromBytes(next.key, record.headers());
                         context().forward(
                             record.withKey(combinedKey.primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(
