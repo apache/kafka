@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -55,7 +56,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -63,6 +64,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -112,7 +114,13 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     private Properties properties;
 
-    private Properties basicProps(final boolean withHeaders) {
+    private Properties basicProps(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) {
+        final String protocol;
+        if (streamsRebalanceProtocolEnabled) {
+            protocol = GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault());
+        } else {
+            protocol = GroupProtocol.CLASSIC.name().toLowerCase(Locale.getDefault());
+        }
         final Properties props = mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -121,7 +129,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10000)
+                mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10000),
+                mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, protocol)
             )
         );
         if (withHeaders) {
@@ -149,9 +158,9 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldShutdownClient(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldShutdownClient(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
@@ -166,38 +175,38 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldReplaceThreads(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldReplaceThreads(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         testReplaceThreads(2);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldReplaceThreadsWithoutJavaHandler(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldReplaceThreadsWithoutJavaHandler(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> fail("exception thrown"));
         testReplaceThreads(2);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldReplaceSingleThread(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldReplaceSingleThread(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         testReplaceThreads(1);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldShutdownMultipleThreadApplication(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldShutdownMultipleThreadApplication(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         testShutdownApplication(2);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldShutdownSingleThreadApplication(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldShutdownSingleThreadApplication(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         testShutdownApplication(1);
     }
 
@@ -229,9 +238,9 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         builder.addGlobalStore(
                 new KeyValueStoreBuilder<>(
                         Stores.persistentKeyValueStore("globalStore"),
@@ -258,9 +267,9 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldEmitSameRecordAfterFailover(final boolean withHeaders) throws Exception {
-        properties = basicProps(withHeaders);
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldEmitSameRecordAfterFailover(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
+        properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
