@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
@@ -36,9 +37,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -203,18 +202,11 @@ public class OAuthCompatibilityTool {
     private static Properties loadConfigFile(Namespace namespace, String argName) {
         String path = namespace.getString(argName);
 
-        if (path == null)
-            return new Properties();
-
-        Properties props = new Properties();
-
-        try (FileInputStream fis = new FileInputStream(path)) {
-            props.load(fis);
+        try {
+            return Utils.loadProps(path);
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to load config file for --" + argName + ": " + path, e);
+            throw new KafkaException("Failed to load config file for --" + argName + ": " + path, e);
         }
-
-        return props;
     }
 
     private static JwtRetriever createRetriever(ConfigHandler configHandler) {
