@@ -2274,8 +2274,8 @@ public class RemoteLogManagerTest {
         // Register metrics to expose them via JMX
         expirationTask.registerMetrics();
 
-        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
-        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String retentionMetricName = "name=RetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
 
         // Test case 1: Testing RetentionSizeInPercent metric (standard retention scenario)
         // retentionSize = 12288, onlyLocalLogSegmentsSize = 100, localLogSegmentsSize = 100
@@ -2339,8 +2339,8 @@ public class RemoteLogManagerTest {
         // Register metrics to expose them via JMX
         expirationTask.registerMetrics();
 
-        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
-        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String retentionMetricName = "name=RetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
 
         // RetentionSizeInPercent = ((100 + 10240) * 100) / 12288 = 84%
         // LocalRetentionSizeInPercent = (100 * 100) / 6144 = 1%
@@ -2356,6 +2356,10 @@ public class RemoteLogManagerTest {
         // Verify metrics are reset to 0 on cancellation (check via accessor since JMX metrics are deregistered)
         assertEquals(0, expirationTask.retentionSizeInPercent());
         assertEquals(0, expirationTask.localRetentionSizeInPercent());
+
+        // Verify JMX metrics are actually deregistered from the Yammer registry after cancellation
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(retentionMetricName));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(localRetentionMetricName));
     }
 
     @Test
@@ -2379,8 +2383,8 @@ public class RemoteLogManagerTest {
         // Register metrics to expose them via JMX
         expirationTask.registerMetrics();
 
-        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
-        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String retentionMetricName = "name=RetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
 
         expirationTask.buildRetentionSizeData(0, 100, 100, 1000, epochEntries, 0, Long.MAX_VALUE);
 

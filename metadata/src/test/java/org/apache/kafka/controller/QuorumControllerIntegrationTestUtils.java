@@ -128,7 +128,7 @@ public class QuorumControllerIntegrationTestUtils {
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")
                                 .setPort(9092 + brokerId)
-                            ).iterator()
+                            )
                         )
                     )
             ).get();

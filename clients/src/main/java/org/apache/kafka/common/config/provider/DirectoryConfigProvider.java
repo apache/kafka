@@ -32,7 +32,6 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Collections.emptyMap;
 
 /**
  * An implementation of {@link ConfigProvider} based on a directory of files.
@@ -87,7 +86,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
             throw new IllegalStateException("The provider has not been configured yet.");
         }
 
-        Map<String, String> map = emptyMap();
+        Map<String, String> map = Map.of();
 
         if (path != null && !path.isEmpty()) {
             Path dir = allowedPaths.parseUntrustedPath(path);

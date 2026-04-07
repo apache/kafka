@@ -1011,7 +1011,7 @@ public class ClassicGroupTest {
             new JoinGroupRequestProtocolCollection(List.of(
                 new JoinGroupRequestProtocol()
                     .setName("roundrobin")
-                    .setMetadata(new byte[0])).iterator())
+                    .setMetadata(new byte[0])))
         ));
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -1488,7 +1488,7 @@ public class ClassicGroupTest {
                     new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(protocols1.get(0).name())
                         .setMetadata(protocols1.get(0).metadata())
-                ).iterator()),
+                )),
                 Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
                     List.of(new TopicPartition(fooTopicName, 0))
                 )))
@@ -1507,7 +1507,7 @@ public class ClassicGroupTest {
                     new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(protocols2.get(0).name())
                         .setMetadata(protocols2.get(0).metadata())
-                ).iterator()),
+                )),
                 Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
                     List.of(new TopicPartition(fooTopicName, 1))
                 )))
@@ -1619,7 +1619,7 @@ public class ClassicGroupTest {
                     new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(protocols1.get(0).name())
                         .setMetadata(protocols1.get(0).metadata())
-                ).iterator()),
+                )),
                 Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
                     List.of(new TopicPartition(fooTopicName, 0))
                 )))

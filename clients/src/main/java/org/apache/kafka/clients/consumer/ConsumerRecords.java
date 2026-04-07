@@ -45,6 +45,14 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         this(records, Map.of());
     }
 
+    /**
+     * Constructs a new ConsumerRecords with the given records and next offsets.
+     *
+     * @param records The records for each partition
+     * @param nextOffsets The next offset and metadata for each partition whose position was advanced
+     *                    during the poll call. These represent the offsets that the consumer will
+     *                    start reading from on the next poll.
+     */
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
         this.records = records;
         this.nextOffsets = Map.copyOf(nextOffsets);
@@ -65,7 +73,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     /**
      * Get the next offsets and metadata corresponding to all topic partitions for which the position have been advanced in this poll call
-     * @return the next offsets that the consumer will consume
+     * @return The next offsets that the consumer will consume
      */
     public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
         return nextOffsets;
@@ -87,7 +95,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     /**
      * Get the partitions which have records contained in this record set.
-     * @return the set of partitions with data in this record set (may be empty if no data was returned)
+     * @return The set of partitions with data in this record set (may be empty if no data was returned)
      */
     public Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(records.keySet());
@@ -135,10 +143,22 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
     }
 
+    /**
+     * Returns whether this container has any records.
+     *
+     * @return True if there are no records, false otherwise
+     */
     public boolean isEmpty() {
         return records.isEmpty();
     }
 
+    /**
+     * Returns an empty ConsumerRecords instance.
+     *
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An empty ConsumerRecords
+     */
     @SuppressWarnings("unchecked")
     public static <K, V> ConsumerRecords<K, V> empty() {
         return (ConsumerRecords<K, V>) EMPTY;

@@ -31,33 +31,34 @@ Messages (aka Records) are always written in batches. The technical term for a b
 ## Record Batch
 
 The following is the on-disk format of a RecordBatch. 
-    
-    
-    baseOffset: int64
-    batchLength: int32
-    partitionLeaderEpoch: int32
-    magic: int8 (current magic value is 2)
-    crc: uint32
-    attributes: int16
-        bit 0~2:
-            0: no compression
-            1: gzip
-            2: snappy
-            3: lz4
-            4: zstd
-        bit 3: timestampType
-        bit 4: isTransactional (0 means not transactional)
-        bit 5: isControlBatch (0 means not a control batch)
-        bit 6: hasDeleteHorizonMs (0 means baseTimestamp is not set as the delete horizon for compaction)
-        bit 7~15: unused
-    lastOffsetDelta: int32
-    baseTimestamp: int64
-    maxTimestamp: int64
-    producerId: int64
-    producerEpoch: int16
-    baseSequence: int32
-    recordsCount: int32
-    records: [Record]
+
+```text
+baseOffset: int64
+batchLength: int32
+partitionLeaderEpoch: int32
+magic: int8 (current magic value is 2)
+crc: uint32
+attributes: int16
+    bit 0~2:
+        0: no compression
+        1: gzip
+        2: snappy
+        3: lz4
+        4: zstd
+    bit 3: timestampType
+    bit 4: isTransactional (0 means not transactional)
+    bit 5: isControlBatch (0 means not a control batch)
+    bit 6: hasDeleteHorizonMs (0 means baseTimestamp is not set as the delete horizon for compaction)
+    bit 7~15: unused
+lastOffsetDelta: int32
+baseTimestamp: int64
+maxTimestamp: int64
+producerId: int64
+producerEpoch: int16
+baseSequence: int32
+recordsCount: int32
+records: [Record]
+```
 
 Note that when compression is enabled, the compressed record data is serialized directly following the count of the number of records. 
 
@@ -74,37 +75,40 @@ Compaction may also modify the baseTimestamp if the record batch contains record
 A control batch contains a single record called the control record. Control records should not be passed on to applications. Instead, they are used by consumers to filter out aborted transactional messages.
 
 The key of a control record conforms to the following schema: 
-    
-    
-    version: int16 (current version is 0)
-    type: int16 (0 indicates an abort marker, 1 indicates a commit)
+
+```text
+version: int16 (current version is 0)
+type: int16 (0 indicates an abort marker, 1 indicates a commit)
+```
 
 The schema for the value of a control record is dependent on the type. The value is opaque to clients.
 
 ## Record
 
 The on-disk format of each record is delineated below. 
-    
-    
-    length: varint
-    attributes: int8
-        bit 0~7: unused
-    timestampDelta: varlong
-    offsetDelta: varint
-    keyLength: varint
-    key: byte[]
-    valueLength: varint
-    value: byte[]
-    headersCount: varint
-    Headers => [Header]
+
+```text
+length: varint
+attributes: int8
+    bit 0~7: unused
+timestampDelta: varlong
+offsetDelta: varint
+keyLength: varint
+key: byte[]
+valueLength: varint
+value: byte[]
+headersCount: varint
+Headers => [Header]
+```
 
 ### Record Header
-    
-    
-    headerKeyLength: varint
-    headerKey: String
-    headerValueLength: varint
-    Value: byte[]
+
+```text
+headerKeyLength: varint
+headerKey: String
+headerValueLength: varint
+Value: byte[]
+```
 
 The key of a record header is guaranteed to be non-null, while the value of a record header may be null. The order of headers in a record is preserved when producing and consuming.
 

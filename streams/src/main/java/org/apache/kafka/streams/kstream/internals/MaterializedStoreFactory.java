@@ -31,8 +31,10 @@ import java.util.Map;
 public abstract class MaterializedStoreFactory<K, V, S extends StateStore> extends AbstractConfigurableStoreFactory {
     protected final MaterializedInternal<K, V, S> materialized;
 
-    public MaterializedStoreFactory(final MaterializedInternal<K, V, S> materialized,
-                                    final DslStoreFormat defaultStoreFormat) {
+    public MaterializedStoreFactory(
+        final MaterializedInternal<K, V, S> materialized,
+        final DslStoreFormat defaultStoreFormat
+    ) {
         super(materialized.dslStoreSuppliers().orElse(null), defaultStoreFormat);
         this.materialized = materialized;
     }
@@ -83,7 +85,7 @@ public abstract class MaterializedStoreFactory<K, V, S extends StateStore> exten
     @Override
     public boolean isCompatibleWith(final StoreFactory storeFactory) {
         return (storeFactory instanceof MaterializedStoreFactory)
-                && ((MaterializedStoreFactory<?, ?, ?>) storeFactory).materialized.equals(materialized);
+            && ((MaterializedStoreFactory<?, ?, ?>) storeFactory).materialized.equals(materialized);
     }
 
 }

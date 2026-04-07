@@ -26,13 +26,9 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-class SessionCacheFlushListenerWithHeader<KOut, VOut>
-    implements CacheFlushListener<Windowed<KOut>, AggregationWithHeaders<VOut>> {
-
+class SessionCacheFlushListenerWithHeader<KOut, VOut> implements CacheFlushListener<Windowed<KOut>, AggregationWithHeaders<VOut>> {
     private final InternalProcessorContext<Windowed<KOut>, Change<VOut>> context;
-
-    @SuppressWarnings("rawtypes")
-    private final ProcessorNode myNode;
+    private final ProcessorNode<?, ?, ?, ?> myNode;
 
     SessionCacheFlushListenerWithHeader(final ProcessorContext<Windowed<KOut>, Change<VOut>> context) {
         this.context = (InternalProcessorContext<Windowed<KOut>, Change<VOut>>) context;
@@ -41,7 +37,7 @@ class SessionCacheFlushListenerWithHeader<KOut, VOut>
 
     @Override
     public void apply(final Record<Windowed<KOut>, Change<AggregationWithHeaders<VOut>>> record) {
-        @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
+        final ProcessorNode<?, ?, ?, ?> prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
             final VOut newValue = AggregationWithHeaders.getAggregationOrNull(record.value().newValue);

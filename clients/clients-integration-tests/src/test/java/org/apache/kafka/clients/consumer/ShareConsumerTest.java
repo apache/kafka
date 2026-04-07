@@ -48,8 +48,10 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
@@ -1299,6 +1301,145 @@ public class ShareConsumerTest {
         // Assert that close completes in less than 5 seconds, not the full 30-second timeout.
         assertTimeoutPreemptively(Duration.ofSeconds(5), () -> shareConsumer.close(),
             "Consumer close should not wait for full timeout when broker is already shut down");
+    }
+
+    @ClusterTest
+    public void testLeaderRestartWithoutLeadershipChangeExplicitAcknowledgementSync() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
+                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                callbackCalled.set(true);
+            });
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            producer.send(record);
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(20000));
+            assertEquals(1, records.count());
+            ConsumerRecord<byte[], byte[]> consumerRecord = records.iterator().next();
+
+            // Shutdown the broker
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+
+            broker.awaitShutdown();
+
+            // Restart the broker
+            cluster.startBroker(0);
+
+            shareConsumer.acknowledge(consumerRecord);
+            Map<TopicIdPartition, Optional<KafkaException>> commitResult = shareConsumer.commitSync(Duration.ofMillis(30000));
+            assertEquals(1, commitResult.size());
+            TopicIdPartition tidp = commitResult.keySet().iterator().next();
+            assertTrue(commitResult.get(tidp).isPresent());
+            assertInstanceOf(NotLeaderOrFollowerException.class, commitResult.get(tidp).get());
+
+            assertTrue(callbackCalled.get());
+        }
+    }
+
+    @ClusterTest
+    public void testLeaderRestartWithoutLeadershipChangeExplicitAcknowledgementAsync() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
+                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                callbackCalled.set(true);
+            });
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            producer.send(record);
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(20000));
+            assertEquals(1, records.count());
+            ConsumerRecord<byte[], byte[]> consumerRecord = records.iterator().next();
+
+            // Shutdown the broker
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+
+            broker.awaitShutdown();
+
+            // Restart the broker
+            cluster.startBroker(0);
+
+            shareConsumer.acknowledge(consumerRecord);
+            shareConsumer.commitAsync();
+
+            int maxRetries = 15;
+            int retries = 0;
+            while (retries < maxRetries) {
+                shareConsumer.poll(Duration.ofMillis(2000));
+                if (callbackCalled.get()) {
+                    break;
+                }
+                retries++;
+            }
+
+            assertTrue(callbackCalled.get());
+        }
+    }
+
+    @ClusterTest
+    public void testLeaderRestartWithoutLeadershipChangeImplicitAcknowledgement() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
+                assertInstanceOf(ShareSessionNotFoundException.class, exception);
+                callbackCalled.set(true);
+            });
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            producer.send(record);
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(20000));
+            assertEquals(1, records.count());
+
+            // Shutdown the broker
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+
+            broker.awaitShutdown();
+
+            // Restart the broker
+            cluster.startBroker(0);
+
+            int maxRetries = 15;
+            int retries = 0;
+            while (retries < maxRetries) {
+                shareConsumer.poll(Duration.ofMillis(2000));
+                if (callbackCalled.get()) {
+                    break;
+                }
+                retries++;
+            }
+
+            assertTrue(callbackCalled.get());
+        }
     }
 
     @ClusterTests({
@@ -4096,39 +4237,8 @@ public class ShareConsumerTest {
         // dynamically set and read back via describe configs.
         alterSharePartitionMaxRecordLocks("group1", "500");
 
-        // Verify the config is readable via describe configs.
-        try (Admin adminClient = createAdminClient()) {
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            assertDoesNotThrow(() ->
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
-                        Config config = configs.get(configResource);
-                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-                        return entry != null && entry.value().equals("500");
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
-        }
-
         // Verify the config can be updated dynamically.
         alterSharePartitionMaxRecordLocks("group1", "1000");
-
-        try (Admin adminClient = createAdminClient()) {
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            assertDoesNotThrow(() ->
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
-                        Config config = configs.get(configResource);
-                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-                        return entry != null && entry.value().equals("1000");
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
-        }
     }
 
     /**
@@ -4427,6 +4537,18 @@ public class ShareConsumerTest {
                 .all()
                 .get(60, TimeUnit.SECONDS), "Failed to alter configs");
         }
+
+        // This config is changed dynamically in tests, and we need it to have propagated before the test proceeds.
+        // Describing the config with a new admin client is not totally foolproof, but it's better than just
+        // altering the config and continuing.
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    Config config = adminClient.describeConfigs(List.of(configResource)).all().get().get(configResource);
+                    ConfigEntry entry = config.get(configKey);
+                    return entry != null && entry.value().equals(newValue);
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
+        }
     }
 
     private void alterShareAutoOffsetReset(String groupId, String newValue) {
@@ -4435,23 +4557,6 @@ public class ShareConsumerTest {
 
     private void alterShareDeliveryCountLimit(String groupId, String newValue) {
         alterShareGroupConfig(groupId, GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, newValue);
-
-        // This config is changed dynamically in tests, and we need it to have propagated before the test proceeds.
-        // Describing the config with a new admin client is not totally foolproof, but it's better than just
-        // altering the config and continuing.
-        try (Admin adminClient = createAdminClient()) {
-            ConfigResource groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-            assertDoesNotThrow(() ->
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        Config config = adminClient.describeConfigs(List.of(groupConfigResource)).all().get().get(groupConfigResource);
-                        ConfigEntry entry = config.get(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
-                        return entry != null && entry.value().equals(newValue);
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
-        }
     }
 
     private void alterShareIsolationLevel(String groupId, String newValue) {
