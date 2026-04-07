@@ -18,7 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.Set;
 import java.util.stream.Collectors;

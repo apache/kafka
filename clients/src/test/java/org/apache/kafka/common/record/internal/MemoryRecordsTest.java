@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter;
 import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;

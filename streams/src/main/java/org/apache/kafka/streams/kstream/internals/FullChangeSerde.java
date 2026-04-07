@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.nio.ByteBuffer;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
+import static org.apache.kafka.common.utils.internals.Utils.getNullableSizePrefixedArray;
 
 public final class FullChangeSerde<T> {
     private final Serde<T> inner;

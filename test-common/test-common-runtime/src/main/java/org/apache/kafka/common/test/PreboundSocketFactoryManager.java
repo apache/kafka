@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.test;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.ServerSocketFactory;
 
 import java.io.IOException;

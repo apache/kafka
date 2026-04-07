@@ -22,8 +22,8 @@ import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkEntry;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 
 public final class AlterLogDirTest extends TieredStorageTestHarness {
 

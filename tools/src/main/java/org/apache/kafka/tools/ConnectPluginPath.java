@@ -18,7 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.ClassLoaderFactory;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.function.Supplier;
 

@@ -20,7 +20,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicReference
 import kafka.utils.TestUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.test.{TestUtils => JTestUtils}

@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.common.utils.internals.Utils.getHost;
+import static org.apache.kafka.common.utils.internals.Utils.getPort;
 
 /**
  * Represents a user defined endpoint in a {@link org.apache.kafka.streams.KafkaStreams} application.

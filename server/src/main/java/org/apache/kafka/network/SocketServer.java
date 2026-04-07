@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.network;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.nio.channels.SocketChannel;
 import java.util.Set;

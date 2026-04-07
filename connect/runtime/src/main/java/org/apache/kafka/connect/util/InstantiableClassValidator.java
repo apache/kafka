@@ -18,7 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 public class InstantiableClassValidator implements ConfigDef.Validator {
 

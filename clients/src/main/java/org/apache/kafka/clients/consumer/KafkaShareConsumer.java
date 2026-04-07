@@ -45,7 +45,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.propsToMap;
+import static org.apache.kafka.common.utils.internals.Utils.propsToMap;
 
 /**
  * A client that consumes records from a Kafka cluster using a share group.

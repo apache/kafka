@@ -20,7 +20,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.concurrent.TimeUnit;

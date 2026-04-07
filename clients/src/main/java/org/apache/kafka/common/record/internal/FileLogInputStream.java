@@ -23,7 +23,7 @@ import org.apache.kafka.common.record.internal.AbstractLegacyRecordBatch.LegacyF
 import org.apache.kafka.common.record.internal.DefaultRecordBatch.DefaultFileChannelRecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

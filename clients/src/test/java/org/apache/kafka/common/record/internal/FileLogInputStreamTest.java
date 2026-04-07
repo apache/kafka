@@ -18,7 +18,7 @@ package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;

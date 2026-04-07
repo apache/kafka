@@ -33,8 +33,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.filterMap;
-import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.common.utils.internals.Utils.filterMap;
+import static org.apache.kafka.common.utils.internals.Utils.union;
 
 /**
  * All tasks contained by the Streams instance.

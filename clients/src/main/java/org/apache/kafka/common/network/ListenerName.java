@@ -18,7 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.Locale;
 import java.util.Objects;

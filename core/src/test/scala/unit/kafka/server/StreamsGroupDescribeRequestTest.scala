@@ -18,12 +18,12 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{StreamsGroupDescribeRequestData, StreamsGroupDescribeResponseData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{StreamsGroupDescribeRequest, StreamsGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api._
+import org.apache.kafka.common.utils.internals.Utils
 
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig

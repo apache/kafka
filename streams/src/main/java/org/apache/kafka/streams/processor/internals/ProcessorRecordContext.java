@@ -29,7 +29,7 @@ import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
+import static org.apache.kafka.common.utils.internals.Utils.getNullableSizePrefixedArray;
 
 public class ProcessorRecordContext implements RecordContext, RecordMetadata {
 

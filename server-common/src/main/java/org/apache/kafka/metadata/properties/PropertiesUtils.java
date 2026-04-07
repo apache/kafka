@@ -17,7 +17,7 @@
 
 package org.apache.kafka.metadata.properties;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.File;
 import java.io.FileOutputStream;

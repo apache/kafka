@@ -31,7 +31,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.KafkaRaftClient;

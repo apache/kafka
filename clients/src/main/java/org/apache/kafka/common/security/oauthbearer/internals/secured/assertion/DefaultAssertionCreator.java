@@ -18,7 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion
 
 import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

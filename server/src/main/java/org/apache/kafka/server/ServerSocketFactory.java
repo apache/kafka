@@ -19,7 +19,7 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.Selectable;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

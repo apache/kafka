@@ -62,7 +62,7 @@ import java.util.Properties;
 import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.common.utils.Utils.delete;
+import static org.apache.kafka.common.utils.internals.Utils.delete;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;

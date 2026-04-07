@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.internals.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.configProps;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;

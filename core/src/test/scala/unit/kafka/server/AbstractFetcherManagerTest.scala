@@ -22,7 +22,8 @@ import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochR
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.utils.{MockTime, Utils}
+import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics

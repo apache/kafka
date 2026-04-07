@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -73,15 +74,15 @@ import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
-import static org.apache.kafka.common.utils.Utils.diff;
-import static org.apache.kafka.common.utils.Utils.formatAddress;
-import static org.apache.kafka.common.utils.Utils.formatBytes;
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
-import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.apache.kafka.common.utils.Utils.murmur2;
-import static org.apache.kafka.common.utils.Utils.union;
-import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.apache.kafka.common.utils.internals.Utils.diff;
+import static org.apache.kafka.common.utils.internals.Utils.formatAddress;
+import static org.apache.kafka.common.utils.internals.Utils.formatBytes;
+import static org.apache.kafka.common.utils.internals.Utils.getHost;
+import static org.apache.kafka.common.utils.internals.Utils.getPort;
+import static org.apache.kafka.common.utils.internals.Utils.intersection;
+import static org.apache.kafka.common.utils.internals.Utils.murmur2;
+import static org.apache.kafka.common.utils.internals.Utils.union;
+import static org.apache.kafka.common.utils.internals.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;

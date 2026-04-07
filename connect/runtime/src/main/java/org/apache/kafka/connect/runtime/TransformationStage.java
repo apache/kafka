@@ -18,7 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.transforms.Transformation;

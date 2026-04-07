@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

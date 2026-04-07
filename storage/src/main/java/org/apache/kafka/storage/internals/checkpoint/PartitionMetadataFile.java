@@ -20,7 +20,7 @@ package org.apache.kafka.storage.internals.checkpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
 import java.io.BufferedReader;

@@ -18,7 +18,7 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.io.IOException;

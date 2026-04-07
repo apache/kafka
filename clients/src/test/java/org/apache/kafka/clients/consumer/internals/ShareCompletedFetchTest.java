@@ -44,7 +44,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.junit.jupiter.api.Test;
 
@@ -266,7 +266,7 @@ public class ShareCompletedFetchTest {
                 assertEquals(TOPIC_NAME, thrown.topicPartition().topic());
                 assertEquals(0, thrown.topicPartition().partition());
                 assertEquals(0, thrown.timestamp());
-                assertArrayEquals("key".getBytes(), org.apache.kafka.common.utils.Utils.toNullableArray(thrown.keyBuffer()));
+                assertArrayEquals("key".getBytes(), Utils.toNullableArray(thrown.keyBuffer()));
                 assertArrayEquals("value".getBytes(), Utils.toNullableArray(thrown.valueBuffer()));
                 assertEquals(0, thrown.headers().toArray().length);
                 fetchedRecords = batch.getInFlightRecords();

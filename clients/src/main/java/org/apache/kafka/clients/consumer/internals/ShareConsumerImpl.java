@@ -72,7 +72,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
@@ -106,9 +106,9 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createShareFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
-import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.swallow;
+import static org.apache.kafka.common.utils.internals.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.isBlank;
+import static org.apache.kafka.common.utils.internals.Utils.swallow;
 
 /**
  * This {@link ShareConsumer} implementation uses an {@link ApplicationEventHandler event handler} to process

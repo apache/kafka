@@ -25,7 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 import org.apache.kafka.server.LeaderEndPoint;
 import org.apache.kafka.server.PartitionFetchState;
 import org.apache.kafka.server.ReplicaState;

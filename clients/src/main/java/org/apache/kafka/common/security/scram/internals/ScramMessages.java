@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;

@@ -28,8 +28,9 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.utils.{MockTime, Utils}
+import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.serialization.{LongDeserializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Tag
 

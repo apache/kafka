@@ -17,7 +17,7 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;

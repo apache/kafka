@@ -24,13 +24,14 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.record.internal.{ControlRecordType, DefaultRecordBatch, MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MockConfigRepository
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.common.message.AbortedTxn
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.storage.internals.log.{CleanerConfig, EpochEntry, LocalLog, LogCleaner, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogManager, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats

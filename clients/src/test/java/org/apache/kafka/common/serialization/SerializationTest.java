@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Stack;
 import java.util.UUID;
 
-import static org.apache.kafka.common.utils.Utils.wrapNullable;
+import static org.apache.kafka.common.utils.internals.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;

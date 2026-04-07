@@ -42,8 +42,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.utils.Utils.formatAddress
+import org.apache.kafka.common.utils.internals.Utils
+import org.apache.kafka.common.utils.internals.Utils.formatAddress
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}

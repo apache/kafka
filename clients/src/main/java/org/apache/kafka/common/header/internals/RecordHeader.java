@@ -17,7 +17,7 @@
 package org.apache.kafka.common.header.internals;
 
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;

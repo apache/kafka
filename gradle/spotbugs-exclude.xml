@@ -266,7 +266,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
-        <Class name="org.apache.kafka.common.utils.Utils"/>
+        <Class name="org.apache.kafka.common.utils.internals.Utils"/>
         <Method name="murmur2"/>
         <Or>
             <Bug pattern="SF_SWITCH_NO_DEFAULT"/>

@@ -18,7 +18,7 @@
 package kafka.utils
 
 import com.typesafe.scalalogging.Logger
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.server.logger.LoggingController
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 

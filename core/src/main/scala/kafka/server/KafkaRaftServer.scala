@@ -21,7 +21,8 @@ import java.util.concurrent.CompletableFuture
 import kafka.utils.{Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.utils.{AppInfoParser, Time, Utils}
+import org.apache.kafka.common.utils.internals.Utils
+import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}

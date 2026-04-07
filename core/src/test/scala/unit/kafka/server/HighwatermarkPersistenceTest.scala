@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
@@ -26,6 +25,7 @@ import kafka.utils.TestUtils
 import kafka.cluster.Partition
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.internal.SimpleRecord
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.metadata.{KRaftMetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}

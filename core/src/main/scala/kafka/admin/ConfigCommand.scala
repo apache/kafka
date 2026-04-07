@@ -27,7 +27,8 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.common.utils.internals.Utils
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.{ConfigType, DynamicConfig, QuotaConfig}
 import org.apache.kafka.server.metrics.ClientMetricsConfigs

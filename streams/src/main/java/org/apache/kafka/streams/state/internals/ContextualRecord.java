@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
-import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
+import static org.apache.kafka.common.utils.internals.Utils.getNullableSizePrefixedArray;
 
 public class ContextualRecord {
     private final byte[] value;

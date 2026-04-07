@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.health;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Utils;
 
 import java.util.Map;
 import java.util.Objects;

@@ -43,9 +43,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.common.utils.internals.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.internals.Utils.getHost;
+import static org.apache.kafka.common.utils.internals.Utils.getPort;
 
 public final class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
