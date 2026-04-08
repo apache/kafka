@@ -460,26 +460,25 @@ public final class StoreQueryUtils {
         return rawVersionedRecord ->
             rawVersionedRecord.validTo().isPresent()
                 ? new VersionedRecord<>(
-                      // deserializeValue s only used via IQ, so it's ok to not pass any headers
-                      deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                      deserializer.deserialize(serdes.topic(), rawVersionedRecord.headers(), rawVersionedRecord.value()),
                       rawVersionedRecord.timestamp(),
-                      rawVersionedRecord.validTo().get()
+                      rawVersionedRecord.validTo().get(),
+                      rawVersionedRecord.headers()
                   )
                 : new VersionedRecord<>(
-                      // deserializeValue s only used via IQ, so it's ok to not pass any headers
-                      deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
-                      rawVersionedRecord.timestamp()
+                      deserializer.deserialize(serdes.topic(), rawVersionedRecord.headers(), rawVersionedRecord.value()),
+                      rawVersionedRecord.timestamp(),
+                      rawVersionedRecord.headers()
                   );
     }
 
     @SuppressWarnings("resource")
     public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes, final VersionedRecord<byte[]> rawVersionedRecord) {
         final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
-        // deserializeValue s only used via IQ, so it's ok to not pass any headers
-        final V value = valueDeserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value());
+        final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.headers(), rawVersionedRecord.value());
         return rawVersionedRecord.validTo().isPresent()
-            ? new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo().get())
-            : new VersionedRecord<>(value, rawVersionedRecord.timestamp());
+            ? new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo().get(), rawVersionedRecord.headers())
+            : new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.headers());
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile, final Position position) {
