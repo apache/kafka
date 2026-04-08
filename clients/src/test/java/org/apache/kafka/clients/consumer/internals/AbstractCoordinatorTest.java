@@ -1752,7 +1752,7 @@ public class AbstractCoordinatorTest {
             return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                     Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
                             .setName(PROTOCOL_NAME)
-                            .setMetadata(EMPTY_DATA.array())).iterator()
+                            .setMetadata(EMPTY_DATA.array()))
             );
         }
 

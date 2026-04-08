@@ -381,7 +381,7 @@ public class KafkaAdminClientTest {
                 new DescribeClusterBroker().
                     setBrokerId(2).
                     setHost("controller2.com").
-                    setPort(9092)).iterator())));
+                    setPort(9092)))));
         if (includeController) {
             assertNotNull(cluster.controller());
             assertEquals(0, cluster.controller().id());
@@ -600,8 +600,8 @@ public class KafkaAdminClientTest {
                             new OffsetDeleteResponsePartition()
                                 .setPartitionIndex(partition)
                                 .setErrorCode(error.code())
-                        ).iterator()))
-                ).collect(Collectors.toList()).iterator()))
+                        )))
+                ).collect(Collectors.toList())))
         );
     }
 
@@ -622,7 +622,7 @@ public class KafkaAdminClientTest {
     public static CreateTopicsResponse prepareCreateTopicsResponse(int throttleTimeMs, CreatableTopicResult... topics) {
         CreateTopicsResponseData data = new CreateTopicsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setTopics(new CreatableTopicResultCollection(Arrays.stream(topics).iterator()));
+            .setTopics(new CreatableTopicResultCollection(Arrays.asList(topics)));
         return new CreateTopicsResponse(data);
     }
 
@@ -635,7 +635,7 @@ public class KafkaAdminClientTest {
     public static DeleteTopicsResponse prepareDeleteTopicsResponse(int throttleTimeMs, DeletableTopicResult... topics) {
         DeleteTopicsResponseData data = new DeleteTopicsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setResponses(new DeletableTopicResultCollection(Arrays.stream(topics).iterator()));
+            .setResponses(new DeletableTopicResultCollection(Arrays.asList(topics)));
         return new DeleteTopicsResponse(data);
     }
 
@@ -854,7 +854,7 @@ public class KafkaAdminClientTest {
             .setTopics(topics)
             .setErrorCode(topLevelError.code())
             .setErrorMessage(topLevelError.message())
-            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)).iterator())));
+            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)))));
     }
 
     /**
@@ -2763,7 +2763,7 @@ public class KafkaAdminClientTest {
                             .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(singletonList(new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
                                     .setPartitionIndex(tp0.partition())
                                     .setErrorCode(Errors.NONE.code())
-                                    .setLowWatermark(3)).iterator()))).iterator()))), nodes.get(0));
+                                    .setLowWatermark(3)))))))), nodes.get(0));
 
             env.kafkaClient().disconnect(nodes.get(1).idString());
             env.kafkaClient().createPendingAuthenticationError(nodes.get(1), 100);
@@ -2820,7 +2820,7 @@ public class KafkaAdminClientTest {
                             .setPartitionIndex(myTopicPartition2.partition())
                             .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
                             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
-                    ).iterator())));
+                    ))));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
@@ -5983,15 +5983,15 @@ public class KafkaAdminClientTest {
                                 new OffsetDeleteResponsePartition()
                                     .setPartitionIndex(0)
                                     .setErrorCode(Errors.NONE.code())
-                            ).iterator())),
+                            ))),
                         new OffsetDeleteResponseTopic()
                             .setName("bar")
                             .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
                                 new OffsetDeleteResponsePartition()
                                     .setPartitionIndex(0)
                                     .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
-                            ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
+                            )))
+                    ).collect(Collectors.toList())))
                 )
             );
 
@@ -6028,15 +6028,15 @@ public class KafkaAdminClientTest {
                                     new OffsetDeleteResponsePartition()
                                         .setPartitionIndex(0)
                                         .setErrorCode(Errors.NONE.code())
-                                ).iterator())),
+                                ))),
                             new OffsetDeleteResponseTopic()
                                 .setName("bar")
                                 .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
                                     new OffsetDeleteResponsePartition()
                                         .setPartitionIndex(0)
                                         .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
-                                ).iterator()))
-                        ).collect(Collectors.toList()).iterator()))
+                                )))
+                        ).collect(Collectors.toList())))
                 )
             );
 
@@ -11427,7 +11427,7 @@ public class KafkaAdminClientTest {
                 new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(List.of(
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0), new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1))),
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
-                ).iterator())
+                ))
             );
 
             TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
@@ -11479,7 +11479,7 @@ public class KafkaAdminClientTest {
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0),
                         new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()).setErrorMessage("Topic authorization failed."))),
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
-                ).iterator())
+                ))
             );
 
             TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);

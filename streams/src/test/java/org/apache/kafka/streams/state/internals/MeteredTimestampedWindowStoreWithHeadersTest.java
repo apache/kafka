@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -252,7 +254,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     private static byte[] serializeValueTimestampHeaders() {
-        final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+        final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(new StringSerializer());
         return serializer.serialize("topic", VALUE_TIMESTAMP_HEADERS);
     }
 
@@ -264,15 +266,20 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
         final Serializer<ValueTimestampHeaders<String>> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
-        // For fetch: key serialization uses empty headers (no value context available)
-        when(keySerializer.serialize(topic, new RecordHeaders(), KEY)).thenReturn(KEY.getBytes());
         // For put: key serialization uses value's headers
         when(keySerializer.serialize(topic, HEADERS, KEY)).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-        when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_TIMESTAMP_HEADERS_BYTES)).thenReturn(VALUE_TIMESTAMP_HEADERS);
+        when(valueDeserializer.deserialize(topic, HEADERS, VALUE_TIMESTAMP_HEADERS_BYTES)).thenReturn(VALUE_TIMESTAMP_HEADERS);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         // For put: value serialization uses value's headers
         when(valueSerializer.serialize(topic, HEADERS, VALUE_TIMESTAMP_HEADERS)).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        context.setRecordContext(new ProcessorRecordContext(
+            0L,
+            0L,
+            0,
+            topic,
+            HEADERS
+        ));
         when(innerStoreMock.fetch(KEY_BYTES, TIMESTAMP)).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         store = new MeteredTimestampedWindowStoreWithHeaders<>(
             innerStoreMock,
@@ -324,7 +331,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUseHeadersFromValueToDeserializeKeyInFetchAll() {
         setUp();
 
@@ -351,7 +357,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUseHeadersFromValueToDeserializeKeyInAll() {
         setUp();
 
@@ -377,7 +382,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUseHeadersFromValueToDeserializeKeyInFetchRange() {
         setUp();
 
@@ -405,7 +409,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchAll() {
         setUp();
 
@@ -431,7 +434,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUseHeadersFromValueToDeserializeKeyInBackwardAll() {
         setUp();
 
@@ -457,7 +459,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchRange() {
         setUp();
 

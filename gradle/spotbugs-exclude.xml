@@ -494,6 +494,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
+            <Class name="org.apache.kafka.clients.consumer.internals.CompletedFetch"/>
             <Class name="org.apache.kafka.clients.producer.MockProducer"/>
             <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
             <Class name="org.apache.kafka.common.utils.ChunkedBytesStream"/>
@@ -529,6 +530,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
+            <Class name="org.apache.kafka.clients.consumer.internals.CompletedFetch"/>
             <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
             <Class name="org.apache.kafka.clients.producer.internals.RecordAccumulator"/>
             <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
@@ -573,6 +575,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.clients.consumer.internals.AbstractMembershipManager"/>
             <Class name="org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer"/>
             <Class name="org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer"/>
+            <Class name="org.apache.kafka.clients.consumer.internals.CompletedFetch"/>
             <Class name="org.apache.kafka.clients.consumer.internals.ConsumerCoordinator"/>
             <Class name="org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager"/>
             <Class name="org.apache.kafka.clients.consumer.internals.StreamsMembershipManager"/>

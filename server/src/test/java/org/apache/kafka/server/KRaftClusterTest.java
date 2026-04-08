@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -1777,11 +1776,6 @@ public class KRaftClusterTest {
         @Override
         public boolean quotaResetRequired(ClientQuotaType quotaType) {
             return true;
-        }
-
-        @Override
-        public boolean updateClusterMetadata(Cluster cluster) {
-            return false;
         }
 
         @Override

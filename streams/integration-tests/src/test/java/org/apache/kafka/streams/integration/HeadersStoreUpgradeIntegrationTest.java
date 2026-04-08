@@ -169,7 +169,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -222,7 +222,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -288,7 +288,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -341,7 +341,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentKeyValueStore(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -1563,7 +1563,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     private void setupAndPopulateKeyValueStoreWithHeaders(final Properties props) throws Exception {
         final StreamsBuilder headersBuilder = new StreamsBuilder();
         headersBuilder.addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.String(),
                     Serdes.String()))
@@ -1622,7 +1622,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder newBuilder = new StreamsBuilder();
         final AtomicReference<SessionWithHeadersProcessor> processorRef = new AtomicReference<>();
         newBuilder.addStateStore(
-                Stores.sessionStoreBuilderWithHeaders(
+                Stores.sessionStoreWithHeadersBuilder(
                     isPersistent ? Stores.persistentSessionStoreWithHeaders(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)) :
                         Stores.inMemorySessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.String(),
@@ -1680,7 +1680,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder newBuilder = new StreamsBuilder();
         final AtomicReference<SessionWithHeadersProcessor> processorRef = new AtomicReference<>();
         newBuilder.addStateStore(
-                Stores.sessionStoreBuilderWithHeaders(
+                Stores.sessionStoreWithHeadersBuilder(
                     Stores.persistentSessionStore(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),  // non-headers supplier!
                     Serdes.String(),
                     Serdes.String()))
@@ -1941,7 +1941,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final StreamsBuilder headersBuilder = new StreamsBuilder();
         final AtomicReference<SessionWithHeadersProcessor> processorRef = new AtomicReference<>();
         headersBuilder.addStateStore(
-                Stores.sessionStoreBuilderWithHeaders(
+                Stores.sessionStoreWithHeadersBuilder(
                     Stores.persistentSessionStoreWithHeaders(SESSION_STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.String(),
                     Serdes.String()))

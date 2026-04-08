@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
@@ -1142,7 +1143,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private final Logger logger;
         private volatile boolean isAllSegmentsValid = false;
         private volatile boolean metricsRegistered = false;
-        private final Map<String, String> metricTags = new HashMap<>();
+        private final Map<String, String> metricTags;
         private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
         private final AtomicInteger localRetentionSizeInPercentValue = new AtomicInteger(0);
 
@@ -1157,8 +1158,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         public RLMExpirationTask(TopicIdPartition topicIdPartition) {
             super(topicIdPartition);
             this.logger = getLogContext().logger(RLMExpirationTask.class);
-            metricTags.put("topic", topicIdPartition.topic());
-            metricTags.put("partition", Integer.toString(topicIdPartition.partition()));
+            this.metricTags = MetricsUtils.getTags("topic", topicIdPartition.topic(),
+                    "partition", Integer.toString(topicIdPartition.partition()));
         }
 
         // Visible for testing
