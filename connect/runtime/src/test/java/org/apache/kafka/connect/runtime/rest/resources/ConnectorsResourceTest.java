@@ -816,12 +816,10 @@ public class ConnectorsResourceTest {
             .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
-        Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        Map<String, Map<String, Object>> body = (Map<String, Map<String, Object>>) response.getEntity();
-        assertEquals(CONNECTOR_NAME, ((ActiveTopicsInfo) body.get(CONNECTOR_NAME)).connector());
+        Map<String, ActiveTopicsInfo> body = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
+        assertEquals(CONNECTOR_NAME, body.get(CONNECTOR_NAME).connector());
         assertEquals(new HashSet<>(CONNECTOR_ACTIVE_TOPICS),
-                ((ActiveTopicsInfo) body.get(CONNECTOR_NAME)).topics());
+                body.get(CONNECTOR_NAME).topics());
     }
 
     @Test
@@ -913,9 +911,8 @@ public class ConnectorsResourceTest {
             cb.getValue().onCompletion(null, msg);
             return null;
         }).when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
-        Response response = connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body);
-        assertEquals(200, response.getStatus());
-        assertEquals(msg, response.getEntity());
+        Message result = connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body);
+        assertEquals(msg, result);
     }
 
     @Test
@@ -945,9 +942,8 @@ public class ConnectorsResourceTest {
             cb.getValue().onCompletion(null, msg);
             return null;
         }).when(herder).resetConnectorOffsets(eq(CONNECTOR_NAME), cb.capture());
-        Response response = connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
-        assertEquals(200, response.getStatus());
-        assertEquals(msg, response.getEntity());
+        Message result = connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
+        assertEquals(msg, result);
     }
 
     private <T> Stubber expectAndCallbackResult(final ArgumentCaptor<Callback<T>> cb, final T value) {
