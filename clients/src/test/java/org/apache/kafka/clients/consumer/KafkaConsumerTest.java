@@ -4197,8 +4197,9 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
     }
 
-    @Test
-    public void testAsyncConsumerBootstrapResolutionExceptionPropagatedToPoll() throws InterruptedException {
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConsumerBootstrapResolutionExceptionPropagatedToPoll(GroupProtocol protocol) throws InterruptedException {
         // Use an invalid hostname that will fail DNS resolution
         String invalidHost = "invalid-host-that-does-not-exist-12345.example.com:9092";
 
@@ -4208,7 +4209,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
             CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
             // Set a short bootstrap timeout so the test doesn't take too long
             CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
-            ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer",
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name(),
             ConsumerConfig.GROUP_ID_CONFIG, "test-group"
         );
 

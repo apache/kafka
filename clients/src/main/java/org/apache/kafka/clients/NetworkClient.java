@@ -777,8 +777,9 @@ public class NetworkClient implements KafkaClient {
     @Override
     public LeastLoadedNode leastLoadedNode(long now) {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
-        if (nodes.isEmpty())
-            throw new IllegalStateException("There are no nodes in the Kafka cluster");
+        if (nodes.isEmpty()) {
+            return handleEmptyNodeList();
+        }
         int inflight = Integer.MAX_VALUE;
 
         Node foundConnecting = null;
@@ -838,6 +839,19 @@ public class NetworkClient implements KafkaClient {
             log.trace("Least loaded node selection failed to find an available node");
             return new LeastLoadedNode(null, atLeastOneConnectionReady);
         }
+    }
+
+    /**
+     * Handle the case when there are no nodes available.
+     * During bootstrap phase, return null node to allow DNS resolution to continue.
+     * After bootstrap, throw IllegalStateException.
+     */
+    private LeastLoadedNode handleEmptyNodeList() {
+        if (!metadataUpdater.isBootstrapped()) {
+            log.debug("No nodes available yet, still in bootstrap phase");
+            return new LeastLoadedNode(null, false);
+        }
+        throw new IllegalStateException("There are no nodes in the Kafka cluster");
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
@@ -1320,7 +1334,10 @@ public class NetworkClient implements KafkaClient {
             LeastLoadedNode leastLoadedNode = leastLoadedNode(now);
 
             // Rebootstrap if needed and configured.
+            // Only rebootstrap if we've already completed initial bootstrap - otherwise we're still
+            // in the initial DNS resolution phase and should let ensureBootstrapped() handle it.
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP
+                    && isBootstrapped()
                     && !leastLoadedNode.hasNodeAvailableOrConnectionReady()) {
                 rebootstrap(now);
 
@@ -1417,8 +1434,7 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public boolean isBootstrapped() {
-            // Check if we have nodes (either from bootstrap or real metadata)
-            // If we have nodes, we can skip DNS resolution
+            // We are bootstrapped if we have any nodes available (either from DNS resolution or metadata response)
             return !metadata.fetch().nodes().isEmpty();
         }
 

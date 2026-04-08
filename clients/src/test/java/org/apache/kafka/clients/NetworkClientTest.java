@@ -1562,10 +1562,13 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, config);
 
+        // First poll to initialize bootstrap timer
+        client.poll(10, time.milliseconds());
+
         // Advance time past bootstrap timeout
         time.sleep(150);
 
-        // Should throw BootstrapResolutionException
+        // Should throw BootstrapResolutionException on next poll
         assertThrows(BootstrapResolutionException.class, () -> client.poll(1000, time.milliseconds()));
     }
 
@@ -1587,11 +1590,11 @@ public class NetworkClientTest {
 
         // Directly call ensureBootstrapped
         // Should return without error even though bootstrap hasn't succeeded (will retry on next poll)
+        // DNS resolution will fail but timeout hasn't been reached yet
         client.ensureBootstrapped(time.milliseconds());
 
-        // Verify bootstrap has not succeeded yet
-        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
-        assertFalse(metadataUpdater.isBootstrapped());
+        // Verify that no exception was thrown and metadata is still empty
+        assertEquals(0, metadata.fetch().nodes().size(), "Metadata should have no nodes after failed DNS resolution");
     }
 
     @Test
