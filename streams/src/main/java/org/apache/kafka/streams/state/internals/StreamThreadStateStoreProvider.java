@@ -111,9 +111,6 @@ public class StreamThreadStateStoreProvider {
                     return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders());
                 } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
                     return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders());
-                } else {
-                    // For custom query types, return the raw store so they can access headers directly
-                    return (T) store;
                 }
             } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                 return (T) new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store, ValueConverters.extractValue());
@@ -122,17 +119,14 @@ public class StreamThreadStateStoreProvider {
                     return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders());
                 } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
                     return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders());
-                } else {
-                    // For custom query types, return the raw store so they can access headers directly
-                    return (T) store;
                 }
             } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                 return (T) new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store, ValueConverters.extractValue());
             } else if (store instanceof SessionStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
                 return (T) new ReadOnlySessionStoreFacade<>((SessionStoreWithHeaders<Object, Object>) store);
-            } else {
-                return (T) store;
             }
+
+            return (T) store;
         } else {
             throw new InvalidStateStoreException(
                 "Cannot get state store " + storeName +
