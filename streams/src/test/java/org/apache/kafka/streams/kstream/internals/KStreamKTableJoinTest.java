@@ -96,7 +96,9 @@ public class KStreamKTableJoinTest {
 
     @AfterEach
     public void cleanup() {
-        driver.close();
+        if (driver != null) {
+            driver.close();
+        }
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix) {
@@ -156,7 +158,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldFailIfTableIsNotVersioned(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -175,7 +176,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldFailIfTableIsNotVersionedButMaterializationIsInherited(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -198,7 +198,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotFailIfTableIsVersionedButMaterializationIsInherited(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -218,7 +217,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldFailIfGracePeriodIsLongerThanHistoryRetention(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -236,7 +234,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldFailIfGracePeriodIsLongerThanHistoryRetentionAndInheritedStore(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -319,7 +316,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldReuseRepartitionTopicWithGeneratedName(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -337,7 +333,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldCreateRepartitionTopicsWithUserProvidedName(final boolean withHeaders) {
-        setUp(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);

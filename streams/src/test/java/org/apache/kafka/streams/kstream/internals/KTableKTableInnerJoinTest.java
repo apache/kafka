@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -63,16 +64,8 @@ public class KTableKTableInnerJoinTest {
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized =
         Materialized.with(Serdes.Integer(), Serdes.String());
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
-
-    private Properties getProps(final boolean withHeaders) {
-        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        if (withHeaders) {
-            props.put(org.apache.kafka.streams.StreamsConfig.DSL_STORE_FORMAT_CONFIG,
-                     org.apache.kafka.streams.StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-        return props;
-    }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -170,7 +163,8 @@ public class KTableKTableInnerJoinTest {
 
         builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(withHeaders))) {
+        setDslStoreFormat(withHeaders);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -272,7 +266,8 @@ public class KTableKTableInnerJoinTest {
             null
         ).get();
 
-        final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(getProps(withHeaders));
+        setDslStoreFormat(withHeaders);
+        final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(props);
         context.setRecordMetadata("left", -1, -2);
         join.init(context);
 
@@ -294,7 +289,8 @@ public class KTableKTableInnerJoinTest {
                                            final KTable<Integer, String> joined,
                                            final boolean withHeaders) {
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(withHeaders))) {
+        setDslStoreFormat(withHeaders);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -391,7 +387,8 @@ public class KTableKTableInnerJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(withHeaders))) {
+        setDslStoreFormat(withHeaders);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -492,6 +489,14 @@ public class KTableKTableInnerJoinTest {
                                                final String expectedValue,
                                                final long expectedTimestamp) {
         assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+    }
+
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
+        }
     }
 
 }

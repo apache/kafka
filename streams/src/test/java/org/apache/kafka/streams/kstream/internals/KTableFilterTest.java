@@ -59,14 +59,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 @SuppressWarnings("unchecked")
 public class KTableFilterTest {
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
-    private Properties props;
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     private void setupProps(final boolean withHeaders) {
-        props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
         // disable caching at the config level
         props.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
         if (withHeaders) {
             props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 

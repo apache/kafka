@@ -54,8 +54,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -63,7 +62,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -81,12 +79,6 @@ public class KTableAggregateTest {
     private static final Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
-    public static Stream<Arguments> data() {
-        return Stream.of(
-            Arguments.of(false),
-            Arguments.of(true)
-        );
-    }
 
     private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
@@ -99,7 +91,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testAggBasic(final boolean withHeaders) {
         final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String topic1 = "topic1";
@@ -150,7 +142,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testAggRepartition(final boolean withHeaders) {
         final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String topic1 = "topic1";
@@ -292,7 +284,7 @@ public class KTableAggregateTest {
 
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testCount(final boolean withHeaders) {
         final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "count-test-input";
@@ -308,7 +300,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testCountWithInternalStore(final boolean withHeaders) {
         final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "count-test-input";
@@ -363,7 +355,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testRemoveOldBeforeAddNew(final boolean withHeaders) {
         final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "count-test-input";
@@ -441,7 +433,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testShouldSendTransientStateWhenUpgrading(final boolean withHeaders) {
         final Properties upgradingConfig = new Properties();
         upgradingConfig.putAll(CONFIG);
@@ -454,7 +446,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testShouldNotSendTransientStateIfNotUpgrading(final boolean withHeaders) {
         testUpgradeFromConfig(CONFIG, asList(
                 new KeyValueTimestamp<>("1", 1L, 8),
@@ -530,7 +522,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testNoEqualsAndNotSameObject(final boolean withHeaders) {
         testKeyWithNoEquals(
                 // key changes, different object reference (deserializer returns a new object reference)
@@ -545,7 +537,7 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @CsvSource({"true", "false"})
     public void testNoEqualsAndSameObject(final boolean withHeaders) {
         testKeyWithNoEquals(
                 // key does not change, same object reference

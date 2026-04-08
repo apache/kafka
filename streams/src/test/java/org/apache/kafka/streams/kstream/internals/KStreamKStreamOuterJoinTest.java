@@ -66,20 +66,14 @@ public class KStreamKStreamOuterJoinTest {
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Consumed<Integer, Long> consumed2 = Consumed.with(Serdes.Integer(), Serdes.Long());
+    private static final Properties PROPS = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    private Properties getProps(final boolean withHeaders) {
-        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-        return props;
-    }
 
     @SuppressWarnings("deprecation") // old join semantics; can be removed when `JoinWindows.of()` is removed
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testOuterJoinDuplicatesWithFixDisabledOldApi(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -97,7 +91,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -125,7 +119,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testOuterJoinDuplicates(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -143,7 +137,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -193,7 +187,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testLeftExpiredNonJoinedRecordsAreEmittedByTheLeftProcessor(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -211,7 +205,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -250,7 +244,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testLeftExpiredNonJoinedRecordsAreEmittedByTheRightProcessor(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -268,7 +262,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -307,7 +301,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testRightExpiredNonJoinedRecordsAreEmittedByTheLeftProcessor(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -325,7 +319,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -364,7 +358,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testRightExpiredNonJoinedRecordsAreEmittedByTheRightProcessor(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -382,7 +376,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -421,7 +415,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testOrdering(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -439,7 +433,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -473,7 +467,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testGracePeriod(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -497,7 +491,7 @@ public class KStreamKStreamOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -541,7 +535,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testEmitAllNonJoinedResultsForAsymmetricWindow(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -565,7 +559,7 @@ public class KStreamKStreamOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -671,7 +665,7 @@ public class KStreamKStreamOuterJoinTest {
     public void runOuterJoin(final StreamJoined<Integer, String, Long> streamJoined,
                              final JoinWindows joinWindows,
                              final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -697,7 +691,7 @@ public class KStreamKStreamOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -787,7 +781,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testWindowing(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -812,7 +806,7 @@ public class KStreamKStreamOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -851,7 +845,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testShouldNotEmitLeftJoinResultForAsymmetricBeforeWindow(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -870,7 +864,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -940,7 +934,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testShouldNotEmitLeftJoinResultForAsymmetricAfterWindow(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -959,7 +953,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -1034,7 +1028,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testShouldForwardCurrentHeaders(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -1052,7 +1046,7 @@ public class KStreamKStreamOuterJoinTest {
         );
         joined.process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
@@ -1461,7 +1455,7 @@ public class KStreamKStreamOuterJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testShouldJoinWithNonTimestampedStore(final boolean withHeaders) {
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final CapturingStoreSuppliers suppliers = new CapturingStoreSuppliers();
         final StreamJoined<Integer, String, String> streamJoined =
                 StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
@@ -1485,9 +1479,24 @@ public class KStreamKStreamOuterJoinTest {
         joined.process(supplier);
 
         // create a TTD so that the topology gets built
-        try (final TopologyTestDriver ignored = new TopologyTestDriver(builder.build(props), props)) {
+        try (final TopologyTestDriver ignored = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
             assertThat("Expected stream joined to supply builders that create non-timestamped stores",
                     !WrappedStateStore.isTimestamped(suppliers.capture.get().get()));
+        }
+    }
+
+    /**
+     * Configures the DSL store format to use headers if enabled.
+     * This is a helper method to reduce boilerplate in parameterized tests that test both
+     * with and without headers mode.
+     *
+     * @param withHeaders Whether to enable headers mode
+     */
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            PROPS.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            PROPS.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 }

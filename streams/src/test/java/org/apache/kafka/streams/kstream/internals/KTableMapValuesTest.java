@@ -55,14 +55,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-    private Properties props;
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    private void setupProps(final boolean withHeaders) {
-        props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-    }
 
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
@@ -84,7 +78,7 @@ public class KTableMapValuesTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testKTable(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -100,7 +94,7 @@ public class KTableMapValuesTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testQueryableKTable(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -188,7 +182,7 @@ public class KTableMapValuesTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testQueryableValueGetter(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName2 = "store2";
@@ -219,7 +213,7 @@ public class KTableMapValuesTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testNotSendingOldValue(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -262,7 +256,7 @@ public class KTableMapValuesTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldEnableSendingOldValuesOnParentIfMapValuesNotMaterialized(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -282,7 +276,7 @@ public class KTableMapValuesTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotEnableSendingOldValuesOnParentIfMapValuesMaterialized(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -340,6 +334,14 @@ public class KTableMapValuesTest {
             proc.checkAndClearProcessResult(
                 new KeyValueTimestamp<>("A", new Change<>(null, 3), 30)
             );
+        }
+    }
+
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 }

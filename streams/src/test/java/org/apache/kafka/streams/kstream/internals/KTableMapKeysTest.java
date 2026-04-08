@@ -40,19 +40,12 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KTableMapKeysTest {
-    private Properties props;
-
-    private void setupProps(final boolean withHeaders) {
-        props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-    }
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testMapKeysConvertingToStream(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic_map_keys";
 
@@ -85,6 +78,14 @@ public class KTableMapKeysTest {
         assertEquals(3, supplier.theCapturedProcessor().processed().size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed().get(i));
+        }
+    }
+
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 }

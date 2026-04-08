@@ -97,13 +97,6 @@ public class KStreamKStreamJoinTest {
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-
-    private void setupProps(final boolean withHeaders) {
-        props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-    }
     private final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(50), Duration.ofMillis(50));
     private final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
@@ -111,7 +104,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -143,7 +136,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldReuseRepartitionTopicWithGeneratedName(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -159,7 +152,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldCreateRepartitionTopicsWithUserProvidedName(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
@@ -178,7 +171,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldDisableLoggingOnStreamJoined(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), Duration.ofMillis(50));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
             .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
@@ -206,7 +199,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldEnableLoggingWithCustomConfigOnStreamJoined(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), Duration.ofMillis(50));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
             .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
@@ -243,7 +236,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowExceptionThisStoreSupplierRetentionDoNotMatchWindowsSizeAndGrace(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         // Case where retention of thisJoinStore doesn't match JoinWindows
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 500L, 100L, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150L, 100L, true);
@@ -258,7 +251,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowExceptionThisStoreSupplierWindowSizeDoesNotMatchJoinWindowsWindowSize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         //Case where window size of thisJoinStore doesn't match JoinWindows
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 150L, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150L, 100L, true);
@@ -273,7 +266,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowExceptionWhenThisJoinStoreSetsRetainDuplicatesFalse(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         //Case where thisJoinStore retain duplicates false
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, false);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150L, 100L, true);
@@ -288,7 +281,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowExceptionOtherStoreSupplierRetentionDoNotMatchWindowsSizeAndGrace(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         //Case where retention size of otherJoinStore doesn't match JoinWindows
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 500L, 100L, true);
@@ -303,7 +296,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowExceptionOtherStoreSupplierWindowSizeDoesNotMatchJoinWindowsWindowSize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         //Case where window size of otherJoinStore doesn't match JoinWindows
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150L, 150L, true);
@@ -318,7 +311,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowExceptionWhenOtherJoinStoreSetsRetainDuplicatesFalse(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         //Case where otherJoinStore retain duplicates false
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150L, 100L, false);
@@ -333,7 +326,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldBuildJoinWithCustomStoresAndCorrectWindowSettings(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         //Case where everything matches up
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -351,7 +344,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldExceptionWhenJoinStoresDoNotHaveUniqueNames(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), Duration.ofMillis(50L));
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150L, 100L, true);
@@ -367,7 +360,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldJoinWithCustomStoreSuppliers(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore(
@@ -410,7 +403,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldJoinWithDslStoreSuppliersIfNoStoreSupplied(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         TrackingDslStoreSuppliers.NUM_CALLS.set(0);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
 
@@ -448,7 +441,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldJoinWithDslStoreSuppliersFromStreamsConfig(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         TrackingDslStoreSuppliers.NUM_CALLS.set(0);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
 
@@ -476,7 +469,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldCreateCorrectWindowStoreTypeBasedOnConfiguration(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
 
         final CapturingStoreSuppliers storeSuppliers = new CapturingStoreSuppliers();
@@ -497,7 +490,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         /*
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
@@ -610,7 +603,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -734,7 +727,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testOuterJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -858,7 +851,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testWindowing(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -1423,7 +1416,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testAsymmetricWindowingAfter(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -1693,7 +1686,7 @@ public class KStreamKStreamJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testAsymmetricWindowingBefore(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -2109,4 +2102,19 @@ public class KStreamKStreamJoinTest {
             "      <-- KSTREAM-MERGE-0000000011\n" +
             "    Sink: KSTREAM-SINK-0000000021 (topic: out-to)\n" +
             "      <-- KSTREAM-MERGE-0000000020\n\n";
+
+    /**
+     * Configures the DSL store format to use headers if enabled.
+     * This is a helper method to reduce boilerplate in parameterized tests that test both
+     * with and without headers mode.
+     *
+     * @param withHeaders Whether to enable headers mode
+     */
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
+        }
+    }
 }

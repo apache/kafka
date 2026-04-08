@@ -73,6 +73,8 @@ public class TimeWindowedCogroupedKStreamImplTest {
     public void setup(final boolean withHeaders) {
         if (withHeaders) {
             props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
             .with(Serdes.String(), Serdes.String()));

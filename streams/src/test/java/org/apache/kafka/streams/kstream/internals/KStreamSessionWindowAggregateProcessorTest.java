@@ -103,14 +103,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     public static Stream<Arguments> data() {
         return Stream.of(
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true, false),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true, true),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false, false),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false, true),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, true, false),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, true, true),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, false, false),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, false, true)
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true),
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false),
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true),
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false)
         );
     }
 
@@ -194,8 +190,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldCreateSingleSessionWhenWithinGap(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldCreateSingleSessionWhenWithinGap(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         processor.process(new Record<>("john", "first", 0L));
         processor.process(new Record<>("john", "second", 500L));
 
@@ -208,8 +204,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldMergeSessions(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldMergeSessions(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         final String sessionId = "mel";
         processor.process(new Record<>(sessionId, "first", 0L));
         try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
@@ -239,8 +235,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldUpdateSessionIfTheSameTime(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldUpdateSessionIfTheSameTime(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         processor.process(new Record<>("mel", "first", 0L));
         processor.process(new Record<>("mel", "second", 0L));
         try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iterator =
@@ -252,12 +248,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
-        // This test expects caching behavior for accurate result counts
-        if (!enableCaching && !emitFinal) {
-            return;
-        }
+    public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
+
         final String sessionId = "mel";
         long now = 0;
         processor.process(new Record<>(sessionId, "first", now));
@@ -308,8 +301,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldRemoveMergedSessionsFromStateStore(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldRemoveMergedSessionsFromStateStore(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         processor.process(new Record<>("a", "1", 0L));
 
         // first ensure it is in the store
@@ -335,12 +328,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldHandleMultipleSessionsAndMerging(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
-        // This test expects caching behavior for accurate result counts
-        if (!enableCaching && !emitFinal) {
-            return;
-        }
+    public void shouldHandleMultipleSessionsAndMerging(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
+
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("b", "1", 0L));
         processor.process(new Record<>("c", "1", 0L));
@@ -412,8 +402,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldGetAggregatedValuesFromValueGetter(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldGetAggregatedValuesFromValueGetter(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
         getter.init(mockContext);
         processor.process(new Record<>("a", "1", 0L));
@@ -427,8 +417,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldImmediatelyForwardNewSessionWhenNonCachedStore(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldImmediatelyForwardNewSessionWhenNonCachedStore(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         if (emitFinal)
             return;
 
@@ -460,8 +450,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldImmediatelyForwardRemovedSessionsWhenMerging(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldImmediatelyForwardRemovedSessionsWhenMerging(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, true, withHeaders);
         if (emitFinal)
             return;
 
@@ -491,8 +481,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, false, withHeaders);
         mockContext.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
@@ -519,8 +509,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, false, withHeaders);
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(0L)),
             mockStoreFactory(STORE_NAME),
@@ -586,8 +576,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final EmitStrategy.StrategyType inputType, final boolean enableCaching, final boolean withHeaders) {
-        setup(inputType, enableCaching, withHeaders);
+    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final EmitStrategy.StrategyType inputType, final boolean withHeaders) {
+        setup(inputType, false, withHeaders);
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1L)),
             mockStoreFactory(STORE_NAME),

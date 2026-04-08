@@ -82,15 +82,16 @@ public class KTableImplTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
-    private Properties props;
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final Serde<String> mySerde = new Serdes.StringSerde();
 
     private KTable<String, String> table;
 
     private void setupProps(final boolean withHeaders) {
-        props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         if (withHeaders) {
             props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 

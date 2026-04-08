@@ -38,13 +38,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class KTableKTableRightJoinTest {
 
-    private Properties getProps(final boolean withHeaders) {
-        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-        return props;
-    }
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -58,7 +52,7 @@ public class KTableKTableRightJoinTest {
             null
         ).get();
 
-        final Properties props = getProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(props);
         context.setRecordMetadata("left", -1, -2);
@@ -74,6 +68,14 @@ public class KTableKTableRightJoinTest {
                     .collect(Collectors.toList()),
                 hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
             );
+        }
+    }
+
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 }
