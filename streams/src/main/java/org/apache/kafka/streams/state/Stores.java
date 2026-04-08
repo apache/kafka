@@ -712,12 +712,11 @@ public final class Stores {
      * @return an instance of {@link StoreBuilder} than can build a {@link SessionStoreWithHeaders}
      */
     public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreWithHeadersBuilder(
-            final SessionBytesStoreSupplier supplier,
-            final Serde<K> keySerde,
-            final Serde<V> valueSerde
+        final SessionBytesStoreSupplier supplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde
     ) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
-
 }

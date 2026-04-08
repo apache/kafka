@@ -1257,7 +1257,7 @@ public abstract class TopologyTestDriverTest {
             ),
             "processor");
         topology.addStateStore(
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 persistent
                     ? Stores.persistentTimestampedKeyValueStoreWithHeaders(timestampedKeyValueStoreWithHeadersName)
                     : Stores.inMemoryKeyValueStore(timestampedKeyValueStoreWithHeadersName),
@@ -1311,7 +1311,7 @@ public abstract class TopologyTestDriverTest {
             ),
             "processor");
         topology.addStateStore(
-            Stores.sessionStoreBuilderWithHeaders(
+            Stores.sessionStoreWithHeadersBuilder(
                 persistent
                     ? Stores.persistentSessionStoreWithHeaders(sessionStoreWithHeadersName, Duration.ofMillis(1000L))
                     : Stores.inMemorySessionStore(sessionStoreWithHeadersName, Duration.ofMillis(1000L)),
@@ -1349,7 +1349,7 @@ public abstract class TopologyTestDriverTest {
             "processorDummy2",
             voidProcessorSupplier);
         topology.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 persistent
                     ? Stores.persistentTimestampedKeyValueStoreWithHeaders(globalTimestampedKeyValueStoreWithHeadersName)
                     : Stores.inMemoryKeyValueStore(globalTimestampedKeyValueStoreWithHeadersName),
