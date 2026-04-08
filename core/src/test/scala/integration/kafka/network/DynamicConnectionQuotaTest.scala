@@ -29,7 +29,6 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{KafkaException, Uuid, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
@@ -81,7 +80,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Flaky("KAFKA-17999")
   @Test
   def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
@@ -105,7 +103,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val maxConnectionsPerIPOverride = 7
     props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride")
     reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride"))
-    waitForMaxConnectionsOverrideApplied("127.0.0.1", maxConnectionsPerIPOverride)
+    waitForMaxConnectionsOverrideApplied("localhost", maxConnectionsPerIPOverride)
 
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
