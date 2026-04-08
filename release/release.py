@@ -363,17 +363,28 @@ git.push_ref(rc_tag)
 git.push_ref(starting_branch)
 
 # Trigger Docker image build and test workflows via GitHub Actions
+print("\n=== Docker Image Workflows ===")
+if github.DRY_RUN:
+    print("NOTE: GITHUB_DRY_RUN is enabled. No actual API calls will be made.")
+if github.GITHUB_REPO != "apache/kafka":
+    print(f"NOTE: Using custom repository: {github.GITHUB_REPO}")
 if confirm("Trigger Docker image build workflows via GitHub Actions?"):
     github_token = preferences.get('github_token', lambda: prompt("Enter your GitHub personal access token (with 'actions' scope): "))
     kafka_url = f"https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}.tgz"
+    print(f"\nStep 1/2: Triggering Docker Build Test workflows for JVM and native images...")
     for image_type in ["jvm", "native"]:
         github.trigger_docker_build_test(github_token, dev_branch, image_type, kafka_url)
+    print("\nDocker Build Test workflows triggered successfully for both JVM and native images.")
     if confirm("Also trigger Docker RC release workflows to push RC images to DockerHub?"):
+        print(f"\nStep 2/2: Triggering Docker RC Release workflows for JVM and native images...")
         for image_type in ["jvm", "native"]:
             docker_image_name = "apache/kafka-native" if image_type == "native" else "apache/kafka"
             rc_docker_image = f"{docker_image_name}:{rc_tag}"
             github.trigger_docker_rc_release(github_token, dev_branch, image_type, rc_docker_image, kafka_url)
-    print(f"\nDocker workflow runs can be monitored at: https://github.com/apache/kafka/actions")
+        print("\nDocker RC Release workflows triggered successfully for both JVM and native images.")
+    print(f"\nAll Docker workflow runs can be monitored at: https://github.com/{github.GITHUB_REPO}/actions")
+else:
+    print("Skipping Docker image workflows.")
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 git.reset_hard_head()
