@@ -2,7 +2,7 @@
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="docs/images/kafka-logo-readme-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/kafka-logo-readme-dark.svg">
-  <img src="docs/images/kafka-logo-readme-light.svg" alt="Kafka Logo" width="50%"> 
+  <img src="docs/images/kafka-logo-readme-light.svg" alt="Kafka Logo" width="50%">
 </picture>
 </p>
 
@@ -13,7 +13,7 @@
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java versions 17 and 25. The `release` parameter in javac is set to `11` for the clients 
+We build and test Apache Kafka with Java versions 17 and 25. The `release` parameter in javac is set to `11` for the clients
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
 minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
 for the rest.
@@ -82,7 +82,7 @@ N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestRespons
 ### Running a particular unit/integration test with log4j output
 By default, there will be only a small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
 
-For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yaml#L35) in `clients/src/test/resources/log4j2.yaml` 
+For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yaml#L35) in `clients/src/test/resources/log4j2.yaml`
 to `level: INFO` and then run:
 
 ```bash
@@ -109,7 +109,7 @@ Generate coverage reports for the whole project:
 ./gradlew reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
 ```
 
-Generate coverage for a single module, i.e.: 
+Generate coverage for a single module, i.e.:
 
 ```bash
 ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
@@ -210,7 +210,7 @@ Please note for this to work you should create/update user maven settings (typic
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
                            https://maven.apache.org/xsd/settings-1.0.0.xsd">
-    ...                           
+    ...
     <servers>
        ...
        <server>
@@ -309,7 +309,7 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: maximum number of test processes to start in parallel. Defaults to the number of processors available to the JVM.
 * `maxScalacThreads`: maximum number of worker threads for the scalac backend. Defaults to the lowest of `8` and the number of processors
-available to the JVM. The value must be between 1 and 16 (inclusive). 
+available to the JVM. The value must be between 1 and 16 (inclusive).
 * `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard output and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
@@ -320,7 +320,7 @@ available to the JVM. The value must be between 1 and 16 (inclusive).
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
 varies, but 15-20% is a reasonable estimate).
-* `keepAliveMode`: configures the keep-alive mode for the Gradle compilation daemon - reuse improves start-up time. The values should 
+* `keepAliveMode`: configures the keep-alive mode for the Gradle compilation daemon - reuse improves start-up time. The values should
 be one of `daemon` or `session` (the default is `daemon`). `daemon` keeps the daemon alive until it's explicitly stopped while
 `session` keeps it alive until the end of the build session. This currently only affects the Scala compiler, see
 https://github.com/gradle/gradle/pull/21034 for a PR that attempts to do the same for the Java compiler.
@@ -360,3 +360,4 @@ Apache Kafka is interested in building the community; we would welcome any thoug
 
 To contribute follow the instructions here:
  * https://kafka.apache.org/contributing.html
+
