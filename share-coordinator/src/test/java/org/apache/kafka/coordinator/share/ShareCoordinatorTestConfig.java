@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
@@ -51,6 +51,7 @@ public class ShareCoordinatorTestConfig {
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_COMPRESSION_CODEC_CONFIG, String.valueOf(CompressionType.NONE.id));
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, "30000");  // 30 seconds
         configs.put(ShareCoordinatorConfig.COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, "10000");    // 10 seconds
+        configs.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "1048576");  // 1024 * 1024
         return configs;
     }
 

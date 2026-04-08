@@ -137,6 +137,7 @@ public class MetricsDuringTopicCreationDeletionTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private Gauge<Integer> getGauge(String metricName) {
         return KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
             .filter(entry -> entry.getKey().getName().endsWith(metricName))

@@ -16,22 +16,21 @@
 */
 package kafka.server
 
-import java.io.File
+import java.util
 import java.util.Properties
 import kafka.cluster.Partition
-import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogOffsetMetadata, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
@@ -63,7 +62,7 @@ class IsrExpirationTest {
   @BeforeEach
   def setUp(): Unit = {
     val logManager: LogManager = mock(classOf[LogManager])
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")

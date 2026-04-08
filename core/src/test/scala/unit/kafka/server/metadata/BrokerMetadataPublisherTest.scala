@@ -22,12 +22,11 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.LogManager
 import kafka.server.share.SharePartitionManager
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
@@ -35,16 +34,17 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.utils.Exit
-import org.apache.kafka.coordinator.common.runtime.{KRaftCoordinatorMetadataDelta, KRaftCoordinatorMetadataImage}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, DelegationTokenImage, FeaturesImage, MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance, ProducerIdsImage, ScramImage, TopicsImage}
 import org.apache.kafka.image.loader.LogDeltaManifest
-import org.apache.kafka.metadata.publisher.AclPublisher
+import org.apache.kafka.metadata.KRaftMetadataCache
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -124,7 +124,7 @@ class BrokerMetadataPublisherTest {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
       broker.brokerMetadataPublisher.dynamicConfigPublisher = publisher
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         assertEquals(0, numTimesReloadCalled.get())
         admin.incrementalAlterConfigs(singletonMap(
@@ -170,7 +170,7 @@ class BrokerMetadataPublisherTest {
       broker.sharedServer.loader.removeAndClosePublisher(broker.brokerMetadataPublisher).get(1, TimeUnit.MINUTES)
       broker.metadataPublishers.remove(broker.brokerMetadataPublisher)
       broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()
       } finally {
@@ -215,7 +215,9 @@ class BrokerMetadataPublisherTest {
     )
 
     val topicId = Uuid.randomUuid()
-    var delta = new MetadataDelta(MetadataImage.EMPTY)
+    var delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new TopicRecord()
       .setName(Topic.GROUP_METADATA_TOPIC_NAME)
       .setTopicId(topicId)
@@ -232,7 +234,9 @@ class BrokerMetadataPublisherTest {
     )
     val image = delta.apply(MetadataProvenance.EMPTY)
 
-    delta = new MetadataDelta(image)
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new RemoveTopicRecord()
       .setTopicId(topicId)
     )
@@ -292,7 +296,7 @@ class BrokerMetadataPublisherTest {
         .numBytes(42)
         .build())
 
-    verify(groupCoordinator).onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta))
+    verify(groupCoordinator).onMetadataUpdate(delta, image)
   }
 
   @Test
@@ -340,7 +344,9 @@ class BrokerMetadataPublisherTest {
     )
 
     // Share version 1 is getting passed to features delta.
-    val delta = new MetadataDelta(image)
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new FeatureLevelRecord().setName(ShareVersion.FEATURE_NAME).setFeatureLevel(1))
 
     metadataPublisher.onMetadataUpdate(
@@ -356,6 +362,6 @@ class BrokerMetadataPublisherTest {
     )
 
     // SharePartitionManager is receiving the latest changes.
-    verify(sharePartitionManager).onShareVersionToggle(any(), any())
+    verify(sharePartitionManager).onShareVersionToggle(any())
   }
 }

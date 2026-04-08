@@ -194,7 +194,7 @@ public class RocksDBMetricsRecorderTest {
         assertThrows(
             IllegalStateException.class,
             () -> recorder.init(
-                new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime()),
                 TASK_ID1
             )
         );

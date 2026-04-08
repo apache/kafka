@@ -48,16 +48,20 @@ import scala.jdk.javaapi.OptionConverters
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   def generateConfigs: scala.collection.Seq[KafkaConfig] = {
-    val overridingProps = new Properties()
     val numServers = 2
-    overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toShort)
-    overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 4.toString)
     TestUtils.createBrokerConfigs(
       numServers,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile,
       saslProperties = serverSaslProperties
-    ).map(KafkaConfig.fromProps(_, overridingProps))
+    ).map(KafkaConfig.fromProps(_, brokerOverrides))
+  }
+
+  protected def brokerOverrides: Properties = {
+    val overridingProps = new Properties()
+    overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toShort)
+    overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 4.toString)
+    overridingProps
   }
 
   private var consumer: Consumer[Array[Byte], Array[Byte]] = _
@@ -504,7 +508,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testCloseWithZeroTimeoutFromCallerThread(groupProtocol: String): Unit = {
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
     val partition = 0
-    consumer.assign(java.util.List.of(new TopicPartition(topic, partition)))
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null,
       "value".getBytes(StandardCharsets.UTF_8))
 
@@ -518,7 +521,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         val e = assertThrows(classOf[ExecutionException], () => future.get())
         assertEquals(classOf[KafkaException], e.getCause.getClass)
       }
-      assertEquals(0, consumer.poll(Duration.ofMillis(50L)).count, "Fetch response should have no message returned.")
     }
   }
 

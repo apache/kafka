@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -49,7 +51,7 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * Callback which is invoked when the Listener needs to load a snapshot.
+         * Callback which is invoked when the Listener needs to load a committed snapshot.
          * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
          * after consuming the reader.
          *
@@ -61,12 +63,24 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleLoadSnapshot(SnapshotReader<T> reader);
 
         /**
+         * Callback which is invoked when the Listener needs to load bootstrap snapshot.
+         * Bootstrap snapshots are uncommitted and are used to store and load the initial application state.
+         *
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * after consuming the reader.
+         *
+         * @param reader snapshot reader instance which must be iterated and closed
+         */
+        void handleLoadBootstrap(SnapshotReader<T> reader);
+
+        /**
          * Called on any change to leadership. This includes both when a leader is elected and
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
          * the implementation of this interface has caught up to the high-watermark through calls to
-         * {@link #handleLoadSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         * {@link #handleLoadSnapshot(SnapshotReader)}, {@link #handleLoadBootstrap(SnapshotReader)},
+         * and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.
@@ -128,6 +142,15 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return optional node id
      */
     OptionalInt nodeId();
+
+    /**
+     * Returns the node information for a given voter id and listener.
+     *
+     * @param id the id of the voter
+     * @param listenerName the name of the listener
+     * @return the node information if it exists, otherwise {@code Optional.empty()}
+     */
+    Optional<Node> voterNode(int id, ListenerName listenerName);
 
     /**
      * Prepare a list of records to be appended to the log.

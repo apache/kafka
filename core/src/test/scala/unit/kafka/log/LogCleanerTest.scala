@@ -18,17 +18,20 @@
 package kafka.log
 
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanedTransactionMetadata, Cleaner, CleanerConfig, CleanerStats, LocalLog, LogAppendInfo, LogCleaner, LogCleanerManager, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.common.message.AbortedTxn
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanedTransactionMetadata, Cleaner, CleanerConfig, CleanerStats, LocalLog, LogAppendInfo, LogCleaner, LogCleanerManager, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -68,7 +71,7 @@ class LogCleanerTest extends Logging {
 
   @AfterEach
   def teardown(): Unit = {
-    CoreUtils.swallow(time.scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => time.scheduler.shutdown())
     Utils.delete(tmpdir)
   }
 
@@ -387,11 +390,13 @@ class LogCleanerTest extends Logging {
     val appendProducer2 = appendTransactionalAsLeader(log, producerId2, producerEpoch)
 
     def abort(producerId: Long): Unit = {
-      log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.REPLICATION)
+      log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.REPLICATION,
+        RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN)
     }
 
     def commit(producerId: Long): Unit = {
-      log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.REPLICATION)
+      log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.REPLICATION,
+        RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN)
     }
 
     // Append some transaction data (offset range in parenthesis)
@@ -413,8 +418,8 @@ class LogCleanerTest extends Logging {
     assertEquals(20L, log.logEndOffset)
 
     val expectedAbortedTxns = util.List.of(
-      new AbortedTxn(producerId1, 8, 10, 11),
-      new AbortedTxn(producerId2, 11, 16, 17)
+      new AbortedTxn().setProducerId(producerId1).setFirstOffset(8).setLastOffset(10).setLastStableOffset(11),
+      new AbortedTxn().setProducerId(producerId2).setFirstOffset(11).setLastOffset(16).setLastStableOffset(17)
     )
 
     assertAllTransactionsComplete(log)
@@ -477,10 +482,13 @@ class LogCleanerTest extends Logging {
     appendProducer1(Seq(1, 2))
     appendProducer2(Seq(2, 3))
     appendProducer1(Seq(3, 4))
-    log.appendAsLeader(abortMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR)
-    log.appendAsLeader(commitMarker(pid2, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
+    log.appendAsLeader(commitMarker(pid2, producerEpoch), 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     appendProducer1(Seq(2))
-    log.appendAsLeader(commitMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     val abortedTransactions = log.collectAbortedTransactions(log.logStartOffset, log.logEndOffset)
 
@@ -518,11 +526,14 @@ class LogCleanerTest extends Logging {
     appendProducer2(Seq(5, 6))
     appendProducer3(Seq(6, 7))
     appendProducer1(Seq(7, 8))
-    log.appendAsLeader(abortMarker(pid2, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(pid2, producerEpoch), 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     appendProducer3(Seq(8, 9))
-    log.appendAsLeader(commitMarker(pid3, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(pid3, producerEpoch), 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     appendProducer1(Seq(9, 10))
-    log.appendAsLeader(abortMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     // we have only cleaned the records in the first segment
     val dirtyOffset = cleaner.clean(new LogToClean(log, 0L, log.activeSegment.baseOffset, false)).getKey
@@ -552,9 +563,11 @@ class LogCleanerTest extends Logging {
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     appendProducer(Seq(2))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     // cannot remove the marker in this pass because there are still valid records
@@ -563,7 +576,8 @@ class LogCleanerTest extends Logging {
     assertEquals(List(0, 2, 3, 4, 5), offsetsInLog(log))
 
     appendProducer(Seq(1, 3))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     // the first cleaning preserves the commit marker (at offset 3) since there were still records for the transaction
@@ -599,10 +613,12 @@ class LogCleanerTest extends Logging {
     val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(1))
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     appendProducer(Seq(2))
     appendProducer(Seq(2))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     cleaner.doClean(new LogToClean(log, 0L, log.activeSegment.baseOffset, false), largeTimestamp)
@@ -632,14 +648,16 @@ class LogCleanerTest extends Logging {
 
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}]
     producer2(Seq(2, 3)) // offsets 2, 3
-    log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 4
+    log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel()) // offset 4
     log.roll()
 
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}], [{2}, {3}, {Producer1: Commit}]
     //  {0, 1},              {2, 3},            {4},                   {5}, {6}, {7} ==> Offsets
     log.appendAsLeader(record(2, 2), 0) // offset 5
     log.appendAsLeader(record(3, 3), 0) // offset 6
-    log.appendAsLeader(commitMarker(1L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 7
+    log.appendAsLeader(commitMarker(1L, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel()) // offset 7
     log.roll()
 
     // first time through the records are removed
@@ -660,7 +678,8 @@ class LogCleanerTest extends Logging {
     // [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
     //  {1},                     {3},                     {4},                 {5}, {6}, {7},                 {8},            {9} ==> Offsets
     producer2(Seq(1)) // offset 8
-    log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 9
+    log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel()) // offset 9
     log.roll()
 
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
@@ -688,7 +707,8 @@ class LogCleanerTest extends Logging {
     val producerEpoch = 0.toShort
 
     // [{Producer1: Commit}, {2}, {3}]
-    log.appendAsLeader(commitMarker(1L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 1
+    log.appendAsLeader(commitMarker(1L, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel()) // offset 1
     log.appendAsLeader(record(2, 2), 0) // offset 2
     log.appendAsLeader(record(3, 3), 0) // offset 3
     log.roll()
@@ -723,7 +743,8 @@ class LogCleanerTest extends Logging {
     appendTransaction(Seq(1))
     log.roll()
 
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     // Both the record and the marker should remain after cleaning
@@ -745,7 +766,8 @@ class LogCleanerTest extends Logging {
     appendTransaction(Seq(1))
     log.roll()
 
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     // Both the batch and the marker should remain after cleaning. The batch is retained
@@ -774,9 +796,11 @@ class LogCleanerTest extends Logging {
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     appendProducer(Seq(3))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     // Aborted records are removed, but the abort marker is still preserved.
@@ -804,11 +828,13 @@ class LogCleanerTest extends Logging {
 
     val appendFirstTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch, 0, AppendOrigin.REPLICATION)
     appendFirstTransaction(Seq(1))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     val appendSecondTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch, 0, AppendOrigin.REPLICATION)
     appendSecondTransaction(Seq(2))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     log.appendAsLeader(record(1, 1), 0)
     log.appendAsLeader(record(2, 1), 0)
@@ -840,7 +866,8 @@ class LogCleanerTest extends Logging {
     val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(2, 3)) // batch last offset is 1
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     def assertAbortedTransactionIndexed(): Unit = {
@@ -1082,7 +1109,8 @@ class LogCleanerTest extends Logging {
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
 
     cleaner.clean(new LogToClean(log, 0L, log.activeSegment.baseOffset, false))
@@ -1116,15 +1144,11 @@ class LogCleanerTest extends Logging {
     val producerId1 = 1L
     val appendProducer = appendTransactionalAsLeader(log, producerId1, producerEpoch, leaderEpoch)
     appendProducer(Seq(1))
-    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     // Now we append one transaction with a key which conflicts with the COMMIT marker appended above
     def commitRecordKey(): ByteBuffer = {
-      val keySize = ControlRecordType.COMMIT.recordKey().sizeOf()
-      val key = ByteBuffer.allocate(keySize)
-      ControlRecordType.COMMIT.recordKey().writeTo(key)
-      key.flip()
-      key
+      ControlRecordType.COMMIT.recordKey()
     }
 
     val producerId2 = 2L
@@ -1136,7 +1160,8 @@ class LogCleanerTest extends Logging {
       new SimpleRecord(time.milliseconds(), commitRecordKey(), ByteBuffer.wrap("foo".getBytes))
     )
     log.appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT)
-    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     log.roll()
     assertEquals(List(0, 1, 2, 3), offsetsInLog(log))
 
@@ -1609,47 +1634,70 @@ class LogCleanerTest extends Logging {
   }
 
   @Test
-  def testSegmentWithOffsetOverflow(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
+  def testCleanedSegmentSizeOverflow(): Unit = {
+    // Put one record per source segment so each filterTo() call reads exactly one batch.
+    // After cleaning source segment 0 into currentCleaned, cleaning source segment 1 would push
+    // currentCleaned over maxCleanedSegmentSize, triggering overflow and
+    // rolling to a second cleaned segment.
     val logProps = new Properties()
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
-    logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 1000: java.lang.Integer)
-    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    LogTestUtils.initializeLogDirWithOverflowedSegment(dir)
+    log.appendAsLeader(record(0, 0), 0)
+    log.roll()
+    log.appendAsLeader(record(1, 1), 0)
+    log.roll()
 
-    val log = makeLog(config = config, recoveryPoint = Long.MaxValue)
-    val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
-      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
-    }
+    val sourceSegments = log.logSegments.asScala.take(2).toSeq
+    val singleBatchSize = sourceSegments.head.log.batches.asScala.map(_.sizeInBytes).max
+    // maxCleanedSize allows exactly 1 batch; adding a 2nd batch overflows.
+    val maxCleanedSize = singleBatchSize.toLong + 1L
 
-    val numSegmentsInitial = log.logSegments.size
-    val allKeys = LogTestUtils.keysInLog(log).toList
-    val expectedKeysAfterCleaning = new mutable.ArrayBuffer[Long]()
-
-    // pretend we want to clean every alternate key
+    // No deletions; both records are retained.
+    val cleaner = makeCleaner(Int.MaxValue, maxCleanedSegmentSize = maxCleanedSize)
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
-    for (k <- 1 until allKeys.size by 2) {
-      expectedKeysAfterCleaning += allKeys(k - 1)
-      offsetMap.put(key(allKeys(k)), Long.MaxValue)
-    }
 
-    // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
-    assertThrows(classOf[LogCleaningAbortedException], () =>
-      cleaner.cleanSegments(log, util.List.of(segmentWithOverflow), offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-        new CleanedTransactionMetadata, -1, segmentWithOverflow.readNextOffset)
-    )
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    assertEquals(allKeys, LogTestUtils.keysInLog(log))
-    assertFalse(LogTestUtils.hasOffsetOverflow(log))
+    // Before: sourceSegment0, sourceSegment1, activeSegment = 3 total
+    val segmentCountBefore = log.logSegments.size
 
-    // Clean each segment now that split is complete.
-    val upperBoundOffset = log.logSegments.asScala.last.readNextOffset
-    for (segmentToClean <- log.logSegments.asScala)
-      cleaner.cleanSegments(log, util.List.of(segmentToClean), offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-        new CleanedTransactionMetadata, -1, upperBoundOffset)
-    assertEquals(expectedKeysAfterCleaning, LogTestUtils.keysInLog(log))
-    assertFalse(LogTestUtils.hasOffsetOverflow(log))
+    cleaner.cleanSegments(log, sourceSegments.asJava, offsetMap, 0L,
+      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, sourceSegments.last.readNextOffset)
+
+    // With overflow, 2 source segments → 2 cleaned segments; net segment count unchanged.
+    // Without overflow, 2 source → 1 cleaned; net count would be segmentCountBefore - 1.
+    assertEquals(segmentCountBefore, log.logSegments.size)
+    assertEquals(List(0L, 1L), LogTestUtils.keysInLog(log).toList)
+    log.close()
+  }
+
+  @Test
+  def testCleanedSegmentOffsetOverflow(): Unit = {
+    // Put one record per source segment so each filterTo() call reads exactly one batch.
+    // After cleaning source segment 0 into currentCleaned (offset 0), cleaning source segment 1
+    // would push the offset range of currentCleaned over maxCleanedOffsetRange, triggering
+    // overflow and rolling to a second cleaned segment.
+    val logProps = new Properties()
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    log.appendAsLeader(record(0, 0), 0)
+    log.roll()
+    log.appendAsLeader(record(1, 1), 0)
+    log.roll()
+
+    val sourceSegments = log.logSegments.asScala.take(2).toSeq
+    // Allow an offset range of 0: after offset 0 is written, any record at offset > 0 overflows.
+    val cleaner = makeCleaner(Int.MaxValue, maxCleanedOffsetRange = 0L)
+    val offsetMap = new FakeOffsetMap(Int.MaxValue)
+
+    val segmentCountBefore = log.logSegments.size
+
+    cleaner.cleanSegments(log, sourceSegments.asJava, offsetMap, 0L,
+      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, sourceSegments.last.readNextOffset)
+
+    assertEquals(segmentCountBefore, log.logSegments.size,
+      "offset overflow should produce 2 cleaned segments, keeping total segment count the same")
+    assertEquals(List(0L, 1L), LogTestUtils.keysInLog(log).toList)
     log.close()
   }
 
@@ -2245,7 +2293,8 @@ class LogCleanerTest extends Logging {
     )
   }
 
-  private def makeCleaner(capacity: Int, checkDone: Consumer[TopicPartition] = _ => (), maxMessageSize: Int = 64*1024) =
+  private def makeCleaner(capacity: Int, checkDone: Consumer[TopicPartition] = _ => (), maxMessageSize: Int = 64*1024,
+                          maxCleanedSegmentSize: Long = Int.MaxValue, maxCleanedOffsetRange: Long = Int.MaxValue) =
     new Cleaner(0,
                 new FakeOffsetMap(capacity),
                 maxMessageSize,
@@ -2253,7 +2302,9 @@ class LogCleanerTest extends Logging {
                 0.75,
                 throttler,
                 time,
-                checkDone)
+                checkDone,
+                maxCleanedSegmentSize,
+                maxCleanedOffsetRange)
 
   private def writeToLog(log: UnifiedLog, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq)

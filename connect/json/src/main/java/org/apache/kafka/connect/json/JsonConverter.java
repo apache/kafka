@@ -23,7 +23,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -63,7 +62,7 @@ import java.util.Set;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
-public class JsonConverter implements Converter, HeaderConverter, Versioned {
+public class JsonConverter implements Converter, HeaderConverter {
 
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
@@ -152,8 +151,6 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 return switch (config.decimalFormat()) {
                     case NUMERIC -> JSON_NODE_FACTORY.numberNode(decimal);
                     case BASE64 -> JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
-                    default ->
-                        throw new DataException("Unexpected " + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + ": " + config.decimalFormat());
                 };
             }
 
@@ -224,7 +221,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
-    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages
+    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages for sink connector
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;

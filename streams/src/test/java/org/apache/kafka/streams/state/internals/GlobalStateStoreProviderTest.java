@@ -31,7 +31,9 @@ import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 
@@ -107,12 +109,28 @@ public class GlobalStateStoreProviderTest {
                     Duration.ofMillis(10L)),
                 Serdes.String(),
                 Serdes.String()).build());
+        stores.put(
+            "ts-kv-store-with-headers",
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                Stores.inMemoryKeyValueStore("ts-kv-store-with-headers"),
+                Serdes.String(),
+                Serdes.String()).build());
+        stores.put(
+            "ts-w-store-with-headers",
+            Stores.timestampedWindowStoreWithHeadersBuilder(
+                Stores.inMemoryWindowStore(
+                    "ts-w-store-with-headers",
+                    Duration.ofMillis(10L),
+                    Duration.ofMillis(2L),
+                    false),
+                Serdes.String(),
+                Serdes.String()).build());
 
         final InternalProcessorContext<?, ?> mockContext = mock(InternalProcessorContext.class);
         when(mockContext.applicationId()).thenReturn("appId");
         when(mockContext.metrics())
             .thenReturn(
-                new StreamsMetricsImpl(new Metrics(), "threadName", "processId", new MockTime())
+                new StreamsMetricsImpl(new Metrics(), "threadName", new MockTime())
             );
         when(mockContext.taskId()).thenReturn(new TaskId(0, 0));
         when(mockContext.appConfigs()).thenReturn(CONFIGS);
@@ -232,6 +250,59 @@ public class GlobalStateStoreProviderTest {
         assertEquals(1, stores.size());
         for (final ReadOnlySessionStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlySessionStore.class));
+        }
+    }
+
+    @Test
+    public void shouldReturnKeyValueStoreWithHeadersFacadeForHeadersAwareStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, String>> stores =
+            provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.keyValueStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyKeyValueStore<String, String> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnTimestampedKeyValueStoreWithHeadersFacadeForHeadersAwareStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnWindowStoreWithHeadersFacadeForHeadersAwareWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, String>> stores =
+            provider.stores("ts-w-store-with-headers", QueryableStoreTypes.windowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, String> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnTimestampedWindowStoreWithHeadersFacadeForHeadersAwareWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores("ts-w-store-with-headers", QueryableStoreTypes.timestampedWindowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
         }
     }
 }

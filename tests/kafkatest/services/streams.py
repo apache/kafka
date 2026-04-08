@@ -15,6 +15,7 @@
 
 import os.path
 import signal
+import uuid
 from . import streams_property
 from . import consumer_property
 from ducktape.services.service import Service
@@ -216,6 +217,8 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
                      'user_test_args3': user_test_args3,
                      'user_test_args4': user_test_args4}
         self.log_level = "DEBUG"
+        # Create a randomized state directory path to prevent test interference
+        self.state_dir = os.path.join(self.PERSISTENT_ROOT, str(uuid.uuid4()))
 
     @property
     def node(self):
@@ -299,7 +302,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def prop_file(self):
-        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
+        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.state_dir, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
         return cfg.render()
 
     def start_node(self, node):
@@ -339,7 +342,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
         self.UPGRADE_FROM = upgrade_from
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
                       streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
@@ -382,35 +385,6 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 
         return cmd
 
-class StreamsEosTestBaseService(StreamsTestBaseService):
-    """Base class for Streams EOS Test services providing some common settings and functionality"""
-
-    clean_node_enabled = True
-
-    def __init__(self, test_context, kafka, command, group_protocol):
-        super(StreamsEosTestBaseService, self).__init__(test_context,
-                                                        kafka,
-                                                        "org.apache.kafka.streams.tests.StreamsEosTest",
-                                                        command)
-        self.group_protocol = group_protocol
-
-    def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEE: "exactly_once_v2",
-                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
-                      "session.timeout.ms": "10000", # set back to 10s for tests. See KIP-735
-                      "group.protocol": self.group_protocol
-                      }
-
-        cfg = KafkaConfig(**properties)
-        return cfg.render()
-
-    def clean_node(self, node):
-        if self.clean_node_enabled:
-            super(StreamsEosTestBaseService, self).clean_node(node)
-
-
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
@@ -443,28 +417,6 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka, processing_guarantee, group_protocol = 'classic', num_threads = 3, replication_factor = 3):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, group_protocol, num_threads, replication_factor)
 
-class StreamsEosTestDriverService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run", "classic")
-
-class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process", group_protocol)
-
-class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex", group_protocol)
-
-class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify", group_protocol)
-
-
-class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex", group_protocol)
-
-
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
@@ -478,7 +430,7 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 processingMode)
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       # the old broker (< 2.4) does not support configuration replication.factor=-1
                       "replication.factor": 1,
@@ -578,7 +530,7 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
         self.JOIN_TOPIC = None
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       'topology.optimization': self.OPTIMIZED_CONFIG,
                       'input.topic': self.INPUT_TOPIC,
@@ -618,7 +570,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
 
     def prop_file(self):
         properties = self.extra_properties.copy()
-        properties[streams_property.STATE_DIR] = self.PERSISTENT_ROOT
+        properties[streams_property.STATE_DIR] = self.state_dir
         properties[streams_property.KAFKA_SERVERS] = self.kafka.bootstrap_servers()
 
         if self.UPGRADE_FROM is not None:
@@ -665,7 +617,7 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         self.AGGREGATION_TOPIC = None
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       'input.topic': self.INPUT_TOPIC,
                       'aggregation.topic': self.AGGREGATION_TOPIC,
@@ -689,7 +641,7 @@ class StaticMemberTestService(StreamsTestBaseService):
         self.GROUP_INSTANCE_ID = group_instance_id
         self.NUM_THREADS = num_threads
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.NUM_THREADS: self.NUM_THREADS,
                       consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
@@ -755,7 +707,7 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         return cmd
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       'source.topic': self.SOURCE_TOPIC,
                       'sink.topic': self.SINK_TOPIC,

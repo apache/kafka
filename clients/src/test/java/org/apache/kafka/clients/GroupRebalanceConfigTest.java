@@ -34,13 +34,14 @@ public class GroupRebalanceConfigTest {
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             new ConsumerConfig(Map.of(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer"
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
             )),
             protocolType
         );
         assertTrue(groupRebalanceConfig.rackId.isEmpty());
     }
-    
+
     @ParameterizedTest
     @EnumSource(value = GroupRebalanceConfig.ProtocolType.class, names = {"CONSUMER", "SHARE"})
     void testRackIdIsEmptyIfValueIsEmptyString(GroupRebalanceConfig.ProtocolType protocolType) {
@@ -48,7 +49,8 @@ public class GroupRebalanceConfigTest {
             new ConsumerConfig(Map.of(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
-                ConsumerConfig.CLIENT_RACK_CONFIG, ""
+                ConsumerConfig.CLIENT_RACK_CONFIG, "",
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
             )),
             protocolType
         );
@@ -62,7 +64,8 @@ public class GroupRebalanceConfigTest {
             new ConsumerConfig(Map.of(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer",
-                ConsumerConfig.CLIENT_RACK_CONFIG, "rack1"
+                ConsumerConfig.CLIENT_RACK_CONFIG, "rack1",
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
             )),
             protocolType
         );

@@ -44,7 +44,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +106,7 @@ public class StreamsStickyAssignorBenchmark {
         taskAssignor = new StickyTaskAssignor();
 
         Map<String, StreamsGroupMember> members = createMembers();
-        this.assignmentConfigs = Collections.singletonMap(
+        this.assignmentConfigs = Map.of(
             "num.standby.replicas",
             Integer.toString(standbyReplicas)
         );
@@ -138,7 +137,7 @@ public class StreamsStickyAssignorBenchmark {
         for (Map.Entry<String, AssignmentMemberSpec> member : groupSpec.members().entrySet()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 member.getKey(),
-                new MemberAssignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap())
+                new MemberAssignment(Map.of(), Map.of(), Map.of())
             );
 
             updatedMemberSpec.put(member.getKey(), new AssignmentMemberSpec(

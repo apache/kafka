@@ -134,6 +134,7 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
                 memberDescriptions.add(new MemberDescription(
                     groupMember.memberId(),
                     Optional.ofNullable(groupMember.groupInstanceId()),
+                    Optional.empty(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new MemberAssignment(partitions),

@@ -26,7 +26,6 @@ import com.yammer.metrics.core.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -57,7 +56,7 @@ public class DelayedDeleteRecords extends DelayedOperation {
                                 Consumer<Map<TopicPartition, DeleteRecordsPartitionResult>> responseCallback) {
         super(delayMs);
         this.onAcksPending = onAcksPending;
-        this.deleteRecordsStatus = Collections.unmodifiableMap(deleteRecordsStatus);
+        this.deleteRecordsStatus = Map.copyOf(deleteRecordsStatus);
         this.responseCallback = responseCallback;
         // first update the acks pending variable according to the error code
         deleteRecordsStatus.forEach((topicPartition, status) -> {

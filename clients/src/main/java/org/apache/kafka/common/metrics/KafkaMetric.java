@@ -20,6 +20,8 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.Objects;
+
 public final class KafkaMetric implements Metric {
 
     private final MetricName metricName;
@@ -41,9 +43,7 @@ public final class KafkaMetric implements Metric {
             MetricConfig config, Time time) {
         this.metricName = metricName;
         this.lock = lock;
-        if (!(valueProvider instanceof Measurable) && !(valueProvider instanceof Gauge))
-            throw new IllegalArgumentException("Unsupported metric value provider of class " + valueProvider.getClass());
-        this.metricValueProvider = valueProvider;
+        this.metricValueProvider = Objects.requireNonNull(valueProvider, "valueProvider must not be null");
         this.config = config;
         this.time = time;
     }
@@ -67,20 +67,15 @@ public final class KafkaMetric implements Metric {
     }
 
     /**
-     * Take the metric and return the value, which could be a {@link Measurable} or a {@link Gauge}
+     * Take the metric and return the value via {@link MetricValueProvider#value(MetricConfig, long)}.
+     *
      * @return Return the metric value
-     * @throws IllegalStateException if the underlying metric is not a {@link Measurable} or a {@link Gauge}.
      */
     @Override
     public Object metricValue() {
         long now = time.milliseconds();
         synchronized (this.lock) {
-            if (isMeasurable())
-                return ((Measurable) metricValueProvider).measure(config, now);
-            else if (this.metricValueProvider instanceof Gauge)
-                return ((Gauge<?>) metricValueProvider).value(config, now);
-            else
-                throw new IllegalStateException("Not a valid metric: " + this.metricValueProvider.getClass());
+            return metricValueProvider.value(config, now);
         }
     }
 

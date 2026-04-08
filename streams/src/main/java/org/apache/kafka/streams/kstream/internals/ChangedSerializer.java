@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
@@ -58,16 +58,6 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         }
 
         switch (UpgradeFromValues.fromString((String) upgradeFrom)) {
-            case UPGRADE_FROM_0100:
-            case UPGRADE_FROM_0101:
-            case UPGRADE_FROM_0102:
-            case UPGRADE_FROM_0110:
-            case UPGRADE_FROM_10:
-            case UPGRADE_FROM_11:
-            case UPGRADE_FROM_20:
-            case UPGRADE_FROM_21:
-            case UPGRADE_FROM_22:
-            case UPGRADE_FROM_23:
             case UPGRADE_FROM_24:
             case UPGRADE_FROM_25:
             case UPGRADE_FROM_26:
@@ -144,7 +134,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
 
     @Override
     public byte[] serialize(final String topic, final Change<T> data) {
-        return serialize(topic, null, data);
+        throw new UnsupportedOperationException("ChangedSerializer requires the headers-aware version of serialize");
     }
 
     @Override

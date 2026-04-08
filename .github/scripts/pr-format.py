@@ -18,12 +18,13 @@ from io import BytesIO
 import json
 import logging
 import os
+import re
 import subprocess
 import shlex
 import sys
 import tempfile
 import textwrap
-from typing import Dict, Optional, TextIO
+from typing import Dict, List, Optional, TextIO
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -103,6 +104,73 @@ def split_paragraphs(text: str):
     yield paragraph, markdown
 
 
+def resolve_reviewer(login: str) -> tuple:
+    """Map a GitHub login to (name, email).
+
+    Tries the repo commit history first, then falls back to the GitHub user profile.
+    If the display name is unavailable, the login is used as the name.
+    If the email is unavailable, '{login}@email-not-found' is used as a placeholder.
+    """
+    name = None
+    email = None
+
+    # Tier 1: find from repo commit history
+    try:
+        cmd = f"gh api repos/apache/kafka/commits?author={login}&per_page=1"
+        p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+        if p.returncode == 0:
+            commits = json.loads(p.stdout)
+            if commits:
+                author = commits[0].get("commit", {}).get("author", {})
+                name = author.get("name")
+                email = author.get("email")
+    except Exception as e:
+        logger.debug(f"Failed to resolve {login} from commit history: {e}")
+
+    # Tier 2: GitHub user profile
+    if not name or not email:
+        try:
+            cmd = f"gh api users/{login}"
+            p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+            if p.returncode == 0:
+                user = json.loads(p.stdout)
+                if not name:
+                    name = user.get("name")
+                if not email:
+                    email = user.get("email")
+        except Exception as e:
+            logger.debug(f"Failed to resolve {login} from GitHub profile: {e}")
+
+    if not name:
+        name = login
+
+    if not email:
+        email = f"{login}@email-not-found"
+
+    return (name, email)
+
+
+def already_exists(email: str, existing_reviewers: List[str]) -> bool:
+    """Check if a reviewer with the given email is already in the existing reviewers list."""
+    existing_emails = re.findall(r'<(.+?)>', ", ".join(existing_reviewers))
+    return email.lower() in [e.lower() for e in existing_emails]
+
+
+def update_reviewers_trailer(body: str, trailer: str) -> str:
+    """Update the Reviewers trailer in the body using git interpret-trailers."""
+    with tempfile.NamedTemporaryFile() as fp:
+        fp.write(body.strip().encode())
+        fp.write(b"\n")
+        fp.flush()
+        cmd = f"git interpret-trailers --if-exists replace --trailer {shlex.quote(trailer)} {fp.name}"
+        p = subprocess.run(shlex.split(cmd), capture_output=True)
+        fp.close()
+
+    if p.returncode == 0:
+        return p.stdout.decode()
+    return body
+
+
 if __name__ == "__main__":
     """
     This script performs some basic linting of our PR titles and body. The PR number is read from the PR_NUMBER
@@ -123,7 +191,7 @@ if __name__ == "__main__":
     """
 
     pr_number = get_env("PR_NUMBER")
-    cmd = f"gh pr view {pr_number} --json 'title,body,reviews'"
+    cmd = f"gh pr view {pr_number} --json 'title,body,reviews,author'"
     p = subprocess.run(shlex.split(cmd), capture_output=True)
     if p.returncode != 0:
         logger.error(f"GitHub CLI failed with exit code {p.returncode}.\nSTDOUT: {p.stdout.decode()}\nSTDERR:{p.stderr.decode()}")
@@ -133,6 +201,19 @@ if __name__ == "__main__":
     title = gh_json["title"]
     body = gh_json["body"]
     reviews = gh_json["reviews"]
+
+    # Auto-fill reviewer from the current review event.
+    # Approvals are also review events, so approvers are automatically added.
+    reviewer_login = get_env("REVIEWER_LOGIN")
+    pr_author = (gh_json.get("author") or {}).get("login")
+    if reviewer_login and reviewer_login != pr_author:
+        existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
+        name, email = resolve_reviewer(reviewer_login)
+        if not already_exists(email, existing_reviewers):
+            existing_value = ", ".join(existing_reviewers)
+            resolved = f"{name} <{email}>"
+            new_value = f"{existing_value}, {resolved}" if existing_value else resolved
+            body = update_reviewers_trailer(body, f"Reviewers: {new_value}")
 
     checks = [] # (bool (0=ok, 1=error), message)
 

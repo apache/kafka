@@ -62,7 +62,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -124,8 +124,6 @@ import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Rebala
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -189,9 +187,9 @@ public abstract class ConsumerCoordinatorTest {
             new IllegalStateException("Illegal state for assignment!"),
             "throw-fatal-error-on-assignment-assignor");
         this.assignors = Arrays.asList(partitionAssignor, throwOnAssignmentAssignor, throwFatalErrorOnAssignmentAssignor);
-        this.assignorMap = mkMap(mkEntry(partitionAssignor.name(), partitionAssignor),
-            mkEntry(throwOnAssignmentAssignor.name(), throwOnAssignmentAssignor),
-            mkEntry(throwFatalErrorOnAssignmentAssignor.name(), throwFatalErrorOnAssignmentAssignor));
+        this.assignorMap = Map.of(partitionAssignor.name(), partitionAssignor,
+            throwOnAssignmentAssignor.name(), throwOnAssignmentAssignor,
+            throwFatalErrorOnAssignmentAssignor.name(), throwFatalErrorOnAssignmentAssignor);
     }
 
     @BeforeEach
@@ -224,8 +222,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupInstanceId,
                                         rackId,
                                         retryBackoffMs,
-                                        retryBackoffMaxMs,
-                                        groupInstanceId.isEmpty());
+                                        retryBackoffMaxMs);
     }
 
     @AfterEach
@@ -568,13 +565,13 @@ public abstract class ConsumerCoordinatorTest {
         assertFalse(client.hasInFlightRequests());
 
         // should try to find coordinator since we are commit async
-        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), (offsets, exception) -> {
-            fail("Commit should not get responses, but got offsets:" + offsets + ", and exception:" + exception);
-        });
+        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), (offsets, exception) ->
+            fail("Commit should not get responses, but got offsets:" + offsets + ", and exception:" + exception)
+        );
         coordinator.poll(time.timer(0));
         assertTrue(coordinator.coordinatorUnknown());
         assertTrue(client.hasInFlightRequests());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
 
         client.respond(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.poll(time.timer(0));
@@ -582,7 +579,7 @@ public abstract class ConsumerCoordinatorTest {
         // after we've discovered the coordinator we should send
         // out the commit request immediately
         assertTrue(client.hasInFlightRequests());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 1);
+        assertEquals(1, coordinator.inFlightAsyncCommits.get());
     }
 
     @Test
@@ -619,13 +616,13 @@ public abstract class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(100L)), "expected sync commit to fail");
         assertFalse(committed.get());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 1);
+        assertEquals(1, coordinator.inFlightAsyncCommits.get());
 
         prepareOffsetCommitRequest(singletonMap(tp, 123L), Errors.NONE);
 
         assertTrue(coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(Long.MAX_VALUE)), "expected sync commit to succeed");
         assertTrue(committed.get(), "expected commit callback to be invoked");
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
     }
 
     @Test
@@ -646,13 +643,13 @@ public abstract class ConsumerCoordinatorTest {
                     "Unexpected exception cause type: " + (cause == null ? null : cause.getClass()));
             });
         }
-        assertEquals(coordinator.inFlightAsyncCommits.get(), numRequests);
+        assertEquals(numRequests, coordinator.inFlightAsyncCommits.get());
 
         coordinator.markCoordinatorUnknown("test cause");
         consumerClient.pollNoWakeup();
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(numRequests, responses.get());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
     }
 
     @Test
@@ -697,7 +694,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.markCoordinatorUnknown("test cause");
         consumerClient.pollNoWakeup();
         assertTrue(asyncCallbackInvoked.get());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
     }
 
     @Test
@@ -1479,7 +1476,7 @@ public abstract class ConsumerCoordinatorTest {
     @Test
     public void testRebalanceWithMetadataChange() {
         MetadataResponse metadataResponse1 = RequestTestUtils.metadataUpdateWith(1,
-                Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1)));
+                Map.of(topic1, 1, topic2, 1));
         MetadataResponse metadataResponse2 = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1));
         verifyRebalanceWithMetadataChange(Optional.empty(), partitionAssignor, metadataResponse1, metadataResponse2, true);
     }
@@ -2006,9 +2003,9 @@ public abstract class ConsumerCoordinatorTest {
         // the leader is responsible for picking up metadata changes and forcing a group rebalance.
         // note that `MockPartitionAssignor.prepare` is not called therefore calling `MockPartitionAssignor.assign`
         // will throw a IllegalStateException. this indirectly verifies that `assign` is correctly skipped.
-        Map<String, List<String>> memberSubscriptions = mkMap(
-            mkEntry(consumerId, singletonList(topic1)),
-            mkEntry(consumerId2, singletonList(topic2))
+        Map<String, List<String>> memberSubscriptions = Map.of(
+            consumerId, List.of(topic1),
+            consumerId2, List.of(topic2)
         );
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE, Optional.empty()));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
@@ -2350,7 +2347,7 @@ public abstract class ConsumerCoordinatorTest {
         MockCommitCallback secondCommitCallback = new MockCommitCallback();
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), firstCommitCallback);
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), secondCommitCallback);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 2);
+        assertEquals(2, coordinator.inFlightAsyncCommits.get());
 
         respondToOffsetCommitRequest(singletonMap(t1p, 100L), error);
         consumerClient.pollNoWakeup();
@@ -2360,7 +2357,7 @@ public abstract class ConsumerCoordinatorTest {
         assertTrue(coordinator.coordinatorUnknown());
         assertInstanceOf(RetriableCommitFailedException.class, firstCommitCallback.exception);
         assertInstanceOf(RetriableCommitFailedException.class, secondCommitCallback.exception);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
     }
 
     @Test
@@ -2549,7 +2546,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), mockOffsetCommitCallback);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
         assertNull(mockOffsetCommitCallback.exception);
@@ -2580,7 +2577,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), callback(success));
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertTrue(success.get());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
     }
 
     @Test
@@ -2590,7 +2587,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_NOT_AVAILABLE);
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), mockOffsetCommitCallback);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
         assertInstanceOf(RetriableCommitFailedException.class, mockOffsetCommitCallback.exception);
@@ -2605,7 +2602,7 @@ public abstract class ConsumerCoordinatorTest {
         MockCommitCallback cb = new MockCommitCallback();
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_NOT_AVAILABLE);
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), cb);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         coordinator.invokeCompletedOffsetCommitCallbacks();
 
         assertTrue(coordinator.coordinatorUnknown());
@@ -2622,7 +2619,7 @@ public abstract class ConsumerCoordinatorTest {
         MockCommitCallback cb = new MockCommitCallback();
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NOT_COORDINATOR);
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), cb);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         coordinator.invokeCompletedOffsetCommitCallbacks();
 
         assertTrue(coordinator.coordinatorUnknown());
@@ -2639,7 +2636,7 @@ public abstract class ConsumerCoordinatorTest {
         MockCommitCallback cb = new MockCommitCallback();
         prepareOffsetCommitRequestDisconnect(singletonMap(t1p, 100L));
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), cb);
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         coordinator.invokeCompletedOffsetCommitCallbacks();
 
         assertTrue(coordinator.coordinatorUnknown());
@@ -2703,7 +2700,7 @@ public abstract class ConsumerCoordinatorTest {
             }
         };
 
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 1);
+        assertEquals(1, coordinator.inFlightAsyncCommits.get());
         thread.start();
 
         client.waitForRequests(2, 5000);
@@ -2711,7 +2708,7 @@ public abstract class ConsumerCoordinatorTest {
         respondToOffsetCommitRequest(singletonMap(t1p, secondOffset.offset()), Errors.NONE);
 
         thread.join();
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
 
         assertEquals(Arrays.asList(firstOffset, secondOffset), committedOffsets);
     }
@@ -3100,7 +3097,7 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertFalse(subscriptions.hasAllFetchPositions());
         assertTrue(subscriptions.awaitingValidation(t1p));
-        assertEquals(subscriptions.position(t1p).offset, 100L);
+        assertEquals(100L, subscriptions.position(t1p).offset);
         assertNull(subscriptions.validPosition(t1p));
     }
 
@@ -3470,7 +3467,7 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(FencedInstanceIdException.class, this::receiveFencedInstanceIdException);
         assertThrows(FencedInstanceIdException.class, () ->
                 coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback()));
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         assertThrows(FencedInstanceIdException.class, () ->
                 coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
     }
@@ -3739,7 +3736,7 @@ public abstract class ConsumerCoordinatorTest {
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID);
 
         coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
         coordinator.invokeCompletedOffsetCommitCallbacks();
     }
 

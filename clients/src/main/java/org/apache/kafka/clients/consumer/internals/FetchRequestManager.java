@@ -145,6 +145,14 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         try {
             Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = fetchRequestPreparer.prepare();
 
+            if (fetchRequests.isEmpty()) {
+                // If there's nothing to fetch, wake up the FetchBuffer so it doesn't needlessly wait for a wakeup
+                // that won't come until the data in the fetch buffer is consumed.
+                fetchBuffer.wakeup();
+                pendingFetchRequestFuture.complete(null);
+                return PollResult.EMPTY;
+            }
+
             List<UnsentRequest> requests = fetchRequests.entrySet().stream().map(entry -> {
                 final Node fetchTarget = entry.getKey();
                 final FetchSessionHandler.FetchRequestData data = entry.getValue();

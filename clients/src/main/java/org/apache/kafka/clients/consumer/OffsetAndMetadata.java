@@ -54,10 +54,7 @@ public class OffsetAndMetadata implements Serializable {
 
         // The server converts null metadata to an empty string. So we store it as an empty string as well on the client
         // to be consistent.
-        if (metadata == null)
-            this.metadata = OffsetFetchResponse.NO_METADATA;
-        else
-            this.metadata = metadata;
+        this.metadata = Objects.requireNonNullElse(metadata, OffsetFetchResponse.NO_METADATA);
     }
 
     /**
@@ -78,10 +75,20 @@ public class OffsetAndMetadata implements Serializable {
         this(offset, "");
     }
 
+    /**
+     * Returns the offset to be committed.
+     *
+     * @return The offset
+     */
     public long offset() {
         return offset;
     }
 
+    /**
+     * Get the metadata of the previously consumed record.
+     *
+     * @return The metadata or empty string if no metadata
+     */
     public String metadata() {
         return metadata;
     }
@@ -91,7 +98,7 @@ public class OffsetAndMetadata implements Serializable {
      * if there exists a leader epoch which is larger than this epoch and begins at an offset earlier than
      * the committed offset.
      *
-     * @return the leader epoch or empty if not known
+     * @return The leader epoch or empty if not known
      */
     public Optional<Integer> leaderEpoch() {
         if (leaderEpoch == null || leaderEpoch < 0)
@@ -106,21 +113,20 @@ public class OffsetAndMetadata implements Serializable {
         OffsetAndMetadata that = (OffsetAndMetadata) o;
         return offset == that.offset &&
                 Objects.equals(metadata, that.metadata) &&
-                Objects.equals(leaderEpoch, that.leaderEpoch);
+                Objects.equals(leaderEpoch(), that.leaderEpoch());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(offset, metadata, leaderEpoch);
+        return Objects.hash(offset, metadata, leaderEpoch());
     }
 
     @Override
     public String toString() {
         return "OffsetAndMetadata{" +
                 "offset=" + offset +
-                ", leaderEpoch=" + leaderEpoch +
+                ", leaderEpoch=" + leaderEpoch().orElse(null) +
                 ", metadata='" + metadata + '\'' +
                 '}';
     }
-
 }

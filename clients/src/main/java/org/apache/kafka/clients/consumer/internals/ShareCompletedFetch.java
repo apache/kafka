@@ -27,9 +27,9 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.ShareFetchResponseData;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -41,9 +41,9 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
@@ -60,6 +60,7 @@ public class ShareCompletedFetch {
     final int nodeId;
     final TopicIdPartition partition;
     final ShareFetchResponseData.PartitionData partitionData;
+    final Optional<Integer> acquisitionLockTimeoutMs;
     final short requestVersion;
 
     private final Logger log;
@@ -77,21 +78,23 @@ public class ShareCompletedFetch {
     private final List<OffsetAndDeliveryCount> acquiredRecordList;
     private ListIterator<OffsetAndDeliveryCount> acquiredRecordIterator;
     private OffsetAndDeliveryCount nextAcquired;
-    private final ShareFetchMetricsAggregator metricAggregator;
+    private final ShareFetchMetricsAggregator metricsAggregator;
 
     ShareCompletedFetch(final LogContext logContext,
                         final BufferSupplier decompressionBufferSupplier,
                         final int nodeId,
                         final TopicIdPartition partition,
                         final ShareFetchResponseData.PartitionData partitionData,
-                        final ShareFetchMetricsAggregator metricAggregator,
+                        final Optional<Integer> acquisitionLockTimeoutMs,
+                        final ShareFetchMetricsAggregator metricsAggregator,
                         final short requestVersion) {
         this.log = logContext.logger(org.apache.kafka.clients.consumer.internals.ShareCompletedFetch.class);
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.nodeId = nodeId;
         this.partition = partition;
         this.partitionData = partitionData;
-        this.metricAggregator = metricAggregator;
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
+        this.metricsAggregator = metricsAggregator;
         this.requestVersion = requestVersion;
         this.batches = ShareFetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.acquiredRecordList = buildAcquiredRecordList(partitionData.acquiredRecords());
@@ -99,10 +102,23 @@ public class ShareCompletedFetch {
     }
 
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
-        List<OffsetAndDeliveryCount> acquiredRecordList = new LinkedList<>();
+        // Setting the size of the array to the size of the first batch of acquired records. In case there is only 1 batch acquired, resizing would not happen.
+        if (partitionAcquiredRecords.isEmpty()) {
+            return List.of();
+        }
+        int initialListSize = (int) (partitionAcquiredRecords.get(0).lastOffset() - partitionAcquiredRecords.get(0).firstOffset() + 1);
+        List<OffsetAndDeliveryCount> acquiredRecordList = new ArrayList<>(initialListSize);
+
+        // Set to find duplicates in case of overlapping acquired records
+        Set<Long> offsets = new HashSet<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
             for (long offset = acquiredRecords.firstOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
-                acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+                if (!offsets.add(offset)) {
+                    log.error("Duplicate acquired record offset {} found in share fetch response for partition {}. " +
+                            "This indicates a broker processing issue.", offset, partition.topicPartition());
+                } else {
+                    acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+                }
             }
         });
         return acquiredRecordList;
@@ -141,7 +157,7 @@ public class ShareCompletedFetch {
      * and number of records parsed. After all partitions have reported, we write the metric.
      */
     void recordAggregatedMetrics(int bytes, int records) {
-        metricAggregator.record(partition.topicPartition(), bytes, records);
+        metricsAggregator.record(partition.topicPartition(), bytes, records);
     }
 
     /**
@@ -160,10 +176,10 @@ public class ShareCompletedFetch {
                                                  final int maxRecords,
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
-        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition);
+        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
 
         if (cachedBatchException != null) {
-            // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+            // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
             Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
             inFlightBatch.setException(new ShareInFlightBatchException(cachedBatchException, offsets));
             cachedBatchException = null;
@@ -233,7 +249,7 @@ public class ShareCompletedFetch {
             }
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
-                // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+                // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
                 Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
                 inFlightBatch.setException(new ShareInFlightBatchException(e, offsets));
             } else {
@@ -264,27 +280,32 @@ public class ShareCompletedFetch {
     }
 
     private <K, V> Set<Long> rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
-                                          final RecordBatch currentBatch) {
+                                               final RecordBatch currentBatch) {
         // Rewind the acquiredRecordIterator to the start, so we are in a known state
         acquiredRecordIterator = acquiredRecordList.listIterator();
 
-        OffsetAndDeliveryCount nextAcquired = nextAcquiredRecord();
+        OffsetAndDeliveryCount acquired = nextAcquiredRecord();
         Set<Long> offsets = new HashSet<>();
         for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
-            if (nextAcquired == null) {
+            while (acquired != null && acquired.offset < offset) {
+                acquired = nextAcquiredRecord();
+            }
+
+            if (acquired == null) {
                 // No more acquired records, so we are done
                 break;
-            } else if (offset == nextAcquired.offset) {
+            } else if (offset == acquired.offset) {
                 // It's acquired, so we reject it
                 inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
                 offsets.add(offset);
-            } else if (offset < nextAcquired.offset) {
+            } else {
                 // It's not acquired, so we skip it
                 continue;
             }
 
-            nextAcquired = nextAcquiredRecord();
+            acquired = nextAcquiredRecord();
         }
+        this.nextAcquired = acquired;
         return offsets;
     }
 
@@ -305,13 +326,13 @@ public class ShareCompletedFetch {
         try {
             key = keyBytes == null ? null : deserializers.keyDeserializer().deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
-            log.error("Key Deserializers with error: {}", deserializers);
+            log.error("Key deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.KEY, partition.topicPartition(), timestampType, record, e, headers);
         }
         try {
             value = valueBytes == null ? null : deserializers.valueDeserializer().deserialize(partition.topic(), headers, valueBytes);
         } catch (RuntimeException e) {
-            log.error("Value Deserializers with error: {}", deserializers);
+            log.error("Value deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, partition.topicPartition(), timestampType, record, e, headers);
         }
         return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),

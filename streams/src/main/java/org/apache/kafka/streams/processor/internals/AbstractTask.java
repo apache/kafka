@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +39,8 @@ import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
     private static final long NO_DEADLINE = -1L;
+    protected static final long NO_OFFSET = -1;
+    protected static final int NO_PARTITION = -1;
 
     private Task.State state = CREATED;
     private long deadlineMs = NO_DEADLINE;
@@ -49,14 +50,6 @@ public abstract class AbstractTask implements Task {
     protected final LogContext logContext;
 
     protected Set<TopicPartition> inputPartitions;
-
-    /**
-     * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;
-     * If the checkpoint has been loaded from the file and has never been re-written (empty map), then we should re-write the checkpoint;
-     * If the checkpoint has been loaded from the file but has not been updated since, then we do not need to checkpoint;
-     * If the checkpoint has been loaded from the file and has been updated since, then we could overwrite the checkpoint;
-     */
-    protected Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
 
     protected final TaskId id;
     protected final TaskConfig config;
@@ -93,14 +86,8 @@ public abstract class AbstractTask implements Task {
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public void maybeCheckpoint(final boolean enforceCheckpoint) {
-        final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
-        if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
-            // the state's current offset would be used to checkpoint
-            stateMgr.flush();
-            stateMgr.checkpoint();
-            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
-        }
+    public void maybeCheckpoint() {
+        stateMgr.commit();
     }
 
     @Override

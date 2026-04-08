@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -48,7 +47,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
-import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
@@ -60,11 +58,11 @@ import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockStandbyUpdateListener;
-import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -156,6 +154,22 @@ public class StreamThreadStateStoreProviderTest {
                 Serdes.String(),
                 Serdes.String()),
             "the-processor");
+        topology.addStateStore(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                Stores.inMemoryKeyValueStore("timestamped-kv-store-with-headers"),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
+        topology.addStateStore(
+            Stores.timestampedWindowStoreWithHeadersBuilder(
+                Stores.inMemoryWindowStore(
+                    "timestamped-window-store-with-headers",
+                    Duration.ofMillis(10L),
+                    Duration.ofMillis(2L),
+                    false),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -181,9 +195,7 @@ public class StreamThreadStateStoreProviderTest {
         taskOne = createStreamsTask(
             streamsConfig,
             mockConsumer,
-            mockRestoreConsumer,
             mockProducer,
-            mockAdminClient,
             processorTopology,
             new TaskId(0, 0));
         taskOne.initializeIfNeeded();
@@ -192,9 +204,7 @@ public class StreamThreadStateStoreProviderTest {
         final StreamTask taskTwo = createStreamsTask(
             streamsConfig,
             mockConsumer,
-            mockRestoreConsumer,
             mockProducer,
-            mockAdminClient,
             processorTopology,
             new TaskId(0, 1));
         taskTwo.initializeIfNeeded();
@@ -421,11 +431,65 @@ public class StreamThreadStateStoreProviderTest {
                 QueryableStoreTypes.keyValueStore())));
     }
 
+    @Test
+    public void shouldFindTimestampedKeyValueStoresWithHeaders() {
+        mockThread(true);
+        final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store-with-headers",
+                QueryableStoreTypes.timestampedKeyValueStore()));
+        assertEquals(2, stores.size());
+        for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldFindTimestampedKeyValueStoresWithHeadersAsKeyValueStores() {
+        mockThread(true);
+        final List<ReadOnlyKeyValueStore<String, String>> stores =
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store-with-headers",
+                QueryableStoreTypes.keyValueStore()));
+        assertEquals(2, stores.size());
+        for (final ReadOnlyKeyValueStore<String, String> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldFindTimestampedWindowStoresWithHeaders() {
+        mockThread(true);
+        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store-with-headers",
+                QueryableStoreTypes.timestampedWindowStore()));
+        assertEquals(2, stores.size());
+        for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldFindTimestampedWindowStoresWithHeadersAsWindowStores() {
+        mockThread(true);
+        final List<ReadOnlyWindowStore<String, String>> stores =
+            provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store-with-headers",
+                QueryableStoreTypes.windowStore()));
+        assertEquals(2, stores.size());
+        for (final ReadOnlyWindowStore<String, String> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+        }
+    }
+
     private StreamTask createStreamsTask(final StreamsConfig streamsConfig,
                                          final Consumer<byte[], byte[]> consumer,
-                                         final Consumer<byte[], byte[]> restoreConsumer,
                                          final Producer<byte[], byte[]> producer,
-                                         final Admin adminClient,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();
@@ -437,17 +501,8 @@ public class StreamThreadStateStoreProviderTest {
             StreamsConfigUtils.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
-            new StoreChangelogReader(
-                new MockTime(),
-                streamsConfig,
-                logContext,
-                adminClient,
-                restoreConsumer,
-                new MockStateRestoreListener(),
-                new MockStandbyUpdateListener()),
             topology.storeToChangelogTopic(),
-            partitions,
-            false);
+            partitions);
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,

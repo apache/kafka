@@ -20,7 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -478,7 +478,7 @@ public class KafkaRaftClientPreVoteTest {
         // invalid voter id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch,
                 otherNodeKey,
                 ReplicaKey.of(10, Uuid.randomUuid()),
@@ -493,7 +493,7 @@ public class KafkaRaftClientPreVoteTest {
         // invalid voter directory id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch,
                 otherNodeKey,
                 ReplicaKey.of(0, Uuid.randomUuid()),

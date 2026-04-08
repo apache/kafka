@@ -35,12 +35,12 @@ import java.io.File;
 import java.io.IOException;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -140,7 +140,7 @@ public class LogCleaner implements BrokerReconfigurable {
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
     private final LogDirFailureChannel logDirFailureChannel;
     private final Time time;
-    private final List<CleanerThread> cleaners = new ArrayList<>();
+    private final List<CleanerThread> cleaners = new CopyOnWriteArrayList<>();
 
     /**
      * Log cleaner configuration which may be dynamically updated.
@@ -464,7 +464,7 @@ public class LogCleaner implements BrokerReconfigurable {
      * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
      * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
      */
-    public class CleanerThread extends ShutdownableThread {
+    public final class CleanerThread extends ShutdownableThread {
         private final Logger logger = new LogContext(logPrefix).logger(CleanerThread.class);
 
         private final Cleaner cleaner;
@@ -472,7 +472,6 @@ public class LogCleaner implements BrokerReconfigurable {
         private volatile CleanerStats lastStats = new CleanerStats(Time.SYSTEM);
         private volatile PreCleanStats lastPreCleanStats = new PreCleanStats();
 
-        @SuppressWarnings("this-escape")
         public CleanerThread(int threadId) throws NoSuchAlgorithmException {
             super("kafka-log-cleaner-thread-" + threadId, false);
 

@@ -53,7 +53,7 @@ import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.test.NoRetryException;
 
@@ -990,7 +990,7 @@ public class ExactlyOnceSourceIntegrationTest {
     }
 
     private ConfigInfo findConfigInfo(String property, ConfigInfos validationResult) {
-        return validationResult.values().stream()
+        return validationResult.configs().stream()
                 .filter(info -> property.equals(info.configKey().name()))
                 .findAny()
                 .orElseThrow(() -> new AssertionError("Failed to find configuration validation result for property '" + property + "'"));

@@ -41,13 +41,13 @@ def query(query, **kwargs):
     Any additional keyword arguments are forwarded to jira.search_issues.
     """
     results = []
-    startAt = 0
+    start_at = 0
     new_results = None
     jira = JIRA(JIRA_BASE_URL)
     while new_results is None or len(new_results) == MAX_RESULTS:
-        new_results = jira.search_issues(query, startAt=startAt, maxResults=MAX_RESULTS, **kwargs)
+        new_results = jira.search_issues(query, startAt=start_at, maxResults=MAX_RESULTS, **kwargs)
         results += new_results
-        startAt += len(new_results)
+        start_at += len(new_results)
     return results
 
 
@@ -172,5 +172,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(e, file=sys.stderr)
         sys.exit(1)
-
-

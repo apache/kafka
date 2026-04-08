@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -154,10 +155,9 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     // visible for testing
-    @SuppressWarnings("deprecation")
     void closeConsumer() {
         try {
-            consumer.close(Duration.ofSeconds(30));
+            consumer.close(CloseOptions.timeout(Duration.ofSeconds(30)));
         } catch (final Exception e) {
             log.error("Error encountered while closing the consumer", e);
         }

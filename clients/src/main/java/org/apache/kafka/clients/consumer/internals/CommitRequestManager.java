@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -38,7 +39,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -181,6 +182,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         // poll when the coordinator node is known and fatal error is not present
         if (coordinatorRequestManager.coordinator().isEmpty()) {
             pendingRequests.maybeFailOnCoordinatorFatalError();
+
+            if (closing && pendingRequests.hasUnsentRequests()) {
+                CommitFailedException exception = new CommitFailedException(
+                        "Failed to commit offsets: Coordinator unknown and consumer is closing");
+                pendingRequests.drainPendingCommits()
+                        .forEach(request -> request.future().completeExceptionally(exception));
+            }
+
             return EMPTY;
         }
 
@@ -493,21 +502,26 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     /**
      * Enqueue a request to fetch committed offsets, that will be sent on the next call to {@link #poll(long)}.
+     * This is used when initializing positions on poll,
+     * and for fetching committed offsets from API calls to consumer.committed.
+     * This function will retry upon expected retriable errors while the timeout hasn't expired.
+     * It will fail fatally with KafkaException for all unexpected errors.
      *
-     * @param partitions       Partitions to fetch offsets for.
-     * @param deadlineMs       Time until which the request should be retried if it fails
-     *                         with expected retriable errors.
+     * @param partitions Partitions to fetch offsets for.
+     * @param deadlineMs Time until which the request should be retried if it fails
+     *                   with expected retriable errors.
      * @return Future that will complete when a successful response is received, or the request
-     * fails and cannot be retried. Note that the request is retried whenever it fails with
-     * retriable expected error and the retry time hasn't expired.
+     * fails and cannot be retried. The result contains both successful offsets and any retriable
+     * partition errors (like UNKNOWN_TOPIC_ID) that occurred. Note that the request is retried
+     * whenever it fails with expected retriable errors and the retry timeout hasn't expired.
      */
-    public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets(
+    public CompletableFuture<OffsetFetchResult> fetchOffsets(
         final Set<TopicPartition> partitions,
         final long deadlineMs) {
         if (partitions.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(new OffsetFetchResult(Collections.emptyMap(), Collections.emptyMap()));
         }
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = new CompletableFuture<>();
+        CompletableFuture<OffsetFetchResult> result = new CompletableFuture<>();
         OffsetFetchRequestState request = createOffsetFetchRequest(partitions, deadlineMs);
         fetchOffsetsWithRetries(request, result);
         return result;
@@ -533,32 +547,107 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     private void fetchOffsetsWithRetries(final OffsetFetchRequestState fetchRequest,
-                                         final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result) {
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> currentResult = pendingRequests.addOffsetFetchRequest(fetchRequest);
+                                         final CompletableFuture<OffsetFetchResult> result) {
+        CompletableFuture<OffsetFetchResult> currentResult = pendingRequests.addOffsetFetchRequest(fetchRequest);
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
         currentResult.whenComplete((res, error) -> {
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
                 log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer:" + fetchRequest);
+                    "outbound buffer: {}", fetchRequest);
             }
-            if (error == null) {
-                maybeUpdateLastSeenEpochIfNewer(res);
-                result.complete(res);
-            } else {
-                if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
-                    if (fetchRequest.isExpired()) {
-                        log.debug("OffsetFetch request for {} timed out and won't be retried anymore", fetchRequest.requestedPartitions);
-                        result.completeExceptionally(maybeWrapAsTimeoutException(error));
-                    } else {
-                        fetchRequest.resetFuture();
-                        fetchOffsetsWithRetries(fetchRequest, result);
-                    }
-                } else
-                    result.completeExceptionally(error);
+
+            // Group-level error
+            if (error != null) {
+                handleGroupLevelError(fetchRequest, result, error);
+                return;
             }
+
+            // Partition-level errors
+            if (res.hasRetriablePartitionErrors()) {
+                handleRetriablePartitionErrors(fetchRequest, result, res);
+                return;
+            }
+
+            handleSuccessfulOffsetFetch(result, res);
+
         });
+    }
+
+    /**
+     * Handles a successful offset fetch response with no errors.
+     */
+    private void handleSuccessfulOffsetFetch(final CompletableFuture<OffsetFetchResult> result,
+                                             final OffsetFetchResult res) {
+        maybeUpdateLastSeenEpochIfNewer(res.offsets());
+        result.complete(res);
+    }
+
+    /**
+     * Handles group-level errors from an offset fetch request.
+     * Group-level errors indicate the entire request failed (e.g., coordinator unavailable).
+     */
+    private void handleGroupLevelError(final OffsetFetchRequestState fetchRequest,
+                                       final CompletableFuture<OffsetFetchResult> result,
+                                       final Throwable error) {
+        boolean isRetriable = (error instanceof RetriableException) ||
+            isStaleEpochErrorAndValidEpochAvailable(error);
+
+        if (!isRetriable) {
+            result.completeExceptionally(error);
+            return;
+        }
+
+        if (fetchRequest.isExpired()) {
+            log.debug("OffsetFetch request for {} timed out and won't be retried anymore",
+                fetchRequest.requestedPartitions);
+            result.completeExceptionally(maybeWrapAsTimeoutException(error));
+            return;
+        }
+
+        retryOffsetFetchOnError(fetchRequest, result, "retriable error: " + error.getMessage());
+    }
+
+    /**
+     * Handles retriable partition-level errors from an offset fetch response.
+     *
+     * <p>The only retriable partition errors are UNKNOWN_TOPIC_ID and UNKNOWN_TOPIC_OR_PARTITION.
+     * When expired or not enough time for another retry, we return partial results with null for
+     * the errored partitions. We check against {@code remainingBackoffMs} to ensure we complete
+     * before the {@link org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper}
+     * expires the event with TimeoutException.
+     */
+    private void handleRetriablePartitionErrors(final OffsetFetchRequestState fetchRequest,
+                                            final CompletableFuture<OffsetFetchResult> result,
+                                            final OffsetFetchResult res) {
+        long currentTimeMs = time.milliseconds();
+
+        // Return partial results if there is no time for another retry.
+        // We check against remainingBackoffMs to ensure we complete before the
+        // CompletableEventReaper expires the event with TimeoutException.
+        if (fetchRequest.isExpired() || fetchRequest.remainingMs() <= fetchRequest.remainingBackoffMs(currentTimeMs)) {
+            log.debug("OffsetFetch request for partitions {} returning partial results with some partition errors {}",
+                fetchRequest.requestedPartitions, res.retriablePartitionErrors().keySet());
+            maybeUpdateLastSeenEpochIfNewer(res.offsets());
+            result.complete(res);
+            return;
+        }
+
+        retryOffsetFetchOnError(fetchRequest, result,
+            "retriable partition errors: " + res.retriablePartitionErrors().keySet());
+    }
+
+    /**
+     * Retries an offset fetch request after an error.
+     */
+    private void retryOffsetFetchOnError(final OffsetFetchRequestState fetchRequest,
+                                         final CompletableFuture<OffsetFetchResult> result,
+                                         final String reason) {
+        log.debug("OffsetFetch request for {} retrying due to {}",
+            fetchRequest.requestedPartitions, reason);
+        fetchRequest.resetFuture();
+        fetchOffsetsWithRetries(fetchRequest, result);
     }
 
     private boolean isStaleEpochErrorAndValidEpochAvailable(Throwable error) {
@@ -700,15 +789,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
+            Map<String, Uuid> topicIds = metadata.topicIds();
+            boolean canUseTopicIds = true;
             Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 OffsetAndMetadata offsetAndMetadata = entry.getValue();
+                Uuid topicId = topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID);
+                if (topicId.equals(Uuid.ZERO_UUID)) {
+                    canUseTopicIds = false;
+                }
 
                 OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
                     .getOrDefault(topicPartition.topic(),
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                             .setName(topicPartition.topic())
+                            .setTopicId(topicId)
                     );
 
                 topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -732,7 +828,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 lastEpochSentOnCommit = Optional.empty();
             }
 
-            OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(data);
+            OffsetCommitRequest.Builder builder = canUseTopicIds
+                    ? OffsetCommitRequest.Builder.forTopicIdsOrNames(data)
+                    : OffsetCommitRequest.Builder.forTopicNames(data);
 
             return buildRequestWithResponseHandling(builder);
         }
@@ -744,6 +842,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          *   - fail the future with a non-recoverable KafkaException for all unexpected errors (even if retriable)
          */
         @Override
+        @SuppressWarnings("NPathComplexity")
         public void onResponse(final ClientResponse response) {
             metricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
@@ -752,13 +851,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             boolean failedRequestRegistered = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                    // Version 10 drops topic name, and supports topic id.
+                    // We need to find offsetAndMetadata based on topic id and partition index only as
+                    // topic name in the response will be emtpy.
+                    // For older versions, topic id is zero, and we will find the offsetAndMetadata based on the topic name.
+                    TopicPartition tp = (!Uuid.ZERO_UUID.equals(topic.topicId()) && metadata.topicNames().containsKey(topic.topicId())) ?
+                        new TopicPartition(metadata.topicNames().get(topic.topicId()), partition.partitionIndex()) :
+                        new TopicPartition(topic.name(), partition.partitionIndex());
 
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
                         OffsetAndMetadata offsetAndMetadata = offsets.get(tp);
-                        long offset = offsetAndMetadata.offset();
-                        log.debug("OffsetCommit completed successfully for offset {} partition {}", offset, tp);
+                        if (offsetAndMetadata == null) {
+                            log.debug("Can't find metadata for partition {}", tp);
+                        } else {
+                            log.debug("OffsetCommit completed successfully for offset {} partition {}", offsetAndMetadata.offset(), tp);
+                        }
                         continue;
                     }
 
@@ -781,7 +889,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         future.completeExceptionally(error.exception());
                         return;
                     } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS ||
-                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION ||
+                        error == Errors.UNKNOWN_TOPIC_ID) {
                         // just retry
                         future.completeExceptionally(error.exception());
                         return;
@@ -934,6 +1043,66 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         abstract void removeRequest();
     }
 
+    /**
+     * Result of an offset fetch request.
+     * Contains the successfully fetched offsets and any
+     * retriable partition errors (e.g., UNKNOWN_TOPIC_ID).
+     * This allows returning partial results, including offsets and partition errors.
+     */
+    public static class OffsetFetchResult {
+        /**
+         * Partitions with offsets successfully retrieved
+         */
+        private final Map<TopicPartition, OffsetAndMetadata> offsets;
+
+        /**
+         * Partitions with retriable errors
+         */
+        private final Map<TopicPartition, Errors> retriablePartitionErrors;
+
+        public OffsetFetchResult(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  Map<TopicPartition, Errors> retriablePartitionErrors) {
+            this.offsets = offsets;
+            this.retriablePartitionErrors = retriablePartitionErrors;
+        }
+
+        public Map<TopicPartition, OffsetAndMetadata> offsets() {
+            return offsets;
+        }
+
+        public Map<TopicPartition, Errors> retriablePartitionErrors() {
+            return retriablePartitionErrors;
+        }
+
+        public boolean hasRetriablePartitionErrors() {
+            return !retriablePartitionErrors.isEmpty();
+        }
+
+        /**
+         * Converts this result to a map of offsets, using null for partitions that had retriable errors.
+         * This is expected to be used when the caller wants to return partial results to the user, where null indicates
+         * that the offset for that partition could not be fetched.
+         *
+         * @return A new map containing all successfully fetched offsets, plus null entries for partitions
+         *         that had retriable errors.
+         */
+        public Map<TopicPartition, OffsetAndMetadata> toOffsetMapWithNulls() {
+            Map<TopicPartition, OffsetAndMetadata> result = new HashMap<>(offsets);
+            for (TopicPartition tp : retriablePartitionErrors.keySet()) {
+                result.put(tp, null);
+            }
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "OffsetFetchResult{" +
+                "offsets=" + offsets +
+                ", retriablePartitionErrors=" + retriablePartitionErrors +
+                '}';
+        }
+    }
+
     class OffsetFetchRequestState extends RetriableRequestState {
 
         /**
@@ -942,10 +1111,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         public final Set<TopicPartition> requestedPartitions;
 
         /**
+         * Map of topic ID to topic names for the topics included in a request when using topic IDs.
+         * To be used when parsing the response, as topics may be removed from the consumer
+         * metadata before receiving a response.
+         */
+        public Map<Uuid, String> topicNamesCache;
+
+        /**
          * Future with the result of the request. This can be reset using {@link #resetFuture()}
          * to get a new result when the request is retried.
          */
-        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+        private CompletableFuture<OffsetFetchResult> future;
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
                                        final long retryBackoffMs,
@@ -956,6 +1132,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 retryBackoffMaxMs, memberInfo, deadlineTimer(time, deadlineMs));
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
+            this.topicNamesCache = new HashMap<>();
         }
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
@@ -968,6 +1145,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 retryBackoffMaxMs, jitter, memberInfo, deadlineTimer(time, deadlineMs));
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
+            this.topicNamesCache = new HashMap<>();
         }
 
         public boolean sameRequest(final OffsetFetchRequestState request) {
@@ -975,38 +1153,41 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
-            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = requestedPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic))
-                .entrySet()
-                .stream()
-                .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName(entry.getKey())
+            Map<String, Uuid> topicIds = metadata.topicIds();
+            topicNamesCache.clear();
+            boolean canUseTopicIds = true;
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = new ArrayList<>();
+            Map<String, List<TopicPartition>> tps = requestedPartitions.stream().collect(Collectors.groupingBy(TopicPartition::topic));
+            for (Map.Entry<String, List<TopicPartition>> entry : tps.entrySet()) {
+                String topic = entry.getKey();
+                Uuid topicId = topicIds.getOrDefault(topic, Uuid.ZERO_UUID);
+                if (Uuid.ZERO_UUID.equals(topicId)) {
+                    canUseTopicIds = false;
+                } else {
+                    // Save topicId-topicName ref to be used when parsing the response
+                    topicNamesCache.put(topicId, topic);
+                }
+                topics.add(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(topic)
+                    .setTopicId(topicId)
                     .setPartitionIndexes(entry.getValue().stream()
                         .map(TopicPartition::partition)
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList());
+                        .collect(Collectors.toList())));
+            }
 
-            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
-                .map(epoch -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setMemberId(memberInfo.memberId)
-                                .setMemberEpoch(epoch)
-                                .setTopics(topics))),
-                            throwOnFetchStableOffsetUnsupported))
-                // Building request without passing member ID/epoch to leave the logic to choose
-                // default values when not present on the request builder.
-                .orElseGet(() -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setTopics(topics))),
-                    throwOnFetchStableOffsetUnsupported));
+            OffsetFetchRequestData.OffsetFetchRequestGroup groupData = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId(groupId)
+                .setTopics(topics);
+            if (memberInfo.memberEpoch.isPresent()) {
+                groupData = groupData.setMemberId(memberInfo.memberId)
+                    .setMemberEpoch(memberInfo.memberEpoch.get());
+            }
+            OffsetFetchRequestData data = new OffsetFetchRequestData()
+                .setRequireStable(true)
+                .setGroups(List.of(groupData));
+            OffsetFetchRequest.Builder builder = canUseTopicIds
+                ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported)
+                : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
             return buildRequestWithResponseHandling(builder);
         }
 
@@ -1090,14 +1271,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         private void onSuccess(final long currentTimeMs,
                                final OffsetFetchResponseData.OffsetFetchResponseGroup response) {
             var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
+            var retriablePartitionErrors = new HashMap<TopicPartition, Errors>();
             var unstableTxnOffsetTopicPartitions = new HashSet<TopicPartition>();
             var unauthorizedTopics = new HashSet<String>();
             var failedRequestRegistered = false;
 
             for (var topic : response.topics()) {
+                // If the topic id is used, the topic name is empty in the response.
+                String topicName = Uuid.ZERO_UUID.equals(topic.topicId()) ? topic.name() : topicNamesCache.get(topic.topicId());
                 for (var partition : topic.partitions()) {
                     var tp = new TopicPartition(
-                        topic.name(),
+                        topicName,
                         partition.partitionIndex()
                     );
                     var error = Errors.forCode(partition.errorCode());
@@ -1109,9 +1293,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             failedRequestRegistered = true;
                         }
 
-                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                            future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
-                            return;
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID) {
+                            // Track retriable partition error. Continue processing other partitions.
+                            // The caller can decide to retry and eventually return the partial results only.
+                            retriablePartitionErrors.put(tp, error);
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
                         } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
@@ -1151,13 +1336,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 future.completeExceptionally(new UnstableOffsetCommitException("There are " +
                     "unstable offsets for the requested topic partitions"));
             } else {
-                onSuccessfulAttempt(currentTimeMs);
-                future.complete(offsets);
+                if (retriablePartitionErrors.isEmpty()) {
+                    // Register success if there are no partition errors.
+                    // If there were partition errors, a failed attempt has been already registered above.
+                    onSuccessfulAttempt(currentTimeMs);
+                }
+                future.complete(new OffsetFetchResult(offsets, retriablePartitionErrors));
             }
         }
 
         private void chainFuture(
-            final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> otherFuture) {
+            final CompletableFuture<OffsetFetchResult> otherFuture) {
             this.future.whenComplete((r, t) -> {
                 if (t != null) {
                     otherFuture.completeExceptionally(t);
@@ -1176,10 +1365,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     /**
      * <p>This is used to stage the unsent {@link OffsetCommitRequestState} and {@link OffsetFetchRequestState}.
-     * <li>unsentOffsetCommits holds the offset commit requests that have not been sent out</>
-     * <li>unsentOffsetFetches holds the offset fetch requests that have not been sent out</li>
-     * <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but not completed</>.
-     * <p>
+     * <ul>
+     *   <li>unsentOffsetCommits holds the offset commit requests that have not been sent out</li>
+     *   <li>unsentOffsetFetches holds the offset fetch requests that have not been sent out</li>
+     *   <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but not completed</li>
+     * </ul>
      * {@code addOffsetFetchRequest} dedupes the requests to avoid sending the same requests.
      */
 
@@ -1211,7 +1401,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
          * upon completion.
          */
-        private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
+        private CompletableFuture<OffsetFetchResult> addOffsetFetchRequest(final OffsetFetchRequestState request) {
             Optional<OffsetFetchRequestState> dupe =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
             Optional<OffsetFetchRequestState> inflight =

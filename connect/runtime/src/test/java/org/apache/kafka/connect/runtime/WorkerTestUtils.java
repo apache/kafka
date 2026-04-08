@@ -168,6 +168,7 @@ public class WorkerTestUtils {
                 "Wrong rebalance delay in " + assignment);
     }
 
+    @SuppressWarnings("unchecked")
     public static <T, R extends ConnectRecord<R>> TransformationChain<T, R> getTransformationChain(
             RetryWithToleranceOperator<T> toleranceOperator,
             List<Object> results) {

@@ -72,6 +72,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -125,6 +126,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final Optional<String> groupId;
     private final ConsumerCoordinator coordinator;
     private final Deserializers<K, V> deserializers;
+    private final FetchMetricsManager fetchMetricsManager;
     private final Fetcher<K, V> fetcher;
     private final OffsetFetcher offsetFetcher;
     private final TopicMetadataFetcher topicMetadataFetcher;
@@ -191,7 +193,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             this.metadata.bootstrap(addresses);
 
-            FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
+            this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
             this.isolationLevel = fetchConfig.isolationLevel;
 
@@ -210,6 +212,22 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
+
+            // If the classic rebalance protocol is used, log message to guide users towards upgrading to the
+            // next-generation consumer rebalance protocol
+            if (groupId.isPresent()) {
+                boolean isStreamsConsumer = assignors.stream()
+                        .anyMatch(a -> a.getClass().getName().contains("StreamsPartitionAssignor"));
+                if (!isStreamsConsumer) {
+                    log.info("\n" +
+                            "****************************************************************\n" +
+                            "* The consumer rebalance protocol (KIP-848) is production-ready!\n" +
+                            "* Set the consumer configuration {}={} to try it out.\n" +
+                            "* See https://kafka.apache.org/documentation/#consumer_rebalance_protocol\n" +
+                            "****************************************************************",
+                            ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+                }
+            }
 
             // no coordinator will be constructed for the default (null) group id
             if (groupId.isEmpty()) {
@@ -256,7 +274,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     retryBackoffMs,
                     retryBackoffMaxMs);
 
-            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -296,7 +314,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.isolationLevel = ConsumerUtils.configuredIsolationLevel(config);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.assignors = assignors;
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics);
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -331,8 +349,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 groupInstanceId,
                 rackId,
                 retryBackoffMs,
-                retryBackoffMaxMs,
-                true
+                retryBackoffMaxMs
             );
             this.coordinator = new ConsumerCoordinator(
                 rebalanceConfig,
@@ -361,8 +378,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         int maxPollRecords = config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
         boolean checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
 
-        ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
-        FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        FetchMetricsRegistry fetchMetricsRegistry = new FetchMetricsRegistry(CONSUMER_METRIC_GROUP_PREFIX);
+        this.fetchMetricsManager = new FetchMetricsManager(metrics, fetchMetricsRegistry);
         ApiVersions apiVersions = new ApiVersions();
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
@@ -381,7 +398,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             subscriptions,
             fetchConfig,
             deserializers,
-            metricsManager,
+            fetchMetricsManager,
             time,
             apiVersions
         );
@@ -1050,25 +1067,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public OptionalLong currentLag(TopicPartition topicPartition) {
         acquireAndEnsureOpen();
         try {
-            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
-
-            // if the log end offset is not known and hence cannot return lag and there is
-            // no in-flight list offset requested yet,
-            // issue a list offset request for that partition so that next time
-            // we may get the answer; we do not need to wait for the return value
-            // since we would not try to poll the network client synchronously
-            if (lag == null) {
-                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
-                        !subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                    subscriptions.requestPartitionEndOffset(topicPartition);
-                    offsetFetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
-                }
-
-                return OptionalLong.empty();
-            }
-
-            return OptionalLong.of(lag);
+            return offsetFetcher.currentLag(topicPartition);
         } finally {
             release();
         }
@@ -1179,6 +1178,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
+        closeQuietly(fetchMetricsManager, "kafka fetch metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(client, "consumer network client", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);

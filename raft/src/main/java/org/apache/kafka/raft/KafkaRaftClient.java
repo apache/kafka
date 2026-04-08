@@ -51,11 +51,11 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
-import org.apache.kafka.common.record.UnalignedRecords;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.UnalignedRecords;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
@@ -171,7 +171,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int MAX_FETCH_WAIT_MS = 500;
     // visible for testing
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
-    public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final OptionalInt nodeId;
     private final Uuid nodeDirectoryId;
@@ -185,7 +184,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final Endpoints localListeners;
     private final SupportedVersionRange localSupportedKRaftVersion;
     private final NetworkChannel channel;
-    private final ReplicatedLog log;
+    private final RaftLog log;
     private final Random random;
     private final FuturePurgatory<Long> appendPurgatory;
     private final FuturePurgatory<Long> fetchPurgatory;
@@ -236,7 +235,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Uuid nodeDirectoryId,
         RecordSerde<T> serde,
         NetworkChannel channel,
-        ReplicatedLog log,
+        RaftLog log,
         Time time,
         ExpirationService expirationService,
         LogContext logContext,
@@ -275,7 +274,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
-        ReplicatedLog log,
+        RaftLog log,
         MemoryPool memoryPool,
         Time time,
         ExpirationService expirationService,
@@ -358,7 +357,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
-
         if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet())) {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
@@ -435,7 +433,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // Re-read the expected offset in case the snapshot had to be reloaded
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < highWatermark) {
-                    LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
+                    LogFetchInfo readInfo = log.read(
+                        nextExpectedOffset,
+                        Isolation.COMMITTED,
+                        Integer.MAX_VALUE
+                    );
                     listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
                 }
             });
@@ -1512,11 +1514,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             FetchRequest.replicaId(request),
             fetchPartition.replicaDirectoryId()
         );
+
         FetchResponseData response = tryCompleteFetchRequest(
             requestMetadata.listenerName(),
             requestMetadata.apiVersion(),
             replicaKey,
             fetchPartition,
+            request.maxBytes(),
             currentTimeMs
         );
         FetchResponseData.PartitionData partitionResponse =
@@ -1587,6 +1591,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     requestMetadata.apiVersion(),
                     replicaKey,
                     fetchPartition,
+                    request.maxBytes(),
                     completionTimeMs
                 );
             }
@@ -1598,6 +1603,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         short apiVersion,
         ReplicaKey replicaKey,
         FetchRequestData.FetchPartition request,
+        int maxSizeBytes,
         long currentTimeMs
     ) {
         try {
@@ -1622,7 +1628,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             final Records records;
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
-                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
+                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED, maxSizeBytes);
 
                 if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
@@ -2207,6 +2213,40 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return true;
     }
 
+    /**
+     * Handle a AddVoter request. This API is used to dynamically add a new voter
+     * to the quorum. The request must be sent to the current quorum leader, and will
+     * only succeed if the leader has committed its current epoch and HWM.
+     *
+     * The request may include an optional clusterId. If provided, it must match this
+     * cluster's id, otherwise the request will be rejected.
+     *
+     * The new voter is validated against the current voter set. If the voter is already
+     * present, or if the request does not include a valid voter id or endpoint, the
+     * request will fail immediately.
+     *
+     * When valid, the leader tentatively adds the new voter and sends it an ApiVersions
+     * request to verify protocol compatibility. This is an asynchronous step:
+     * the ApiVersionsResponse will later be handled in {@link #handleApiVersionsResponse},
+     * where the leader decides whether to keep the voter (if compatible) or remove it
+     * again (if incompatible or unreachable).
+     *
+     * This API may return the following errors:
+     *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is provided but does
+     *     not match this cluster's id
+     * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#UNKNOWN_LEADER_EPOCH} if the epoch is larger than this node's epoch
+     * - {@link Errors#NOT_LEADER_OR_FOLLOWER} if the request was sent to a broker that
+     *     is not the current quorum leader
+     * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
+     * - {@link Errors#REQUEST_TIMED_OUT} if the leader is still processing a previous
+     *     voter change, or if the high watermark has not yet advanced
+     * - {@link Errors#DUPLICATE_VOTER} if the requested voter id already exists in the
+     *     current voter set
+     * - {@link Errors#UNSUPPORTED_VERSION} if the cluster does not support kraft.version 1
+     * - {@link Errors#INVALID_REQUEST} if the request does not include a valid voter or endpoint
+     */
     private CompletableFuture<AddRaftVoterResponseData> handleAddVoterRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
@@ -2310,6 +2350,42 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    /**
+     * Handle a RemoveVoter request. This API is used to dynamically remove an existing
+     * voter from the quorum. The request must be sent to the current quorum leader,
+     * and will only succeed if the leader has committed its current epoch and HWM.
+     *
+     * The request may include an optional clusterId. If provided, it must match this
+     * cluster's id, otherwise the request will be rejected.
+     *
+     * The voter is validated against the current voter set. If the voter does not exist,
+     * or if the request does not include a valid voter id or endpoint, the request will
+     * fail immediately.
+     *
+     * This API performs several checks before committing the removal:
+     * - Ensures the leader is not currently processing another voter change request.
+     * - Checks that the high watermark has been established and the current epoch is committed.
+     * - Validates that the cluster supports the required kraft.version for reconfiguration.
+     * - Confirms that there are no uncommitted voter changes pending in the log.
+     *
+     * When all checks pass, the voter is removed from the voter set and a new VotersRecord
+     * is appended to the log.
+     *
+     * This API may return the following errors:
+     *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is provided but does
+     *   not match this cluster's id
+     * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#UNKNOWN_LEADER_EPOCH} if the epoch is larger than this node's epoch
+     * - {@link Errors#NOT_LEADER_OR_FOLLOWER} if the request was sent to a broker that
+     *   is not the current quorum leader
+     * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
+     * - {@link Errors#REQUEST_TIMED_OUT} if the leader is still processing a previous
+     *   voter change, or if the high watermark has not yet advanced
+     * - {@link Errors#VOTER_NOT_FOUND} if the specified voter does not exist in the current set
+     * - {@link Errors#UNSUPPORTED_VERSION} if the cluster does not support the required kraft.version
+     * - {@link Errors#INVALID_REQUEST} if the request does not include a valid voter or endpoint
+     */
     private CompletableFuture<RemoveRaftVoterResponseData> handleRemoveVoterRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
@@ -2372,6 +2448,27 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    /**
+     * Handle an UpdateVoter request. This API is used to update the metadata (endpoints
+     * and supported KRaft version range) of an existing voter in the quorum. The request
+     * should be sent to the current quorum leader, and will only succeed if the leader
+     * has committed its current epoch and HWM.
+     *
+     * This API may return the following errors:
+     *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is provided but does
+     *     not match this cluster's id
+     * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#UNKNOWN_LEADER_EPOCH} if the epoch is larger than this node's epoch
+     * - {@link Errors#NOT_LEADER_OR_FOLLOWER} if the request was sent to a broker that
+     *     is not the current quorum leader
+     * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
+     * - {@link Errors#REQUEST_TIMED_OUT} if the leader is still processing a previous
+     *     voter change, or if the high watermark has not yet advanced
+     * - {@link Errors#INVALID_REQUEST} if the request does not include a valid voter id,
+     *     directory id, endpoint, or KRaft version
+     * - {@link Errors#VOTER_NOT_FOUND} if the specified voter does not exist in the current set
+     */
     private CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
@@ -2636,48 +2733,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void handleResponse(RaftResponse.Inbound response, long currentTimeMs) {
         // The response epoch matches the local epoch, so we can handle the response
         ApiKeys apiKey = ApiKeys.forId(response.data().apiKey());
-        final boolean handledSuccessfully;
-
-        switch (apiKey) {
-            case FETCH:
-                handledSuccessfully = handleFetchResponse(response, currentTimeMs);
-                break;
-
-            case VOTE:
-                handledSuccessfully = handleVoteResponse(response, currentTimeMs);
-                break;
-
-            case BEGIN_QUORUM_EPOCH:
-                handledSuccessfully = handleBeginQuorumEpochResponse(response, currentTimeMs);
-                break;
-
-            case END_QUORUM_EPOCH:
-                handledSuccessfully = handleEndQuorumEpochResponse(response, currentTimeMs);
-                break;
-
-            case FETCH_SNAPSHOT:
-                handledSuccessfully = handleFetchSnapshotResponse(response, currentTimeMs);
-                break;
-
-            case API_VERSIONS:
-                handledSuccessfully = handleApiVersionsResponse(response, currentTimeMs);
-                break;
-
-            case UPDATE_RAFT_VOTER:
-                handledSuccessfully = handleUpdateVoterResponse(response, currentTimeMs);
-                break;
-
-            case ADD_RAFT_VOTER:
-                handledSuccessfully = handleAddVoterResponse(response, currentTimeMs);
-                break;
-
-            case REMOVE_RAFT_VOTER:
-                handledSuccessfully = handleRemoveVoterResponse(response, currentTimeMs);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
-        }
+        final boolean handledSuccessfully = switch (apiKey) {
+            case FETCH -> handleFetchResponse(response, currentTimeMs);
+            case VOTE -> handleVoteResponse(response, currentTimeMs);
+            case BEGIN_QUORUM_EPOCH -> handleBeginQuorumEpochResponse(response, currentTimeMs);
+            case END_QUORUM_EPOCH -> handleEndQuorumEpochResponse(response, currentTimeMs);
+            case FETCH_SNAPSHOT -> handleFetchSnapshotResponse(response, currentTimeMs);
+            case API_VERSIONS -> handleApiVersionsResponse(response, currentTimeMs);
+            case UPDATE_RAFT_VOTER -> handleUpdateVoterResponse(response, currentTimeMs);
+            case ADD_RAFT_VOTER -> handleAddVoterResponse(response, currentTimeMs);
+            case REMOVE_RAFT_VOTER -> handleRemoveVoterResponse(response, currentTimeMs);
+            default -> throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
+        };
 
         requestManager.onResponseResult(
             response.source(),
@@ -2740,48 +2807,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void handleRequest(RaftRequest.Inbound request, long currentTimeMs) {
         ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
-        final CompletableFuture<? extends ApiMessage> responseFuture;
-
-        switch (apiKey) {
-            case FETCH:
-                responseFuture = handleFetchRequest(request, currentTimeMs);
-                break;
-
-            case VOTE:
-                responseFuture = completedFuture(handleVoteRequest(request));
-                break;
-
-            case BEGIN_QUORUM_EPOCH:
-                responseFuture = completedFuture(handleBeginQuorumEpochRequest(request, currentTimeMs));
-                break;
-
-            case END_QUORUM_EPOCH:
-                responseFuture = completedFuture(handleEndQuorumEpochRequest(request, currentTimeMs));
-                break;
-
-            case DESCRIBE_QUORUM:
-                responseFuture = completedFuture(handleDescribeQuorumRequest(request, currentTimeMs));
-                break;
-
-            case FETCH_SNAPSHOT:
-                responseFuture = completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
-                break;
-
-            case ADD_RAFT_VOTER:
-                responseFuture = handleAddVoterRequest(request, currentTimeMs);
-                break;
-
-            case REMOVE_RAFT_VOTER:
-                responseFuture = handleRemoveVoterRequest(request, currentTimeMs);
-                break;
-
-            case UPDATE_RAFT_VOTER:
-                responseFuture = handleUpdateVoterRequest(request, currentTimeMs);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Unexpected request type " + apiKey);
-        }
+        final CompletableFuture<? extends ApiMessage> responseFuture = switch (apiKey) {
+            case FETCH -> handleFetchRequest(request, currentTimeMs);
+            case VOTE -> completedFuture(handleVoteRequest(request));
+            case BEGIN_QUORUM_EPOCH -> completedFuture(handleBeginQuorumEpochRequest(request, currentTimeMs));
+            case END_QUORUM_EPOCH -> completedFuture(handleEndQuorumEpochRequest(request, currentTimeMs));
+            case DESCRIBE_QUORUM -> completedFuture(handleDescribeQuorumRequest(request, currentTimeMs));
+            case FETCH_SNAPSHOT -> completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
+            case ADD_RAFT_VOTER -> handleAddVoterRequest(request, currentTimeMs);
+            case REMOVE_RAFT_VOTER -> handleRemoveVoterRequest(request, currentTimeMs);
+            case UPDATE_RAFT_VOTER -> handleUpdateVoterRequest(request, currentTimeMs);
+            default -> throw new IllegalArgumentException("Unexpected request type " + apiKey);
+        };
 
         responseFuture.whenComplete((response, exception) -> {
             ApiMessage message = response;
@@ -2902,7 +2939,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return minBackoffMs;
     }
 
-    private long maybeSendRequest(
+    private long maybeSendRequests(
         long currentTimeMs,
         Set<ReplicaKey> remoteVoters,
         Function<Integer, Node> destinationSupplier,
@@ -2958,7 +2995,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         return request
-            .setMaxBytes(MAX_FETCH_SIZE_BYTES)
+            .setMaxBytes(quorumConfig.fetchMaxBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
@@ -2982,7 +3019,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             quorum.epoch(),
             snapshotId,
-            MAX_FETCH_SIZE_BYTES,
+            quorumConfig.fetchSnapshotMaxBytes(),
             snapshotSize
         );
     }
@@ -3089,13 +3126,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
-            timeUntilNextBeginQuorumSend = maybeSendRequest(
+            Set<ReplicaKey> needToSendBeginQuorumRequests = state.needToSendBeginQuorumRequests(currentTimeMs);
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
-                voters
-                    .voterKeys()
-                    .stream()
-                    .filter(key -> key.id() != quorum.localIdOrThrow())
-                    .collect(Collectors.toSet()),
+                needToSendBeginQuorumRequests,
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest
             );
@@ -3177,7 +3211,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!state.epochElection().isVoteRejected()) {
             VoterSet voters = partitionState.lastVoterSet();
             boolean preVote = quorum.isProspective();
-            return maybeSendRequest(
+            return maybeSendRequests(
                 currentTimeMs,
                 state.epochElection().unrecordedVoters(),
                 voterId -> voters
@@ -3781,7 +3815,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return new RecordsSnapshotWriter.Builder()
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(time)
-                .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
+                .setMaxBatchSizeBytes(MAX_BATCH_SIZE_BYTES)
                 .setMemoryPool(memoryPool)
                 .setRawSnapshotWriter(wrappedWriter)
                 .setKraftVersion(partitionState.kraftVersionAtOffset(lastContainedLogOffset))
@@ -3853,6 +3887,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    @Override
     public Optional<Node> voterNode(int id, ListenerName listenerName) {
         return partitionState.lastVoterSet().voterNode(id, listenerName);
     }
@@ -3999,8 +4034,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 lastSent = null;
             }
 
-            logger.debug("Notifying listener {} of snapshot {}", listenerName(), reader.snapshotId());
-            listener.handleLoadSnapshot(reader);
+            if (reader.snapshotId().equals(BOOTSTRAP_SNAPSHOT_ID)) {
+                logger.debug("Notifying listener {} of bootstrap snapshot {}", listenerName(), reader.snapshotId());
+                listener.handleLoadBootstrap(reader);
+            } else {
+                logger.debug("Notifying listener {} of committed snapshot {}", listenerName(), reader.snapshotId());
+                listener.handleLoadSnapshot(reader);
+            }
         }
 
         /**

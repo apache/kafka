@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.common.utils.Exit;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -26,9 +28,12 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class CommandLineUtilsTest {
     @Test
@@ -50,8 +55,8 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("my.empty.property=", "my.empty.property1");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("my.empty.property"), "", "Value of a key with missing value should be an empty string");
-        assertEquals(props.getProperty("my.empty.property1"), "", "Value of a key with missing value with no delimiter should be an empty string");
+        assertEquals("", props.getProperty("my.empty.property"), "Value of a key with missing value should be an empty string");
+        assertEquals("", props.getProperty("my.empty.property1"), "Value of a key with missing value with no delimiter should be an empty string");
     }
 
     @Test
@@ -59,7 +64,7 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("my.property=value");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("my.property"), "value", "Value of a single property should be 'value'");
+        assertEquals("value", props.getProperty("my.property"), "Value of a single property should be 'value'");
     }
 
     @Test
@@ -67,8 +72,8 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("first.property=first", "second.property=second");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("first.property"), "first", "Value of first property should be 'first'");
-        assertEquals(props.getProperty("second.property"), "second", "Value of second property should be 'second'");
+        assertEquals("first", props.getProperty("first.property"), "Value of first property should be 'first'");
+        assertEquals("second", props.getProperty("second.property"), "Value of second property should be 'second'");
     }
 
     @Test
@@ -76,9 +81,9 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("first.property==first", "second.property=second=", "third.property=thi=rd");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("first.property"), "=first", "Value of first property should be '=first'");
-        assertEquals(props.getProperty("second.property"), "second=", "Value of second property should be 'second='");
-        assertEquals(props.getProperty("third.property"), "thi=rd", "Value of second property should be 'thi=rd'");
+        assertEquals("=first", props.getProperty("first.property"), "Value of first property should be '=first'");
+        assertEquals("second=", props.getProperty("second.property"), "Value of second property should be 'second='");
+        assertEquals("thi=rd", props.getProperty("third.property"), "Value of third property should be 'thi=rd'");
     }
 
     Properties props = new Properties();
@@ -265,5 +270,107 @@ public class CommandLineUtilsTest {
             assertThrows(CommandLineUtils.InitializeBootstrapException.class,
                 () -> CommandLineUtils.initializeBootstrapProperties(createTestProps(),
                     Optional.of("127.0.0.2:9094"), Optional.of("127.0.0.3:9095"))).getMessage());
+    }
+
+    @SuppressWarnings("unchecked")
+    private OptionSpec<String> createMockOptionSpec(String name) {
+        OptionSpec<String> spec = mock(OptionSpec.class);
+        when(spec.toString()).thenReturn("[" + name.replaceAll("--", "") + "]");
+        return spec;
+    }
+
+    @Test
+    void testCheckOneOfArgsNoOptions() {
+        OptionParser parser = mock(OptionParser.class);
+        OptionSet options = mock(OptionSet.class);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
+                CommandLineUtils.checkOneOfArgs(parser, options)
+        );
+
+        assertEquals("At least one option must be provided", e.getMessage());
+    }
+
+    @Test
+    void testCheckOneOfArgsOnePresent() {
+        OptionParser parser = mock(OptionParser.class);
+        OptionSet options = mock(OptionSet.class);
+        OptionSpec<String> opt1 = createMockOptionSpec("--first-option");
+        OptionSpec<String> opt2 = createMockOptionSpec("--second-option");
+        OptionSpec<String> opt3 = createMockOptionSpec("--third-option");
+
+        when(options.has(opt1)).thenReturn(true);
+        when(options.has(opt2)).thenReturn(false);
+        when(options.has(opt3)).thenReturn(false);
+
+        assertDoesNotThrow(() ->
+                CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
+        );
+
+        when(options.has(opt1)).thenReturn(false);
+        when(options.has(opt2)).thenReturn(true);
+
+        assertDoesNotThrow(() ->
+                CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
+        );
+
+        when(options.has(opt2)).thenReturn(false);
+        when(options.has(opt3)).thenReturn(true);
+
+        assertDoesNotThrow(() ->
+                CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
+        );
+    }
+
+    @Test
+    void testCheckOneOfArgsNonePresent() {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        OptionParser parser = mock(OptionParser.class);
+        OptionSet options = mock(OptionSet.class);
+        OptionSpec<String> opt1 = createMockOptionSpec("--first-option");
+        OptionSpec<String> opt2 = createMockOptionSpec("--second-option");
+        OptionSpec<String> opt3 = createMockOptionSpec("--third-option");
+
+        when(options.has(opt1)).thenReturn(false);
+        when(options.has(opt2)).thenReturn(false);
+        when(options.has(opt3)).thenReturn(false);
+
+        try {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3));
+            assertEquals("Exactly one of the following arguments is required: " +
+                    "[first-option], [second-option], [third-option]", e.getMessage());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    void testCheckOneOfArgsMultiplePresent() {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        OptionParser parser = mock(OptionParser.class);
+        OptionSet options = mock(OptionSet.class);
+        OptionSpec<String> opt1 = createMockOptionSpec("--first-option");
+        OptionSpec<String> opt2 = createMockOptionSpec("--second-option");
+        OptionSpec<String> opt3 = createMockOptionSpec("--third-option");
+
+        when(options.has(opt1)).thenReturn(true);
+        when(options.has(opt2)).thenReturn(true);
+        when(options.has(opt3)).thenReturn(false);
+
+        try {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3));
+            assertEquals("Exactly one of the following arguments is required: " +
+                    "[first-option], [second-option], [third-option]", e.getMessage());
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 }

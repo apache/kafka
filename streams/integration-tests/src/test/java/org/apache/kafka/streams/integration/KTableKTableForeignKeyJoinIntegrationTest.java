@@ -891,7 +891,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             rejoin,
             leftVersioned,
             rightVersioned,
-            value -> value.split("\\|")[1]
+            value -> {
+                final String[] tokens = value.split("\\|");
+                return tokens.length == 2 ? tokens[1] : null;
+            }
         );
     }
 

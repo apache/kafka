@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -140,9 +140,9 @@ public class ProtocolSerializationTest {
         check(new CompactArrayOf(Type.COMPACT_STRING),
                 new Object[] {"hello", "there", "beautiful"},
                 "COMPACT_ARRAY(COMPACT_STRING)");
-        check(ArrayOf.nullable(Type.STRING), null, "ARRAY(STRING)");
+        check(ArrayOf.nullable(Type.STRING), null, "NULLABLE_ARRAY(STRING)");
         check(CompactArrayOf.nullable(Type.COMPACT_STRING), null,
-                "COMPACT_ARRAY(COMPACT_STRING)");
+                "COMPACT_NULLABLE_ARRAY(COMPACT_STRING)");
     }
 
     @Test

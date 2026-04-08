@@ -32,12 +32,4 @@ public record OffsetPosition(long offset, int position) implements IndexEntry {
     public long indexValue() {
         return position;
     }
-
-    @Override
-    public String toString() {
-        return "OffsetPosition(" +
-            "offset=" + offset +
-            ", position=" + position +
-            ')';
-    }
 }

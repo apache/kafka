@@ -87,6 +87,8 @@ public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    private static final List<TopicPartition> ASSIGNED_PARTITIONS = new ArrayList<>();
+
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
@@ -246,6 +248,64 @@ public class RegexSourceIntegrationTest {
                 TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
                 outputTopic,
                 Arrays.asList(record1, record2)
+            );
+
+            streams.close();
+        } finally {
+            CLUSTER.deleteTopics(topic1, topic2);
+        }
+    }
+
+    @Test
+    public void shouldNotCrashIfPatternMatchesTopicHasNoData() throws Exception {
+        final String topic1 = "TEST-TOPIC-1";
+        final String topic2 = "TEST-TOPIC-2";
+
+        try {
+            CLUSTER.createTopic(topic1);
+
+            final StreamsBuilder builder = new StreamsBuilder();
+            final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
+            builder.stream(Pattern.compile("not-a-match"));
+            final List<String> assignedTopics = new CopyOnWriteArrayList<>();
+
+            pattern1Stream
+                .selectKey((k, v) -> k)
+                .groupByKey()
+                .aggregate(() -> "", (k, v, a) -> v)
+                .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+            final Topology topology = builder.build();
+            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                        @Override
+                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        }
+                    };
+                }
+            });
+
+            startApplicationAndWaitUntilRunning(streams);
+            TestUtils.waitForCondition(() -> assignedTopics.contains(topic1) && !assignedTopics.contains(topic2), STREAM_TASKS_NOT_UPDATED);
+
+            CLUSTER.createTopic(topic2);
+            TestUtils.waitForCondition(() -> assignedTopics.contains(topic1) && assignedTopics.contains(topic2), STREAM_TASKS_NOT_UPDATED);
+
+            final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                topic1,
+                Collections.singletonList(record1),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+                CLUSTER.time
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
+                outputTopic,
+                List.of(record1)
             );
 
             streams.close();

@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -59,6 +58,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -92,6 +92,7 @@ public class PluginsTest {
         pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, TestPlugins.pluginPathJoined());
         plugins = new Plugins(pluginProps);
         props = new HashMap<>(pluginProps);
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put("key.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "true");
@@ -354,7 +355,7 @@ public class PluginsTest {
     @Test
     public void newConverterShouldConfigureWithPluginClassLoader() {
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.className());
-        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.className());
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.className(), null, Optional.empty());
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
             createConfig();
         }
@@ -376,7 +377,7 @@ public class PluginsTest {
         String providerPrefix = "some.provider";
         props.put(providerPrefix + ".class", TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
 
-        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
+        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.className(), null, Optional.empty());
         assertNotNull(classLoader);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
             createConfig();
@@ -397,7 +398,7 @@ public class PluginsTest {
     @Test
     public void newHeaderConverterShouldConfigureWithPluginClassLoader() {
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_HEADER_CONVERTER.className());
-        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.className());
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.className(), null, Optional.empty());
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
             createConfig();
         }
@@ -589,7 +590,7 @@ public class PluginsTest {
 
     @Test
     public void testAliasesInConverters() throws ClassNotFoundException {
-        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className());
+        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className(), null);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             String configKey = "config.key";
             String alias = "SamplingConverter";
@@ -688,7 +689,7 @@ public class PluginsTest {
         }
     }
 
-    public static class TestConverter implements Converter, Configurable, Versioned {
+    public static class TestConverter implements Converter, Configurable {
         public Map<String, ?> configs;
 
         public ConfigDef config() {
@@ -714,11 +715,6 @@ public class PluginsTest {
         @Override
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
-        }
-
-        @Override
-        public String version() {
-            return "test";
         }
     }
 
@@ -775,13 +771,8 @@ public class PluginsTest {
         }
     }
 
-    public static class TestInternalConverter extends JsonConverter implements Versioned {
+    public static class TestInternalConverter extends JsonConverter {
         public Map<String, ?> configs;
-
-        @Override
-        public String version() {
-            return "test";
-        }
 
         @Override
         public void configure(Map<String, ?> configs) {

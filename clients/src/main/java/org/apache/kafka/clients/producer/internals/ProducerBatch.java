@@ -21,15 +21,15 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
@@ -49,8 +49,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
+import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V2;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_TIMESTAMP;
 
 /**
  * A batch of records that is or will be sent.
@@ -72,6 +72,9 @@ public final class ProducerBatch {
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
+    private boolean bufferDeallocated = false;
+    // Tracks if the batch has been sent to the NetworkClient
+    private boolean inflight = false;
 
     int recordCount;
     int maxRecordSize;
@@ -321,10 +324,16 @@ public final class ProducerBatch {
     }
 
     public Deque<ProducerBatch> split(int splitBatchSize) {
-        Deque<ProducerBatch> batches = new ArrayDeque<>();
-        MemoryRecords memoryRecords = recordsBuilder.build();
+        RecordBatch recordBatch = validateAndGetRecordBatch();
+        Deque<ProducerBatch> batches = splitRecordsIntoBatches(recordBatch, splitBatchSize);
+        finalizeSplitBatches(batches);
+        return batches;
+    }
 
+    private RecordBatch validateAndGetRecordBatch() {
+        MemoryRecords memoryRecords = recordsBuilder.build();
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
+
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
 
@@ -336,6 +345,11 @@ public final class ProducerBatch {
         if (recordBatchIter.hasNext())
             throw new IllegalArgumentException("A producer batch should only have one record batch.");
 
+        return recordBatch;
+    }
+
+    private Deque<ProducerBatch> splitRecordsIntoBatches(RecordBatch recordBatch, int splitBatchSize) {
+        Deque<ProducerBatch> batches = new ArrayDeque<>();
         Iterator<Thunk> thunkIter = thunks.iterator();
         // We always allocate batch size because we are already splitting a big batch.
         // And we also Retain the create time of the original batch.
@@ -362,9 +376,23 @@ public final class ProducerBatch {
             batch.closeForRecordAppends();
         }
 
+        return batches;
+    }
+
+    private void finalizeSplitBatches(Deque<ProducerBatch> batches) {
+        // Chain all split batch ProduceRequestResults to the original batch's produceFuture
+        // Ensures the original batch's future doesn't complete until all split batches complete
+        for (ProducerBatch splitBatch : batches) {
+            produceFuture.addDependent(splitBatch.produceFuture);
+        }
+
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, index -> new RecordBatchTooLargeException());
         produceFuture.done();
 
+        assignProducerStateToBatches(batches);
+    }
+
+    private void assignProducerStateToBatches(Deque<ProducerBatch> batches) {
         if (hasSequence()) {
             int sequence = baseSequence();
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
@@ -373,7 +401,6 @@ public final class ProducerBatch {
                 sequence += newBatch.recordCount;
             }
         }
-        return batches;
     }
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
@@ -555,6 +582,22 @@ public final class ProducerBatch {
 
     public boolean sequenceHasBeenReset() {
         return reopened;
+    }
+
+    public boolean isBufferDeallocated() {
+        return bufferDeallocated;
+    }
+
+    public void markBufferDeallocated() {
+        bufferDeallocated = true;
+    }
+
+    public boolean isInflight() {
+        return inflight;
+    }
+
+    public void setInflight(boolean inflight) {
+        this.inflight = inflight;
     }
 
     // VisibleForTesting

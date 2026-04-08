@@ -22,15 +22,4 @@ import org.apache.kafka.server.storage.log.FetchIsolation;
 
 public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
                                      FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
-
-    @Override
-    public String toString() {
-        return "RemoteStorageFetchInfo{" +
-                "fetchMaxBytes=" + fetchMaxBytes +
-                ", minOneMessage=" + minOneMessage +
-                ", topicIdPartition=" + topicIdPartition +
-                ", fetchInfo=" + fetchInfo +
-                ", fetchIsolation=" + fetchIsolation +
-                '}';
-    }
 }

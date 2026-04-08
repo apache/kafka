@@ -18,12 +18,4 @@ package org.apache.kafka.storage.internals.log;
 
 // Mapping of epoch to the first offset of the subsequent epoch
 public record EpochEntry(int epoch, long startOffset) {
-
-    @Override
-    public String toString() {
-        return "EpochEntry(" +
-                "epoch=" + epoch +
-                ", startOffset=" + startOffset +
-                ')';
-    }
 }

@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -35,7 +35,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +42,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -373,7 +373,12 @@ public class ProducerConfig extends AbstractConfig {
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
+                                        Type.LIST,
+                                        NO_DEFAULT_VALUE,
+                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
@@ -462,7 +467,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
@@ -501,8 +506,8 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
@@ -553,10 +558,16 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
-                                        List.of(), 
-                                        ConfigDef.Importance.LOW, 
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                                        ConfigDef.Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 
@@ -668,22 +679,47 @@ public class ProducerConfig extends AbstractConfig {
         return newConfigs;
     }
 
+    /**
+     * Constructs a new ProducerConfig with the given properties.
+     *
+     * @param props The producer configuration properties
+     */
     public ProducerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ProducerConfig with the given configuration map.
+     *
+     * @param props The producer configuration map
+     */
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Gets the set of all producer configuration names.
+     *
+     * @return The set of configuration names
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Gets a copy of the producer configuration definition.
+     *
+     * @return A new ConfigDef instance containing the producer configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }
 
+    /**
+     * Generates HTML documentation for producer configurations.
+     *
+     * @param args Command line arguments (unused)
+     */
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "producerconfigs_" + config));
     }

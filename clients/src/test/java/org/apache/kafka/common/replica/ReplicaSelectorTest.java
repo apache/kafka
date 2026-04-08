@@ -46,8 +46,8 @@ public class ReplicaSelectorTest {
         ReplicaSelector selector = new RackAwareReplicaSelector();
         Optional<ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
         assertOptional(selected, replicaInfo -> {
-            assertEquals(replicaInfo.endpoint().rack(), "rack-b", "Expect replica to be in rack-b");
-            assertEquals(replicaInfo.endpoint().id(), 3, "Expected replica 3 since it is more caught-up");
+            assertEquals("rack-b", replicaInfo.endpoint().rack(), "Expect replica to be in rack-b");
+            assertEquals(3, replicaInfo.endpoint().id(), "Expected replica 3 since it is more caught-up");
         });
 
         selected = selector.select(tp, metadata("not-a-rack"), partitionView);
@@ -57,7 +57,7 @@ public class ReplicaSelectorTest {
 
         selected = selector.select(tp, metadata("rack-a"), partitionView);
         assertOptional(selected, replicaInfo -> {
-            assertEquals(replicaInfo.endpoint().rack(), "rack-a", "Expect replica to be in rack-a");
+            assertEquals("rack-a", replicaInfo.endpoint().rack(), "Expect replica to be in rack-a");
             assertEquals(replicaInfo, leader, "Expect the leader since it's in rack-a");
         });
 

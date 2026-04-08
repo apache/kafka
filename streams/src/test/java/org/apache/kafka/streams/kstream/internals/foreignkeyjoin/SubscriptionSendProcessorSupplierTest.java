@@ -83,6 +83,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -100,6 +103,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -117,6 +123,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(1).record(),
             is(new Record<>(fk2, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -134,6 +143,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -151,6 +163,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -168,6 +183,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -185,6 +203,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -200,6 +221,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -215,6 +239,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(null, new SubscriptionWrapper<>(null, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -226,6 +253,9 @@ public class SubscriptionSendProcessorSupplierTest {
         leftJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     // Inner join tests
@@ -244,6 +274,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -282,6 +315,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(1).record(),
             is(new Record<>(fk2, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -295,6 +331,10 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
     }
 
     @Test
@@ -312,6 +352,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -329,6 +372,10 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
     }
 
     @Test
@@ -346,6 +393,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -361,6 +411,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -372,6 +425,9 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(null)), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -383,6 +439,9 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     // Bi-function tests: inner join, left join
@@ -424,6 +483,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -441,6 +503,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -460,6 +525,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(1).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -479,6 +547,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -498,6 +569,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -517,6 +591,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -534,6 +611,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -551,6 +631,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -566,6 +649,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(null, new SubscriptionWrapper<>(null, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -577,6 +663,9 @@ public class SubscriptionSendProcessorSupplierTest {
         biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     // Bi-function tests: inner join
@@ -597,6 +686,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -638,6 +730,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(1).record(),
             is(new Record<>(compositeKey2, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -672,6 +767,9 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
         );
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
@@ -683,6 +781,9 @@ public class SubscriptionSendProcessorSupplierTest {
         biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     private static class LeftValueSerializer implements Serializer<LeftValue> {

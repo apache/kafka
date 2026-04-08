@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
@@ -212,7 +213,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     }
 
     @Override
-    public void validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
@@ -244,10 +245,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         validateEmptyGroup();
     }
 
-    public void validateOffsetsAlterable() throws ApiException {
-        validateEmptyGroup();
-    }
-
     public void validateEmptyGroup() {
         if (state() != ShareGroupState.EMPTY) {
             throw Errors.NON_EMPTY_GROUP.exception();
@@ -268,7 +265,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         members().forEach((memberId, member) ->
             records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
             records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
@@ -316,7 +313,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             .setAssignorName(defaultAssignor)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asShareGroupDescribeMember(

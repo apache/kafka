@@ -16,15 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
+import org.apache.kafka.clients.consumer.internals.metrics.SensorBuilder;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-import java.io.IOException;
-import java.util.Arrays;
-
-public class ShareFetchMetricsManager implements AutoCloseable {
-    private final Metrics metrics;
+public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
     private final Sensor recordsFetched;
@@ -32,9 +31,14 @@ public class ShareFetchMetricsManager implements AutoCloseable {
     private final Sensor sentAcknowledgements;
     private final Sensor failedAcknowledgements;
 
+    @SuppressWarnings({"this-escape"})
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
-        this.metrics = metrics;
+        this(new MetricsLedger(metrics), metricsRegistry);
+    }
 
+    @SuppressWarnings({"this-escape"})
+    private ShareFetchMetricsManager(MetricsLedger metrics, ShareFetchMetricsRegistry metricsRegistry) {
+        super(metrics);
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
@@ -94,17 +98,5 @@ public class ShareFetchMetricsManager implements AutoCloseable {
 
     void recordFailedAcknowledgements(int acknowledgements) {
         failedAcknowledgements.record(acknowledgements);
-    }
-
-    @Override
-    public void close() throws IOException {
-        Arrays.asList(
-            throttleTime.name(),
-            bytesFetched.name(),
-            recordsFetched.name(),
-            fetchLatency.name(),
-            sentAcknowledgements.name(),
-            failedAcknowledgements.name()
-        ).forEach(metrics::removeSensor);
     }
 }

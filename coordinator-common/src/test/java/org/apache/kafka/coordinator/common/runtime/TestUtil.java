@@ -20,16 +20,16 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordVersion;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -44,13 +44,30 @@ import java.util.List;
 public class TestUtil {
     public static MemoryRecords records(
         long timestamp,
+        Compression compression,
         String... records
     ) {
-        return records(timestamp, Arrays.stream(records).toList());
+        return records(timestamp, compression, Arrays.stream(records).toList());
+    }
+
+
+    public static MemoryRecords records(
+        long timestamp,
+        String... records
+    ) {
+        return records(timestamp, Compression.NONE, Arrays.stream(records).toList());
     }
 
     public static MemoryRecords records(
         long timestamp,
+        List<String> records
+    ) {
+        return records(timestamp, Compression.NONE, records);
+    }
+
+    public static MemoryRecords records(
+        long timestamp,
+        Compression compression,
         List<String> records
     ) {
         if (records.isEmpty())
@@ -62,7 +79,7 @@ public class TestUtil {
 
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(
             RecordVersion.current().value,
-            CompressionType.NONE,
+            compression.type(),
             simpleRecords
         );
 
@@ -71,7 +88,7 @@ public class TestUtil {
         MemoryRecordsBuilder builder = MemoryRecords.builder(
             buffer,
             RecordVersion.current().value,
-            Compression.NONE,
+            compression,
             TimestampType.CREATE_TIME,
             0L,
             timestamp,

@@ -70,7 +70,8 @@ public class PartitionInfo {
     }
 
     /**
-     * The complete set of replicas for this partition regardless of whether they are alive or up-to-date
+     * The complete set of replicas for this partition regardless of whether they are alive or up-to-date. The preferred replica
+     * is the head of the list.
      */
     public Node[] replicas() {
         return replicas;

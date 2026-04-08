@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.PluginMetrics;
 
 import java.util.List;
 import java.util.Map;
@@ -34,18 +35,19 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
 
     Set<TopicPartition> taskTopicPartitions() {
         List<String> fields = getList(TASK_TOPIC_PARTITIONS);
-        if (fields == null || fields.isEmpty()) {
-            return Set.of();
-        }
         return fields.stream()
             .map(MirrorUtils::decodeTopicPartition)
             .collect(Collectors.toSet());
     }
 
-    MirrorSourceMetrics metrics() {
-        MirrorSourceMetrics metrics = new MirrorSourceMetrics(this);
+    MirrorSourceLegacyMetrics legacyMetrics() {
+        MirrorSourceLegacyMetrics metrics = new MirrorSourceLegacyMetrics(this);
         metricsReporters().forEach(metrics::addReporter);
         return metrics;
+    }
+
+    MirrorSourceMetrics metrics(PluginMetrics pluginMetrics) {
+        return new MirrorSourceMetrics(pluginMetrics, this);
     }
 
     @Override
@@ -57,7 +59,8 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
         .define(
             TASK_TOPIC_PARTITIONS,
             ConfigDef.Type.LIST,
-            null,
+            ConfigDef.NO_DEFAULT_VALUE,
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             ConfigDef.Importance.LOW,
             TASK_TOPIC_PARTITIONS_DOC)
         .define(TASK_INDEX,

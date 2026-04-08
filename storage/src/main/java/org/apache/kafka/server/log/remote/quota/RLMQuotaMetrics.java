@@ -24,7 +24,7 @@ import org.apache.kafka.server.quota.SensorAccess;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class RLMQuotaMetrics {
+public class RLMQuotaMetrics implements AutoCloseable {
 
     private final SensorAccess sensorAccess;
     private final Metrics metrics;
@@ -50,5 +50,10 @@ public class RLMQuotaMetrics {
             s.add(metrics.metricName(name + "-max", group,
                 String.format(descriptionFormat, "maximum")), new Max());
         });
+    }
+
+    @Override
+    public void close() {
+        this.metrics.removeSensor(name);
     }
 }

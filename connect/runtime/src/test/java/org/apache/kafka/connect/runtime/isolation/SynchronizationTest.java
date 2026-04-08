@@ -45,6 +45,7 @@ import java.net.URL;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -190,10 +191,10 @@ public class SynchronizationTest {
         }
 
         @Override
-        public PluginClassLoader pluginClassLoader(String name, VersionRange range) {
+        PluginClassLoader pluginClassLoader(String name, VersionRange range, Optional<ClassLoader> connectorLoader) {
             dclBreakpoint.await(name);
             dclBreakpoint.await(name);
-            return super.pluginClassLoader(name, range);
+            return super.pluginClassLoader(name, range, connectorLoader);
         }
     }
 
@@ -224,7 +225,7 @@ public class SynchronizationTest {
     public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
         // Grab a reference to the target PluginClassLoader before activating breakpoints
-        ClassLoader connectorLoader = plugins.connectorLoader(t1Class);
+        ClassLoader connectorLoader = plugins.connectorLoader(t1Class, null);
 
         // THREAD 1: loads a class by delegating downward starting from the DelegatingClassLoader
         // DelegatingClassLoader breakpoint will only trigger on this thread
@@ -304,7 +305,7 @@ public class SynchronizationTest {
     public void testPluginClassLoaderDoesntHoldMonitorLock()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
-        ClassLoader connectorLoader = plugins.connectorLoader(t1Class);
+        ClassLoader connectorLoader = plugins.connectorLoader(t1Class, null);
 
         Object externalTestLock = new Object();
         Breakpoint<Object> testBreakpoint = new Breakpoint<>();

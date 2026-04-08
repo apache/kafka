@@ -28,7 +28,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -155,7 +155,7 @@ public class StaticBrokerConfigTest {
 
             // test for case ConfigResource.Type == GROUP
             Config groupConfig = configResourceMap.get(groupResource);
-            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.configDef().configKeys());
+            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.CONFIG_DEF.configKeys());
 
             // test for case ConfigResource.Type == CLIENT_METRICS
             Config clientMetricsConfig = configResourceMap.get(clientMetricsResource);

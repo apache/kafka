@@ -42,7 +42,7 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -300,12 +300,8 @@ public class ReplicaVerificationTool {
                 .ofType(Long.class)
                 .defaultsTo(30_000L);
             options = parser.parse(args);
-            if (args.length == 0 || options.has(helpOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.");
-            }
-            if (options.has(versionOpt)) {
-                CommandLineUtils.printVersionAndExit();
-            }
+
+            CommandLineUtils.maybePrintHelpOrVersion(this, "Validate that all replicas for a set of topics have the same data.");
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
         }
 

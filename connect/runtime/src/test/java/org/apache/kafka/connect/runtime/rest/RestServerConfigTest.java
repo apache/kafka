@@ -122,7 +122,7 @@ public class RestServerConfigTest {
 
         props.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999,");
         ConfigException ce = assertThrows(ConfigException.class, () -> RestServerConfig.forPublic(null, props));
-        assertTrue(ce.getMessage().contains(" admin.listeners"));
+        assertTrue(ce.getMessage().contains("admin.listeners"));
     }
 
     @Test

@@ -33,7 +33,7 @@ class ShareConsumerPerformanceService(PerformanceService):
 
         "socket-buffer-size", "The size of the tcp RECV size."
 
-        "consumer.config", "Consumer config properties file."
+        "command-config", "Config properties file."
     """
 
     # Root directory for persistent output
@@ -73,15 +73,19 @@ class ShareConsumerPerformanceService(PerformanceService):
         for node in self.nodes:
             node.version = version
 
-    def args(self):
+    def args(self, version):
         """Dictionary of arguments used to start the Share Consumer Performance script."""
         args = {
             'topic': self.topic,
-            'messages': self.messages,
             'bootstrap-server': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'group': self.group,
             'timeout': self.timeout
         }
+
+        if version.supports_command_config():
+            args['num-records'] = self.messages
+        else:
+            args['messages'] = self.messages
 
         if self.fetch_size is not None:
             args['fetch-size'] = self.fetch_size
@@ -97,10 +101,13 @@ class ShareConsumerPerformanceService(PerformanceService):
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"%s%s\";" % (get_log4j_config_param(node), get_log4j_config_for_tools(node))
         cmd += " %s" % self.path.script("kafka-share-consumer-perf-test.sh", node)
-        for key, value in self.args().items():
+        for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
-        cmd += " --consumer.config %s" % ShareConsumerPerformanceService.CONFIG_FILE
+        if node.version.supports_command_config():
+            cmd += " --command-config %s" % ShareConsumerPerformanceService.CONFIG_FILE
+        else:
+            cmd += " --consumer.config %s" % ShareConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
@@ -124,10 +131,13 @@ class ShareConsumerPerformanceService(PerformanceService):
             last = line
 
         # Parse and save the last line's information
+        # The script kafka-share-consumer-perf-test.sh first prints the header line in the following format:
+        #   start.time, end.time, data.consumed.in.MB, MB.sec, nMsg.sec, data.consumed.in.nMsg, fetch.time.ms
+        # The corresponding results are then printed in the same order, so we can parse the last line for the results.
         if last is not None:
             parts = last.split(',')
             self.results[idx-1] = {
                 'total_mb': float(parts[2]),
                 'mbps': float(parts[3]),
-                'records_per_sec': float(parts[5]),
+                'records_per_sec': float(parts[4]),
             }

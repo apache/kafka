@@ -24,11 +24,12 @@ import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
-import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.internal.{DefaultRecord, DefaultRecordBatch, Records}
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -36,6 +37,22 @@ import java.nio.charset.StandardCharsets
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
+
+  // topic auto creation is enabled by default, only some tests disable it
+  var disableAutoTopicCreation = false
+
+  override def brokerOverrides: Properties = {
+    val props = super.brokerOverrides
+    if (disableAutoTopicCreation) {
+      props.put("auto.create.topics.enable", "false")
+    }
+    props
+  }
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    disableAutoTopicCreation = testInfo.getDisplayName.contains("autoCreateTopicsEnabled=false")
+    super.setUp(testInfo)
+  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
@@ -119,6 +136,52 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     } finally {
       producer.close()
     }
+  }
+
+  /**
+   * Test error message received when send fails waiting on metadata for a topic that does not exist.
+   * No need to run this for both rebalance protocols.
+   */
+  @ParameterizedTest(name = "groupProtocol={0}.autoCreateTopicsEnabled={1}")
+  @MethodSource(Array("protocolAndAutoCreateTopicProviders"))
+  def testSendTimeoutErrorMessageWhenTopicDoesNotExist(groupProtocol: String, autoCreateTopicsEnabled: String): Unit = {
+    val producer = createProducer(maxBlockMs = 500)
+    val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+    val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    assertEquals("Topic topic not present in metadata after 500 ms.", exception.getCause.getMessage)
+  }
+
+  /**
+   * Test error message received when send fails waiting on metadata for a partition that does not exist (topic exists).
+   * No need to run this for both rebalance protocols.
+   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testSendTimeoutErrorWhenPartitionDoesNotExist(groupProtocol: String): Unit = {
+    val producer = createProducer(maxBlockMs = 500)
+    // Send a message to auto-create the topic
+    var record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+    assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
+
+    // Send another message to the topic that exists but to a partition that does not
+    record = new ProducerRecord(topic, 10, "key".getBytes, "value".getBytes)
+    val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", exception.getCause.getMessage)
+  }
+
+  /**
+   * Test error message received when partitionsFor fails waiting on metadata for a topic that does not exist.
+   * No need to run this for both rebalance protocols.
+   */
+  @ParameterizedTest(name = "groupProtocol={0}.autoCreateTopicsEnabled={1}")
+  @MethodSource(Array("protocolAndAutoCreateTopicProviders"))
+  def testPartitionsForTimeoutErrorWhenTopicDoesNotExist(groupProtocol: String, autoCreateTopicsEnabled: String): Unit = {
+    val producer = createProducer(maxBlockMs = 500)
+
+    val exception = assertThrows(classOf[TimeoutException], () => producer.partitionsFor("unexisting-topic"))
+    assertEquals("Topic unexisting-topic not present in metadata after 500 ms.", exception.getMessage)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -283,6 +346,12 @@ object PlaintextProducerSendTest {
       data.add(Arguments.of(groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)))
       data.add(Arguments.of(groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs)))
     }
+    data.stream()
+  }
+
+  def protocolAndAutoCreateTopicProviders: java.util.stream.Stream[Arguments] = {
+    val data = new java.util.ArrayList[Arguments]()
+    data.add(Arguments.of("classic", "false"))
     data.stream()
   }
 }

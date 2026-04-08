@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -45,6 +45,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.quota.QuotaType;
@@ -63,6 +64,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -86,6 +88,7 @@ import static org.apache.kafka.clients.CommonClientConfigs.METADATA_MAX_AGE_CONF
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -99,16 +102,20 @@ import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -179,6 +186,63 @@ public class PlaintextConsumerTest {
         testCoordinatorFailover(cluster, config);
     }
 
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1")
+        }
+    )
+    public void testClassicConsumerCloseOnBrokerShutdown() {
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        );
+        testConsumerCloseOnBrokerShutdown(config);
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1")
+        }
+    )
+    public void testAsyncConsumerCloseOnBrokerShutdown() {
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
+            ENABLE_AUTO_COMMIT_CONFIG, false
+        );
+        // Disabling auto commit so that commitSync() does not block the close timeout.
+        testConsumerCloseOnBrokerShutdown(config);
+    }
+
+    private void testConsumerCloseOnBrokerShutdown(Map<String, Object> consumerConfig) {
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
+            consumer.subscribe(List.of(TOPIC));
+
+            // Force consumer to discover coordinator by doing a poll
+            // This ensures coordinator is discovered before we shutdown the broker
+            consumer.poll(Duration.ofMillis(100));
+
+            // Now shutdown broker.
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+            broker.awaitShutdown();
+
+            // Do another poll to force the consumer to retry finding the coordinator.
+            consumer.poll(Duration.ofMillis(100));
+
+            // Close should not hang waiting for retries when broker is already down
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> consumer.close(),
+                    "Consumer close should not wait for full timeout when broker is already shutdown");
+        }
+    }
+
     @ClusterTest
     public void testClassicConsumerHeaders() throws Exception {
         testHeaders(Map.of(
@@ -201,7 +265,10 @@ public class PlaintextConsumerTest {
         ) {
             var record = new ProducerRecord<>(TP.topic(), TP.partition(), null, "key".getBytes(), "value".getBytes());
             record.headers().add("headerKey", "headerValue".getBytes());
+            record.headers().add("headerKey2", "headerValue2".getBytes());
+            record.headers().add("headerKey3", "headerValue3".getBytes());
             producer.send(record);
+            producer.flush();
 
             assertEquals(0, consumer.assignment().size());
             consumer.assign(List.of(TP));
@@ -210,8 +277,15 @@ public class PlaintextConsumerTest {
             consumer.seek(TP, 0);
             var records = consumeRecords(consumer, numRecords);
             assertEquals(numRecords, records.size());
+
             var header = records.get(0).headers().lastHeader("headerKey");
             assertEquals("headerValue", header == null ? null : new String(header.value()));
+
+            // Test the order of headers in a record is preserved when producing and consuming
+            Header[] headers = records.get(0).headers().toArray();
+            assertEquals("headerKey", headers[0].key());
+            assertEquals("headerKey2", headers[1].key());
+            assertEquals("headerKey3", headers[2].key());
         }
     }
 
@@ -289,7 +363,14 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerGroupConsumption() throws Exception {
         testGroupConsumption(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
@@ -304,6 +385,69 @@ public class PlaintextConsumerTest {
             sendRecords(producer, TP, 10, startingTimestamp);
             consumer.subscribe(List.of(TOPIC));
             consumeAndVerifyRecords(consumer, TP, 1, 0, 0, startingTimestamp);
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
+    public void testAsyncConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    private void testGroupConsumptionWithTwoMembers(Map<String, Object> consumerConfig) throws InterruptedException {
+        var fooTopic = "foo";
+        var foo0 = new TopicPartition(fooTopic, 0);
+        var foo1 = new TopicPartition(fooTopic, 1);
+        cluster.createTopic(fooTopic, 2, (short) BROKER_COUNT);
+
+        consumerConfig = new HashMap<>(consumerConfig);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "group_two_members");
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumerConfig);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumerConfig)
+        ) {
+            var startingTimestamp = System.currentTimeMillis();
+
+            consumer1.subscribe(List.of(fooTopic));
+            awaitAssignment(consumer1, Set.of(foo0, foo1));
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo0, 10, 0, 0, startingTimestamp);
+
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo1, 10, 0, 0, startingTimestamp);
+
+            consumer2.subscribe(List.of(fooTopic));
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                return consumer1.assignment().size() == 1 && consumer2.assignment().size() == 1;
+            }, "Timed out waiting for rebalance to complete");
+
+            assertTrue(consumer1.assignment().contains(foo0) || consumer1.assignment().contains(foo1));
+            assertTrue(consumer2.assignment().contains(foo0) || consumer2.assignment().contains(foo1));
+            assertNotEquals(consumer1.assignment(), consumer2.assignment());
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, consumer1.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
+            consumeAndVerifyRecords(consumer2, consumer2.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
         }
     }
 
@@ -553,14 +697,19 @@ public class PlaintextConsumerTest {
 
             // commit sync and verify onCommit is called
             var commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
-            consumer.commitSync(Map.of(TP, new OffsetAndMetadata(2L)));
-            assertEquals(2, consumer.committed(Set.of(TP)).get(TP).offset());
+            consumer.commitSync(Map.of(TP, new OffsetAndMetadata(2L, "metadata")));
+            OffsetAndMetadata metadata = consumer.committed(Set.of(TP)).get(TP);
+            assertEquals(2, metadata.offset());
+            assertEquals("metadata", metadata.metadata());
             assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue());
 
             // commit async and verify onCommit is called
-            var offsetsToCommit = Map.of(TP, new OffsetAndMetadata(5L));
+            var offsetsToCommit = Map.of(TP, new OffsetAndMetadata(5L, null));
             sendAndAwaitAsyncCommit(consumer, Optional.of(offsetsToCommit));
-            assertEquals(5, consumer.committed(Set.of(TP)).get(TP).offset());
+            metadata = consumer.committed(Set.of(TP)).get(TP);
+            assertEquals(5, metadata.offset());
+            // null metadata will be converted to an empty string
+            assertEquals("", metadata.metadata());
             assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue());
         }
         // cleanup
@@ -813,13 +962,9 @@ public class PlaintextConsumerTest {
             assertNotNull(fetchLead0);
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
     }
 
@@ -881,13 +1026,9 @@ public class PlaintextConsumerTest {
             var expectedLag = numMessages - records.count();
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
     }
 
@@ -1254,7 +1395,14 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart() throws Exception {
         testStaticConsumerDetectsNewPartitionCreatedAfterRestart(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
@@ -1588,6 +1736,75 @@ public class PlaintextConsumerTest {
         }
     }
 
+    @ClusterTest
+    public void testClassicConsumerStallBetweenPoll() throws Exception {
+        testStallBetweenPoll(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerStallBetweenPoll() throws Exception {
+        testStallBetweenPoll(GroupProtocol.CONSUMER);
+    }
+
+    /**
+     * This test is to prove that the intermittent stalling that has been experienced when using the asynchronous
+     * consumer, as filed under KAFKA-19259, have been fixed.
+     *
+     * <p/>
+     *
+     * The basic idea is to have one thread that produces a record every 500 ms. and the main thread that consumes
+     * records without pausing between polls for much more than the produce delay. In the test case filed in
+     * KAFKA-19259, the consumer sometimes pauses for up to 5-10 seconds despite records being produced every second.
+     */
+    private void testStallBetweenPoll(GroupProtocol groupProtocol) throws Exception {
+        var testTopic = "stall-test-topic";
+        var numPartitions = 6;
+        cluster.createTopic(testTopic, numPartitions, (short) BROKER_COUNT);
+
+        // The producer must produce slowly to tickle the scenario.
+        var produceDelay = 500;
+
+        var executor = Executors.newScheduledThreadPool(1);
+
+        try (var producer = cluster.producer()) {
+            // Start a thread running that produces records at a relative trickle.
+            executor.scheduleWithFixedDelay(
+                () -> producer.send(new ProducerRecord<>(testTopic, TestUtils.randomBytes(64))),
+                0,
+                produceDelay,
+                TimeUnit.MILLISECONDS
+            );
+
+            Map<String, Object> consumerConfig = Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+
+            // Assign a tolerance for how much time is allowed to pass between Consumer.poll() calls given that there
+            // should be *at least* one record to read every second.
+            var pollDelayTolerance = 2000;
+
+            try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
+                consumer.subscribe(List.of(testTopic));
+
+                // This is here to allow the consumer time to settle the group membership/assignment.
+                awaitNonEmptyRecords(consumer, new TopicPartition(testTopic, 0));
+
+                // Keep track of the last time the poll is invoked to ensure the deltas between invocations don't
+                // exceed the delay threshold defined above.
+                var beforePoll = System.currentTimeMillis();
+                consumer.poll(Duration.ofSeconds(5));
+                consumer.poll(Duration.ofSeconds(5));
+                var afterPoll = System.currentTimeMillis();
+                var pollDelay = afterPoll - beforePoll;
+
+                if (pollDelay > pollDelayTolerance)
+                    fail("Detected a stall of " + pollDelay + " ms between Consumer.poll() invocations despite a Producer producing records every " + produceDelay + " ms");
+            } finally {
+                executor.shutdownNow();
+                // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor did not terminate");
+            }
+        }
+    }
+
     private ConsumerRecords<byte[], byte[]> awaitNonEmptyRecords(
         Consumer<byte[], byte[]> consumer,
         TopicPartition tp
@@ -1604,6 +1821,63 @@ public class PlaintextConsumerTest {
         }, "Timed out waiting for non-empty records from topic " + tp.topic() + " partition " + tp.partition());
 
         return result.get();
+    }
+
+    @ClusterTest
+    public void testClassicConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CONSUMER);
+    }
+
+    /**
+     * Verify that {@link Consumer#unsubscribe()} does not commit offsets even when
+     * {@code enable.auto.commit} is enabled. A second consumer using the same group ID
+     * should see no committed offsets after the first consumer unsubscribes.
+     */
+    private void testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol groupProtocol) throws Exception {
+        var numRecords = 10;
+        var groupId = "unsubscribe-no-commit-test";
+        sendRecords(cluster, TP, numRecords);
+
+        // Consumer 1: subscribe, consume records, then unsubscribe (without explicit commit)
+        Map<String, Object> config = new HashMap<>();
+        config.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+        config.put(GROUP_ID_CONFIG, groupId);
+        config.put(ENABLE_AUTO_COMMIT_CONFIG, true);
+
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(config)) {
+            consumer1.subscribe(List.of(TOPIC));
+            consumeRecords(consumer1, numRecords);
+
+            // Unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+            consumer1.unsubscribe();
+        }
+
+        // Consumer 2: use the same group ID to check committed offsets
+        try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(config)) {
+            consumer2.subscribe(List.of(TOPIC));
+            OffsetAndMetadata committed = consumer2.committed(Set.of(TP)).get(TP);
+            assertNull(committed,
+                    "unsubscribe() should not commit offsets even when auto-commit is enabled");
+        }
+    }
+
+    private void awaitMetricsCleanup(
+        Consumer<?, ?> consumer,
+        String metricName,
+        Map<String, String> tags1,
+        Map<String, String> tags2
+    ) throws InterruptedException {
+        var metric1 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags1);
+        var metric2 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags2);
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return consumer.metrics().get(metric1) == null && consumer.metrics().get(metric2) == null;
+        }, "Metrics for removed partitions should be cleaned up");
     }
 
     public static class SerializerImpl implements Serializer<byte[]> {

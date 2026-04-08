@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Optional;
 
-
 /**
  * The ControllerMutationQuotaManager is a specialized ClientQuotaManager used in the context
  * of throttling controller's operations/mutations.

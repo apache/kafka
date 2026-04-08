@@ -122,6 +122,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             EMIT_OFFSET_SYNCS_ENABLED + " is disabled.";
     public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
 
+    public static final String METRIC_NAMES_FORMAT = "metric.names.formats";
+    public static final String METRIC_NAMES_LEGACY = "legacy";
+    public static final String METRIC_NAMES_NEW = "new";
+    public static final String METRIC_NAMES_FORMAT_DEFAULT = METRIC_NAMES_LEGACY;
+
     public static final String OFFSET_SYNCS_CLIENT_ROLE_PREFIX = "offset-syncs-";
 
     public static final String TASK_INDEX = "task.index";
@@ -311,6 +316,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
                     JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(
@@ -323,6 +329,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             .define(CONFIG_PROVIDERS_CONFIG,
                     ConfigDef.Type.LIST,
                     List.of(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     ConfigDef.Importance.LOW, 
                     CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()

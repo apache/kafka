@@ -23,10 +23,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -60,7 +58,7 @@ public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return Map.of(Errors.forCode(data.errorCode()), 1);
     }
 
     @Override
@@ -79,12 +77,12 @@ public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
     }
 
     public static ConsumerGroupHeartbeatResponseData.Assignment createAssignment(
-        Map<Uuid, Set<Integer>> assignment
+        Map<Uuid, Map<Integer, Integer>> assignment
     ) {
         List<ConsumerGroupHeartbeatResponseData.TopicPartitions> topicPartitions = assignment.entrySet().stream()
             .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
-                .setPartitions(new ArrayList<>(keyValue.getValue())))
+                .setPartitions(new ArrayList<>(keyValue.getValue().keySet())))
             .collect(Collectors.toList());
 
         return new ConsumerGroupHeartbeatResponseData.Assignment()

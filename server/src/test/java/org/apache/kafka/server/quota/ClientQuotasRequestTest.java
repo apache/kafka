@@ -479,6 +479,7 @@ public class ClientQuotasRequestTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void testMatchEntities(ClientQuotaFilter filter, int expectedMatchSize, Predicate<ClientQuotaEntity> partition)
         throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(5000L, () -> {
@@ -711,9 +712,9 @@ public class ClientQuotasRequestTest {
                 .stream()
                 .map(configEntry -> new ClientQuotaAlteration.Op(configEntry.getKey(),
                     configEntry.getValue().orElse(null)))
-                .collect(Collectors.toList());
+                .toList();
             return new ClientQuotaAlteration(entity, ops);
-        }).collect(Collectors.toList());
+        }).toList();
 
         try (Admin admin = cluster.admin()) {
             Map<ClientQuotaEntity, KafkaFuture<Void>> result = admin.alterClientQuotas(entries,

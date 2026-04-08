@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 
 import org.junit.jupiter.api.AfterEach;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.management.ManagementFactory;
+import java.util.Map;
 
 import javax.management.JMException;
 import javax.management.MBeanServer;
@@ -41,38 +43,49 @@ public class AppInfoParserTest {
     private static final String METRICS_PREFIX = "app-info-test";
     private static final String METRICS_ID = "test";
 
-    private Metrics metrics;
     private MBeanServer mBeanServer;
 
     @BeforeEach
     public void setUp() {
-        metrics = new Metrics(new MockTime(1));
         mBeanServer = ManagementFactory.getPlatformMBeanServer();
     }
 
     @AfterEach
-    public void tearDown() {
-        metrics.close();
+    public void tearDown() throws JMException {
+        if (mBeanServer.isRegistered(expectedAppObjectName())) {
+            mBeanServer.unregisterMBean(expectedAppObjectName());
+        }
     }
 
     @Test
     public void testRegisterAppInfoRegistersMetrics() throws JMException {
-        registerAppInfo();
-        registerAppInfoMultipleTimes();
+        try (Metrics metrics = new Metrics(new MockTime(1))) {
+            registerAppInfo(metrics);
+            registerAppInfoMultipleTimes(metrics);
+            AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
+        }
     }
 
     @Test
     public void testUnregisterAppInfoUnregistersMetrics() throws JMException {
-        registerAppInfo();
-        AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
+        try (Metrics metrics = new Metrics(new MockTime(1))) {
+            registerAppInfo(metrics);
+            AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
 
-        assertFalse(mBeanServer.isRegistered(expectedAppObjectName()));
-        assertNull(metrics.metric(metrics.metricName("commit-id", "app-info")));
-        assertNull(metrics.metric(metrics.metricName("version", "app-info")));
-        assertNull(metrics.metric(metrics.metricName("start-time-ms", "app-info")));
+            assertFalse(mBeanServer.isRegistered(expectedAppObjectName()));
+            assertNull(metrics.metric(metrics.metricName("commit-id", "app-info")));
+            assertNull(metrics.metric(metrics.metricName("version", "app-info")));
+            assertNull(metrics.metric(metrics.metricName("start-time-ms", "app-info")));
+
+            Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+            assertNull(metrics.metric(metrics.metricName("commit-id", "app-info", idTag)));
+            assertNull(metrics.metric(metrics.metricName("version", "app-info", idTag)));
+            assertNull(metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)));
+            AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
+        }
     }
 
-    private void registerAppInfo() throws JMException {
+    private void registerAppInfo(Metrics metrics) throws JMException {
         assertEquals(EXPECTED_COMMIT_VERSION, AppInfoParser.getCommitId());
         assertEquals(EXPECTED_VERSION, AppInfoParser.getVersion());
 
@@ -82,9 +95,15 @@ public class AppInfoParserTest {
         assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
         assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
         assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
+
+        Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+        assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)).metricValue());
     }
 
-    private void registerAppInfoMultipleTimes() throws JMException {
+    private void registerAppInfoMultipleTimes(Metrics metrics) throws JMException {
         assertEquals(EXPECTED_COMMIT_VERSION, AppInfoParser.getCommitId());
         assertEquals(EXPECTED_VERSION, AppInfoParser.getVersion());
 
@@ -95,9 +114,37 @@ public class AppInfoParserTest {
         assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
         assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
         assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
+
+        Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)).metricValue());
     }
 
     private ObjectName expectedAppObjectName() throws MalformedObjectNameException {
         return new ObjectName(METRICS_PREFIX + ":type=app-info,id=" + METRICS_ID);
+    }
+
+    @Test
+    public void testClientIdWontAddRepeatedly() throws JMException {
+        Map<String, String> tags = Map.of(
+            "client-id", METRICS_ID,
+            "other-tag", "tag-value",
+            "another-tag", "another-value"
+        );
+        Metrics metrics = new Metrics(new MetricConfig().tags(tags), new MockTime(1));
+        AppInfoParser.registerAppInfo(METRICS_PREFIX, METRICS_ID, metrics, EXPECTED_START_MS);
+
+        assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info", tags)).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info", tags)).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info", tags)).metricValue());
+
+        Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)).metricValue());
+        metrics.close();
+        AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
     }
 }

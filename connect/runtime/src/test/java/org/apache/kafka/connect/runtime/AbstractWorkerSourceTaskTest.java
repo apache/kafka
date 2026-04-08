@@ -169,6 +169,7 @@ public class AbstractWorkerSourceTaskTest {
 
     private Map<String, String> workerProps() {
         Map<String, String> props = new HashMap<>();
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("offset.storage.file.filename", "/tmp/connect.offsets");

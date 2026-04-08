@@ -31,11 +31,13 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
@@ -69,7 +71,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
-      assertTrue(logOpt.isDefined)
+      assertTrue(logOpt.isPresent)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
     val admin = createAdminClient()
@@ -101,7 +103,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
-      assertTrue(logOpt.isDefined)
+      assertTrue(logOpt.isPresent)
       assertEquals(oldSegmentSize, logOpt.get.config.segmentSize())
     }
 
@@ -456,6 +458,54 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
+    }
+  }
+
+  @Test
+  def testDynamicGroupCoordinatorConfigChange(): Unit = {
+    val newCachedBufferMaxBytes = 2 * 1024 * 1024
+    val brokerId: String = this.brokers.head.config.brokerId.toString
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.BROKER, brokerId)
+      val op = new AlterConfigOp(
+        new ConfigEntry(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, newCachedBufferMaxBytes.toString),
+        OpType.SET
+      )
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
+    }
+
+    for (b <- this.brokers) {
+      val value = if (b.config.brokerId.toString == brokerId) newCachedBufferMaxBytes else GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_DEFAULT
+      TestUtils.retry(10000) {
+        assertEquals(value, b.config.groupCoordinatorConfig.cachedBufferMaxBytes())
+      }
+    }
+  }
+
+  @Test
+  def testDynamicShareCoordinatorConfigChange(): Unit = {
+    val newCachedBufferMaxBytes = 2 * 1024 * 1024
+    val brokerId: String = this.brokers.head.config.brokerId.toString
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.BROKER, brokerId)
+      val op = new AlterConfigOp(
+        new ConfigEntry(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, newCachedBufferMaxBytes.toString),
+        OpType.SET
+      )
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
+    }
+
+    for (b <- this.brokers) {
+      val value = if (b.config.brokerId.toString == brokerId) newCachedBufferMaxBytes else ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_DEFAULT
+      TestUtils.retry(10000) {
+        assertEquals(value, b.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
+      }
     }
   }
 

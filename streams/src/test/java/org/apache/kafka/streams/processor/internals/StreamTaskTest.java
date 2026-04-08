@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -77,6 +78,8 @@ import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +95,7 @@ import org.mockito.quality.Strictness;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -121,10 +125,12 @@ import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
@@ -184,6 +190,8 @@ public class StreamTaskTest {
     };
     private final MockProcessorNode<Integer, Integer, ?, ?> processorStreamTime = new MockProcessorNode<>(10L);
     private final MockProcessorNode<Integer, Integer, ?, ?> processorSystemTime = new MockProcessorNode<>(10L, PunctuationType.WALL_CLOCK_TIME);
+
+    private final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorStreamTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.STREAM_TIME);
 
     private final String storeName = "store";
     private final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, false);
@@ -554,7 +562,6 @@ public class StreamTaskTest {
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, 10L));
 
         task = createStatefulTask(createConfig("100"), true);
 
@@ -1263,6 +1270,70 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldPunctuateUsingAnchoredStreamStartTime() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorSystemTime = new MockProcessorNode<>(Instant.ofEpochMilli(15), 10L, PunctuationType.WALL_CLOCK_TIME);  // Dummy
+        task = createStatelessTaskWithAnchoredPunctuation(createConfig(), anchoredProcessorSystemTime);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+
+        task.addRecords(partition1, asList(
+                getConsumerRecordWithOffsetAsTimestamp(partition1, 14),
+                getConsumerRecordWithOffsetAsTimestamp(partition1, 24)
+        ));
+
+        task.addRecords(partition2, asList(
+                getConsumerRecordWithOffsetAsTimestamp(partition2, 15),
+                getConsumerRecordWithOffsetAsTimestamp(partition2, 25)
+        ));
+
+        task.updateLags();
+
+        // st: -1
+        assertFalse(task.canPunctuateStreamTime());
+        assertFalse(task.maybePunctuateStreamTime()); // punctuate at 15
+
+        // st: 14
+        assertTrue(task.process(0L));
+        assertEquals(3, task.numBuffered());
+        assertEquals(1, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
+        assertFalse(task.maybePunctuateStreamTime());
+
+        // st: 15
+        // punctuate at 15 due to startTime
+        assertTrue(task.process(0L));
+        assertEquals(2, task.numBuffered());
+        assertEquals(1, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime());
+
+        // st: 24
+        assertTrue(task.process(0L));
+        assertEquals(1, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
+        assertFalse(task.maybePunctuateStreamTime());
+
+        // st: 25
+        // punctuate at 25 due to startTime + interval
+        assertTrue(task.process(0L));
+        assertEquals(0, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime());
+
+        anchoredProcessorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 15L, 25L);
+    }
+
+    @Test
     public void shouldRespectPunctuateCancellationStreamTime() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
@@ -1600,6 +1671,66 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldLogNotReadyWhenStaleAfterThreshold() throws Exception {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        
+        task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
+
+        try (final LogCaptureAppender streamTaskAppender = LogCaptureAppender.createAndRegister(StreamTask.class);
+             final LogCaptureAppender partitionGroupAppender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            
+            // Enable TRACE logging for PartitionGroup to capture the "ready for processing" message
+            partitionGroupAppender.setClassLogger(PartitionGroup.class, Level.TRACE);
+            
+            // Set lastNotReadyLogTime to 100 seconds ago
+            final long initialTime = time.milliseconds();
+            task.setLastNotReadyLogTime(initialTime - 100_000L);
+            
+            // Advance time by 19.999 seconds
+            long newTime = time.milliseconds() + 19_999L;
+            
+            // Should not trigger logging after being stale for 119 seconds
+            assertFalse(task.isProcessable(newTime));
+            List<String> messages = streamTaskAppender.getMessages();
+            assertEquals(0, messages.size(), "No log message should be logged before 120 seconds");
+
+            // Advance time by 20 seconds
+            newTime = time.milliseconds() + 20_000L;
+
+            // Should trigger logging after being stale for 120 seconds
+            assertFalse(task.isProcessable(newTime));
+            
+            // Validate INFO log from StreamTask about partition2 not being ready
+            messages = streamTaskAppender.getMessages();
+            final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag of -1\n\tWaiting to fetch data for topic2-0";
+            final String expectedReadyMessage = "Partition topic1-0 has buffered data, ready for processing";
+            assertThat("Should have logged not ready message", messages.size(), is(1));
+            assertThat(
+                streamTaskAppender.getEvents(),
+                hasItem(Matchers.allOf(
+                    Matchers.hasProperty("level", equalTo("INFO")),
+                    Matchers.hasProperty("message", equalTo(expectedNotReadyMessage))
+                ))
+            );
+            assertThat(messages.get(0), equalTo(expectedNotReadyMessage));
+            
+            // Validate TRACE log from PartitionGroup about partition1 being ready
+            assertThat(
+                partitionGroupAppender.getEvents(),
+                hasItem(Matchers.allOf(
+                    Matchers.hasProperty("level", equalTo("TRACE")),
+                    Matchers.hasProperty("message", containsString(expectedReadyMessage))
+                ))
+            );
+        }
+    }
+
+    @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
@@ -1678,6 +1809,36 @@ public class StreamTaskTest {
         assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 100, now + 110, now + 122, now + 130, now + 235, now + 240);
+    }
+
+    @Test
+    public void shouldPunctuateUsingAnchoredSystemStartTimeWithStartTimeBeforeNow() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+
+        final long now = time.milliseconds();
+        final long testStartTime = now + (10L - (now % 10L));   // Used to make test deterministic
+        time.setCurrentTimeMs(testStartTime);
+        final MockProcessorNode<Integer, Integer, ?, ?> anchoredProcessorSystemTime = new MockProcessorNode<>(Instant.ofEpochMilli(testStartTime - 10), 10L, PunctuationType.WALL_CLOCK_TIME);
+        task = createStatelessTaskWithAnchoredPunctuation(createConfig("100"), anchoredProcessorSystemTime);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertFalse(task.canPunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+
+        // Expects the punctuations to happen at a time satisfying startTime + n * interval
+        // where n is a positive number or 0
+        time.sleep(9);
+        assertFalse(task.canPunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(1);
+        assertTrue(task.canPunctuateSystemTime());
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
+        assertTrue(task.maybePunctuateSystemTime());
+        anchoredProcessorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME,  testStartTime + 10, testStartTime + 20);
     }
 
     @Test
@@ -1819,79 +1980,6 @@ public class StreamTaskTest {
         verify(recordCollector).offsets();
     }
 
-    @Test
-    public void shouldNotCheckpointOffsetsAgainOnCommitIfSnapshotNotChangedMuch() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Long offset = 543L;
-
-        when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
-        when(stateManager.changelogOffsets())
-            .thenReturn(singletonMap(changelogPartition, 10L)) // restoration checkpoint
-            .thenReturn(singletonMap(changelogPartition, 10L))
-            .thenReturn(singletonMap(changelogPartition, 20L));
-
-        task = createStatefulTask(createConfig("100"), true);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { }); // should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(true); // should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(false); // should not checkpoint
-
-        assertThat("Map was empty", task.highWaterMark().size() == 2);
-
-        verify(stateManager, times(2)).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointOffsetsOnCommitIfSnapshotMuchChanged() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Long offset = 543L;
-
-        when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
-        when(stateManager.changelogOffsets())
-            .thenReturn(singletonMap(changelogPartition, 0L))
-            .thenReturn(singletonMap(changelogPartition, 10L))
-            .thenReturn(singletonMap(changelogPartition, 12000L));
-
-        task = createStatefulTask(createConfig("100"), true);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { }); // should checkpoint
-        task.prepareCommit(true);
-        task.postCommit(true); // should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(false); // should checkpoint since the offset delta is greater than the threshold
-
-        assertThat("Map was empty", task.highWaterMark().size() == 2);
-
-        verify(stateManager, times(3)).checkpoint();
-    }
-
-    @Test
-    public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { });
-        task.prepareCommit(true);
-        task.postCommit(false);
-        final File checkpointFile = new File(
-            stateDirectory.getOrCreateDirectoryForTask(taskId),
-            StateManagerUtil.CHECKPOINT_FILE_NAME
-        );
-
-        assertFalse(checkpointFile.exists());
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
@@ -1949,6 +2037,15 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig("100"));
         task.processorContext().setCurrentNode(processorStreamTime);
         task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
+    }
+
+    @Test
+    public void shouldNotThrowExceptionOnAnchoredSchedule() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig("100"));
+        task.processorContext().setCurrentNode(processorStreamTime);
+        task.schedule(Instant.ofEpochMilli(1000), 1,  PunctuationType.STREAM_TIME, timestamp -> { });
     }
 
     @Test
@@ -2080,60 +2177,22 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldSkipCheckpointingSuspendedCreatedTask() {
+    public void shouldCommitForSuspendedTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatefulTask(createConfig("100"), true);
-        task.suspend();
-        task.postCommit(true);
-
-        verify(stateManager, never()).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointForSuspendedTask() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, 1L));
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
         task.suspend();
         task.postCommit(true);
 
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
-    public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
+    public void shouldCommitForSuspendedRunningTaskWithLargeProgress() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, 0L)) // restoration checkpoint
-                .thenReturn(singletonMap(partition1, 1L))
-                .thenReturn(singletonMap(partition1, 2L));
-
-        task = createStatefulTask(createConfig("100"), true);
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { });
-
-        task.prepareCommit(true);
-        task.postCommit(false);
-
-        task.suspend();
-        task.postCommit(false);
-
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointForSuspendedRunningTaskWithLargeProgress() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, 0L))
-                .thenReturn(singletonMap(partition1, 12000L))
-                .thenReturn(singletonMap(partition1, 24000L));
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
@@ -2145,17 +2204,14 @@ public class StreamTaskTest {
         task.suspend();
         task.postCommit(false); // should checkpoint since the offset delta is greater than the threshold
 
-        verify(stateManager, times(3)).checkpoint();
+        verify(stateManager, times(3)).commit();
     }
 
     @Test
-    public void shouldCheckpointWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
+    public void shouldCommitWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final Map<TopicPartition, Long> checkpointableOffsets = singletonMap(partition1, 1L);
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.emptyMap()) // restoration checkpoint
-                .thenReturn(checkpointableOffsets);
         when(recordCollector.offsets()).thenReturn(checkpointableOffsets);
 
         task = createStatefulTask(createConfig(), true);
@@ -2169,7 +2225,7 @@ public class StreamTaskTest {
         task.suspend();
         task.postCommit(true); // should checkpoint
 
-        verify(stateManager, times(2)).checkpoint();
+        verify(stateManager, times(2)).commit();
         verify(stateManager, times(2)).updateChangelogOffsets(checkpointableOffsets);
         verify(recordCollector, times(2)).offsets();
     }
@@ -2193,7 +2249,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotCheckpointOnCloseCreated() {
+    public void shouldNotCommitOnCloseCreated() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final MetricName metricName = setupCloseTaskMetric();
@@ -2210,12 +2266,11 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager, never()).flush();
-        verify(stateManager, never()).checkpoint();
+        verify(stateManager, never()).commit();
     }
 
     @Test
-    public void shouldCheckpointOnCloseRestoringIfNoProgress() {
+    public void shouldCommitOnCloseRestoringIfNoProgress() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -2229,56 +2284,28 @@ public class StreamTaskTest {
 
         assertEquals(Task.State.CLOSED, task.state());
 
-        verify(stateManager, times(2)).flush();
-        verify(stateManager, times(2)).checkpoint();
+        verify(stateManager, times(2)).commit();
     }
 
     @Test
-    public void shouldAlwaysCheckpointStateIfEnforced() {
+    public void shouldAlwaysCommitStateIfEnforced() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.initializeIfNeeded();
-        task.maybeCheckpoint(true);
+        task.maybeCheckpoint();
 
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
-    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.singletonMap(partition1, 50L))
-                .thenReturn(Collections.singletonMap(partition1, 11000L))
-                .thenReturn(Collections.singletonMap(partition1, 12000L));
-
-        task = createOptimizedStatefulTask(createConfig("100"), consumer);
-        task.initializeIfNeeded();
-
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
-        task.maybeCheckpoint(false);  // this should checkpoint
-        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
-
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointOffsetsOnPostCommit() {
+    public void shouldCommitOffsetsOnPostCommit() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
 
         when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, offset + 10000L)) // restoration checkpoint
-                .thenReturn(singletonMap(partition1, offset + 12000L));
 
         task = createOptimizedStatefulTask(createConfig(), consumer);
         task.initializeIfNeeded();
@@ -2298,7 +2325,7 @@ public class StreamTaskTest {
 
         assertEquals(SUSPENDED, task.state());
 
-        verify(stateManager).checkpoint();
+        verify(stateManager, times(2)).commit();
     }
 
     @Test
@@ -2307,7 +2334,6 @@ public class StreamTaskTest {
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
 
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, offset));
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -2330,7 +2356,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager, times(2)).checkpoint();
+        verify(stateManager, times(2)).commit();
         verify(stateManager).close();
     }
 
@@ -2359,18 +2385,16 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
         verify(stateManager, never()).close();
     }
 
     @Test
-    public void shouldThrowOnCloseCleanCheckpointError() {
+    public void shouldThrowOnCloseCleanCommitError() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 54300L;
-        doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).checkpoint();
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, offset));
+        doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).commit();
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -2604,7 +2628,7 @@ public class StreamTaskTest {
                 streamsMetrics,
                 null
         );
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", "processId", time);
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", time);
 
         // The processor topology is missing the topics
         final ProcessorTopology topology = withSources(emptyList(), mkMap());
@@ -2863,25 +2887,25 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCheckpointAfterRestorationWhenAtLeastOnceEnabled() {
+    public void shouldCommitAfterRestorationWhenAtLeastOnceEnabled() {
         final ProcessorStateManager processorStateManager = mockStateManager();
         recordCollector = mock(RecordCollectorImpl.class);
 
         task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        verify(processorStateManager).checkpoint();
+        verify(processorStateManager).commit();
     }
 
     @Test
-    public void shouldNotCheckpointAfterRestorationWhenExactlyOnceEnabled() {
+    public void shouldNotCommitAfterRestorationWhenExactlyOnceEnabled() {
         final ProcessorStateManager processorStateManager = mockStateManager();
         recordCollector = mock(RecordCollectorImpl.class);
 
         task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        verify(processorStateManager, never()).checkpoint();
+        verify(processorStateManager, never()).commit();
         verify(processorStateManager, never()).changelogOffsets();
         verify(recordCollector, never()).offsets();
     }
@@ -3238,7 +3262,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", "processId", time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,
@@ -3275,7 +3299,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", "processId", time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,
@@ -3284,6 +3308,46 @@ public class StreamTaskTest {
             context,
             logContext,
             false
+        );
+    }
+
+    private StreamTask createStatelessTaskWithAnchoredPunctuation(
+            final StreamsConfig config,
+            final MockProcessorNode<Integer, Integer, ?, ?>  anchoredProcessorSystemTime
+    ) {
+        final ProcessorTopology topology = withSources(
+                asList(source1, source2, anchoredProcessorStreamTime, anchoredProcessorSystemTime),
+                mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
+        );
+
+        source1.addChild(anchoredProcessorStreamTime);
+        source2.addChild(anchoredProcessorStreamTime);
+        source1.addChild(anchoredProcessorSystemTime);
+        source2.addChild(anchoredProcessorSystemTime);
+
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
+                taskId,
+                config,
+                stateManager,
+                streamsMetrics,
+                null
+        );
+
+        return new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+                new StreamsMetricsImpl(metrics, "test", time),
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector,
+                context,
+                logContext,
+                false
         );
     }
 
@@ -3311,7 +3375,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", "processId", time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,

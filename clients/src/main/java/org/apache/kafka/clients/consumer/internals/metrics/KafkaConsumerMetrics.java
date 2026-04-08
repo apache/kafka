@@ -26,10 +26,9 @@ import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 
-public class KafkaConsumerMetrics implements AutoCloseable {
-    private final Metrics metrics;
+public class KafkaConsumerMetrics extends AbstractConsumerMetricsManager {
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
@@ -39,9 +38,13 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
-    public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
-        this.metrics = metrics;
-        final String metricGroupName = metricGrpPrefix + CONSUMER_METRICS_SUFFIX;
+    public KafkaConsumerMetrics(Metrics metrics) {
+        this(new MetricsLedger(metrics));
+    }
+
+    private KafkaConsumerMetrics(MetricsLedger metrics) {
+        super(metrics);
+        final String metricGroupName = CONSUMER_METRIC_GROUP;
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.
@@ -109,14 +112,5 @@ public class KafkaConsumerMetrics implements AutoCloseable {
 
     public void recordCommitted(long duration) {
         this.committedSensor.record(duration);
-    }
-
-    @Override
-    public void close() {
-        metrics.removeMetric(lastPollMetricName);
-        metrics.removeSensor(timeBetweenPollSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
-        metrics.removeSensor(commitSyncSensor.name());
-        metrics.removeSensor(committedSensor.name());
     }
 }

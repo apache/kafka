@@ -37,6 +37,11 @@ public class MockAssignor implements TaskAssignor {
     }
 
     @Override
+    public String toString() {
+        return name();
+    }
+
+    @Override
     public GroupAssignment assign(
         final GroupSpec groupSpec,
         final TopologyDescriber topologyDescriber

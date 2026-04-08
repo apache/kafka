@@ -867,6 +867,23 @@ public class ProcessorTopologyTest {
                 equalTo(new TestRecord<>("key3", "value3", null, 3000L)));
     }
 
+
+    @Test
+    public void testTopologyInitializationWithInitialKeyAndValue() {
+        final String initialKey = "key1";
+        final String initialValue = "value1";
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+                Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String());
+        topology.addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1);
+        topology.addProcessor("processor1", defineWithStores(() -> new StatefulProcessorWithInitialization(DEFAULT_STORE_NAME, initialKey, initialValue), Collections.singleton(storeBuilder)), "source1");
+        driver = new TopologyTestDriver(topology, props);
+        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
+        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
+        assertEquals(1, results.size());
+        assertEquals(initialValue, results.get(0).value);
+        assertEquals(initialKey, results.get(0).key);
+    }
+
     @Test
     public void shouldCreateStringWithSourceAndTopics() {
         topology.addSource("source", "topic1", "topic2");
@@ -1263,6 +1280,31 @@ public class ProcessorTopologyTest {
             context.forward(record.withValue(record.value().split("@")[0]));
         }
     }
+
+    private static class StatefulProcessorWithInitialization implements Processor<String, String, Void, Void> {
+        private KeyValueStore<String, String> store;
+        private final String storeName;
+        private final String initialKey;
+        private final String initialValue;
+
+        public StatefulProcessorWithInitialization(final String storeName, final String initialKey, final String initialValue) {
+            this.storeName = storeName;
+            this.initialKey = initialKey;
+            this.initialValue = initialValue;
+        }
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(storeName);
+            store.put(initialKey, initialValue);
+        }
+
+        @Override
+        public void process(final Record<String, String> record) {
+            store.put(record.key(), record.value());
+        }
+    }
+
 
     /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.

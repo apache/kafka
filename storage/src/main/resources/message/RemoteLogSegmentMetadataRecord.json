@@ -82,13 +82,13 @@
       "name": "MaxTimestampMs",
       "type": "int64",
       "versions": "0+",
-      "about": "Maximum timestamp in milli seconds with in this segment."
+      "about": "Maximum timestamp in milliseconds with in this segment."
     },
     {
       "name": "EventTimestampMs",
       "type": "int64",
       "versions": "0+",
-      "about": "Epoch time in milli seconds at which this event is generated."
+      "about": "Epoch time in milliseconds at which this event is generated."
     },
     {
       "name": "SegmentLeaderEpochs",

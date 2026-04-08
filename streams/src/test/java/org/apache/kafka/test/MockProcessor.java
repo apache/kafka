@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,10 @@ public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, 
     public MockProcessor(final PunctuationType punctuationType,
                          final long scheduleInterval) {
         delegate = new MockApiProcessor<>(punctuationType, scheduleInterval);
+    }
+
+    public MockProcessor(final PunctuationType punctuationType, final Instant startTime, final long scheduleInterval) {
+        delegate = new MockApiProcessor<>(punctuationType, startTime, scheduleInterval);
     }
 
     public MockProcessor() {

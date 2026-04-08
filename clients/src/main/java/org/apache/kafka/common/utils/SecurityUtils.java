@@ -33,7 +33,7 @@ import java.util.Map;
 
 public class SecurityUtils {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecurityUtils.class);
 
     private static final Map<String, ResourceType> NAME_TO_RESOURCE_TYPES;
     private static final Map<String, AclOperation> NAME_TO_OPERATIONS;

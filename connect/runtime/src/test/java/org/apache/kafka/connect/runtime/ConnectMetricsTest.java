@@ -62,15 +62,17 @@ public class ConnectMetricsTest {
 
     private static final Map<String, String> DEFAULT_WORKER_CONFIG = Map.of(
         WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
-        WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
+        WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+    );
     private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("connector", 0);
     private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>();
     private ConnectMetrics metrics;
-    
+
     static {
         TAGS.put("t1", "v1");
     }
-    
+
     @BeforeEach
     public void setUp() {
         metrics = new ConnectMetrics("worker1", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime(), "cluster-1");
@@ -242,6 +244,11 @@ public class ConnectMetricsTest {
         }
 
         @Override
+        public String version() {
+            return "test";
+        }
+
+        @Override
         public ConfigDef config() {
             return Converter.super.config();
         }
@@ -328,6 +335,11 @@ public class ConnectMetricsTest {
         }
 
         @Override
+        public String version() {
+            return "test";
+        }
+
+        @Override
         public ConfigDef config() {
             return null;
         }
@@ -370,6 +382,11 @@ public class ConnectMetricsTest {
 
         @Override
         public void configure(Map<String, ?> configs) { }
+
+        @Override
+        public String version() {
+            return "test";
+        }
 
         @Override
         public ConfigDef config() {

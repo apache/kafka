@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -173,7 +172,7 @@ public class MetadataRequest extends AbstractRequest {
                     .setTopicId(topic.topicId())
                     .setErrorCode(error.code())
                     .setIsInternal(false)
-                    .setPartitions(Collections.emptyList()));
+                    .setPartitions(List.of()));
             }
         }
 
@@ -200,9 +199,9 @@ public class MetadataRequest extends AbstractRequest {
 
     public List<Uuid> topicIds() {
         if (isAllTopics())
-            return Collections.emptyList();
+            return List.of();
         else if (version() < 10)
-            return Collections.emptyList();
+            return List.of();
         else
             return data.topics()
                     .stream()

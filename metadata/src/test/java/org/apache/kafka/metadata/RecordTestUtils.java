@@ -23,7 +23,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.MockRandom;
@@ -106,22 +106,7 @@ public class RecordTestUtils {
         }
     }
 
-    public static class ImageDeltaPair<I, D> {
-        private final Supplier<I> imageSupplier;
-        private final Function<I, D> deltaCreator;
-
-        public ImageDeltaPair(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
-            this.imageSupplier = imageSupplier;
-            this.deltaCreator = deltaCreator;
-        }
-
-        public Supplier<I> imageSupplier() {
-            return imageSupplier;
-        }
-
-        public Function<I, D> deltaCreator() {
-            return deltaCreator;
-        }
+    public record ImageDeltaPair<I, D>(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
     }
 
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
@@ -277,7 +262,7 @@ public class RecordTestUtils {
                         setHost("localhost").
                         setPort(9000 + id).
                         setSecurityProtocol(SecurityProtocol.SSL.id)
-                ).iterator()
+                )
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
                 List.of(
@@ -285,7 +270,7 @@ public class RecordTestUtils {
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
-                ).iterator()
+                )
             ));
     }
 }

@@ -74,6 +74,7 @@ public class ShareGroupMember extends ModernGroupMember {
             this.memberId = Objects.requireNonNull(newMemberId);
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
+            this.state = member.state;
             this.rackId = member.rackId;
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
@@ -169,6 +170,11 @@ public class ShareGroupMember extends ModernGroupMember {
         }
     }
 
+    /**
+     * The partitions assigned to this member.
+     */
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
+
     private ShareGroupMember(
           String memberId,
           int memberEpoch,
@@ -189,9 +195,26 @@ public class ShareGroupMember extends ModernGroupMember {
             clientId,
             clientHost,
             subscribedTopicNames,
-            state,
-            assignedPartitions
+            state
         );
+        this.assignedPartitions = assignedPartitions;
+    }
+
+    /**
+     * @return The partitions assigned to this member.
+     */
+    public Map<Uuid, Set<Integer>> assignedPartitions() {
+        return assignedPartitions;
+    }
+
+    /**
+     * @return True if the two provided members have different assigned partitions.
+     */
+    public static boolean hasAssignedPartitionsChanged(
+        ShareGroupMember member1,
+        ShareGroupMember member2
+    ) {
+        return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
 
     /**
