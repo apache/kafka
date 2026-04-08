@@ -657,7 +657,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: shut down instance 1, wipe its entire state, then restart.
-        // This simulates the LittleHorse scenario: complete state deletion followed by
+        // This simulates the following scenario: complete state deletion followed by
         // changelog restoration. The standby tasks on this instance will have stores
         // that were never initialized with offsets.
         closeStreams(streams1);
