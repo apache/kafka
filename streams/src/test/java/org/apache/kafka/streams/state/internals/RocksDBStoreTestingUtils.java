@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -165,6 +166,7 @@ public final class RocksDBStoreTestingUtils {
 
     /**
      * Finds all RocksDB store directories for the given store name across all task directories.
+     * Returns an empty list if no task directories exist.
      *
      * @param stateDir the root state directory
      * @param appId    the application ID
@@ -177,7 +179,7 @@ public final class RocksDBStoreTestingUtils {
             file.isDirectory() && !file.getName().startsWith("."));
 
         if (taskDirs == null || taskDirs.length == 0) {
-            throw new IllegalStateException("No task directories found under " + appDir);
+            return Collections.emptyList();
         }
 
         final List<File> storeDirs = new ArrayList<>();

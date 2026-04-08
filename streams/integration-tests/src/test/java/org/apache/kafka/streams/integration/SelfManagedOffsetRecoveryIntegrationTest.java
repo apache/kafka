@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -26,6 +27,8 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -47,10 +50,17 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration tests for KIP-1035 column family offset recovery.
@@ -188,17 +198,8 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
         streams.cleanUp();
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
-    }
-
-    private void waitForRunning(final KafkaStreams kafkaStreams) throws Exception {
-        TestUtils.waitForCondition(
-            () -> kafkaStreams.state().equals(KafkaStreams.State.RUNNING),
-            Duration.ofSeconds(60).toMillis(),
-            () -> "Expected RUNNING state but was " + kafkaStreams.state()
-        );
     }
 
     private Properties producerConfig() {
@@ -238,6 +239,17 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
     }
 
     /**
+     * Extracts the latest count for each key from the output records.
+     */
+    private Map<String, Long> latestCountsFromOutput(final List<KeyValue<String, Long>> output) {
+        final Map<String, Long> latest = new HashMap<>();
+        for (final KeyValue<String, Long> record : output) {
+            latest.put(record.key, record.value);
+        }
+        return latest;
+    }
+
+    /**
      * ALOS baseline: after an unclean shutdown (status=open), the store should recover
      * because ALOS opens with ignoreInvalidState=true.
      */
@@ -265,8 +277,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         // Phase 3: restart — should recover despite status=open
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         // Phase 4: produce more records, verify processing continues
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -275,10 +286,14 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         );
         produceRecords(additionalRecords);
 
-        // We expect output from both initial and additional records.
-        // After recovery, state may be rebuilt from changelog, so we just verify
-        // that processing continues and we get at least the additional records' output.
-        waitForOutput(initialRecords.size() + additionalRecords.size());
+        // ALOS may produce duplicates, so we verify processing continues and counts
+        // are at least the expected values (duplicates are acceptable under ALOS).
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
+
+        // A: 3 (v1, v2, v3), B: 1, C: 1 — at minimum
+        assertTrue(counts.get("A") >= 3L, "A count should be at least 3");
+        assertTrue(counts.get("C") >= 1L, "C count should be at least 1");
     }
 
     /**
@@ -314,8 +329,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         // Phase 3: restart with EOS — should detect corruption, wipe, and restore from changelog
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         // Phase 4: produce more records and verify processing continues correctly
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -325,8 +339,13 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         produceRecords(additionalRecords);
 
         // After recovery from corruption, state is rebuilt from changelog.
-        // New consumer group reads all committed output from the beginning.
-        waitForOutput(initialRecords.size() + additionalRecords.size());
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
+
+        // A: 3 (v1, v2, v3), B: 1, C: 1 — exact under EOS
+        assertEquals(3L, counts.get("A"), "A count after EOS recovery");
+        assertEquals(1L, counts.get("B"), "B count after EOS recovery");
+        assertEquals(1L, counts.get("C"), "C count after EOS recovery");
     }
 
     /**
@@ -358,8 +377,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         // Phase 3: restart — should detect missing offsets, mark task corrupted, wipe and restore
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         // Phase 4: produce more records, verify data is re-bootstrapped from changelog
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -368,7 +386,12 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         );
         produceRecords(additionalRecords);
 
-        waitForOutput(initialRecords.size() + additionalRecords.size());
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
+
+        assertEquals(3L, counts.get("A"), "A count after missing offsets recovery");
+        assertEquals(1L, counts.get("B"), "B count after missing offsets recovery");
+        assertEquals(1L, counts.get("C"), "C count after missing offsets recovery");
     }
 
     /**
@@ -403,8 +426,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         // Phase 3: restart — should recover from both corruptions
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         // Phase 4: produce more records, verify data is re-bootstrapped correctly
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -413,68 +435,12 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         );
         produceRecords(additionalRecords);
 
-        waitForOutput(initialRecords.size() + additionalRecords.size());
-    }
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
 
-    /**
-     * End-to-end EOS correctness after recovery: verifies that no duplicate output records
-     * are visible via READ_COMMITTED and that final aggregation values are correct.
-     *
-     * Without the fix, the application crashes on restart due to ProcessorStateException.
-     */
-    @Test
-    public void shouldMaintainEosGuaranteesAcrossUncleanShutdownAndRecovery() throws Exception {
-        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-
-        // Phase 1: produce records with known keys, wait for committed output
-        final List<KeyValue<String, String>> batch1 = Arrays.asList(
-            new KeyValue<>("X", "a"),
-            new KeyValue<>("Y", "b"),
-            new KeyValue<>("X", "c")
-        );
-
-        startStreams();
-        produceRecords(batch1);
-        waitForOutput(batch1.size());
-
-        // Phase 2: clean shutdown, corrupt store status
-        closeStreams(streams);
-        streams = null;
-
-        setAllStoreStatusesToOpen(STORE_NAME);
-
-        // Phase 3: restart, produce more records with same keys
-        final StreamsBuilder builder = buildCountTopology();
-        streams = new KafkaStreams(builder.build(), streamsConfig);
-        streams.start();
-        waitForRunning(streams);
-
-        final List<KeyValue<String, String>> batch2 = Arrays.asList(
-            new KeyValue<>("X", "d"),
-            new KeyValue<>("Y", "e")
-        );
-        produceRecords(batch2);
-
-        // Phase 4: collect all committed output and verify correctness
-        final List<KeyValue<String, Long>> allOutput = waitForOutput(batch1.size() + batch2.size());
-
-        // Find the latest count for each key — these should reflect correct aggregation
-        // without double-counting. X had 3 records total (a, c, d) -> count=3, Y had 2 (b, e) -> count=2
-        long latestX = 0;
-        long latestY = 0;
-        for (final KeyValue<String, Long> record : allOutput) {
-            if ("X".equals(record.key)) {
-                latestX = Math.max(latestX, record.value);
-            } else if ("Y".equals(record.key)) {
-                latestY = Math.max(latestY, record.value);
-            }
-        }
-
-        // X: 3 records total -> count should be exactly 3
-        // Y: 2 records total -> count should be exactly 2
-        // If there were duplicates from recovery, counts would be higher
-        org.junit.jupiter.api.Assertions.assertEquals(3L, latestX, "X count should be 3 (no double-counting after recovery)");
-        org.junit.jupiter.api.Assertions.assertEquals(2L, latestY, "Y count should be 2 (no double-counting after recovery)");
+        assertEquals(3L, counts.get("A"), "A count after combined corruption recovery");
+        assertEquals(1L, counts.get("B"), "B count after combined corruption recovery");
+        assertEquals(1L, counts.get("C"), "C count after combined corruption recovery");
     }
 
     /**
@@ -497,8 +463,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         final StreamsBuilder builder1 = buildDualStoreTopology();
         streams = new KafkaStreams(builder1.build(), streamsConfig);
         streams.cleanUp();
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         produceRecords(initialRecords);
         // Wait for output from the first store
@@ -514,8 +479,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         // Phase 3: restart — should recover the corrupted store, keep the clean one
         final StreamsBuilder builder2 = buildDualStoreTopology();
         streams = new KafkaStreams(builder2.build(), streamsConfig);
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         // Phase 4: produce more records, verify both stores produce correct output
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -524,7 +488,13 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         );
         produceRecords(additionalRecords);
 
-        waitForOutput(initialRecords.size() + additionalRecords.size());
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
+
+        // Store 1 counts by key: A=3 (v1, v1, v1), B=1 (v2), C=1 (v3)
+        assertEquals(3L, counts.get("A"), "A count after multi-store recovery");
+        assertEquals(1L, counts.get("B"), "B count after multi-store recovery");
+        assertEquals(1L, counts.get("C"), "C count after multi-store recovery");
     }
 
     /**
@@ -538,7 +508,6 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
     public void shouldRecoverStandbyTaskFromUncleanShutdownWithEos() throws Exception {
         streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         streamsConfig.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
 
         // Use separate state dirs for each instance
         final File stateDir1 = TestUtils.tempDirectory();
@@ -560,11 +529,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         final KafkaStreams streams2 = new KafkaStreams(builder2.build(), config2);
         streams1.cleanUp();
         streams2.cleanUp();
-        streams1.start();
-        streams2.start();
-
-        waitForRunning(streams1);
-        waitForRunning(streams2);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(Arrays.asList(streams1, streams2));
 
         // Phase 2: produce data, wait for processing
         final List<KeyValue<String, String>> initialRecords = Arrays.asList(
@@ -587,8 +552,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         // Phase 4: restart instance 1 — should recover from standby or changelog
         final StreamsBuilder builder1Restart = buildCountTopology();
         final KafkaStreams streams1Restart = new KafkaStreams(builder1Restart.build(), config1);
-        streams1Restart.start();
-        waitForRunning(streams1Restart);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams1Restart);
 
         // Phase 5: shut down instance 2, verify instance 1 takes over
         closeStreams(streams2);
@@ -600,7 +564,13 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         );
         produceRecords(additionalRecords);
 
-        waitForOutput(initialRecords.size() + additionalRecords.size());
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
+
+        // A: 3 (v1, v2, v3), B: 1, C: 1
+        assertEquals(3L, counts.get("A"), "A count after standby recovery");
+        assertEquals(1L, counts.get("B"), "B count after standby recovery");
+        assertEquals(1L, counts.get("C"), "C count after standby recovery");
 
         // Clean up — set streams to instance 1 so tearDown handles it
         streams = streams1Restart;
@@ -621,10 +591,9 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
     public void shouldNotThrowTaskCorruptedOnStandbyAfterStateWipe() throws Exception {
         streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         streamsConfig.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
 
-        final File stateDir1 = TestUtils.tempDirectory();
-        final File stateDir2 = TestUtils.tempDirectory();
+        final File stateDir1 = TestUtils.tempDirectory("instance1-state");
+        final File stateDir2 = TestUtils.tempDirectory("instance2-state");
 
         final Properties config1 = new Properties();
         config1.putAll(streamsConfig);
@@ -642,11 +611,7 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         final KafkaStreams streams2 = new KafkaStreams(builder2.build(), config2);
         streams1.cleanUp();
         streams2.cleanUp();
-        streams1.start();
-        streams2.start();
-
-        waitForRunning(streams1);
-        waitForRunning(streams2);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(Arrays.asList(streams1, streams2));
 
         final List<KeyValue<String, String>> initialRecords = Arrays.asList(
             new KeyValue<>("A", "v1"),
@@ -657,16 +622,42 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
         waitForOutput(initialRecords.size());
 
         // Phase 2: shut down instance 1, wipe its entire state, then restart.
-        // This simulates the following scenario: complete state deletion followed by
-        // changelog restoration. The standby tasks on this instance will have stores
-        // that were never initialized with offsets.
         closeStreams(streams1);
         streams1.cleanUp();
 
+        // Verify that no RocksDB store directories exist.
+        final String appId = streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
+        final File stateDirForStreamsOne = new File(stateDir1, appId);
+        final List<File> storeDirsAfterCleanup = RocksDBStoreTestingUtils.findAllStoreDirs(
+            stateDir1, appId, STORE_NAME);
+        assertTrue(storeDirsAfterCleanup.isEmpty(),
+            "No store directories should exist after cleanUp, but found: " + storeDirsAfterCleanup);
+
         final StreamsBuilder builder1Restart = buildCountTopology();
         final KafkaStreams streams1Restart = new KafkaStreams(builder1Restart.build(), config1);
-        streams1Restart.start();
-        waitForRunning(streams1Restart);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams1Restart);
+
+        // Wait for instance 1 to have standby tasks
+        TestUtils.waitForCondition(() ->
+            streams1Restart.metadataForLocalThreads().stream()
+                .anyMatch(t -> !t.standbyTasks().isEmpty()),
+            60_000, "Instance 1 should have standby tasks after restart");
+
+        // Verify that store directories now exist for the standby tasks —
+        // these were freshly created from changelog restoration, not carried over.
+        final Set<TopicPartition> standbyPartitions = new HashSet<>();
+        for (final ThreadMetadata threadMd : streams1Restart.metadataForLocalThreads()) {
+            for (final TaskMetadata taskMd : threadMd.standbyTasks()) {
+                standbyPartitions.addAll(taskMd.topicPartitions());
+            }
+        }
+        assertFalse(standbyPartitions.isEmpty(),
+            "Instance 1 should have standby partitions after restart");
+        for (final TopicPartition tp : standbyPartitions) {
+            final File storeDir = new File(stateDirForStreamsOne, "0_" + tp.partition() + "/rocksdb/" + STORE_NAME);
+            assertTrue(storeDir.exists(),
+                "Standby store directory should exist after changelog restore: " + storeDir);
+        }
 
         // Phase 3: trigger a rebalance by shutting down instance 2 and restarting it.
         // Before the fix, the standby tasks on instance 1 would throw
@@ -675,11 +666,11 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
 
         final StreamsBuilder builder2Restart = buildCountTopology();
         final KafkaStreams streams2Restart = new KafkaStreams(builder2Restart.build(), config2);
-        streams2Restart.start();
-
-        // Both instances should reach RUNNING without TaskCorruptedException
-        waitForRunning(streams1Restart);
-        waitForRunning(streams2Restart);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams2Restart);
+        // streams1Restart is already running — just wait for it to stabilize after rebalance
+        TestUtils.waitForCondition(
+            () -> streams1Restart.state() == KafkaStreams.State.RUNNING,
+            60_000, "Instance 1 should return to RUNNING after rebalance");
 
         // Phase 4: verify processing still works after rebalance
         final List<KeyValue<String, String>> additionalRecords = Arrays.asList(
@@ -687,7 +678,13 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
             new KeyValue<>("C", "v1")
         );
         produceRecords(additionalRecords);
-        waitForOutput(initialRecords.size() + additionalRecords.size());
+
+        final List<KeyValue<String, Long>> allOutput = waitForOutput(initialRecords.size() + additionalRecords.size());
+        final Map<String, Long> counts = latestCountsFromOutput(allOutput);
+
+        assertEquals(3L, counts.get("A"), "A count after state wipe and rebalance");
+        assertEquals(1L, counts.get("B"), "B count after state wipe and rebalance");
+        assertEquals(1L, counts.get("C"), "C count after state wipe and rebalance");
 
         // Clean up
         closeStreams(streams2Restart);
