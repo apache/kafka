@@ -3518,7 +3518,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, false, tpId, partitionData, FetchIsolation.TXN_COMMITTED
+                0, false, tpId, partitionData, FetchIsolation.TXN_COMMITTED, 0
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3598,7 +3598,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, minOneMessage, tpId, partitionData, FetchIsolation.HIGH_WATERMARK
+                0, minOneMessage, tpId, partitionData, FetchIsolation.HIGH_WATERMARK, 0
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3684,7 +3684,7 @@ public class RemoteLogManagerTest {
         when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
         doNothing().when(firstBatch).writeTo(capture.capture());
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, true, tpId, partitionData, FetchIsolation.HIGH_WATERMARK
+                0, true, tpId, partitionData, FetchIsolation.HIGH_WATERMARK, 0
         );
 
 
@@ -4140,7 +4140,7 @@ public class RemoteLogManagerTest {
                 Uuid.randomUuid(), fetchOffset, 0, 100, Optional.empty());
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
                 1048576, true, leaderTopicIdPartition,
-                partitionData, FetchIsolation.HIGH_WATERMARK);
+                partitionData, FetchIsolation.HIGH_WATERMARK, 0);
         FetchDataInfo fetchDataInfo = remoteLogManager.read(remoteStorageFetchInfo);
         // firstBatch baseOffset may not be equal to the fetchOffset
         assertEquals(9, fetchDataInfo.fetchOffsetMetadata.messageOffset);
@@ -4269,6 +4269,38 @@ public class RemoteLogManagerTest {
         assertEquals(6, remoteLogManager.followerThreadPoolSize());
         remoteLogManager.resizeFollowerThreadPool(4);
         assertEquals(4, remoteLogManager.followerThreadPoolSize());
+    }
+
+    @Test
+    void testQuotaStartsUnlimitedWithoutExplicitConfig() throws Exception {
+        Properties props = brokerConfig;
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        appendRLMConfig(props);
+
+        RemoteLogManagerConfig rlmConfig = configs(props);
+        RemoteLogManager rlm = new RemoteLogManager(
+            rlmConfig, brokerId, logDir, clusterId, time,
+            tp -> Optional.empty(),
+            (topicPartition, offset) -> { },
+            brokerTopicStats, metrics, endPoint
+        );
+
+        try {
+            assertEquals(Long.MAX_VALUE, (long) rlm.fetchQuotaManager().quota().bound());
+            assertEquals(Long.MAX_VALUE, (long) rlm.copyQuotaManager().quota().bound());
+
+            long throttleTime = rlm.recordAndCheckFetchQuota(100_000_000);
+            assertEquals(0L, throttleTime);
+
+            long fetchQuota = 1_000_000L;
+            rlm.updateFetchQuota(fetchQuota);
+            assertEquals(fetchQuota, (long) rlm.fetchQuotaManager().quota().bound());
+
+            throttleTime = rlm.recordAndCheckFetchQuota(50_000);
+            assertTrue(throttleTime > 0);
+        } finally {
+            rlm.close();
+        }
     }
 
     private void appendRecordsToFile(File file, int nRecords, int nRecordsPerBatch) throws IOException {

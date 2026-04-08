@@ -21,5 +21,5 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 
 public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
-                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
+                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation, int quotaReservedBytes) {
 }
