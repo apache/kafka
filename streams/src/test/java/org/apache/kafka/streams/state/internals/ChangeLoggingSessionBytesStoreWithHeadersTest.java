@@ -27,6 +27,8 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.SessionStore;
 
+import java.util.Arrays;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,8 @@ import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,12 +104,12 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            headers,
-            Position.emptyPosition()
+            eq(store.name()),
+            eq(binaryKey),
+            eq(value1),
+            eq(0L),
+            argThat(actual -> Arrays.equals(actual.toArray(), headers.toArray())),
+            eq(Position.emptyPosition())
         );
     }
 
@@ -124,12 +128,12 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            headers,
-            POSITION
+            eq(store.name()),
+            eq(binaryKey),
+            eq(value1),
+            eq(0L),
+            argThat(actual -> Arrays.equals(actual.toArray(), headers.toArray())),
+            eq(POSITION)
         );
     }
 
@@ -217,12 +221,12 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            headers,
-            Position.emptyPosition()
+            eq(store.name()),
+            eq(binaryKey),
+            eq(value1),
+            eq(0L),
+            argThat(actual -> Arrays.equals(actual.toArray(), headers.toArray())),
+            eq(Position.emptyPosition())
         );
     }
 }
