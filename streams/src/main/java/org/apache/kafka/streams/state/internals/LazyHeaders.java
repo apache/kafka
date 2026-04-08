@@ -18,9 +18,11 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -33,12 +35,13 @@ import java.util.Objects;
  * <p>Headers added via {@link #add(Header)} or {@link #add(String, byte[])} before
  * materialization are accumulated in a side list and merged on first read access.
  *
- * <p>Thread safety: uses volatile + synchronized for safe lazy initialization.
+ * <p>Instances are confined to a single {@code StreamThread} and are not shared
+ * across threads, so no synchronization is needed.
  */
 class LazyHeaders implements Headers {
 
     private final byte[] rawHeaders;
-    private volatile RecordHeaders materialized;
+    private RecordHeaders materialized;
     private List<Header> pendingAdds;
 
     /**
@@ -53,30 +56,23 @@ class LazyHeaders implements Headers {
     }
 
     private RecordHeaders materialize() {
-        RecordHeaders result = materialized;
-        if (result == null) {
-            synchronized (this) {
-                result = materialized;
-                if (result == null) {
-                    final Headers deserialized = HeadersDeserializer.deserialize(rawHeaders);
-                    result = (deserialized instanceof RecordHeaders)
-                        ? (RecordHeaders) deserialized
-                        : new RecordHeaders(deserialized);
-                    if (pendingAdds != null) {
-                        for (final Header h : pendingAdds) {
-                            result.add(h);
-                        }
-                        pendingAdds = null;
-                    }
-                    materialized = result;
+        if (materialized == null) {
+            final Headers deserialized = HeadersDeserializer.deserialize(rawHeaders);
+            materialized = (deserialized instanceof RecordHeaders)
+                ? (RecordHeaders) deserialized
+                : new RecordHeaders(deserialized);
+            if (pendingAdds != null) {
+                for (final Header h : pendingAdds) {
+                    materialized.add(h);
                 }
+                pendingAdds = null;
             }
         }
-        return result;
+        return materialized;
     }
 
     /**
-     * Returns true if the headers have not yet been deserialized.
+     * Returns true if the headers have been deserialized.
      * Visible for testing.
      */
     boolean isDeserialized() {
@@ -89,23 +85,17 @@ class LazyHeaders implements Headers {
         if (materialized != null) {
             materialized.add(header);
         } else {
-            synchronized (this) {
-                if (materialized != null) {
-                    materialized.add(header);
-                } else {
-                    if (pendingAdds == null) {
-                        pendingAdds = new ArrayList<>();
-                    }
-                    pendingAdds.add(header);
-                }
+            if (pendingAdds == null) {
+                pendingAdds = new ArrayList<>();
             }
+            pendingAdds.add(header);
         }
         return this;
     }
 
     @Override
     public Headers add(final String key, final byte[] value) throws IllegalStateException {
-        return add(new org.apache.kafka.common.header.internals.RecordHeader(key, value));
+        return add(new RecordHeader(key, value));
     }
 
     @Override
@@ -141,12 +131,12 @@ class LazyHeaders implements Headers {
         final Headers other = (o instanceof LazyHeaders)
             ? ((LazyHeaders) o).materialize()
             : (Headers) o;
-        return java.util.Arrays.equals(materialize().toArray(), other.toArray());
+        return Arrays.equals(materialize().toArray(), other.toArray());
     }
 
     @Override
     public int hashCode() {
-        return java.util.Arrays.hashCode(materialize().toArray());
+        return Arrays.hashCode(materialize().toArray());
     }
 
     @Override
