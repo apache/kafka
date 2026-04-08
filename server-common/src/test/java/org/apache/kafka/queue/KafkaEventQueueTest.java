@@ -425,6 +425,17 @@ public class KafkaEventQueueTest {
         }
     }
 
+    /**
+     * Wait for the queue's event handler thread to enter cond.await(), ensuring
+     * that startIdleMs has been captured before the test advances MockTime.
+     */
+    private static void waitForQueueThreadToBeIdle(Thread queueThread) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> queueThread.getState() == Thread.State.WAITING,
+                "Queue thread should be waiting"
+        );
+    }
+
     @Test
     public void testIdleTimeCallback() throws Exception {
         MockTime time = new MockTime();
@@ -456,12 +467,7 @@ public class KafkaEventQueueTest {
             }));
             assertEquals("event1-processed", event1.get());
 
-            // Wait for the queue thread to enter cond.await() before advancing MockTime.
-            // This ensures startIdleMs is captured before the time advancement.
-            TestUtils.waitForCondition(
-                    () -> queueThread.getState() == Thread.State.WAITING,
-                    "Queue thread should be waiting"
-            );
+            waitForQueueThreadToBeIdle(queueThread);
 
             long timeBeforeWait = time.milliseconds();
             long waitTime5Ms = 5;
@@ -476,11 +482,7 @@ public class KafkaEventQueueTest {
             assertEquals(timeBeforeWait + waitTime5Ms, lastCurrentTimeMs.get(), "Current time should be " + (timeBeforeWait + waitTime5Ms) + "ms, was: " + lastCurrentTimeMs.get());
 
             // Test 2: Deferred event
-            // Wait for the queue thread to enter cond.await() before advancing MockTime.
-            TestUtils.waitForCondition(
-                    () -> queueThread.getState() == Thread.State.WAITING,
-                    "Queue thread should be waiting"
-            );
+            waitForQueueThreadToBeIdle(queueThread);
 
             long timeBeforeDeferred = time.milliseconds();
             long waitTime2Ms = 2;
