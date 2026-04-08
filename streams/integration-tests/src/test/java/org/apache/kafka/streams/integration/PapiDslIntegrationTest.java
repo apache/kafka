@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -35,9 +36,11 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.SlidingWindows;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -665,7 +668,7 @@ public class PapiDslIntegrationTest {
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new org.apache.kafka.common.serialization.LongDeserializer());
+            final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new LongDeserializer());
 
             inputTopic.pipeInput("key1", "value1");
 
@@ -690,12 +693,25 @@ public class PapiDslIntegrationTest {
                 materialized.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
             )
             .toStream()
-            .to("output-topic");
+            .process(() -> new ContextualProcessor<Windowed<String>, String, Windowed<String>, String>() {
+                @Override
+                public void process(final Record<Windowed<String>, String> record) {
+                    final WindowStore<String, ValueTimestampHeaders<String>> store = context().getStateStore("table-store");
+
+                    try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> it = store.all()) {
+                        while (it.hasNext()) {
+                            final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> row = it.next();
+                            context().forward(new Record<>(row.key, row.value.value(), row.value.timestamp()));
+                        }
+                    }
+                }
+            }, "table-store")
+            .to("output-topic", Produced.with(WindowedSerdes.timeWindowedSerdeFrom(String.class, Duration.ofHours(1L).toMillis()), Serdes.String()));
 
         // Verify topology can be built and run with window headers store supplier
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<Windowed<String>, String> outputTopic = testDriver.createOutputTopic("output-topic", new org.apache.kafka.streams.kstream.TimeWindowedDeserializer<>(new StringDeserializer(), Duration.ofHours(1L).toMillis()), new StringDeserializer());
+            final TestOutputTopic<Windowed<String>, String> outputTopic = testDriver.createOutputTopic("output-topic", new TimeWindowedDeserializer<>(new StringDeserializer(), Duration.ofHours(1L).toMillis()), new StringDeserializer());
 
             inputTopic.pipeInput("key1", "value1");
 
