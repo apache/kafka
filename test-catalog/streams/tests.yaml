@@ -4687,6 +4687,7 @@ org.apache.kafka.streams.state.internals.KeyValueSegmentsTest:
 - shouldNotCreateSegmentThatIsAlreadyExpired
 - shouldOpenExistingSegments
 - shouldRollSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 - shouldUpdateSegmentFileNameFromOldColonFormatToNewFormat
 - shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat
 org.apache.kafka.streams.state.internals.KeyValueStoreBuilderTest:
@@ -4822,6 +4823,7 @@ org.apache.kafka.streams.state.internals.LogicalKeyValueSegmentsTest:
 - shouldNotCreateReservedSegmentFromRegularMethod
 - shouldNotCreateReservedSegmentWithNonNegativeId
 - shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.MaybeTest:
 - shouldAnswerIsDefined
 - shouldReturnDefinedValue
@@ -5338,6 +5340,7 @@ org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStoreTest:
 - shouldRestoreToByteStoreForActiveTask
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest:
 - shouldBackwardFetchAllSessionsWithSameRecordKey
 - shouldBackwardFetchAllSessionsWithinKeyRange
@@ -5838,6 +5841,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreTe
 - shouldRestoreToByteStoreForActiveTask
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreWithHeadersTest:
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
@@ -5860,6 +5864,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreWi
 - shouldRestoreToByteStoreForActiveTask
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - prefixScanShouldNotThrowConcurrentModificationException
 - shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug
@@ -6185,6 +6190,7 @@ org.apache.kafka.streams.state.internals.SessionSegmentsWithHeadersTest:
 - shouldGetSegmentsWithinTimeRange
 - shouldNotCreateSegmentThatIsAlreadyExpired
 - shouldOpenExistingSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.SessionStoreBuilderTest:
 - shouldHaveCachingAndChangeLoggingWhenBothEnabled
 - shouldHaveCachingStoreWhenEnabled
@@ -6513,6 +6519,7 @@ org.apache.kafka.streams.state.internals.TimestampedSegmentsTest:
 - shouldNotCreateSegmentThatIsAlreadyExpired
 - shouldOpenExistingSegments
 - shouldRollSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 - shouldUpdateSegmentFileNameFromOldColonFormatToNewFormat
 - shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat
 org.apache.kafka.streams.state.internals.TimestampedSegmentsWithHeadersTest:
@@ -6527,6 +6534,7 @@ org.apache.kafka.streams.state.internals.TimestampedSegmentsWithHeadersTest:
 - shouldGetSegmentsWithinTimeRange
 - shouldNotCreateSegmentThatIsAlreadyExpired
 - shouldOpenExistingSegments
+- shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterTest:
 - shouldCollectExecutionInfoForWindowKeyQueryWhenRequested
 - shouldCollectExecutionInfoForWindowRangeQueryWhenRequested
