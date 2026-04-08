@@ -915,6 +915,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testSubscriptionOnNullTopicCollection
 - testSubscriptionWithEmptyPartitionAssignment
 - testUnSubscribingNonExisingMetricsDoesntCauseError
+- testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled
 - testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration
 - testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration
 - testUnsubscribingCustomMetricsWithSameNameDoesntAffectConsumerMetrics
@@ -1227,6 +1228,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testSubscriptionOnEmptyTopic
 - testSubscriptionOnNullTopic
 - testSuccessfulStartupShutdown
+- testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled
 - testUnsubscribeGeneratesUnsubscribeEvent
 - testUnsubscribeWithoutGroupId
 - testVerifyApplicationEventOnShutdown

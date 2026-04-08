@@ -298,6 +298,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumerSimpleConsumption
 - testAsyncConsumerStallBetweenPoll
 - testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart
+- testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled
 - testClassicConsumerAutoOffsetReset
 - testClassicConsumerCloseLeavesGroupOnInterrupt
 - testClassicConsumerCloseOnBrokerShutdown
@@ -335,6 +336,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testClassicConsumerSimpleConsumption
 - testClassicConsumerStallBetweenPoll
 - testClassicConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart
+- testClassicConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled
 - testClassicConsumingWithNullGroupId
 org.apache.kafka.clients.consumer.SaslPlainPlaintextConsumerTest:
 - testAsyncConsumeCoordinatorFailover
