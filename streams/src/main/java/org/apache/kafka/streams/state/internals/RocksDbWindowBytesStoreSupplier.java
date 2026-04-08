@@ -27,11 +27,11 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
         TIMESTAMPED_WINDOW_STORE_WITH_HEADERS
     }
 
-    private final String name;
-    private final long retentionPeriod;
-    private final long segmentInterval;
-    private final long windowSize;
-    private final boolean retainDuplicates;
+    protected final String name;
+    protected final long retentionPeriod;
+    protected final long segmentInterval;
+    protected final long windowSize;
+    protected final boolean retainDuplicates;
     private final WindowStoreTypes windowStoreType;
 
     public RocksDbWindowBytesStoreSupplier(
