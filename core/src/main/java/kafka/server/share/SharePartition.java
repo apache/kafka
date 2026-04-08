@@ -1131,7 +1131,7 @@ public class SharePartition {
 
                 // Successfully updated the state of the offset and created a persister state batch for write to persister.
                 persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
-                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount()), null));
                 if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
                     deliveryCompleteCount.incrementAndGet();
                 }
@@ -1172,7 +1172,7 @@ public class SharePartition {
 
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
-                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount()), null));
             if (isStateTerminal(updateResult.state())) {
                 deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
             }
@@ -2326,6 +2326,7 @@ public class SharePartition {
                     // mapping between bytes and record state type. All ack types have been added except for RENEW which
                     // has been handled above.
                     RecordState recordState = recordStateWithDlq(ackType);
+                    Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQ.CLIENT_REJECT : null;
                     if (recordState == null) {
                         return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
                     }
@@ -2344,9 +2345,10 @@ public class SharePartition {
                         return Optional.of(new InvalidRecordStateException(
                             "Unable to acknowledge records for the batch"));
                     }
+
                     // Successfully updated the state of the offset and created a persister state batch for write to persister.
                     persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
-                        offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                        offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount()), dlqCause));
                     if (isStateTerminal(updateResult.state())) {
                         deliveryCompleteCount.incrementAndGet();
                     }
@@ -2405,6 +2407,7 @@ public class SharePartition {
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
             RecordState recordState = recordStateWithDlq(ackType);
+            Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQ.CLIENT_REJECT : null;
             if (recordState == null) {
                 return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
             }
@@ -2425,7 +2428,7 @@ public class SharePartition {
 
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
-                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount()), dlqCause));
             if (isStateTerminal(updateResult.state())) {
                 deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
             }
@@ -2561,7 +2564,7 @@ public class SharePartition {
                             persisterBatch.stateBatch.firstOffset(),
                             persisterBatch.stateBatch.lastOffset(),
                             Optional.of(persisterBatch.stateBatch.deliveryCount()),
-                            Optional.empty(),
+                            Optional.ofNullable(persisterBatch.dlqCause),
                             false
                         )).whenComplete((v1, dlqException) -> {
                             PersisterStateBatch sb = persisterBatch.stateBatch;
@@ -2590,7 +2593,7 @@ public class SharePartition {
                                 }
                                 phase2Batch = new PersisterBatch(updateResult, new PersisterStateBatch(
                                     sb.firstOffset(), sb.lastOffset(),
-                                    updateResult.state().id(), (short) updateResult.deliveryCount()));
+                                    updateResult.state().id(), (short) updateResult.deliveryCount()), null);
                                 deliveryCompleteCount.addAndGet(
                                     numInFlightRecordsInBatch(sb.firstOffset(), sb.lastOffset()));
                             } finally {
@@ -3496,7 +3499,8 @@ public class SharePartition {
      */
     private record PersisterBatch(
         InFlightState updatedState,
-        PersisterStateBatch stateBatch
+        PersisterStateBatch stateBatch,
+        Throwable dlqCause
     ) { }
 
     /**
