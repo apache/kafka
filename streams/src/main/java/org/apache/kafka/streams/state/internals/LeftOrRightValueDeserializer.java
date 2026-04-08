@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -57,13 +58,18 @@ public class LeftOrRightValueDeserializer<V1, V2> implements WrappingNullableDes
 
     @Override
     public LeftOrRightValue<V1, V2> deserialize(final String topic, final byte[] data) {
+        throw new UnsupportedOperationException("LeftOrRightValueDeserializer requires the headers-aware version of deserialize");
+    }
+
+    @Override
+    public LeftOrRightValue<V1, V2> deserialize(final String topic, final Headers headers, final byte[] data) {
         if (data == null || data.length == 0) {
             return null;
         }
 
         return (data[0] == 1)
-            ? LeftOrRightValue.makeLeftValue(leftDeserializer.deserialize(topic, rawValue(data)))
-            : LeftOrRightValue.makeRightValue(rightDeserializer.deserialize(topic, rawValue(data)));
+            ? LeftOrRightValue.makeLeftValue(leftDeserializer.deserialize(topic, headers, rawValue(data)))
+            : LeftOrRightValue.makeRightValue(rightDeserializer.deserialize(topic, headers, rawValue(data)));
     }
 
     private byte[] rawValue(final byte[] data) {

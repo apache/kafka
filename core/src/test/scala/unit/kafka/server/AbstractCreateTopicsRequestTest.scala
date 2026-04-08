@@ -41,7 +41,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
                 validateOnly: Boolean = false) = {
     val req = new CreateTopicsRequestData()
     req.setTimeoutMs(timeout)
-    req.setTopics(new CreatableTopicCollection(topics.asJava.iterator()))
+    req.setTopics(new CreatableTopicCollection(topics.asJava))
     req.setValidateOnly(validateOnly)
     new CreateTopicsRequest.Builder(req).build()
   }

@@ -832,6 +832,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     * <p>
+     * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before
+     * unsubscribing, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,
+     * it is recommended to explicitly call {@link #commitSync()} before invoking this method.
      *
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. rebalance callback errors)
      */

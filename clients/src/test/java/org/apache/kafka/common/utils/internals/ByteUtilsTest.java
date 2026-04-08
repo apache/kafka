@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils.internals;
 
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Disabled;
@@ -30,6 +31,10 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Comparator;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.LongFunction;
@@ -37,6 +42,7 @@ import java.util.function.LongFunction;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ByteUtilsTest {
     private static final int MAX_LENGTH_VARINT = 5;
@@ -57,6 +63,94 @@ public class ByteUtilsTest {
     private final byte xBF = (byte) 0xbf;
     private final byte xC0 = (byte) 0xc0;
     private final byte xFE = (byte) 0xfe;
+
+    @Test
+    public void testIncrement() {
+        byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
+        byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
+        Bytes output = ByteUtils.increment(Bytes.wrap(input));
+        assertArrayEquals(expected, output.get());
+    }
+
+    @Test
+    public void testIncrementUpperBoundary() {
+        byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        assertThrows(IndexOutOfBoundsException.class, () -> ByteUtils.increment(Bytes.wrap(input)));
+    }
+    @Test
+    public void testIncrementWithSubmap() {
+        final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+        Bytes key1 = Bytes.wrap(new byte[]{(byte) 0xAA});
+        byte[] val = new byte[]{(byte) 0x00};
+        map.put(key1, val);
+
+        Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0xAA});
+        map.put(key2, val);
+
+        Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
+        map.put(key3, val);
+
+        Bytes key4 = Bytes.wrap(new byte[]{(byte) 0xAB, (byte) 0x00});
+        map.put(key4, val);
+
+        Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01});
+        map.put(key5, val);
+
+        Bytes prefix = key1;
+        Bytes prefixEnd = ByteUtils.increment(prefix);
+
+        Comparator<? super Bytes> comparator = map.comparator();
+        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+        NavigableMap<Bytes, byte[]> subMapResults;
+        if (result > 0) {
+            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
+            subMapResults = map.tailMap(prefix, true);
+        } else {
+            subMapResults = map.subMap(prefix, true, prefixEnd, false);
+        }
+
+        NavigableMap<Bytes, byte[]> subMapExpected = new TreeMap<>();
+        subMapExpected.put(key1, val);
+        subMapExpected.put(key2, val);
+        subMapExpected.put(key3, val);
+
+        assertEquals(subMapExpected.keySet(), subMapResults.keySet());
+    }
+
+
+    @Test
+    public void testBytesLexicographicCases() {
+        assertEquals(0, cmp("", ""));
+        assertTrue(cmp("", "aaa") < 0);
+        assertTrue(cmp("aaa", "") > 0);
+
+        assertEquals(0, cmp("aaa", "aaa"));
+        assertTrue(cmp("aaa", "bbb") < 0);
+        assertTrue(cmp("bbb", "aaa") > 0);
+
+        assertTrue(cmp("aaaaaa", "bbb") < 0);
+        assertTrue(cmp("aaa", "bbbbbb") < 0);
+        assertTrue(cmp("bbbbbb", "aaa") > 0);
+        assertTrue(cmp("bbb", "aaaaaa") > 0);
+
+        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbb") < 0);
+        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaa") > 0);
+
+        assertTrue(cmp("common_prefix_aaaaaa", "common_prefix_bbb") < 0);
+        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbbbbb") < 0);
+        assertTrue(cmp("common_prefix_bbbbbb", "common_prefix_aaa") > 0);
+        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaaaaa") > 0);
+
+        assertTrue(cmp("common_prefix", "common_prefix_aaa") < 0);
+        assertTrue(cmp("common_prefix_aaa", "common_prefix") > 0);
+    }
+
+    private int cmp(String l, String r) {
+        return ByteUtils.BYTES_LEXICO_COMPARATOR.compare(
+                l.getBytes(StandardCharsets.UTF_8),
+                r.getBytes(StandardCharsets.UTF_8));
+    }
+
 
     @Test
     public void testReadUnsignedIntLEFromArray() {

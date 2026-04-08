@@ -155,7 +155,7 @@ public class StreamThreadStateStoreProviderTest {
                 Serdes.String()),
             "the-processor");
         topology.addStateStore(
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.inMemoryKeyValueStore("timestamped-kv-store-with-headers"),
                 Serdes.String(),
                 Serdes.String()),

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -111,10 +112,11 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         return newValue;
     }
 
-    private ValueTimestampHeaders<VOut> computeValueAndTimestamp(final KIn key, final ValueTimestampHeaders<VIn> valueTimestampHeaders) {
+    private ValueTimestampHeaders<VOut> computeValueAndTimestamp(final KIn key, final ValueTimestampHeaders<VIn> valueTimestampHeaders, final Headers  contextHeaders) {
+
         VOut newValue = null;
         long timestamp = 0;
-        Headers headers = null;
+        Headers headers = contextHeaders;
 
         if (valueTimestampHeaders != null) {
             newValue = mapper.apply(key, valueTimestampHeaders.value());
@@ -174,6 +176,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
 
     private class KTableMapValuesValueGetter implements KTableValueGetter<KIn, VOut> {
         private final KTableValueGetter<KIn, VIn> parentGetter;
+        private InternalProcessorContext<?, ?> context;
 
         KTableMapValuesValueGetter(final KTableValueGetter<KIn, VIn> parentGetter) {
             this.parentGetter = parentGetter;
@@ -182,16 +185,17 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             parentGetter.init(context);
+            this.context = (InternalProcessorContext<?, ?>) context;
         }
 
         @Override
         public ValueTimestampHeaders<VOut> get(final KIn key) {
-            return computeValueAndTimestamp(key, parentGetter.get(key));
+            return computeValueAndTimestamp(key, parentGetter.get(key), context.headers());
         }
 
         @Override
         public ValueTimestampHeaders<VOut> get(final KIn key, final long asOfTimestamp) {
-            return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp));
+            return computeValueAndTimestamp(key, parentGetter.get(key, asOfTimestamp), context.headers());
         }
 
         @Override

@@ -535,6 +535,68 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
+    /**
+     * Test that poll() does not return records until the reconciliation check is complete.
+     * This prevents a race condition where records could be returned for partitions that
+     * are being revoked (see KAFKA-20332).
+     */
+    @Test
+    public void testPollWaitsForReconciliationCheckComplete() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions);
+
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        // PositionsValidator starts with metadataUpdateVersion=-1. Stub metadata.updateVersion() to match,
+        // so canSkipUpdateFetchPositions() passes and we test the reconciliation check path.
+        doReturn(-1).when(metadata).updateVersion();
+
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        // Simulate partition assignment from group coordinator
+        subscriptions.assignFromSubscribed(singleton(tp));
+
+        // Set up position so canSkipUpdateFetchPositions() returns true (partition in FETCHING state)
+        completeSeekUnvalidatedEventSuccessfully();
+        subscriptions.seek(tp, 0);
+
+        // Set up fetch collector to return records when called
+        doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), "")))
+            .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // Capture the AsyncPollEvent to manually control when reconciliation check is marked complete
+        AtomicReference<AsyncPollEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            AsyncPollEvent event = invocation.getArgument(0);
+            assertTrue(capturedEvent.compareAndSet(null, event));
+            // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+
+        // Poll should return empty because reconciliation check is not complete.
+        ConsumerRecords<?, ?> result1 = consumer.poll(Duration.ZERO);
+        assertTrue(result1.isEmpty(), "Poll should not return records if it hasn't completed checking and triggering pending reconciliations.");
+
+        // Now mark reconciliation check complete on the captured event
+        assertNotNull(capturedEvent.get(), "AsyncPollEvent should have been captured");
+        capturedEvent.get().markReconciliationCheckComplete();
+
+        // Next poll should return the records since reconciliation check is now complete
+        ConsumerRecords<?, ?> result2 = consumer.poll(Duration.ZERO);
+        assertEquals(2, result2.count(), "Expected 2 records after reconciliation check is complete");
+    }
+
     @Test
     public void testEnsureCallbackExecutedByApplicationThread() {
         consumer = newConsumer();
@@ -1871,6 +1933,38 @@ public class AsyncKafkaConsumerTest {
         completeUnsubscribeApplicationEventSuccessfully();
         consumer.unsubscribe();
         verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+    }
+
+    /**
+     * Verify that unsubscribe() does not commit offsets even when auto-commit is enabled.
+     * This ensures users are aware that they need to explicitly call commitSync() before
+     * unsubscribing to avoid duplicate processing upon re-joining the group.
+     */
+    @Test
+    public void testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled() {
+        Properties props = requiredConsumerConfigAndGroupId("test-group");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+
+        consumer = newConsumer(props);
+
+        // Subscribe to a topic
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singleton("topic"));
+
+        // Clear any previous invocations to focus on unsubscribe behavior
+        clearInvocations(applicationEventHandler);
+
+        // Call unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+        completeUnsubscribeApplicationEventSuccessfully();
+        consumer.unsubscribe();
+
+        // Verify that UnsubscribeEvent was sent
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+
+        // Verify that no commit event (sync or async) was sent despite auto-commit being enabled
+        verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(SyncCommitEvent.class));
+        verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
+        verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(CommitOnCloseEvent.class));
     }
 
     @Test
