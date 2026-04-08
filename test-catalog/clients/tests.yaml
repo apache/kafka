@@ -1202,6 +1202,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollThrowsInterruptExceptionIfInterrupted
+- testPollWaitsForReconciliationCheckComplete
 - testProcessBackgroundEventsTimesOut
 - testProcessBackgroundEventsWithInitialDelay
 - testProcessBackgroundEventsWithoutDelay

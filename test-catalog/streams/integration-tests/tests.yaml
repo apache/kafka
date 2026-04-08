@@ -318,6 +318,11 @@ org.apache.kafka.streams.integration.RocksDBMetricsIntegrationTest:
 org.apache.kafka.streams.integration.SelfJoinUpgradeIntegrationTest:
 - shouldRestartWithTopologyOptimizationOn
 - shouldUpgradeWithTopologyOptimizationOff
+org.apache.kafka.streams.integration.SessionsStoreWithHeadersTest:
+- shouldManualUpgradeFromTimestampedToHeaders
+- shouldPutFetchAndDelete
+- shouldRestore
+- shouldSetChangelogTopicProperties
 org.apache.kafka.streams.integration.SlidingWindowedKStreamIntegrationTest:
 - shouldAggregateWindowedWithGrace
 - shouldAggregateWindowedWithNoGrace
