@@ -87,7 +87,7 @@ public class KTableImplTest {
 
     private KTable<String, String> table;
 
-    private void setupProps(final boolean withHeaders) {
+    private void setDslStoreFormat(final boolean withHeaders) {
         if (withHeaders) {
             props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         } else {
@@ -103,7 +103,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testKTable(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -173,7 +173,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testMaterializedKTable(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -240,7 +240,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldPreserveSerdesForOperators(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, String> table1 = builder.table("topic-2", stringConsumed);
         final ConsumedInternal<String, String> consumedInternal = new ConsumedInternal<>(stringConsumed);
@@ -366,7 +366,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testStateStoreLazyEval(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -385,7 +385,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testStateStore(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -405,7 +405,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotEnableSendingOldValuesIfNotMaterializedAlreadyAndNotForcedToMaterialize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
@@ -417,7 +417,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldEnableSendingOldValuesIfNotMaterializedAlreadyButForcedToMaterialize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
@@ -441,7 +441,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldCreateSourceAndSinkNodesForRepartitioningTopic(final boolean withHeaders) throws Exception {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
@@ -496,98 +496,98 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullSelectorOnToStream(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.toStream((KeyValueMapper<String, String, ?>) null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullPredicateOnFilter(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.filter(null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullPredicateOnFilterNot(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.filterNot(null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullMapperOnMapValues(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.mapValues((ValueMapper<String, ?>) null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullMapperOnMapValueWithKey(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.mapValues((ValueMapperWithKey<String, String, ?>) null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullSelectorOnGroupBy(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.groupBy(null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullOtherTableOnJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.join(null, MockValueJoiner.TOSTRING_JOINER));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldAllowNullStoreInJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         table.join(table, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullJoinerJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.join(table, null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullOtherTableOnOuterJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.outerJoin(null, MockValueJoiner.TOSTRING_JOINER));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullJoinerOnOuterJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.outerJoin(table, null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullJoinerOnLeftJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.leftJoin(table, null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotAllowNullOtherTableOnLeftJoin(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.leftJoin(null, MockValueJoiner.TOSTRING_JOINER));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnFilterWhenMaterializedIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(
             NullPointerException.class,
             () -> table.filter((key, value) -> false, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null)
@@ -597,7 +597,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnFilterNotWhenMaterializedIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(
             NullPointerException.class,
             () -> table.filterNot((key, value) -> false, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null)
@@ -607,7 +607,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnJoinWhenMaterializedIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(
             NullPointerException.class,
             () -> table.join(table, MockValueJoiner.TOSTRING_JOINER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null)
@@ -617,7 +617,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnLeftJoinWhenMaterializedIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(
             NullPointerException.class,
             () -> table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null)
@@ -627,7 +627,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnOuterJoinWhenMaterializedIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(
             NullPointerException.class,
             () -> table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null)
@@ -637,14 +637,14 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenTransformerSupplierIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.transformValues(null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenMaterializedIsNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.transformValues(mock(), (Materialized<String, Object, KeyValueStore<Bytes, byte[]>>) null));
     }
 
@@ -652,7 +652,7 @@ public class KTableImplTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.transformValues(mock(), (String[]) null));
     }
 }

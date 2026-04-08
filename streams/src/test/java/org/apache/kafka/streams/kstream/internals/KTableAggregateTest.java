@@ -79,7 +79,6 @@ public class KTableAggregateTest {
     private static final Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
-
     private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,

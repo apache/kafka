@@ -90,7 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamSlidingWindowAggregateTest {
     
-    public static Stream<Arguments> data() {
+    public static Stream<Arguments> testParameters() {
         return Stream.of(
             Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true, false),
             Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true, true),
@@ -132,7 +132,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testAggregateSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -230,7 +230,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testReduceSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -297,7 +297,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testAggregateLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -518,7 +518,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testJoin(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -668,7 +668,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testEarlyRecordsSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -792,7 +792,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testEarlyRecordsRepeatedInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -876,7 +876,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testEarlyRecordsLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1031,7 +1031,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testEarlyNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1131,7 +1131,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1223,7 +1223,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testEarlyNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1344,7 +1344,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1469,7 +1469,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
@@ -1502,7 +1502,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
@@ -1581,7 +1581,7 @@ public class KStreamSlidingWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testAggregateRandomInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputInOrderIterator, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();

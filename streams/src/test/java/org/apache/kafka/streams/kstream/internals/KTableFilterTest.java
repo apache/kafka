@@ -61,7 +61,7 @@ public class KTableFilterTest {
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
     private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
-    private void setupProps(final boolean withHeaders) {
+    private void setup(final boolean withHeaders) {
         // disable caching at the config level
         props.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
         if (withHeaders) {
@@ -111,7 +111,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldPassThroughWithoutMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -129,7 +129,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldPassThroughOnMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -217,7 +217,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldGetValuesOnMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -290,7 +290,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotSendOldValuesWithoutMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -304,7 +304,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotSendOldValuesOnMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -319,7 +319,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotEnableSendingOldValuesIfNotAlreadyMaterializedAndNotForcedToMaterialize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -400,7 +400,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldEnableSendOldValuesWhenNotMaterializedAlreadyButForcedToMaterialize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -420,7 +420,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldEnableSendOldValuesWhenMaterializedAlreadyAndForcedToMaterialize(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -440,7 +440,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldSendOldValuesWhenEnabledOnUpStreamMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -493,7 +493,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldSkipNullToRepartitionWithoutMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -513,7 +513,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldSkipNullToRepartitionOnMaterialization(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -533,7 +533,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotSkipNullIfVersionedUpstream(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         // stateful downstream operation enables sendOldValues, but duplicate nulls will still
         // be sent because the source table is versioned
         final StreamsBuilder builder = new StreamsBuilder();
@@ -556,7 +556,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldSkipNullIfVersionedDownstream(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         // materializing the result of the filter as a versioned store does not prevent duplicate
         // tombstones from being sent, as it's whether the input table is versioned or not that
         // determines whether the optimization is enabled
@@ -580,7 +580,7 @@ public class KTableFilterTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testTypeVariance(final boolean withHeaders) {
-        setupProps(withHeaders);
+        setup(withHeaders);
         final Predicate<Number, Object> numberKeyPredicate = (key, value) -> false;
 
         new StreamsBuilder()

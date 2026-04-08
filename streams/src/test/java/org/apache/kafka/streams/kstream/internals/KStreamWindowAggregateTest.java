@@ -103,7 +103,7 @@ public class KStreamWindowAggregateTest {
 
     private boolean emitFinal;
 
-    public static Stream<Arguments> data() {
+    public static Stream<Arguments> testParameters() {
         return Stream.of(
             Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false),
             Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true),
@@ -129,7 +129,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testAggBasic(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -225,7 +225,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void testJoin(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -475,7 +475,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -503,7 +503,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldLogAndMeterWhenSkippingExpiredWindow(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -589,7 +589,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -646,7 +646,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldNotEmitFinalIfNotProgressEnough(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) throws IOException {
         setup(inputType, inputWithCache, withHeaders);
         final File stateDir = TestUtils.tempDirectory();
@@ -736,7 +736,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldEmitWithInterval0(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) throws IOException {
         setup(inputType, inputWithCache, withHeaders);
         final File stateDir = TestUtils.tempDirectory();
@@ -805,7 +805,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldEmitWithLargeInterval(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) throws IOException {
         setup(inputType, inputWithCache, withHeaders);
         final File stateDir = TestUtils.tempDirectory();
@@ -906,7 +906,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void shouldEmitFromLastEmitTime(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) throws IOException {
         setup(inputType, inputWithCache, withHeaders);
         final File stateDir = TestUtils.tempDirectory();
@@ -988,7 +988,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
+    @MethodSource("testParameters")
     public void showThrowIfEmitFinalUsedWithUnlimitedWindow(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         if (emitFinal) {
