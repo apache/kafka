@@ -17,6 +17,9 @@
 
 package org.apache.kafka.server.share.dlq;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -25,8 +28,11 @@ import java.util.concurrent.CompletableFuture;
  * a successfully completed future.
  */
 public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
+    Logger logger = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
+
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
+        logger.info("Enqueing share group dlq record parameter: {}", param);
         return CompletableFuture.completedFuture(null);
     }
 }
