@@ -391,22 +391,6 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
         .setAuthorizedOperations(authorizedOperationsInt)
         .setMembers(List(
           new ConsumerGroupDescribeResponseData.Member()
-            .setMemberId("member-2")
-            .setMemberEpoch(member2Response.memberEpoch)
-            .setClientId(clientId)
-            .setClientHost(clientHost)
-            .setSubscribedTopicRegex("")
-            .setSubscribedTopicNames(List("foo").asJava)
-            .setAssignment(new Assignment())
-            .setTargetAssignment(new Assignment()
-              .setTopicPartitions(List(
-                new TopicPartitions()
-                  .setTopicId(topicId)
-                  .setTopicName("foo")
-                  .setPartitions(List[Integer](2).asJava)
-              ).asJava))
-            .setMemberType(1.toByte),
-          new ConsumerGroupDescribeResponseData.Member()
             .setMemberId("member-1")
             .setMemberEpoch(member1Response.memberEpoch)
             .setClientId(clientId)
@@ -428,6 +412,22 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
                   .setPartitions(List[Integer](0, 1).asJava)
               ).asJava))
             .setMemberType(1.toByte),
+          new ConsumerGroupDescribeResponseData.Member()
+            .setMemberId("member-2")
+            .setMemberEpoch(member2Response.memberEpoch)
+            .setClientId(clientId)
+            .setClientHost(clientHost)
+            .setSubscribedTopicRegex("")
+            .setSubscribedTopicNames(List("foo").asJava)
+            .setAssignment(new Assignment())
+            .setTargetAssignment(new Assignment()
+              .setTopicPartitions(List(
+                new TopicPartitions()
+                  .setTopicId(topicId)
+                  .setTopicName("foo")
+                  .setPartitions(List[Integer](2).asJava)
+              ).asJava))
+            .setMemberType(1.toByte),
         ).asJava)
     )
 
@@ -437,6 +437,24 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       version = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled),
     )
 
+    // Normalize ordering before comparing since the response does not guarantee order.
+    actual.foreach(normalizeDescribedGroup)
+
     assertEquals(expected, actual)
+  }
+
+  private def normalizeDescribedGroup(group: DescribedGroup): Unit = {
+    group.members.sort((a, b) => a.memberId.compareTo(b.memberId))
+    group.members.forEach { member =>
+      normalizeAssignment(member.assignment)
+      normalizeAssignment(member.targetAssignment)
+    }
+  }
+
+  private def normalizeAssignment(assignment: Assignment): Unit = {
+    if (assignment != null) {
+      assignment.topicPartitions.sort((a, b) => a.topicId.compareTo(b.topicId))
+      assignment.topicPartitions.forEach(tp => Collections.sort(tp.partitions))
+    }
   }
 }

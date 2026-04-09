@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
@@ -373,12 +374,16 @@ public class ConsumerGroupMemberTest {
             )
             .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
-        // Sort the topic partitions to avoid order dependency from HashMap iteration.
-        var cmp = Comparator.comparing(
-            (ConsumerGroupDescribeResponseData.TopicPartitions tp) -> tp.topicId().toString()
-        );
-        actual.assignment().topicPartitions().sort(cmp);
-        expected.assignment().topicPartitions().sort(cmp);
+        // Sort to avoid order dependency from HashMap iteration.
+        Consumer<ConsumerGroupDescribeResponseData.Assignment> normalizeAssignment = assignment -> {
+            assignment.topicPartitions().sort(Comparator.comparing(
+                (ConsumerGroupDescribeResponseData.TopicPartitions tp) -> tp.topicId().toString()
+            ));
+            assignment.topicPartitions().forEach(tp ->
+                tp.partitions().sort(Integer::compareTo));
+        };
+        normalizeAssignment.accept(actual.assignment());
+        normalizeAssignment.accept(expected.assignment());
 
         assertEquals(expected, actual);
     }
@@ -416,6 +421,9 @@ public class ConsumerGroupMemberTest {
         );
 
         // The assignment should merge both assigned and pending revocation for the same topic.
+        // Sort partitions to avoid order dependency from HashSet iteration.
+        actual.assignment().topicPartitions().forEach(tp ->
+            tp.partitions().sort(Integer::compareTo));
         assertEquals(
             List.of(
                 new ConsumerGroupDescribeResponseData.TopicPartitions()
