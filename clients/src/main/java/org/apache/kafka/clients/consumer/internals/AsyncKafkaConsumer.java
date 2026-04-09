@@ -2031,9 +2031,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             long timeoutMs = inflightPoll.deadlineMs() - time.milliseconds();
             if (timeoutMs > 0) {
                 try {
+                    wakeupTrigger.setActiveTask(inflightPoll.reconciliationCheckFuture());
                     ConsumerUtils.getResult(inflightPoll.reconciliationCheckFuture(), timeoutMs);
                 } catch (TimeoutException e) {
                     return Fetch.empty();
+                } finally {
+                    wakeupTrigger.clearTask();
                 }
             } else {
                 // No time to wait and reconciliation check not complete

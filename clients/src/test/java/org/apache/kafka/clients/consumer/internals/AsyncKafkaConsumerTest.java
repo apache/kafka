@@ -480,6 +480,32 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testWakeupWhileWaitingOnReconciliationCheck() {
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class), subscriptions);
+
+        final TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Do not complete the AsyncPollEvent and call wakeup().
+        // The call to poll should throw WakeupException without blocking for the full timeout.
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        long startTime = System.currentTimeMillis();
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMillis(1500)));
+        long elapsed = System.currentTimeMillis() - startTime;
+
+        assertTrue(elapsed < 500, "Wakeup should interrupt promptly, took " + elapsed + "ms");
+    }
+
+    @Test
     public void testCommitInRebalanceCallback() {
         consumer = newConsumer();
         final String topicName = "foo";
