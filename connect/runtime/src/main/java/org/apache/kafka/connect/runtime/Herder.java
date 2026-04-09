@@ -317,9 +317,9 @@ public interface Herder {
 
 
     /**
-     * Returns the configuration of a plugin
+     * Returns the configuration of a plugin. Internal configuration keys are omitted.
      * @param pluginName the name of the plugin
-     * @return the list of ConfigKeyInfo of the plugin
+     * @return the list of ConfigKeyInfo for non-internal keys of the plugin
      */
     List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
 

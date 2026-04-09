@@ -1217,7 +1217,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigKey configKey : configsMap.values()) {
-                results.add(AbstractHerder.convertConfigKey(configKey));
+                if (!configKey.internalConfig) {
+                    results.add(AbstractHerder.convertConfigKey(configKey));
+                }
             }
             return results;
         } catch (ClassNotFoundException e) {

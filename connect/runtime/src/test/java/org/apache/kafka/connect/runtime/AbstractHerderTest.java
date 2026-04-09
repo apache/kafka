@@ -1173,6 +1173,23 @@ public class AbstractHerderTest {
         );
     }
 
+    @Test
+    public void testConnectorPluginConfigOmitsInternalKeys() throws Exception {
+        String pluginName = "source-with-internal";
+        Class<?> pluginClass = Class.forName("org.apache.kafka.connect.runtime.SourceConnectorWithInternalConfig");
+        AbstractHerder herder = testHerder();
+
+        when(plugins.pluginClass(pluginName, null)).then(invocation -> pluginClass);
+        when(plugins.newPlugin(anyString(), any())).then(invocation -> pluginClass.getDeclaredConstructor().newInstance());
+        when(herder.plugins()).thenReturn(plugins);
+
+        List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
+        assertTrue(configs.stream().anyMatch(c -> c.name().equals("required")));
+        // Same value as SourceConnectorWithInternalConfig.INTERNAL_ONLY_CONFIG_KEY (avoid type ref for checkstyle CDA)
+        assertFalse(configs.stream().anyMatch(c -> c.name().equals("internal.only.config")));
+        verify(plugins).withClassLoader(pluginClass.getClassLoader());
+    }
+
     private <T> void testConnectorPluginConfig(
             String pluginName,
             Supplier<T> newPluginInstance,
