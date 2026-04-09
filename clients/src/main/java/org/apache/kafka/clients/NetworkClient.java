@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -1107,6 +1108,13 @@ public class NetworkClient implements KafkaClient {
                 // not before ready.
                 this.connectionStates.checkingApiVersions(node);
                 ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
+                String clusterId = this.metadataUpdater.clusterId();
+                int nodeId = Integer.parseInt(node);
+                if (clusterId != null && nodeId < Integer.MAX_VALUE/2) {
+                    System.out.println("CLUSTER_ID(" + clusterId + "), NODE_ID(" + nodeId + ")");
+                    apiVersionRequestBuilder.setClusterId(clusterId);
+                    apiVersionRequestBuilder.setNodeId(Integer.parseInt(node));
+                }
                 ClientRequest clientRequest = newClientRequest(node, apiVersionRequestBuilder, now, true);
                 doSend(clientRequest, true, now);
                 iter.remove();
@@ -1191,6 +1199,15 @@ public class NetworkClient implements KafkaClient {
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.inProgress = null;
+        }
+
+        @Override
+        public String clusterId() {
+            ClusterResource clusterResource = metadata.fetch().clusterResource();
+            if (clusterResource != null) {
+                return clusterResource.clusterId();
+            }
+            return null;
         }
 
         @Override
@@ -1296,6 +1313,7 @@ public class NetworkClient implements KafkaClient {
 
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
                 log.info("Rebootstrap requested by server.");
+                log.error("REBOOTSTRAP REQUESTED BY SERVER.");
                 initiateRebootstrap();
             } else if (response.brokers().isEmpty()) {
                 // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
