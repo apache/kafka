@@ -158,8 +158,7 @@ public class Assertions {
             assignment.topicPartitions().sort(Comparator.comparing(
                 ConsumerGroupDescribeResponseData.TopicPartitions::topicId
             ));
-            assignment.topicPartitions().forEach(topic ->
-                topic.partitions().sort(Integer::compareTo));
+            assignment.topicPartitions().forEach(topic -> topic.partitions().sort(Integer::compareTo));
         }
     }
 

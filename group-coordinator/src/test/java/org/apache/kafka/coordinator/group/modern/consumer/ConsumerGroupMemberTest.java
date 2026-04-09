@@ -379,8 +379,7 @@ public class ConsumerGroupMemberTest {
             assignment.topicPartitions().sort(Comparator.comparing(
                 (ConsumerGroupDescribeResponseData.TopicPartitions tp) -> tp.topicId().toString()
             ));
-            assignment.topicPartitions().forEach(tp ->
-                tp.partitions().sort(Integer::compareTo));
+            assignment.topicPartitions().forEach(tp -> tp.partitions().sort(Integer::compareTo));
         };
         normalizeAssignment.accept(actual.assignment());
         normalizeAssignment.accept(expected.assignment());
@@ -422,8 +421,7 @@ public class ConsumerGroupMemberTest {
 
         // The assignment should merge both assigned and pending revocation for the same topic.
         // Sort partitions to avoid order dependency from HashSet iteration.
-        actual.assignment().topicPartitions().forEach(tp ->
-            tp.partitions().sort(Integer::compareTo));
+        actual.assignment().topicPartitions().forEach(tp -> tp.partitions().sort(Integer::compareTo));
         assertEquals(
             List.of(
                 new ConsumerGroupDescribeResponseData.TopicPartitions()
