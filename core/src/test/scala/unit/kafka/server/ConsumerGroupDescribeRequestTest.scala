@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerG
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{Assertions, GroupCoordinatorConfig}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
@@ -437,24 +437,9 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       version = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled),
     )
 
-    // Normalize ordering before comparing since the response does not guarantee order.
-    actual.foreach(normalizeDescribedGroup)
-
-    assertEquals(expected, actual)
-  }
-
-  private def normalizeDescribedGroup(group: DescribedGroup): Unit = {
-    group.members.sort((a, b) => a.memberId.compareTo(b.memberId))
-    group.members.forEach { member =>
-      normalizeAssignment(member.assignment)
-      normalizeAssignment(member.targetAssignment)
-    }
-  }
-
-  private def normalizeAssignment(assignment: Assignment): Unit = {
-    if (assignment != null) {
-      assignment.topicPartitions.sort((a, b) => a.topicId.compareTo(b.topicId))
-      assignment.topicPartitions.forEach(tp => Collections.sort(tp.partitions))
-    }
+    Assertions.assertResponseEquals(
+      new ConsumerGroupDescribeResponseData().setGroups(expected.asJava),
+      new ConsumerGroupDescribeResponseData().setGroups(actual.asJava)
+    )
   }
 }
