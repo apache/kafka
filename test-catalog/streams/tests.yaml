@@ -783,6 +783,7 @@ org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest:
 - shouldBuildGlobalTableWithQueryaIbleStoreName
 - shouldBuildGlobalTopologyWithAllGlobalTables
 - shouldBuildSimpleGlobalTableTopology
+- shouldFindMatchingAncestorWhenLaterParentHasNoMatch
 - shouldHaveCorrectSourceTopicsForTableFromMergedStream
 - shouldHaveNullTimestampExtractorWhenNoneSupplied
 - shouldMapStateStoresToCorrectSourceTopics
@@ -825,6 +826,8 @@ org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest:
 - shouldSetUseVersionedSemanticsWithIntermediateNode
 - shouldSetUseVersionedSemanticsWithIntermediateNodeMaterializedAsVersioned
 - shouldSetUseVersionedSemanticsWithToStreamAndBackIfMaterializedAsVersioned
+- shouldShareRepartitionTopicForMergedStreamWithKeyChangingOpOnLeftBranch
+- shouldShareRepartitionTopicForMergedStreamWithKeyChangingOpOnRightBranch
 - shouldThrowOnVersionedStoreSupplierForGlobalTable
 - shouldUseProvidedTimestampExtractor
 - testNewName
