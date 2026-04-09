@@ -1393,22 +1393,11 @@ public class NetworkClient implements KafkaClient {
             if (timeToNextUpdate > 0)
                 return timeToNextUpdate;
 
-            if (stickyNode != null) {
-                Node freshNode = metadataUpdater.fetchNodes().stream()
-                        .filter(n -> n.idString().equals(stickyNode.idString()))
-                        .findFirst().orElse(null);
-
-                if (freshNode == null) {
-                    log.debug("Telemetry stickyNode {} is no longer in metadata, clearing it.", stickyNode);
-                    stickyNode = null;
-                    return reconnectBackoffMs;
-                }
-
-                if (!freshNode.equals(stickyNode)) {
-                    log.info("Telemetry stickyNode address changed from {} to {}, updating stickyNode.",
-                            stickyNode, freshNode);
-                    stickyNode = freshNode;
-                }
+            // The node connection params can change while having the same node id hence check if the cached
+            // sticky node has not changed, if changed then reset the sticky node.
+            if (stickyNode != null && isNodeChanged(stickyNode)) {
+                log.debug("Telemetry stickyNode {} either is no longer in metadata or changed, clearing it.", stickyNode);
+                stickyNode = null;
             }
 
             // Per KIP-714, let's continue to re-use the same broker for as long as possible.
@@ -1458,6 +1447,13 @@ public class NetworkClient implements KafkaClient {
             // In either case, we just need to wait for a network event to let us know the selected
             // connection might be usable again.
             return Long.MAX_VALUE;
+        }
+
+        private boolean isNodeChanged(Node node) {
+            Node newNode = metadataUpdater.fetchNodes().stream()
+                    .filter(n -> n.id() == node.id())
+                    .findFirst().orElse(null);
+            return newNode == null || !newNode.equals(node);
         }
 
         public void handleResponse(GetTelemetrySubscriptionsResponse response) {

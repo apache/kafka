@@ -1455,6 +1455,7 @@ public class NetworkClientTest {
     public void testStickyNodeDoesNotUseStaleIpOnReconnect() throws UnknownHostException {
         String staleIp = "10.200.20.100";
         String freshIp  = "10.200.20.200";
+        // Both nodes share the same id to simulate a broker whose IP changed (e.g. pod replacement).
         Node staleNode  = new Node(0, staleIp, 9092);
         Node freshNode  = new Node(0, freshIp, 9092);
 
