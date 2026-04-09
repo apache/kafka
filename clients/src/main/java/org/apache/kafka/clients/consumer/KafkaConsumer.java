@@ -1426,9 +1426,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param topic The topic to get partition metadata for
      *
      * @return The list of partitions, which will be empty when the given topic is not found.
-     *         Note: when {@code auto.create.topics.enable} is {@code true}, this method may
-     *         return an empty list even though the topic is being auto-created in the background.
-     *         Callers should not assume the topic does not exist based solely on an empty result.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1452,9 +1453,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum of time to await topic metadata
      *
      * @return The list of partitions, which will be empty when the given topic is not found.
-     *         Note: when {@code auto.create.topics.enable} is {@code true}, this method may
-     *         return an empty list even though the topic is being auto-created in the background.
-     *         Callers should not assume the topic does not exist based solely on an empty result.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
