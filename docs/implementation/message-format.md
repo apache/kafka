@@ -128,7 +128,7 @@ Marks a transaction as committed.
 </tr>
 </table>
 
-Types 0 and 1 are used as end-of-transaction markers for the transactional messaging protocol. Types 2 through 6 are used internally by the KRaft consensus protocol.
+Types 0 and 1 are used as end-of-transaction markers for the transactional messaging protocol. Types 2 through 6 are used internally by the KRaft consensus protocol. The schema of the value in the control record is dependent on the type. The value is opaque to clients.
 
 ## Record
 
