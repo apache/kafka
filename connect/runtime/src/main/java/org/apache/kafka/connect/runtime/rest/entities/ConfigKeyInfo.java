@@ -31,7 +31,6 @@ public record ConfigKeyInfo(
     @JsonProperty("order_in_group") int orderInGroup,
     @JsonProperty("width") String width,
     @JsonProperty("display_name") String displayName,
-    @JsonProperty("dependents") List<String> dependents,
-    @JsonProperty("internal") boolean internal
+    @JsonProperty("dependents") List<String> dependents
 ) {
 }

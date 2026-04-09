@@ -1013,8 +1013,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         String width = configKey.width.name();
         String displayName = configKey.displayName;
         List<String> dependents = configKey.dependents;
-        boolean internal = configKey.internalConfig;
-        return new ConfigKeyInfo(name, typeName, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents, internal);
+        return new ConfigKeyInfo(name, typeName, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
     }
 
     private static ConfigValueInfo convertConfigValue(ConfigValue configValue, Type type) {

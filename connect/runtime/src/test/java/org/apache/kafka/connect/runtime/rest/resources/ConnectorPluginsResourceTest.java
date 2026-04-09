@@ -88,7 +88,6 @@ import jakarta.ws.rs.BadRequestException;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -171,25 +170,25 @@ public class ConnectorPluginsResourceTest {
         List<ConfigInfo> configs = new LinkedList<>(result.configs());
         List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.configs());
 
-        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", List.of(), false);
+        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", List.of());
         ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", List.of(), List.of(), true);
         ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", List.of(), false);
+        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", List.of());
         configValueInfo = new ConfigValueInfo("test.int.config", "1", List.of("1", "2", "3"), List.of(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", List.of(), false);
+        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", List.of());
         configValueInfo = new ConfigValueInfo("test.string.config.default", "", List.of(), List.of(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", List.of(), false);
+        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", List.of());
         configValueInfo = new ConfigValueInfo("test.list.config", "a,b", List.of("a", "b", "c"), List.of(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
@@ -456,16 +455,6 @@ public class ConnectorPluginsResourceTest {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();
             assertTrue(cki.isPresent());
         }
-
-        Optional<ConfigKeyInfo> internalCki = connectorConfigDef.stream()
-                .filter(c -> c.name().equals(ConnectorPluginsResourceTestConnector.TEST_INTERNAL_CONFIG)).findFirst();
-        assertTrue(internalCki.isPresent());
-        assertTrue(internalCki.get().internal());
-
-        Optional<ConfigKeyInfo> nonInternalCki = connectorConfigDef.stream()
-                .filter(c -> c.name().equals(ConnectorPluginsResourceTestConnector.TEST_STRING_CONFIG)).findFirst();
-        assertTrue(nonInternalCki.isPresent());
-        assertFalse(nonInternalCki.get().internal());
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
@@ -475,15 +464,13 @@ public class ConnectorPluginsResourceTest {
         private static final String TEST_INT_CONFIG = "test.int.config";
         private static final String TEST_STRING_CONFIG_DEFAULT = "test.string.config.default";
         private static final String TEST_LIST_CONFIG = "test.list.config";
-        private static final String TEST_INTERNAL_CONFIG = "test.internal.config";
         private static final String GROUP = "Test";
 
         private static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
             .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.", GROUP, 1, Width.MEDIUM, TEST_INT_CONFIG, new IntegerRecommender())
             .define(TEST_STRING_CONFIG_DEFAULT, Type.STRING, "", Importance.LOW, "Test configuration with default value.")
-            .define(TEST_LIST_CONFIG, Type.LIST, Importance.HIGH, "Test configuration for list type.", GROUP, 2, Width.LONG, TEST_LIST_CONFIG, new ListRecommender())
-            .defineInternal(TEST_INTERNAL_CONFIG, Type.STRING, "", Importance.LOW);
+            .define(TEST_LIST_CONFIG, Type.LIST, Importance.HIGH, "Test configuration for list type.", GROUP, 2, Width.LONG, TEST_LIST_CONFIG, new ListRecommender());
 
         @Override
         public String version() {
