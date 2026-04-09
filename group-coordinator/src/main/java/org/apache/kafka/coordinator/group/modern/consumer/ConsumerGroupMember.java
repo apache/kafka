@@ -480,12 +480,20 @@ public class ConsumerGroupMember extends ModernGroupMember {
         Assignment targetAssignment,
         CoordinatorMetadataImage image
     ) {
+        // The assignment includes both assigned partitions and partitions pending
+        // revocation because the member is still responsible for the latter until
+        // revocation is complete.
+        var mergedAssignment = new HashMap<Uuid, Set<Integer>>();
+        assignedPartitions.forEach((topicId, partitions) ->
+            mergedAssignment.put(topicId, new HashSet<>(partitions.keySet())));
+        partitionsPendingRevocation.forEach((topicId, partitions) ->
+            mergedAssignment.computeIfAbsent(topicId, __ -> new HashSet<>()).addAll(partitions.keySet()));
+
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromAssignment(
-                    Utils.toAssignmentWithoutEpochs(assignedPartitions), image)))
+                .setTopicPartitions(topicPartitionsFromAssignment(mergedAssignment, image)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromAssignment(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),

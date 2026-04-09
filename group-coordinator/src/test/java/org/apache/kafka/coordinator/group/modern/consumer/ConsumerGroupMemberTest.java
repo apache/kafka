@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -333,8 +334,11 @@ public class ConsumerGroupMemberTest {
                 .setSupportedProtocols(toClassicProtocolCollection("range")) : null)
             .build();
 
-        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, new KRaftCoordinatorMetadataImage(metadataImage));
-        ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
+        var actual = member.asConsumerGroupDescribeMember(
+            targetAssignment,
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+        var expected = new ConsumerGroupDescribeResponseData.Member()
             .setMemberId(memberId)
             .setMemberEpoch(epoch)
             .setClientId(clientId)
@@ -344,12 +348,19 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .setAssignment(
+                // The assignment should include both assigned partitions and
+                // partitions pending revocation.
                 new ConsumerGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(List.of(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                        .setTopicId(topicId1)
-                        .setTopicName("topic1")
-                        .setPartitions(assignedPartitions)
-                    ))
+                    .setTopicPartitions(new ArrayList<>(List.of(
+                        new ConsumerGroupDescribeResponseData.TopicPartitions()
+                            .setTopicId(topicId1)
+                            .setTopicName("topic1")
+                            .setPartitions(assignedPartitions),
+                        new ConsumerGroupDescribeResponseData.TopicPartitions()
+                            .setTopicId(topicId2)
+                            .setTopicName("topic2")
+                            .setPartitions(Arrays.asList(3, 4, 5))
+                    )))
             )
             .setTargetAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()
@@ -362,7 +373,58 @@ public class ConsumerGroupMemberTest {
             )
             .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
+        // Sort the topic partitions to avoid order dependency from HashMap iteration.
+        var cmp = Comparator.comparing(
+            (ConsumerGroupDescribeResponseData.TopicPartitions tp) -> tp.topicId().toString()
+        );
+        actual.assignment().topicPartitions().sort(cmp);
+        expected.assignment().topicPartitions().sort(cmp);
+
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testAsConsumerGroupDescribeMemberWithSameTopicPendingRevocation() {
+        var topicId1 = Uuid.randomUuid();
+        var metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId1, "topic1", 6)
+            .build();
+
+        // Assigned partitions [0, 1] and partitions pending revocation [2] share the same topic.
+        var record = new ConsumerGroupCurrentMemberAssignmentValue()
+            .setMemberEpoch(5)
+            .setPreviousMemberEpoch(4)
+            .setAssignedPartitions(List.of(
+                new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                    .setTopicId(topicId1)
+                    .setPartitions(Arrays.asList(0, 1))
+            ))
+            .setPartitionsPendingRevocation(List.of(
+                new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                    .setTopicId(topicId1)
+                    .setPartitions(List.of(2))
+            ));
+
+        var memberId = Uuid.randomUuid().toString();
+        var member = new ConsumerGroupMember.Builder(memberId)
+            .updateWith(LOG, GROUP_ID, record)
+            .build();
+
+        var actual = member.asConsumerGroupDescribeMember(
+            null,
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+
+        // The assignment should merge both assigned and pending revocation for the same topic.
+        assertEquals(
+            List.of(
+                new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId1)
+                    .setTopicName("topic1")
+                    .setPartitions(Arrays.asList(0, 1, 2))
+            ),
+            actual.assignment().topicPartitions()
+        );
     }
 
     @Test
