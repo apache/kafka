@@ -17,9 +17,9 @@
 
 package org.apache.kafka.tools;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.test.TestSslUtils;
 
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -31,7 +31,6 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -59,184 +58,32 @@ class OAuthCompatibilityToolTest {
     }
 
     @Test
-    public void testParseArgsParsesSaslJaasConfig() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--sasl.jaas.config", "test"
-        });
-
-        assertEquals("test", namespace.getString("sasl.jaas.config"));
-    }
-
-    @Test
-    public void testParseArgsParsesClientId() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--client-id", "testId"
-        });
-
-        assertEquals("testId", namespace.getString("clientId"));
-    }
-
-    @Test
-    public void testParseArgsParsesClientSecret() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--client-secret", "testSecret"
-        });
-
-        assertEquals("testSecret", namespace.getString("clientSecret"));
-    }
-
-    @Test
     public void testParseArgsThrowsIfArgumentIsEmpty() {
         OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
         assertThrows(
-                ArgumentParserException.class,
-                () -> argsHandler.parseArgs(new String[]{"", ""}));
-    }
-
-    @Test
-    public void testGetConfigsReturnsInteger() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--sasl.login.connect.timeout.ms", "100"
-        });
-        Properties properties = new Properties();
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertEquals(100, clientConfigHandler.getConfigs().get("sasl.login.connect.timeout.ms"));
-    }
-
-    @Test
-    public void testGetConfigsReturnsLong() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--sasl.login.retry.backoff.ms", "5"
-        });
-        Properties properties = new Properties();
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertEquals(5L, clientConfigHandler.getConfigs().get("sasl.login.retry.backoff.ms"));
-    }
-
-    @Test
-    public void testGetConfigsReturnsClass() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--ssl.engine.factory.class", "org.apache.kafka.test.TestSslUtils$TestSslEngineFactory"
-        });
-        Properties properties = new Properties();
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertEquals(TestSslUtils.TestSslEngineFactory.class, clientConfigHandler.getJaasOptions().get("ssl.engine.factory.class"));
-    }
-
-    @Test
-    public void testGetConfigsThrowsWhenClassNotFound() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--ssl.engine.factory.class", "SomeClass"
-        });
-        Properties properties = new Properties();
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertThrows(KafkaException.class, () -> clientConfigHandler.getJaasOptions().get("ssl.engine.factory.class"));
-    }
-
-    @Test
-    public void testGetConfigsReturnsStringListFromCli() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--sasl.oauthbearer.expected.audience", "test1",
-            "--sasl.oauthbearer.expected.audience", "test2"
-        });
-        Properties properties = new Properties();
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertTrue(((List<?>) clientConfigHandler.getConfigs().get("sasl.oauthbearer.expected.audience")).contains("test1"));
-        assertTrue(((List<?>) clientConfigHandler.getConfigs().get("sasl.oauthbearer.expected.audience")).contains("test2"));
-    }
-
-    @Test
-    public void testGetConfigsReturnsStringListFromProperties() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{});
-        Properties properties = new Properties();
-        properties.put("sasl.oauthbearer.expected.audience", "test1,test2");
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertTrue(((List<?>) clientConfigHandler.getConfigs().get("sasl.oauthbearer.expected.audience")).contains("test1"));
-        assertTrue(((List<?>) clientConfigHandler.getConfigs().get("sasl.oauthbearer.expected.audience")).contains("test2"));
+            ArgumentParserException.class,
+            () -> argsHandler.parseArgs(new String[]{"", ""}));
     }
 
     @Test
     public void testGetConfigsReturnsStringListAndCliHasPriority() throws ArgumentParserException {
         OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
         Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--sasl.oauthbearer.expected.audience", "test1",
-            "--sasl.oauthbearer.expected.audience", "test2"
+            "--sasl.oauthbearer.expected.audience", "test1,test2"
         });
         Properties properties = new Properties();
         properties.put("sasl.oauthbearer.expected.audience", "test3");
         OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
 
-        assertTrue(((List<?>) clientConfigHandler.getConfigs().get("sasl.oauthbearer.expected.audience")).contains("test1"));
-        assertTrue(((List<?>) clientConfigHandler.getConfigs().get("sasl.oauthbearer.expected.audience")).contains("test2"));
+        ConfigDef cd = new ConfigDef();
+        SaslConfigs.addClientSaslSupport(cd);
+
+        assertTrue(((List<?>) clientConfigHandler.getConfigs(cd).get("sasl.oauthbearer.expected.audience")).contains("test1"));
+        assertTrue(((List<?>) clientConfigHandler.getConfigs(cd).get("sasl.oauthbearer.expected.audience")).contains("test2"));
     }
 
     @Test
-    public void testGetConfigsIgnoresSaslJaasConfigIfCredentialsAreProvidedViaCli() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{
-            "--client-id", "testId1",
-            "--client-secret", "testSecret1",
-            "--scope", "testScope1",
-        });
-        Properties properties = new Properties();
-        properties.put(
-                "sasl.jaas.config",
-                "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"testId2\" clientSecret=\"testSecret2\" scope=\"testScope2\";");
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertEquals("testId1", clientConfigHandler.getJaasOptions().get("clientId"));
-        assertEquals("testSecret1", clientConfigHandler.getJaasOptions().get("clientSecret"));
-        assertEquals("testScope1", clientConfigHandler.getJaasOptions().get("scope"));
-    }
-
-    @Test
-    public void testGetJaasOptionsContainsSaslJaasConfigIfCredentialsAreNotProvidedViaCli() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{});
-        Properties properties = new Properties();
-        properties.put(
-            "sasl.jaas.config",
-            "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"testId\" clientSecret=\"testSecret\" scope=\"testScope\";");
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertEquals("testId", clientConfigHandler.getJaasOptions().get("clientId"));
-        assertEquals("testSecret", clientConfigHandler.getJaasOptions().get("clientSecret"));
-        assertEquals("testScope", clientConfigHandler.getJaasOptions().get("scope"));
-    }
-
-    @Test
-    public void testGetJaasOptionsContainsUnknownKeyInSaslJaasConfig() throws ArgumentParserException {
-        OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
-        Namespace namespace = argsHandler.parseArgs(new String[]{});
-        Properties properties = new Properties();
-        properties.put(
-                "sasl.jaas.config",
-                "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required unknownKey=\"test\" clientId=\"testId\" clientSecret=\"testSecret\" scope=\"testScope\";");
-        OAuthCompatibilityTool.ConfigHandler clientConfigHandler = new OAuthCompatibilityTool.ConfigHandler(namespace, properties);
-
-        assertEquals("testId", clientConfigHandler.getJaasOptions().get("clientId"));
-        assertEquals("testSecret", clientConfigHandler.getJaasOptions().get("clientSecret"));
-        assertEquals("testScope", clientConfigHandler.getJaasOptions().get("scope"));
-        assertNull(clientConfigHandler.getJaasOptions().get("unknownKey"));
-    }
-
-    @Test
-    public void testExitsWhenOnlyClientIdProvided() {
+    public void testExitsWhenOnlyUnknowArgumentIsProvided() {
         AtomicInteger exitCode = new AtomicInteger(-1);
         Exit.setExitProcedure((code, message) -> {
             exitCode.set(code);
