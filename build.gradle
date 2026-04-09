@@ -871,10 +871,13 @@ subprojects {
     java {
       targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
       importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      // Use the cleanthat/JavaParser engine instead of the default google-java-format engine.
-      // The default engine depends on com.sun.tools.javac internals, which are not accessible
-      // under the Gradle 9.3+ / Spotless 8.x worker setup and blocked upgrading this project.
-      // cleanthat uses JavaParser and does not touch JDK internals. See KAFKA-20182.
+      // The default engine (google-java-format) uses the JDK compiler's internal
+      // parser (com.sun.tools.javac.*), which JPMS blocks without --add-exports.
+      // Gradle 9.3+ / Spotless 8.x no longer pass those exports to the worker JVM,
+      // so the default engine fails at runtime. The cleanthat engine uses the
+      // JavaParser library instead, which ships its own Java parser and does not
+      // rely on any JDK internal classes, so it works out of the box.
+      // See KAFKA-20182.
       removeUnusedImports('cleanthat-javaparser-unnecessaryimport')
     }
   }
