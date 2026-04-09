@@ -150,6 +150,8 @@ When provisioning new broker nodes that we want to add to an existing Kafka clus
 $ bin/kafka-storage.sh format --cluster-id <CLUSTER_ID> --config config/server.properties
 ```
 
+### Formatting New Controllers
+
 When provisioning new controller nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with the --no-initial-controllers flag. 
 
 ```bash
