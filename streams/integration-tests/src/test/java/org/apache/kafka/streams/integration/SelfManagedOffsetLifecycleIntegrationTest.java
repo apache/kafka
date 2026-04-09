@@ -156,8 +156,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         if (cleanUp) {
             streams.cleanUp();
         }
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
     }
 
@@ -165,17 +164,8 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         final StreamsBuilder builder = buildCountTopology();
         streams = new KafkaStreams(builder.build(), streamsConfig);
         streams.setGlobalStateRestoreListener(listener);
-        streams.start();
-        waitForRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
-    }
-
-    private void waitForRunning(final KafkaStreams kafkaStreams) throws Exception {
-        TestUtils.waitForCondition(
-            () -> kafkaStreams.state().equals(KafkaStreams.State.RUNNING),
-            Duration.ofSeconds(60).toMillis(),
-            () -> "Expected RUNNING state but was " + kafkaStreams.state()
-        );
     }
 
     private Properties producerConfig() {
