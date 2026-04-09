@@ -48,9 +48,6 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
         this.windowStoreType = windowStoreType;
-        if (windowStoreType == WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS) {
-            throw new IllegalArgumentException("This supplier does not support TIMESTAMPED_WINDOW_STORE_WITH_HEADERS type. Use RocksDbWindowHeadersBytesStoreSupplier instead.");
-        }
     }
 
     @Override
