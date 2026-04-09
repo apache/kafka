@@ -114,11 +114,8 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
     }
 
     private boolean isTimeOrderedStore(final StateStore stateStore) {
-        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
+        if (stateStore instanceof TimeOrderedStore) {
             return true;
-        }
-        if (stateStore instanceof TimestampedToHeadersWindowStoreAdapter) {
-            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).store);
         }
         if (stateStore instanceof WrappedStateStore) {
             return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());

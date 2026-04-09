@@ -32,7 +32,7 @@ import java.util.Objects;
 
 public class RocksDBTimeOrderedSessionStore
     extends WrappedStateStore<AbstractRocksDBTimeOrderedSegmentedBytesStore<? extends Segment>, Object, Object>
-    implements SessionStore<Bytes, byte[]> {
+    implements SessionStore<Bytes, byte[]>, TimeOrderedStore {
 
     private StateStoreContext stateStoreContext;
 
@@ -160,5 +160,10 @@ public class RocksDBTimeOrderedSessionStore
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(sessionKey, aggregate);
+    }
+
+    @Override
+    public boolean hasIndex() {
+        return wrapped().hasIndex();
     }
 }

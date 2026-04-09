@@ -56,7 +56,7 @@ import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue
  *   <li>Read: {@code [timestamp][value]} → {@code [headers][timestamp][value]} (add empty headers)</li>
  * </ul>
  */
-public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
+public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]>, TimeOrderedStore {
     final WindowStore<Bytes, byte[]> store;
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
@@ -244,6 +244,14 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     @Override
     public Position getPosition() {
         return store.getPosition();
+    }
+
+    @Override
+    public boolean hasIndex() {
+        if (store instanceof TimeOrderedStore) {
+            return ((TimeOrderedStore) store).hasIndex();
+        }
+        return false;
     }
 
     /**

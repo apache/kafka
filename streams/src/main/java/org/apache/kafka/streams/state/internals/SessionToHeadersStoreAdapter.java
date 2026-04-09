@@ -53,7 +53,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * @see SessionToHeadersIteratorAdapter
  */
 @SuppressWarnings("unchecked")
-public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]> {
+public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>, TimeOrderedStore {
     final SessionStore<Bytes, byte[]> store;
 
     SessionToHeadersStoreAdapter(final SessionStore<Bytes, byte[]> store) {
@@ -210,5 +210,13 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     @Override
     public Position getPosition() {
         return store.getPosition();
+    }
+
+    @Override
+    public boolean hasIndex() {
+        if (store instanceof TimeOrderedStore) {
+            return ((TimeOrderedStore) store).hasIndex();
+        }
+        return false;
     }
 }
