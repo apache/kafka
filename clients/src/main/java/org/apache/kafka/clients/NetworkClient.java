@@ -1110,7 +1110,7 @@ public class NetworkClient implements KafkaClient {
                 ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
                 String clusterId = this.metadataUpdater.clusterId();
                 int nodeId = Integer.parseInt(node);
-                if (clusterId != null && nodeId < Integer.MAX_VALUE/2) {
+                if (clusterId != null && nodeId < Integer.MAX_VALUE / 2) {
                     System.out.println("CLUSTER_ID(" + clusterId + "), NODE_ID(" + nodeId + ")");
                     apiVersionRequestBuilder.setClusterId(clusterId);
                     apiVersionRequestBuilder.setNodeId(Integer.parseInt(node));
