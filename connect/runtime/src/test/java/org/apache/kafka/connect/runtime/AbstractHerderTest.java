@@ -1185,7 +1185,7 @@ public class AbstractHerderTest {
 
         List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
         assertTrue(configs.stream().anyMatch(c -> c.name().equals("required")));
-        // Same value as SourceConnectorWithInternalConfig.INTERNAL_ONLY_CONFIG_KEY (avoid type ref for checkstyle CDA)
+        // any internal config keys should not be exposed
         assertFalse(configs.stream().anyMatch(c -> c.name().equals("internal.only.config")));
         verify(plugins).withClassLoader(pluginClass.getClassLoader());
     }
