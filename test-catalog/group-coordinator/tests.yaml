@@ -6,10 +6,9 @@ org.apache.kafka.coordinator.group.GroupConfigManagerTest:
 - testUpdateConfigWithNullGroupId
 - testUpdateGroupConfig
 org.apache.kafka.coordinator.group.GroupConfigTest:
+- testAllFieldsAbsentWhenNotConfigured
+- testAllFieldsPresentWhenConfigured
 - testAllGroupConfigSynonyms
-- testAssignmentIntervalMsAbsentWhenNotConfigured
-- testAssignmentIntervalMsNotValidatedWhenNotConfigured
-- testAssignorOffloadEnableAbsentWhenNotConfigured
 - testEvaluateDoesNotModifyInput
 - testEvaluateEmptyPropsReturnsEmpty
 - testEvaluateMaxBoundedValueAboveMaxIsCapped
@@ -20,6 +19,7 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testFromPropsWithDefaultValue
 - testInvalidConfigName
 - testInvalidProps
+- testNotValidatedWhenNotConfigured
 - testValidShareAutoOffsetResetValues
 - testValidShareIsolationLevelValues
 - testValidateWithAllGroupTypeConfigs
