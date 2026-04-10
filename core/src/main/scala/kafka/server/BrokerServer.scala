@@ -53,7 +53,7 @@ import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYamm
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
-import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
+import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
@@ -165,6 +165,8 @@ class BrokerServer(
   var sharePartitionManager: SharePartitionManager = _
 
   var persister: Persister = _
+
+  private var shareGroupTimer: Timer = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -378,6 +380,9 @@ class BrokerServer(
 
       /* create share coordinator */
       shareCoordinator = createShareCoordinator()
+
+      /* create shared timer for share group components */
+      shareGroupTimer = new SystemTimerReaper("share-group-reaper", new SystemTimer("share-group"))
 
       /* create persister */
       persister = createShareStatePersister()
@@ -652,7 +657,7 @@ class BrokerServer(
       ),
       Time.SYSTEM,
       config.interBrokerListenerName(),
-      new SystemTimerReaper("network-partition-metadata-client-reaper", new SystemTimer("network-partition-metadata-client"))
+      shareGroupTimer
     )
   }
 
@@ -731,10 +736,7 @@ class BrokerServer(
               NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
               new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName),
               Time.SYSTEM,
-              new SystemTimerReaper(
-                "persister-state-manager-reaper",
-                new SystemTimer("persister")
-              )
+              shareGroupTimer
             )
           )
       } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
@@ -883,6 +885,8 @@ class BrokerServer(
 
       if (persister != null)
         Utils.swallow(this.logger.underlying, () => persister.stop())
+
+      Utils.closeQuietly(shareGroupTimer, "share group timer")
 
       if (lifecycleManager != null)
         Utils.swallow(this.logger.underlying, () => lifecycleManager.close())
