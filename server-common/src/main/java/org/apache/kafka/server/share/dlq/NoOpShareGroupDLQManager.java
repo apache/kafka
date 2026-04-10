@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  * a successfully completed future.
  */
 public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
-    Logger logger = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
 
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
