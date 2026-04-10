@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -485,7 +484,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
         // The assignment includes both assigned partitions and partitions pending
         // revocation because the member is still responsible for the latter until
         // revocation is complete.
-        var topicPartitionsMap = new LinkedHashMap<Uuid, ConsumerGroupDescribeResponseData.TopicPartitions>();
+        var topicPartitionsMap = new HashMap<Uuid, ConsumerGroupDescribeResponseData.TopicPartitions>();
         BiConsumer<Uuid, Map<Integer, Integer>> accumulate = (topicId, eps) ->
             image.topicMetadata(topicId).ifPresent(metadata ->
                 topicPartitionsMap.computeIfAbsent(topicId, __ ->
