@@ -151,7 +151,7 @@ public class Assertions {
         }
     }
 
-    private static void normalizeAssignment(
+    public static void normalizeAssignment(
         ConsumerGroupDescribeResponseData.Assignment assignment
     ) {
         if (assignment != null) {

@@ -33,12 +33,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 /**
  * ConsumerGroupMember contains all the information related to a member
@@ -483,17 +485,23 @@ public class ConsumerGroupMember extends ModernGroupMember {
         // The assignment includes both assigned partitions and partitions pending
         // revocation because the member is still responsible for the latter until
         // revocation is complete.
-        var mergedAssignment = new HashMap<Uuid, Set<Integer>>();
-        assignedPartitions.forEach((topicId, partitions) ->
-            mergedAssignment.put(topicId, new HashSet<>(partitions.keySet())));
-        partitionsPendingRevocation.forEach((topicId, partitions) ->
-            mergedAssignment.computeIfAbsent(topicId, __ -> new HashSet<>()).addAll(partitions.keySet()));
+        var topicPartitionsMap = new LinkedHashMap<Uuid, ConsumerGroupDescribeResponseData.TopicPartitions>();
+        BiConsumer<Uuid, Map<Integer, Integer>> accumulate = (topicId, eps) ->
+            image.topicMetadata(topicId).ifPresent(metadata ->
+                topicPartitionsMap.computeIfAbsent(topicId, __ ->
+                    new ConsumerGroupDescribeResponseData.TopicPartitions()
+                        .setTopicId(topicId)
+                        .setTopicName(metadata.name())
+                        .setPartitions(new ArrayList<>())
+                ).partitions().addAll(eps.keySet()));
+        assignedPartitions.forEach(accumulate);
+        partitionsPendingRevocation.forEach(accumulate);
 
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromAssignment(mergedAssignment, image)))
+                .setTopicPartitions(new ArrayList<>(topicPartitionsMap.values())))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromAssignment(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),

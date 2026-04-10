@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.coordinator.group.Assertions;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -34,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +42,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.function.Consumer;
 
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
@@ -375,14 +374,8 @@ public class ConsumerGroupMemberTest {
             .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
         // Sort to avoid order dependency from HashMap iteration.
-        Consumer<ConsumerGroupDescribeResponseData.Assignment> normalizeAssignment = assignment -> {
-            assignment.topicPartitions().sort(Comparator.comparing(
-                (ConsumerGroupDescribeResponseData.TopicPartitions tp) -> tp.topicId().toString()
-            ));
-            assignment.topicPartitions().forEach(tp -> tp.partitions().sort(Integer::compareTo));
-        };
-        normalizeAssignment.accept(actual.assignment());
-        normalizeAssignment.accept(expected.assignment());
+        Assertions.normalizeAssignment(actual.assignment());
+        Assertions.normalizeAssignment(expected.assignment());
 
         assertEquals(expected, actual);
     }
@@ -420,8 +413,7 @@ public class ConsumerGroupMemberTest {
         );
 
         // The assignment should merge both assigned and pending revocation for the same topic.
-        // Sort partitions to avoid order dependency from HashSet iteration.
-        actual.assignment().topicPartitions().forEach(tp -> tp.partitions().sort(Integer::compareTo));
+        Assertions.normalizeAssignment(actual.assignment());
         assertEquals(
             List.of(
                 new ConsumerGroupDescribeResponseData.TopicPartitions()
