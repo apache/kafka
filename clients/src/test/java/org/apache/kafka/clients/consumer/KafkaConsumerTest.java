@@ -1790,6 +1790,68 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
+    /**
+     * Verify that unsubscribe() does not commit offsets even when auto-commit is enabled.
+     * This ensures users are aware that they need to explicitly call commitSync() before
+     * unsubscribing to avoid duplicate processing upon re-joining the group.
+     */
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @SuppressWarnings("unchecked")
+    public void testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled(GroupProtocol groupProtocol) {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        Map<String, Integer> tpCounts = new HashMap<>();
+        tpCounts.put(topic, 1);
+        initMetadata(client, tpCounts);
+        Node node = metadata.fetch().nodes().get(0);
+
+        ConsumerPartitionAssignor assignor = new RangeAssignor();
+
+        // Create consumer with auto-commit enabled
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        initializeSubscriptionWithSingleTopic(consumer, getConsumerRebalanceListener(consumer));
+
+        // Mock rebalance responses
+        prepareRebalance(client, node, assignor, List.of(tp0), null);
+
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        consumer.poll(Duration.ZERO);
+
+        // Verify that subscription are set up correctly
+        assertEquals(Set.of(topic), consumer.subscription());
+
+        // Mock a fetch response so that we have consumed some data
+        Map<TopicPartition, FetchInfo> fetches = new HashMap<>();
+        fetches.put(tp0, new FetchInfo(0, 10));
+        client.respondFrom(fetchResponse(fetches), node);
+        client.poll(0, time.milliseconds());
+
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
+        assertEquals(10, records.count());
+        assertEquals(10L, consumer.position(tp0));
+
+        // Clear previous requests to focus on unsubscribe behavior
+        client.requests().clear();
+
+        // Call unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+        consumer.unsubscribe();
+
+        // Verify that subscription and assignment are both cleared
+        assertEquals(Collections.emptySet(), consumer.subscription());
+        assertEquals(Collections.emptySet(), consumer.assignment());
+
+        // Verify that no offset commit request was sent despite auto-commit being enabled
+        for (ClientRequest req : client.requests()) {
+            assertNotSame(ApiKeys.OFFSET_COMMIT, req.requestBuilder().apiKey(),
+                    "unsubscribe() should not commit offsets even when auto-commit is enabled");
+        }
+
+        client.requests().clear();
+    }
+
     // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
     //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest

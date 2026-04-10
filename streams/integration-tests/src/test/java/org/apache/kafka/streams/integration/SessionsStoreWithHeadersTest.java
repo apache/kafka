@@ -32,15 +32,15 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.ValueTimestampHeaders;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -65,10 +65,10 @@ import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
-public class TimestampedWindowStoreWithHeadersTest {
+public class SessionsStoreWithHeadersTest {
 
-    private static final String STORE_NAME = "headers-window-store";
-    private static final long WINDOW_SIZE_MS = 100L;
+    private static final String STORE_NAME = "headers-session-store";
+    private static final long WINDOW_GAP_MS = 100L;
     private static final long RETENTION_MS = 1000L;
 
     private String inputStream;
@@ -126,14 +126,14 @@ public class TimestampedWindowStoreWithHeadersTest {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder.addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.Integer(),
                     Serdes.String()
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(() -> new TimestampedWindowStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
+            .process(() -> new SessionStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         final Properties props = props();
@@ -152,7 +152,7 @@ public class TimestampedWindowStoreWithHeadersTest {
             KeyValue.pair(1, "a50"), KeyValue.pair(2, null), KeyValue.pair(3, "c50"));
 
         // Window 2: [baseTimestamp + WINDOW_SIZE_MS, baseTimestamp + 2 * WINDOW_SIZE_MS)
-        numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + WINDOW_SIZE_MS,
+        numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + WINDOW_GAP_MS,
             EMPTY_HEADERS,
             KeyValue.pair(1, "a100"), KeyValue.pair(2, "b100"), KeyValue.pair(3, null));
 
@@ -172,14 +172,14 @@ public class TimestampedWindowStoreWithHeadersTest {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder.addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.Integer(),
                     Serdes.String()
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(() -> new TimestampedWindowStoreWithHeadersContentCheckerProcessor(false), STORE_NAME)
+            .process(() -> new SessionStoreWithHeadersContentCheckerProcessor(false), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         final Properties props = props();
@@ -207,14 +207,14 @@ public class TimestampedWindowStoreWithHeadersTest {
         StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder.addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.Integer(),
                     Serdes.String()
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(() -> new TimestampedWindowStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
+            .process(() -> new SessionStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         final Properties props = props();
@@ -229,7 +229,7 @@ public class TimestampedWindowStoreWithHeadersTest {
         initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 50, HEADERS2,
             KeyValue.pair(1, "a50"), KeyValue.pair(2, null), KeyValue.pair(3, "c50"));
 
-        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + WINDOW_SIZE_MS, EMPTY_HEADERS,
+        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + WINDOW_GAP_MS, EMPTY_HEADERS,
             KeyValue.pair(1, "a100"), KeyValue.pair(2, "b100"), KeyValue.pair(3, "c100"));
 
         IntegrationTestUtils.waitUntilMinRecordsReceived(
@@ -248,14 +248,14 @@ public class TimestampedWindowStoreWithHeadersTest {
         streamsBuilder = new StreamsBuilder();
 
         streamsBuilder.addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.Integer(),
                     Serdes.String()
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(() -> new TimestampedWindowStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
+            .process(() -> new SessionStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
@@ -263,7 +263,7 @@ public class TimestampedWindowStoreWithHeadersTest {
 
         // produce additional records to verify restored store works correctly
         final Headers finalHeaders = new RecordHeaders().add("final", "true".getBytes());
-        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 2 * WINDOW_SIZE_MS, finalHeaders,
+        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 2 * WINDOW_GAP_MS, finalHeaders,
             KeyValue.pair(1, "a200"), KeyValue.pair(2, "b200"), KeyValue.pair(3, "c200"));
 
         final List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -282,14 +282,14 @@ public class TimestampedWindowStoreWithHeadersTest {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder.addStateStore(
-                Stores.timestampedWindowStoreBuilder(
-                    Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                Stores.sessionStoreBuilder(
+                    Stores.persistentSessionStore(STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.Integer(),
                     Serdes.String()
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(TimestampedWindowStoreContentCheckerProcessor::new, STORE_NAME)
+            .process(SessionStoreContentCheckerProcessor::new, STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         shouldManualUpgradeFromTimestampedToHeaders(streamsBuilder.build());
@@ -307,7 +307,7 @@ public class TimestampedWindowStoreWithHeadersTest {
             KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
         initialRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + 50,
             KeyValue.pair(1, "a50"), KeyValue.pair(2, null), KeyValue.pair(3, "c50"));
-        initialRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + WINDOW_SIZE_MS,
+        initialRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + WINDOW_GAP_MS,
             KeyValue.pair(1, "a100"), KeyValue.pair(2, "b100"), KeyValue.pair(3, null));
 
         List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -330,14 +330,14 @@ public class TimestampedWindowStoreWithHeadersTest {
 
         streamsBuilder
             .addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofMillis(RETENTION_MS)),
                     Serdes.Integer(),
                     Serdes.String()
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(() -> new TimestampedWindowStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
+            .process(() -> new SessionStoreWithHeadersContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
@@ -345,7 +345,7 @@ public class TimestampedWindowStoreWithHeadersTest {
 
         // produce additional records with headers to verify upgraded store works
         final Headers upgradedHeaders = new RecordHeaders().add("upgraded", "true".getBytes());
-        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 2 * WINDOW_SIZE_MS, upgradedHeaders,
+        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 2 * WINDOW_GAP_MS, upgradedHeaders,
             KeyValue.pair(1, "a200"), KeyValue.pair(2, "b200"), KeyValue.pair(3, "c200"));
 
         receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -412,21 +412,21 @@ public class TimestampedWindowStoreWithHeadersTest {
     }
 
     /**
-     * Processor for validating expected contents of a timestamped window store with headers, and forwards
+     * Processor for validating expected contents of a session store with headers, and forwards
      * the number of failed checks downstream for consumption.
      */
-    private static class TimestampedWindowStoreWithHeadersContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
+    private static class SessionStoreWithHeadersContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
 
         private ProcessorContext<Integer, Integer> context;
-        private TimestampedWindowStoreWithHeaders<Integer, String> store;
+        private SessionStoreWithHeaders<Integer, String> store;
 
         // whether the processor should write records to the store as they arrive.
         private final boolean writeToStore;
         // in-memory copy of seen data, to validate for testing purposes.
-        // Maps key -> windowStartTime -> ValueTimestampHeaders
-        private final Map<Integer, Map<Long, Optional<ValueTimestampHeaders<String>>>> data;
+        // Maps windowed-key -> AggregationWithHeaders
+        private final Map<Windowed<Integer>, Optional<AggregationWithHeaders<String>>> data;
 
-        TimestampedWindowStoreWithHeadersContentCheckerProcessor(final boolean writeToStore) {
+        SessionStoreWithHeadersContentCheckerProcessor(final boolean writeToStore) {
             this.writeToStore = writeToStore;
             this.data = new HashMap<>();
         }
@@ -439,15 +439,12 @@ public class TimestampedWindowStoreWithHeadersTest {
 
         @Override
         public void process(final Record<Integer, String> record) {
-            final long windowStartTime = record.timestamp() - (record.timestamp() % WINDOW_SIZE_MS);
-
             if (writeToStore) {
-                final ValueTimestampHeaders<String> valueTimestampHeaders =
-                    ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers());
-                store.put(record.key(), valueTimestampHeaders, windowStartTime);
+                final AggregationWithHeaders<String> valueHeaders =
+                    AggregationWithHeaders.make(record.value(), record.headers());
+                store.put(new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())), valueHeaders);
 
-                data.computeIfAbsent(record.key(), k -> new HashMap<>());
-                data.get(record.key()).put(windowStartTime, Optional.ofNullable(valueTimestampHeaders));
+                data.put(new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())), Optional.ofNullable(valueHeaders));
             }
 
             //
@@ -461,43 +458,36 @@ public class TimestampedWindowStoreWithHeadersTest {
          */
         private int checkStoreContents() {
             int failedChecks = 0;
-            for (final Map.Entry<Integer, Map<Long, Optional<ValueTimestampHeaders<String>>>> keyEntry : data.entrySet()) {
-                final Integer key = keyEntry.getKey();
+            for (final Map.Entry<Windowed<Integer>, Optional<AggregationWithHeaders<String>>> keyEntry : data.entrySet()) {
+                final Windowed<Integer> windowedKey = keyEntry.getKey();
+                final long sessionTime = windowedKey.window().start();
 
-                for (final Map.Entry<Long, Optional<ValueTimestampHeaders<String>>> windowEntry : keyEntry.getValue().entrySet()) {
-                    final Long windowStartTime = windowEntry.getKey();
-                    final ValueTimestampHeaders<String> expectedValueTimestampHeaders =
-                        windowEntry.getValue().orElse(null);
+                final AggregationWithHeaders<String> expectedValueTHeaders = keyEntry.getValue().orElse(null);
+                final AggregationWithHeaders<String> actualValueHeaders = store.fetchSession(windowedKey.key(), sessionTime, sessionTime);
 
-                    // validate fetch from store
-                    try (final WindowStoreIterator<ValueTimestampHeaders<String>> iterator =
-                             store.fetch(key, windowStartTime, windowStartTime)) {
-                        final ValueTimestampHeaders<String> actualValueTimestampHeaders =
-                            iterator.hasNext() ? iterator.next().value : null;
-                        if (!Objects.equals(actualValueTimestampHeaders, expectedValueTimestampHeaders)) {
-                            failedChecks++;
-                        }
-                    }
+                if (!Objects.equals(actualValueHeaders, expectedValueTHeaders)) {
+                    failedChecks++;
                 }
             }
+
             return failedChecks;
         }
     }
 
     /**
-     * Processor for validating expected contents of a timestamped window store (without headers).
-     * Used for testing the upgrade path from TimestampedWindowStore to TimestampedWindowStoreWithHeaders.
+     * Processor for validating expected contents of a session store (without headers).
+     * Used for testing the upgrade path from SessionStore to SessionStoreWithHeaders.
      */
-    private static class TimestampedWindowStoreContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
+    private static class SessionStoreContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
 
         private ProcessorContext<Integer, Integer> context;
-        private TimestampedWindowStore<Integer, String> store;
+        private SessionStore<Integer, String> store;
 
         // in-memory copy of seen data, to validate for testing purposes.
-        // Maps key -> windowStartTime -> ValueAndTimestamp
-        private final Map<Integer, Map<Long, Optional<ValueAndTimestamp<String>>>> data;
+        // Maps windowed-key -> value
+        private final Map<Windowed<Integer>, Optional<String>> data;
 
-        TimestampedWindowStoreContentCheckerProcessor() {
+        SessionStoreContentCheckerProcessor() {
             this.data = new HashMap<>();
         }
 
@@ -509,13 +499,10 @@ public class TimestampedWindowStoreWithHeadersTest {
 
         @Override
         public void process(final Record<Integer, String> record) {
-            final long windowStartTime = record.timestamp() - (record.timestamp() % WINDOW_SIZE_MS);
 
-            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(record.value(), record.timestamp());
-            store.put(record.key(), valueAndTimestamp, windowStartTime);
+            store.put(new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())), record.value());
 
-            data.computeIfAbsent(record.key(), k -> new HashMap<>());
-            data.get(record.key()).put(windowStartTime, Optional.ofNullable(valueAndTimestamp));
+            data.put(new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())), Optional.ofNullable(record.value()));
 
             final int failedChecks = checkStoreContents();
             context.forward(record.withValue(failedChecks));
@@ -527,22 +514,15 @@ public class TimestampedWindowStoreWithHeadersTest {
          */
         private int checkStoreContents() {
             int failedChecks = 0;
-            for (final Map.Entry<Integer, Map<Long, Optional<ValueAndTimestamp<String>>>> keyEntry : data.entrySet()) {
-                final Integer key = keyEntry.getKey();
+            for (final Map.Entry<Windowed<Integer>, Optional<String>> keyEntry : data.entrySet()) {
+                final Windowed<Integer> windowedKey = keyEntry.getKey();
+                final long sessionTime = windowedKey.window().start();
 
-                for (final Map.Entry<Long, Optional<ValueAndTimestamp<String>>> windowEntry : keyEntry.getValue().entrySet()) {
-                    final Long windowStartTime = windowEntry.getKey();
-                    final ValueAndTimestamp<String> expectedValueAndTimestamp = windowEntry.getValue().orElse(null);
+                final String expectedValue = keyEntry.getValue().orElse(null);
+                final String actualValue = store.fetchSession(windowedKey.key(), sessionTime, sessionTime);
 
-                    // validate fetch from store
-                    try (final WindowStoreIterator<ValueAndTimestamp<String>> iterator =
-                             store.fetch(key, windowStartTime, windowStartTime)) {
-                        final ValueAndTimestamp<String> actualValueAndTimestamp =
-                            iterator.hasNext() ? iterator.next().value : null;
-                        if (!Objects.equals(actualValueAndTimestamp, expectedValueAndTimestamp)) {
-                            failedChecks++;
-                        }
-                    }
+                if (!Objects.equals(actualValue, expectedValue)) {
+                    failedChecks++;
                 }
             }
             return failedChecks;

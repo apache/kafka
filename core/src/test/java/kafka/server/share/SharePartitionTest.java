@@ -219,7 +219,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.EARLIEST);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -270,7 +270,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.LATEST);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.LATEST));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -330,7 +330,7 @@ public class SharePartitionTest {
         Mockito.when(resetStrategy.type()).thenReturn(ShareGroupAutoOffsetResetStrategy.StrategyType.BY_DURATION);
         Mockito.when(resetStrategy.timestamp()).thenReturn(expectedTimestamp);
 
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(resetStrategy);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(resetStrategy));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -480,7 +480,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.EARLIEST);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -531,7 +531,7 @@ public class SharePartitionTest {
         // final ShareGroupAutoOffsetResetStrategy resetStrategy = ShareGroupAutoOffsetResetStrategy.fromString("by_duration:PT1H");
         final ShareGroupAutoOffsetResetStrategy resetStrategy = Mockito.mock(ShareGroupAutoOffsetResetStrategy.class);
         final long expectedTimestamp = MOCK_TIME.milliseconds() - TimeUnit.HOURS.toMillis(1);
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(resetStrategy);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(resetStrategy));
 
         Mockito.when(resetStrategy.type()).thenReturn(ShareGroupAutoOffsetResetStrategy.StrategyType.BY_DURATION);
         Mockito.when(resetStrategy.timestamp()).thenReturn(expectedTimestamp);
@@ -7151,7 +7151,7 @@ public class SharePartitionTest {
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         int expectedDurationMs = 500;
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(expectedDurationMs);
+        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(Optional.of(expectedDurationMs));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager)).build();
@@ -7172,8 +7172,8 @@ public class SharePartitionTest {
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
         // First invocation of shareRecordLockDurationMs() returns 500, and the second invocation returns 1000
         Mockito.when(groupConfig.shareRecordLockDurationMs())
-            .thenReturn(expectedDurationMs1)
-            .thenReturn(expectedDurationMs2);
+            .thenReturn(Optional.of(expectedDurationMs1))
+            .thenReturn(Optional.of(expectedDurationMs2));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager)).build();
@@ -12324,7 +12324,7 @@ public class SharePartitionTest {
     public void testMaxDeliveryCountUsesGroupConfigWhenPresent() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(8);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(8));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
@@ -12376,7 +12376,7 @@ public class SharePartitionTest {
 
         // Dynamically decrease the limit to 2 via group config BEFORE releasing.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(2);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(2));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // Release: archival check fires because deliveryCount(2) >= maxDeliveryCount(2),
@@ -12412,7 +12412,7 @@ public class SharePartitionTest {
 
         // Now increase limit to 10 via group config before the second acquire.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(10);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(10));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // Second acquire: deliveryCount = 2. With old limit (2) this would archive.
@@ -12432,7 +12432,7 @@ public class SharePartitionTest {
     public void testMaxInFlightRecordsUsesGroupConfigWhenPresent() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(5000);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(5000));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
@@ -12477,7 +12477,7 @@ public class SharePartitionTest {
 
         // Dynamically decrease the limit to 30 via group config.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(30);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(30));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // The effective limit should now be 30.
@@ -12510,7 +12510,7 @@ public class SharePartitionTest {
 
         // Increase limit to 500 via group config.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(500);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(500));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         assertEquals(500, sharePartition.maxInFlightRecords());
@@ -12540,14 +12540,14 @@ public class SharePartitionTest {
 
         // Dynamically set limit to exactly the in-flight count via group config.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(50);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(50));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // Still at boundary: 50 < 50 is false.
         assertFalse(sharePartition.canAcquireRecords());
 
         // Increase by 1 to cross the boundary.
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(51);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(51));
 
         // Now 50 < 51 is true.
         assertTrue(sharePartition.canAcquireRecords());
@@ -12557,7 +12557,7 @@ public class SharePartitionTest {
     public void testDynamicPartitionMaxRecordLocksRemoveGroupConfig() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(500);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(500));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
@@ -12591,7 +12591,7 @@ public class SharePartitionTest {
 
         // Decrease limit to 20, well below the 50 in-flight.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(20);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(20));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // maxInFlightRecords - inFlightRecordsCount = 20 - 50 = -30, so maxRecordsToAcquire <= 0.
