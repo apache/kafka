@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -226,39 +225,6 @@ public class ShareConsumerCallbackTest extends ShareConsumerTestBase {
                 shareConsumer.poll(Duration.ofMillis(500));
                 return partitionExceptionMap.containsKey(tp) && partitionExceptionMap.get(tp) instanceof InvalidRecordStateException;
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to be notified by InvalidRecordStateException");
-        }
-    }
-
-    /**
-     * Test implementation of AcknowledgementCommitCallback to track the completed acknowledgements.
-     * partitionOffsetsMap is used to track the offsets acknowledged for each partition.
-     * partitionExceptionMap is used to track the exception encountered for each partition if any.
-     * Note - Multiple calls to {@link #onComplete(Map, Exception)} will not update the partitionExceptionMap for any existing partitions,
-     * so please ensure to clear the partitionExceptionMap after every call to onComplete() in a single test.
-     */
-    private static class TestableAcknowledgementCommitCallback implements AcknowledgementCommitCallback {
-        private final Map<TopicPartition, Set<Long>> partitionOffsetsMap;
-        private final Map<TopicPartition, Exception> partitionExceptionMap;
-
-        public TestableAcknowledgementCommitCallback(Map<TopicPartition, Set<Long>> partitionOffsetsMap,
-                                                     Map<TopicPartition, Exception> partitionExceptionMap) {
-            this.partitionOffsetsMap = partitionOffsetsMap;
-            this.partitionExceptionMap = partitionExceptionMap;
-        }
-
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            offsetsMap.forEach((partition, offsets) -> {
-                partitionOffsetsMap.merge(partition.topicPartition(), offsets, (oldOffsets, newOffsets) -> {
-                    Set<Long> mergedOffsets = new HashSet<>();
-                    mergedOffsets.addAll(oldOffsets);
-                    mergedOffsets.addAll(newOffsets);
-                    return mergedOffsets;
-                });
-                if (!partitionExceptionMap.containsKey(partition.topicPartition()) && exception != null) {
-                    partitionExceptionMap.put(partition.topicPartition(), exception);
-                }
-            });
         }
     }
 
