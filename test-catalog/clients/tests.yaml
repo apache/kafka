@@ -132,6 +132,7 @@ org.apache.kafka.clients.NetworkClientTest:
 - testSimpleRequestResponse
 - testSimpleRequestResponseWithNoBrokerDiscovery
 - testSimpleRequestResponseWithStaticNodes
+- testStickyNodeDoesNotUseStaleIpOnReconnect
 - testTelemetryRequest
 - testUnsupportedApiVersionsRequestWithVersionProvidedByTheBroker
 - testUnsupportedApiVersionsRequestWithoutVersionProvidedByTheBroker
