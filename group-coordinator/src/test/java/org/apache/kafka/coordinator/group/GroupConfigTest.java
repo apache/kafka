@@ -51,7 +51,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_DEFAULT;
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT;
@@ -117,8 +116,6 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "-1", "1.0");
             } else if (GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-1", "1.2");
-            } else if (GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG.equals(name)) {
-                assertPropertyInvalid(name, "not_a_number", "1.0");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -307,11 +304,6 @@ public class GroupConfigTest {
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
-        // Check for invalid streamsTaskOffsetIntervalMs, < MIN
-        props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "1000");
-        doTestInvalidProps(props, InvalidConfigurationException.class);
-        props = createValidGroupConfig();
-
         // Check for invalid shareIsolationLevel.
         props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_commit");
         doTestInvalidProps(props, ConfigException.class);
@@ -354,7 +346,6 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
         defaultValue.put(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, "3000");
         defaultValue.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
-        defaultValue.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
         defaultValue.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "true");
 
         Properties props = new Properties();
@@ -377,7 +368,6 @@ public class GroupConfigTest {
         assertEquals(1, config.getInt(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG));
         assertEquals(3000, config.getInt(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG));
         assertEquals(1250, config.getInt(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG));
-        assertEquals(30000, config.getInt(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG));
         assertEquals(true, config.getBoolean(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG));
     }
 
@@ -549,19 +539,6 @@ public class GroupConfigTest {
         );
     }
 
-    /**
-     * Data source for configs with min-only evaluation (no max bound enforced by evaluate).
-     * Each entry: (configKey, tooLow, expectedMax).
-     */
-    private static Stream<Arguments> minBoundedConfigs() {
-        return Stream.of(
-            Arguments.of(
-                GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
-                1000, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT
-            )
-        );
-    }
-
     @ParameterizedTest(name = "testEvaluateValueAboveMaxIsCapped[{0}]")
     @MethodSource("rangeBoundedConfigs")
     public void testEvaluateValueAboveMaxIsCapped(
@@ -613,20 +590,6 @@ public class GroupConfigTest {
         assertEquals(expectedMax, result.get(key));
     }
 
-    @ParameterizedTest(name = "testEvaluateMinBoundedValueBelowMinIsCapped[{0}]")
-    @MethodSource("minBoundedConfigs")
-    public void testEvaluateMinBoundedValueBelowMinIsCapped(
-        String key,
-        int tooLow,
-        int expectedMin
-    ) {
-        Properties props = new Properties();
-        props.put(key, tooLow);
-        Properties result = GroupConfig.evaluate(props, "test-group",
-            GroupCoordinatorConfig.fromProps(new HashMap<>()), ShareGroupConfig.fromProps(new HashMap<>()));
-        assertEquals(expectedMin, result.get(key));
-    }
-
     @Test
     public void testAllGroupConfigSynonyms() {
         // Every GroupConfig entry should have an entry in ALL_GROUP_CONFIG_SYNONYMS.
@@ -670,7 +633,6 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
         props.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
         props.put(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, "3000");
-        props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "45000");
         props.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "true");
         return props;
     }

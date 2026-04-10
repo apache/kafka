@@ -544,25 +544,6 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, -1);
         assertEquals("Invalid value -1 for configuration group.streams.initial.rebalance.delay.ms: Value must be at least 0",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        // group.streams.task.offset.interval.ms
-
-        // must be positive
-        configs.clear();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, 0);
-        assertEquals("Invalid value 0 for configuration group.streams.task.offset.interval.ms: Value must be at least 1",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        // cannot be smaller than MIN
-        configs.clear();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT - 1);
-        assertEquals("group.streams.task.offset.interval.ms must be greater than or equal to group.streams.min.task.offset.interval.ms",
-            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
-
-        // can be MIN
-        configs.clear();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT);
-        createConfig(configs);
     }
 
     @Test
@@ -682,40 +663,6 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 7000);
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals(7000, config.streamsGroupInitialRebalanceDelayMs());
-    }
-
-    @Test
-    public void testStreamsGroupTaskOffsetIntervalDefaultValue() {
-        Map<String, Object> configs = new HashMap<>();
-        GroupCoordinatorConfig config = createConfig(configs);
-        assertEquals(60000, config.streamsGroupTaskOffsetIntervalMs());
-        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
-            config.streamsGroupTaskOffsetIntervalMs());
-    }
-
-    @Test
-    public void testStreamsGroupTaskOffsetIntervalCustomValue() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, 45000);
-        GroupCoordinatorConfig config = createConfig(configs);
-        assertEquals(45000, config.streamsGroupTaskOffsetIntervalMs());
-    }
-
-    @Test
-    public void testStreamsGroupMinTaskOffsetIntervalDefaultValue() {
-        Map<String, Object> configs = new HashMap<>();
-        GroupCoordinatorConfig config = createConfig(configs);
-        assertEquals(15000, config.streamsGroupMinTaskOffsetIntervalMs());
-        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
-            config.streamsGroupMinTaskOffsetIntervalMs());
-    }
-
-    @Test
-    public void testStreamsGroupMinTaskOffsetIntervalCustomValue() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, 20000);
-        GroupCoordinatorConfig config = createConfig(configs);
-        assertEquals(20000, config.streamsGroupMinTaskOffsetIntervalMs());
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {

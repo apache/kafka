@@ -104,8 +104,6 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "streams.assignor.offload.enable";
 
-    public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
-
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -150,8 +148,6 @@ public final class GroupConfig extends AbstractConfig {
     public final Optional<Integer> streamsAssignmentIntervalMs;
 
     public final Optional<Boolean> streamsAssignorOffloadEnable;
-
-    public final int streamsTaskOffsetIntervalMs;
 
     public final String shareIsolationLevel;
 
@@ -258,13 +254,7 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
-        .define(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
-            INT,
-            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
-            atLeast(1),
-            MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC);
 
     /**
      * Mapping from GroupConfig name to its broker-level synonym config name.
@@ -292,8 +282,7 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG)),
         Map.entry(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG)),
         Map.entry(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG)),
-        Map.entry(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
-        Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG))
+        Map.entry(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
     );
 
     /**
@@ -339,7 +328,6 @@ public final class GroupConfig extends AbstractConfig {
             Optional.of(getInt(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG)) :
             Optional.empty();
         this.streamsAssignorOffloadEnable = Optional.empty();
-        this.streamsTaskOffsetIntervalMs = getInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
         this.shareRenewAcknowledgeEnable = getBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
     }
@@ -383,7 +371,6 @@ public final class GroupConfig extends AbstractConfig {
         int streamsHeartbeatIntervalMs = (Integer) valueMaps.get(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         int streamsNumStandbyReplicas = (Integer) valueMaps.get(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         int streamsAssignmentIntervalMs = (Integer) valueMaps.get(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG);
-        int streamsTaskOffsetIntervalMs = (Integer) valueMaps.get(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -499,10 +486,6 @@ public final class GroupConfig extends AbstractConfig {
                     GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
             }
         }
-        if (streamsTaskOffsetIntervalMs < groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()) {
-            throw new InvalidConfigurationException(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
-                GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
-        }
         if (consumerSessionTimeout <= consumerHeartbeatInterval) {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -604,8 +587,6 @@ public final class GroupConfig extends AbstractConfig {
         clampToRange(props, groupId, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinAssignmentIntervalMs(),
             groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs());
-        clampToMin(props, groupId, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs());
 
         // Verify that clamping did not break the session > heartbeat invariant.
         checkSessionExceedsHeartbeat(props, groupId,
@@ -881,13 +862,6 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<Boolean> streamsAssignorOffloadEnable() {
         return streamsAssignorOffloadEnable;
-    }
-
-    /**
-     * The task offset reporting interval.
-     */
-    public int streamsTaskOffsetIntervalMs() {
-        return streamsTaskOffsetIntervalMs;
     }
 
     /**

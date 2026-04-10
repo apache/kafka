@@ -374,14 +374,6 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
 
-    public static final String STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG = "group.streams.task.offset.interval.ms";
-    public static final int STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT = 60000;
-    public static final String STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC = "The interval in which the warmup task changelog offsets on a client are updated on the broker. The offsets are sent with the next heartbeat after this time has passed.";
-
-    public static final String STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG = "group.streams.min.task.offset.interval.ms";
-    public static final int STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT = 15000;
-    public static final String STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
-
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
         CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
@@ -460,9 +452,7 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, INT, STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC)
         .define(STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
-        .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
-        .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
-        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC);
+        .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC);
 
 
     /**
@@ -523,8 +513,6 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupInitialRebalanceDelayMs;
     private final int streamsGroupMinAssignmentIntervalMs;
     private final int streamsGroupMaxAssignmentIntervalMs;
-    private final int streamsGroupTaskOffsetIntervalMs;
-    private final int streamsGroupMinTaskOffsetIntervalMs;
 
     private final AbstractConfig config;
 
@@ -587,8 +575,6 @@ public class GroupCoordinatorConfig {
         this.streamsGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
-        this.streamsGroupTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG);
-        this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.config = config;
 
         // New group coordinator configs validation.
@@ -688,10 +674,6 @@ public class GroupCoordinatorConfig {
 
         require(streamsGroupNumStandbyReplicas <= streamsGroupMaxStandbyReplicas,
             String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG));
-
-        require(streamsGroupTaskOffsetIntervalMs >= streamsGroupMinTaskOffsetIntervalMs,
-            String.format("%s must be greater than or equal to %s", STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG));
-
     }
 
     /**
@@ -890,8 +872,7 @@ public class GroupCoordinatorConfig {
             GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
             GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
             GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
-            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs(),
-            GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, streamsGroupTaskOffsetIntervalMs());
+            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs());
     }
 
     /**
@@ -1327,19 +1308,5 @@ public class GroupCoordinatorConfig {
      */
     public boolean streamsGroupAssignorOffloadEnable() {
         return STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT;
-    }
-
-    /**
-     * The task offset interval for streams groups.
-     */
-    public int streamsGroupTaskOffsetIntervalMs() {
-        return streamsGroupTaskOffsetIntervalMs;
-    }
-
-    /**
-     * The minimum task offset interval for streams groups.
-     */
-    public int streamsGroupMinTaskOffsetIntervalMs() {
-        return streamsGroupMinTaskOffsetIntervalMs;
     }
 }

@@ -531,7 +531,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
         streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
-        streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));

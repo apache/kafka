@@ -2140,8 +2140,7 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
-            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -8865,15 +8864,6 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.flatMap(GroupConfig::streamsAssignorOffloadEnable)
             .orElse(config.streamsGroupAssignorOffloadEnable());
-    }
-
-    /**
-     * Get the task offset interval of the provided streams group.
-     */
-    private int streamsGroupTaskOffsetIntervalMs(String groupId) {
-        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
-            .orElse(config.streamsGroupTaskOffsetIntervalMs());
     }
 
     /**

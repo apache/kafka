@@ -206,7 +206,6 @@ import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_SESSION_TIMEO
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
@@ -1208,8 +1207,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -17582,8 +17580,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17677,8 +17674,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17771,8 +17767,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
-                    .setStatusDetail("Source topics bar are missing.")))
-                .setTaskOffsetIntervalMs(60_000),
+                    .setStatusDetail("Source topics bar are missing."))),
             result.response().data()
         );
 
@@ -17864,8 +17859,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_INTERNAL_TOPICS.code())
-                    .setStatusDetail("Internal topics are missing: bar")))
-                .setTaskOffsetIntervalMs(60_000),
+                    .setStatusDetail("Internal topics are missing: bar"))),
             result.response().data()
         );
 
@@ -17954,8 +17948,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.INCORRECTLY_PARTITIONED_TOPICS.code())
-                    .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]")))
-                .setTaskOffsetIntervalMs(60_000),
+                    .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]"))),
             result.response().data()
         );
 
@@ -18061,8 +18054,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.STALE_TOPOLOGY.code())
-                    .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1.")))
-                .setTaskOffsetIntervalMs(60_000),
+                    .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1."))),
             result.response().data()
         );
 
@@ -18164,8 +18156,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                ))
-                .setTaskOffsetIntervalMs(60_000),
+                )),
             result1.response().data()
         );
         assertRecordsEquals(List.of(), result1.records());
@@ -18186,8 +18177,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                ))
-                .setTaskOffsetIntervalMs(60_000),
+                )),
             result2.response().data()
         );
 
@@ -18280,8 +18270,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                ))
-                .setTaskOffsetIntervalMs(60_000),
+                )),
             result2.response().data()
         );
     }
@@ -18361,8 +18350,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18491,8 +18479,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18640,8 +18627,7 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
 
             result.response().data()
         );
@@ -18769,8 +18755,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18786,8 +18771,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -18840,8 +18824,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18857,8 +18840,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -18910,8 +18892,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                         .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
-                ))
-                .setTaskOffsetIntervalMs(60_000),
+                )),
             result.response().data()
         );
 
@@ -18940,8 +18921,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -19108,8 +19088,7 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19151,8 +19130,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19198,8 +19176,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19233,8 +19210,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19274,8 +19250,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19305,8 +19280,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19333,8 +19307,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19365,8 +19338,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19409,8 +19381,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19457,8 +19428,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19669,8 +19639,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19806,8 +19775,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20048,8 +20016,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20088,8 +20055,7 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20118,8 +20084,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20151,8 +20116,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20217,8 +20181,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20257,8 +20220,7 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20286,8 +20248,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -20482,8 +20443,7 @@ public class GroupMetadataManagerTest {
                         .setStandbyTasks(List.of())
                         .setWarmupTasks(List.of())
                         .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
-                        .setStatus(List.of())
-                        .setTaskOffsetIntervalMs(60_000),
+                        .setStatus(List.of()),
                 result.response().data()
         );
 
@@ -20661,8 +20621,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -21476,7 +21435,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
 
-        // Verify default heartbeat interval, session timeout, num.standby.replicas, task.offset.interval before config update.
+        // Verify default heartbeat interval, session timeout, and num.standby.replicas before config update.
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             result.response().data().heartbeatIntervalMs());
         context.assertSessionTimeout(groupId, memberId,
@@ -21495,12 +21454,10 @@ public class GroupMetadataManagerTest {
         // Dynamic update group config with out-of-range values.
         // Session timeout 70000 exceeds max 60000; heartbeat interval 1 is below min 5000;
         // num standby replicas 100 exceeds max 2.
-        // task offset interval 100 exceeds min 15000.
         Properties newGroupConfig = new Properties();
         newGroupConfig.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, 70000);
         newGroupConfig.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, 1);
         newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 100);
-        newGroupConfig.put(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, 100);
         context.updateGroupConfig(groupId, newGroupConfig);
 
         // Session timer is rescheduled on second heartbeat, new assignment with evaluated parameter is calculated.
@@ -21519,8 +21476,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT);
 
-        // Verify that the number of standby replicas is evaluated to max,
-        // and task offset interval is evaluated to min
+        // Verify that the number of standby replicas is evaluated to max.
         assertEquals(
             Map.of(
                 "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
@@ -27416,7 +27372,7 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(0),
             result1.response().data()
         );
 
@@ -27481,7 +27437,7 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(0),
             result2.response().data()
         );
 
@@ -27519,7 +27475,7 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(0),
             result3.response().data()
         );
 

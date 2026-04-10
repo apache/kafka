@@ -296,7 +296,6 @@ public class ConfigCommandIntegrationTest {
         assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.heartbeat.interval.ms=5000}"));
         assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.num.standby.replicas=0}"));
         assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.session.timeout.ms=45000}"));
-        assertTrue(message.contains("streams.task.offset.interval.ms=60000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.task.offset.interval.ms=60000}"));
     }
 
     @ClusterTest
@@ -400,41 +399,6 @@ public class ConfigCommandIntegrationTest {
             "--alter", "--add-config", "streams.num.standby.replicas=3"));
         message = captureStandardErr(run(command));
         assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to group.streams.max.standby.replicas"));
-    }
-
-    @ClusterTest
-    public void testAlterStreamsGroupTaskOffsetInterval() {
-        // Verify the initial config
-        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "groups",
-            "--entity-name", "group",
-            "--describe", "--all"));
-        String message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms=60000"));
-
-        // Alter task offset interval
-        command = Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "groups",
-            "--entity-name", "group",
-            "--alter", "--add-config", "streams.task.offset.interval.ms=45000"));
-        message = captureStandardOut(run(command));
-        assertEquals("Completed updating config for group group.", message);
-
-        // Verify the updated config
-        command = Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "groups",
-            "--describe"));
-        message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms=45000"));
-
-        // Should fail to set below min interval
-        command = Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "groups",
-            "--entity-name", "group",
-            "--alter", "--add-config", "streams.task.offset.interval.ms=1"));
-        message = captureStandardErr(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to group.streams.min.task.offset.interval.ms"));
-
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {
