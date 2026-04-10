@@ -112,6 +112,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import scala.Tuple2;
 import scala.collection.Seq;
@@ -3246,6 +3247,7 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
+        private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3282,6 +3284,11 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withShareGroupDlqEnableSupplier(Supplier<Boolean> shareGroupDlqEnableSupplier) {
+            this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
@@ -3299,7 +3306,8 @@ public class SharePartitionManagerTest {
                 persister,
                 new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
-                brokerTopicStats
+                brokerTopicStats,
+                shareGroupDlqEnableSupplier
             );
         }
     }

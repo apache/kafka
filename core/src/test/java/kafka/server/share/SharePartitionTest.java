@@ -96,6 +96,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
@@ -12602,6 +12603,140 @@ public class SharePartitionTest {
         assertFalse(sharePartition.cachedState().isEmpty());
     }
 
+    @Test
+    public void testAcknowledgeRejectWithDlqEnabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .build();
+
+        // Acquire 2 batches so that the first one stays in cache after being archived.
+        MemoryRecords records1 = memoryRecords(5, 5);
+        MemoryRecords records2 = memoryRecords(10, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge the first batch with REJECT.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // With NoOp DLQ manager and NoOp persister, the full 2-phase flow completes synchronously:
+        // ACQUIRED -> ARCHIVING (phase 1 persist) -> DLQ enqueue -> ARCHIVED (phase 2 persist).
+        // The final state should be ARCHIVED.
+        assertNull(sharePartition.cachedState().get(5L));
+        assertEquals(1, sharePartition.cachedState().size());
+
+        // The second batch should remain acquired.
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+
+        // Start offset advances past the archived batch.
+        assertEquals(10, sharePartition.startOffset());
+
+        // deliveryCompleteCount is 0 as evicted records are subtracted.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAcknowledgeRejectWithDlqDisabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> false)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(5, 5);
+        MemoryRecords records2 = memoryRecords(10, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge the first batch with REJECT when DLQ is disabled.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // Without DLQ, REJECT goes directly to ARCHIVED (no ARCHIVING intermediate state).
+        // Once ARCHIVED, the batch at start offset is evicted from cache.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertNull(sharePartition.cachedState().get(5L));
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAcknowledgePerOffsetRejectWithDlqEnabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .build();
+
+        // Acquire a batch with 5 records (offsets 0-4) and a second batch to keep cache populated.
+        MemoryRecords records1 = memoryRecords(5);
+        MemoryRecords records2 = memoryRecords(5, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge with per-offset ack types: ACCEPT for 0-2, REJECT for 3-4.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 4, List.of(
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.REJECT.id, AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // With NoOp DLQ + NoOp persister, full 2-phase flow completes synchronously.
+        // Batch should have offset state since offsets have different states.
+        // Once all offsets reach terminal state, the batch at start offset is evicted.
+        assertNull(sharePartition.cachedState().get(0L));
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAcknowledgePerOffsetRejectWithDlqDisabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> false)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(5);
+        MemoryRecords records2 = memoryRecords(5, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge with per-offset ack types: ACCEPT for 0-2, REJECT for 3-4.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 4, List.of(
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.REJECT.id, AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // Without DLQ, REJECT goes directly to ARCHIVED (no ARCHIVING intermediate state).
+        // All offsets in first batch reach terminal state, so it is evicted.
+        assertNull(sharePartition.cachedState().get(0L));
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
     private static ShareGroupConfigProvider configProviderWithRenewDisabled() {
         ShareGroupConfigProvider configProvider = Mockito.mock(ShareGroupConfigProvider.class);
         Mockito.when(configProvider.isRenewAcknowledgeEnabled(GROUP_ID)).thenReturn(false);
@@ -12623,6 +12758,7 @@ public class SharePartitionTest {
         private SharePartitionState state = SharePartitionState.EMPTY;
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
+        private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
 
         private SharePartitionBuilder withMaxInflightRecords(int defaultMaxInflightRecords) {
             this.defaultMaxInflightRecords = defaultMaxInflightRecords;
@@ -12669,6 +12805,11 @@ public class SharePartitionTest {
             return this;
         }
 
+        private SharePartitionBuilder withShareGroupDlqEnableSupplier(Supplier<Boolean> shareGroupDlqEnableSupplier) {
+            this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+            return this;
+        }
+
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();
         }
@@ -12676,7 +12817,7 @@ public class SharePartitionTest {
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, defaultMaxInflightRecords, defaultMaxDeliveryCount,
                     defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, configProvider,
-                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics);
+                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics, shareGroupDlqEnableSupplier);
         }
     }
 }

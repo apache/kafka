@@ -329,9 +329,15 @@ public class SharePartition {
      */
     private long fetchLockIdleDurationMs;
 
-    private final Supplier<Boolean> isDlqEnabledSupplier = () -> false;
-
+    /**
+     * Reference to the dlq manager implementation.
+     */
     private final ShareGroupDLQ shareGroupDLQ = new NoOpShareGroupDLQManager();
+
+    /**
+     * Supplier to toggle dlq support.
+     */
+    private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
     SharePartition(
         String groupId,
@@ -345,11 +351,12 @@ public class SharePartition {
         Persister persister,
         ReplicaManager replicaManager,
         ShareGroupConfigProvider configProvider,
-        SharePartitionListener listener
+        SharePartitionListener listener,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
             timer, time, persister, replicaManager, configProvider, SharePartitionState.EMPTY, listener,
-            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
+            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()), shareGroupDlqEnableSupplier);
     }
 
     // Visible for testing
@@ -368,7 +375,8 @@ public class SharePartition {
         ShareGroupConfigProvider configProvider,
         SharePartitionState sharePartitionState,
         SharePartitionListener listener,
-        SharePartitionMetrics sharePartitionMetrics
+        SharePartitionMetrics sharePartitionMetrics,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -394,6 +402,7 @@ public class SharePartition {
         this.timeoutHandler = releaseAcquisitionLockOnTimeout();
         this.registerGaugeMetrics();
         this.deliveryCompleteCount = new AtomicInteger(0);
+        this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
     }
 
     /**
@@ -3321,7 +3330,7 @@ public class SharePartition {
     }
 
     private RecordState recordStateWithDlq(byte ackType) {
-        if (isDlqEnabledSupplier.get() && AcknowledgeType.REJECT.id == ackType) {
+        if (shareGroupDlqEnableSupplier.get() && AcknowledgeType.REJECT.id == ackType) {
             return RecordState.ARCHIVING;
         }
         return ACK_TYPE_TO_RECORD_STATE.get(ackType);

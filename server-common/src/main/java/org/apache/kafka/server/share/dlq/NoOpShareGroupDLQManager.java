@@ -28,11 +28,11 @@ import java.util.concurrent.CompletableFuture;
  * a successfully completed future.
  */
 public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
-    private static final Logger logger = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
+    private static final Logger log = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
 
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
-        logger.info("Enqueing share group dlq record parameter: {}", param);
+        log.warn("Enqueuing share group dlq record parameter: {}", param);
         return CompletableFuture.completedFuture(null);
     }
 }
