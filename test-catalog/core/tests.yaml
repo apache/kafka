@@ -1436,6 +1436,7 @@ kafka.server.ConfigAdminManagerTest:
 - testReassembleLegacyResponse
 - testValidateResourceNameIsCurrentNodeId
 kafka.server.ConsumerGroupDescribeRequestTest:
+- testConsumerGroupDescribeIncludesPartitionsPendingRevocation
 - testConsumerGroupDescribeWhenFeatureFlagNotEnabled
 - testConsumerGroupDescribeWithMigrationMember
 - testConsumerGroupDescribeWithNewGroupCoordinator

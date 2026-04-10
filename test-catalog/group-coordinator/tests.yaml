@@ -993,6 +993,7 @@ org.apache.kafka.coordinator.group.modern.UnionSetTest:
 - testUnion
 org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMemberTest:
 - testAsConsumerGroupDescribeMember
+- testAsConsumerGroupDescribeMemberWithSameTopicPendingRevocation
 - testAsConsumerGroupDescribeWithTargetAssignmentNull
 - testAsConsumerGroupDescribeWithTopicNameNotFound
 - testAssignedAndPendingRevocationEpoch
