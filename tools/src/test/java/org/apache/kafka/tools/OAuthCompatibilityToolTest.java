@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 class OAuthCompatibilityToolTest {
 
@@ -84,7 +83,7 @@ class OAuthCompatibilityToolTest {
     }
 
     @Test
-    public void testExitsWhenOnlyUnknowArgumentIsProvided() {
+    public void testExitsWhenOnlyUnknownArgumentProvided() {
         AtomicInteger exitCode = new AtomicInteger(-1);
         Exit.setExitProcedure((code, message) -> {
             exitCode.set(code);
@@ -92,9 +91,7 @@ class OAuthCompatibilityToolTest {
         });
 
         try {
-            OAuthCompatibilityTool.main(new String[]{"--unkown-argument", "value"});
-            fail("Expected RuntimeException to be thrown");
-        } catch (RuntimeException e) {
+            assertThrows(RuntimeException.class, () -> OAuthCompatibilityTool.main(new String[]{"--unknown-argument", "value"}));
             assertEquals(1, exitCode.get());
         } finally {
             Exit.resetExitProcedure();
