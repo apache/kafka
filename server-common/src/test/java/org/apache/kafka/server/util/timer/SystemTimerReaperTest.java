@@ -24,6 +24,8 @@ import org.mockito.Mockito;
 
 import java.util.concurrent.CompletableFuture;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 public class SystemTimerReaperTest {
     private static class FutureTimerTask<T> extends TimerTask {
         CompletableFuture<T> future = new CompletableFuture<>();
@@ -66,5 +68,17 @@ public class SystemTimerReaperTest {
         timerReaper.close();
         Mockito.verify(timer, Mockito.times(1)).close();
         TestUtils.waitForCondition(timerReaper::isShutdown, "reaper not shutdown");
+    }
+
+    @Test
+    public void testRejectsNullName() {
+        assertThrows(NullPointerException.class, () ->
+            new SystemTimerReaper(null, Mockito.mock(Timer.class)));
+    }
+
+    @Test
+    public void testRejectsNullTimer() {
+        assertThrows(NullPointerException.class, () ->
+            new SystemTimerReaper("reaper", null));
     }
 }
