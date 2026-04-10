@@ -76,69 +76,13 @@ RUN echo 'PermitUserEnvironment yes' >> /etc/ssh/sshd_config
 # Install binary test dependencies.
 # we use the same versions as in vagrant/base.sh
 ARG KAFKA_MIRROR="https://s3-us-west-2.amazonaws.com/kafka-packages"
-RUN mkdir -p "/opt/kafka-2.1.1" && chmod a+rw /opt/kafka-2.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.1.1"
-RUN mkdir -p "/opt/kafka-2.2.2" && chmod a+rw /opt/kafka-2.2.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.2.2"
-RUN mkdir -p "/opt/kafka-2.3.1" && chmod a+rw /opt/kafka-2.3.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.3.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.3.1"
-RUN mkdir -p "/opt/kafka-2.4.1" && chmod a+rw /opt/kafka-2.4.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.4.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.4.1"
-RUN mkdir -p "/opt/kafka-2.5.1" && chmod a+rw /opt/kafka-2.5.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.5.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.5.1"
-RUN mkdir -p "/opt/kafka-2.6.3" && chmod a+rw /opt/kafka-2.6.3 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.6.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.6.3"
-RUN mkdir -p "/opt/kafka-2.7.2" && chmod a+rw /opt/kafka-2.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.7.2"
-RUN mkdir -p "/opt/kafka-2.8.2" && chmod a+rw /opt/kafka-2.8.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.8.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.8.2"
-RUN mkdir -p "/opt/kafka-3.0.2" && chmod a+rw /opt/kafka-3.0.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.0.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.0.2"
-RUN mkdir -p "/opt/kafka-3.1.2" && chmod a+rw /opt/kafka-3.1.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.1.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.1.2"
-RUN mkdir -p "/opt/kafka-3.2.3" && chmod a+rw /opt/kafka-3.2.3 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.2.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.2.3"
-RUN mkdir -p "/opt/kafka-3.3.2" && chmod a+rw /opt/kafka-3.3.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.3.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.3.2"
-RUN mkdir -p "/opt/kafka-3.4.1" && chmod a+rw /opt/kafka-3.4.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.4.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.4.1"
-RUN mkdir -p "/opt/kafka-3.5.2" && chmod a+rw /opt/kafka-3.5.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.5.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.5.2"
-RUN mkdir -p "/opt/kafka-3.6.2" && chmod a+rw /opt/kafka-3.6.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.6.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.6.2"
-RUN mkdir -p "/opt/kafka-3.7.2" && chmod a+rw /opt/kafka-3.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.7.2"
-RUN mkdir -p "/opt/kafka-3.8.1" && chmod a+rw /opt/kafka-3.8.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.8.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.8.1"
-RUN mkdir -p "/opt/kafka-3.9.2" && chmod a+rw /opt/kafka-3.9.2 && curl -s "$KAFKA_MIRROR/kafka_2.13-3.9.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.2"
-RUN mkdir -p "/opt/kafka-4.0.1" && chmod a+rw /opt/kafka-4.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.0.1"
-RUN mkdir -p "/opt/kafka-4.1.2" && chmod a+rw /opt/kafka-4.1.2 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.1.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.1.2"
 RUN mkdir -p "/opt/kafka-4.2.0" && chmod a+rw /opt/kafka-4.2.0 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.2.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.2.0"
 RUN mkdir -p "/opt/kafka-4.3.0" && chmod a+rw /opt/kafka-4.3.0 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.3.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.3.0"
 
 
 # Streams test dependencies
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.1.1-test.jar" -o /opt/kafka-2.1.1/libs/kafka-streams-2.1.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.2.2-test.jar" -o /opt/kafka-2.2.2/libs/kafka-streams-2.2.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.3.1-test.jar" -o /opt/kafka-2.3.1/libs/kafka-streams-2.3.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.4.1-test.jar" -o /opt/kafka-2.4.1/libs/kafka-streams-2.4.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.5.1-test.jar" -o /opt/kafka-2.5.1/libs/kafka-streams-2.5.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.6.3-test.jar" -o /opt/kafka-2.6.3/libs/kafka-streams-2.6.3-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.7.2-test.jar" -o /opt/kafka-2.7.2/libs/kafka-streams-2.7.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.8.2-test.jar" -o /opt/kafka-2.8.2/libs/kafka-streams-2.8.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.0.2-test.jar" -o /opt/kafka-3.0.2/libs/kafka-streams-3.0.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.1.2-test.jar" -o /opt/kafka-3.1.2/libs/kafka-streams-3.1.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.2.3-test.jar" -o /opt/kafka-3.2.3/libs/kafka-streams-3.2.3-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.3.2-test.jar" -o /opt/kafka-3.3.2/libs/kafka-streams-3.3.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.4.1-test.jar" -o /opt/kafka-3.4.1/libs/kafka-streams-3.4.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.5.2-test.jar" -o /opt/kafka-3.5.2/libs/kafka-streams-3.5.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.6.2-test.jar" -o /opt/kafka-3.6.2/libs/kafka-streams-3.6.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.7.2-test.jar" -o /opt/kafka-3.7.2/libs/kafka-streams-3.7.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.8.1-test.jar" -o /opt/kafka-3.8.1/libs/kafka-streams-3.8.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.2-test.jar" -o /opt/kafka-3.9.2/libs/kafka-streams-3.9.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.1-test.jar" -o /opt/kafka-4.0.1/libs/kafka-streams-4.0.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.1.2-test.jar" -o /opt/kafka-4.1.2/libs/kafka-streams-4.1.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.2.0-test.jar" -o /opt/kafka-4.2.0/libs/kafka-streams-4.2.0-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.3.0-test.jar" -o /opt/kafka-4.3.0/libs/kafka-streams-4.3.0-test.jar
-
-# To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper 
-# client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper 
-# client is incompatible with JDK 17. See KAFKA-17888 for more details.
-RUN curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper/3.5.7/zookeeper-3.5.7.jar" -o /opt/zookeeper-3.5.7.jar
-RUN curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper-jute/3.5.7/zookeeper-jute-3.5.7.jar" -o /opt/zookeeper-jute-3.5.7.jar
-RUN rm -f /opt/kafka-2.1.1/libs/zookeeper-* && rm -f /opt/kafka-2.2.2/libs/zookeeper-* && rm -f /opt/kafka-2.3.1/libs/zookeeper-*
-RUN cp /opt/zookeeper-3.5.7.jar /opt/kafka-2.1.1/libs/zookeeper-3.5.7.jar && chmod a+rw /opt/kafka-2.1.1/libs/zookeeper-3.5.7.jar
-RUN cp /opt/zookeeper-3.5.7.jar /opt/kafka-2.2.2/libs/zookeeper-3.5.7.jar && chmod a+rw /opt/kafka-2.2.2/libs/zookeeper-3.5.7.jar
-RUN cp /opt/zookeeper-3.5.7.jar /opt/kafka-2.3.1/libs/zookeeper-3.5.7.jar && chmod a+rw /opt/kafka-2.3.1/libs/zookeeper-3.5.7.jar
-RUN cp /opt/zookeeper-jute-3.5.7.jar /opt/kafka-2.1.1/libs/zookeeper-jute-3.5.7.jar && chmod a+rw /opt/kafka-2.1.1/libs/zookeeper-jute-3.5.7.jar
-RUN cp /opt/zookeeper-jute-3.5.7.jar /opt/kafka-2.2.2/libs/zookeeper-jute-3.5.7.jar && chmod a+rw /opt/kafka-2.2.2/libs/zookeeper-jute-3.5.7.jar
-RUN cp /opt/zookeeper-jute-3.5.7.jar /opt/kafka-2.3.1/libs/zookeeper-jute-3.5.7.jar && chmod a+rw /opt/kafka-2.3.1/libs/zookeeper-jute-3.5.7.jar
-# The version of Kibosh to use for testing.
-# If you update this, also update vagrant/base.sh
-ARG KIBOSH_VERSION="8841dd392e6fbf02986e2fb1f1ebf04df344b65a"
 
 # Aligning uid inside/outside docker enables containers to modify files of kafka source (mounted in /opt/kafka-dev")
 # By default, the outside user id is 1000 (UID_MIN). The known exception in QA is travis which gives non-1000 id.

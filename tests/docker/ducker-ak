@@ -105,13 +105,17 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678
     on your local machine to enable debugging in VS Code.
 
-test [-d|--debug] [test-name(s)] [-- [ducktape args]]
+test [-d|--debug] [-s|--skip-build] [test-name(s)] [-- [ducktape args]]
     Run a test or set of tests inside the currently active Ducker nodes.
     For example, to run the system test produce_bench_test, you would run:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py
 
     If --debug is passed, the tests will wait for remote VS Code debugger to connect on port 5678:
         ./tests/docker/ducker-ak test --debug ./tests/kafkatest/tests/core/produce_bench_test.py
+
+    If -s|--skip-build is passed, the gradle build step (gradlew systemTestLibs) will be skipped.
+    This is useful when test artifacts are already built (e.g., in CI). Can also be set via the
+    SKIP_BUILD environment variable (e.g., SKIP_BUILD=true).
 
     To pass arguments to underlying ducktape invocation, pass them after `--`, e.g.:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py -- --test-runner-timeout 1800000
@@ -580,9 +584,11 @@ ducker_test() {
         die "ducker_test: the ducker01 instance appears to be down. Did you run 'ducker up'?"
     declare -a test_name_args=()
     local debug=0
+    local skip_build="${SKIP_BUILD:-}"
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -d|--debug) debug=1; shift;;
+            -s|--skip-build) skip_build=true; shift;;
             --) shift; break;;
             *) test_name_args+=("${1}"); shift;;
         esac
@@ -603,9 +609,13 @@ ducker_test() {
         fi
     done
 
-    must_pushd "${kafka_dir}"
-    ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
-    must_popd
+    if [[ -n "${skip_build}" ]]; then
+        echo "ducker_test: skipping gradle build (--skip-build or SKIP_BUILD is set)."
+    else
+        must_pushd "${kafka_dir}"
+        ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
+        must_popd
+    fi
     if [[ "${debug}" -eq 1 ]]; then
         local ducktape_cmd="python3 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
     else
