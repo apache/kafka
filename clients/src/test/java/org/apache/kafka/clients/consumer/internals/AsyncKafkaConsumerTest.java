@@ -1860,7 +1860,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(100L).when(applicationEventHandler).maximumTimeToWait();
         doAnswer(invocation -> {
             Timer pollTimer = invocation.getArgument(0, Timer.class);
-            ((MockTime) time).sleep(pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
             return null;
         }).when(fetchBuffer).awaitWakeup(any(Timer.class));
 
@@ -1982,7 +1982,7 @@ public class AsyncKafkaConsumerTest {
 
         doAnswer(invocation -> {
             Timer pollTimer = invocation.getArgument(0, Timer.class);
-            ((MockTime) time).sleep(pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
             return null;
         }).when(fetchBuffer).awaitWakeup(any(Timer.class));
 
