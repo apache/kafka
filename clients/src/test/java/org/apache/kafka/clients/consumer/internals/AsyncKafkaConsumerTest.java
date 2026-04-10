@@ -1969,13 +1969,14 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
 
-        AtomicBoolean errorInjected = new AtomicBoolean(false);
-
+        // Inject the error inside maximumTimeToWait(), which is the first call in
+        // pollForFetches — after checkInflightPoll has already submitted the event.
+        // This models the background thread completing the event with a metadata error
+        // between checkInflightPoll and the blocking wait.
         doAnswer(invocation -> {
-            if (!errorInjected.get() && capturedEvent.get() != null) {
+            if (capturedEvent.get() != null) {
                 capturedEvent.get().onMetadataError(
                     new TopicAuthorizationException(singleton(topicName)));
-                errorInjected.set(true);
             }
             return fetchWaitMs;
         }).when(applicationEventHandler).maximumTimeToWait();
