@@ -32,6 +32,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Tag;
 
 import java.time.Duration;
 import java.util.List;
@@ -42,26 +43,27 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
+@Tag("integration")
+@ClusterTestDefaults(
+    types = {Type.KRAFT},
+    brokers = 3,
+    serverProperties = {
+        @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
+        @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
+        @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+        @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
+    }
+)
 public class ShareConsumerRackAwareTest {
 
-    @ClusterTestDefaults(
-        serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
-        }
-    )
-    public static class WithAssignmentBatchingDisabledTest extends ShareConsumerRackAwareTest {
-    }
-
-    @ClusterTest(
-        types = {Type.KRAFT},
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
-            @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
-            @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
-        }
-    )
+    @ClusterTest
     void testShareConsumerWithRackAwareAssignor(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String groupId = "group0";
         String topic = "test-topic";
