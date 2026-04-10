@@ -78,8 +78,9 @@ class OAuthCompatibilityToolTest {
         ConfigDef cd = new ConfigDef();
         SaslConfigs.addClientSaslSupport(cd);
 
-        assertTrue(((List<?>) clientConfigHandler.getConfigs(cd).get("sasl.oauthbearer.expected.audience")).contains("test1"));
-        assertTrue(((List<?>) clientConfigHandler.getConfigs(cd).get("sasl.oauthbearer.expected.audience")).contains("test2"));
+        List<?> audience = (List<?>) clientConfigHandler.getConfigs(cd).get("sasl.oauthbearer.expected.audience");
+        assertTrue(audience.contains("test1"));
+        assertTrue(audience.contains("test2"));
     }
 
     @Test
