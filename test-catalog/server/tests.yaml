@@ -314,6 +314,24 @@ org.apache.kafka.server.metrics.LinuxIoMetricsCollectorTest:
 - testUnableToReadNonexistentProcFile
 org.apache.kafka.server.metrics.NodeMetricsTest:
 - testMetricsExported
+org.apache.kafka.server.partition.AlterPartitionManagerTest:
+- testAuthorizationFailed
+- testBasic
+- testBasicSentLeaderRecoveryState
+- testBasicWithBrokerEpoch
+- testInvalidRequest
+- testInvalidUpdateVersion
+- testNotLeaderOrFollower
+- testOneInFlight
+- testOverwriteWithinBatch
+- testPartitionMissingInResponse
+- testRetryOnAuthenticationFailure
+- testRetryOnUnsupportedVersionError
+- testSingleBatch
+- testStaleBrokerEpoch
+- testSubmitFromCallback
+- testUnknownServer
+- testUnknownTopicPartition
 org.apache.kafka.server.purgatory.DelayedFutureTest:
 - testDelayedFuture
 org.apache.kafka.server.quota.ClientQuotasRequestTest:
