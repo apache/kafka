@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.Exit;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,8 +38,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OAuthCompatibilityToolTest {
 
+    private final AtomicInteger exitCode = new AtomicInteger(-1);
+
+    @BeforeEach
+    void setUp() {
+        Exit.setExitProcedure((code, message) -> {
+            exitCode.set(code);
+            throw new RuntimeException("exit called");
+        });
+    }
+
+    @AfterEach
+    void tearDown() {
+        Exit.resetExitProcedure();
+    }
+
     @Test
-    public void testParseArgsParsesClientConfig() throws ArgumentParserException {
+    void testParseArgsParsesClientConfig() throws ArgumentParserException {
         OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
         Namespace namespace = argsHandler.parseArgs(new String[]{
             "--client-config", "/tmp/test/client.properties"
@@ -47,7 +64,7 @@ class OAuthCompatibilityToolTest {
     }
 
     @Test
-    public void testParseArgsParsesBrokerConfig() throws ArgumentParserException {
+    void testParseArgsParsesBrokerConfig() throws ArgumentParserException {
         OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
         Namespace namespace = argsHandler.parseArgs(new String[]{
             "--broker-config", "/tmp/test/broker.properties"
@@ -57,7 +74,7 @@ class OAuthCompatibilityToolTest {
     }
 
     @Test
-    public void testParseArgsThrowsIfArgumentIsEmpty() {
+    void testParseArgsThrowsIfArgumentIsEmpty() {
         OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
         assertThrows(
             ArgumentParserException.class,
@@ -65,7 +82,7 @@ class OAuthCompatibilityToolTest {
     }
 
     @Test
-    public void testGetConfigsReturnsStringListAndCliHasPriority() throws ArgumentParserException {
+    void testGetConfigsReturnsStringListAndCliHasPriority() throws ArgumentParserException {
         OAuthCompatibilityTool.ArgsHandler argsHandler = new OAuthCompatibilityTool.ArgsHandler();
         Namespace namespace = argsHandler.parseArgs(new String[]{
             "--sasl.oauthbearer.expected.audience", "test1,test2"
@@ -83,18 +100,14 @@ class OAuthCompatibilityToolTest {
     }
 
     @Test
-    public void testExitsWhenOnlyUnknownArgumentProvided() {
-        AtomicInteger exitCode = new AtomicInteger(-1);
-        Exit.setExitProcedure((code, message) -> {
-            exitCode.set(code);
-            throw new RuntimeException("exit called");
-        });
+    void testExitsWhenOnlyUnknownArgumentProvided() {
+        assertThrows(RuntimeException.class, () -> OAuthCompatibilityTool.main(new String[]{"--unknown-argument", "value"}));
+        assertEquals(1, exitCode.get());
+    }
 
-        try {
-            assertThrows(RuntimeException.class, () -> OAuthCompatibilityTool.main(new String[]{"--unknown-argument", "value"}));
-            assertEquals(1, exitCode.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+    @Test
+    void testExitsWhenArgumentValueIsInvalid() {
+        assertThrows(RuntimeException.class, () -> OAuthCompatibilityTool.main(new String[]{"--sasl.login.retry.backoff.ms", "not-a-number"}));
+        assertEquals(1, exitCode.get());
     }
 }
