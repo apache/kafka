@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.io.TempDir;
 
