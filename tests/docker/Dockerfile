@@ -124,8 +124,8 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.1.2-test.jar" -o /opt/kafka-4.1.2/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.2.0-test.jar" -o /opt/kafka-4.2.0/libs/kafka-streams-4.2.0-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.3.0-test.jar" -o /opt/kafka-4.3.0/libs/kafka-streams-4.3.0-test.jar
 
-# To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper
-# client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper
+# To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper 
+# client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper 
 # client is incompatible with JDK 17. See KAFKA-17888 for more details.
 RUN curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper/3.5.7/zookeeper-3.5.7.jar" -o /opt/zookeeper-3.5.7.jar
 RUN curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper-jute/3.5.7/zookeeper-jute-3.5.7.jar" -o /opt/zookeeper-jute-3.5.7.jar
