@@ -40,7 +40,7 @@ plugins {
   id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '9.3.1' apply false
-  id 'com.diffplug.spotless' version "8.3.0"
+  id 'com.diffplug.spotless' version "8.4.0"
 }
 
 ext {
@@ -871,14 +871,11 @@ subprojects {
     java {
       targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
       importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      // The default engine (google-java-format) uses the JDK compiler's internal
-      // parser (com.sun.tools.javac.*), which JPMS blocks without --add-exports.
-      // Gradle 9.3+ / Spotless 8.x no longer pass those exports to the worker JVM,
-      // so the default engine fails at runtime. The cleanthat engine uses the
-      // JavaParser library instead, which ships its own Java parser and does not
-      // rely on any JDK internal classes, so it works out of the box.
-      // See KAFKA-20182.
-      removeUnusedImports('cleanthat-javaparser-unnecessaryimport')
+      // removeUnusedImports is intentionally omitted because its engines
+      // (google-java-format, cleanthat) can non-deterministically throw
+      // InvocationTargetException under parallel execution. Unused imports are
+      // still enforced by checkstyle (UnusedImports + RedundantImport).
+      // Re-enable once https://github.com/diffplug/spotless/issues/2850 is fixed.
     }
   }
 
