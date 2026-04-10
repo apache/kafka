@@ -31,7 +31,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
@@ -49,7 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(1200)
-@Tag("integration")
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {

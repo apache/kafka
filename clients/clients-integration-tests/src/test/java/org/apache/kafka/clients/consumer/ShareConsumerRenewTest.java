@@ -30,7 +30,6 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Meter;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.List;
@@ -44,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(1200)
-@Tag("integration")
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {

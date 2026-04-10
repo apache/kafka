@@ -32,7 +32,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Tag;
 
 import java.time.Duration;
 import java.util.List;
@@ -43,7 +42,6 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
-@Tag("integration")
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     brokers = 3,

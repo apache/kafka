@@ -85,7 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class ShareConsumerTestBase {
+public abstract class ShareConsumerTestBase {
     protected final ClusterInstance cluster;
     protected final TopicPartition tp = new TopicPartition("topic", 0);
     protected Uuid tpId;

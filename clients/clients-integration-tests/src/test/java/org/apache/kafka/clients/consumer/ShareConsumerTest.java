@@ -58,7 +58,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
@@ -98,7 +97,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(1200)
-@Tag("integration")
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {
