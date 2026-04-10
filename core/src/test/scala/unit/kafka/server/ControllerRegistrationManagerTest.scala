@@ -19,7 +19,7 @@ package kafka.server
 
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.message.ControllerRegistrationResponseData
-import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord, UnregisterBrokerRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord, UnregisterControllerRecord}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ControllerRegistrationResponse
 import org.apache.kafka.common.utils.ExponentialBackoff
@@ -104,7 +104,7 @@ class ControllerRegistrationManagerTest {
     manager: ControllerRegistrationManager,
     metadataVersion: MetadataVersion,
     registrationModifier: RegisterControllerRecord => Option[RegisterControllerRecord],
-    unregisterModifier: UnregisterBrokerRecord => Option[UnregisterBrokerRecord]
+    unregisterModifier: UnregisterControllerRecord => Option[UnregisterControllerRecord]
   ): MetadataImage = {
     val delta = new MetadataDelta.Builder().
       setImage(prevImage).
@@ -354,12 +354,12 @@ class ControllerRegistrationManagerTest {
       )
       assertTrue(registeredInLog(manager))
 
-      // Now unregister the controller via an UnregisterBrokerRecord.
+      // Now unregister the controller via an UnregisterControllerRecord.
       doMetadataUpdate(image,
         manager,
         MetadataVersion.IBP_3_7_IV0,
         _ => None,
-        r => if (r.brokerId() == 1) Some(r) else None
+        r => if (r.controllerId() == 1) Some(r) else None
       )
       assertFalse(registeredInLog(manager))
 

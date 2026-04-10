@@ -14,15 +14,13 @@
 // limitations under the License.
 
 {
-  "apiKey": 1,
+  "apiKey": 29,
   "type": "metadata",
-  "name": "UnregisterBrokerRecord",
+  "name": "UnregisterControllerRecord",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The broker id." },
-    { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
-      "about": "The broker epoch." }
+    { "name": "ControllerId", "type": "int32", "versions": "0+",
+      "about": "The controller id." }
   ]
 }

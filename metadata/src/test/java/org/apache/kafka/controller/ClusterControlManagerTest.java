@@ -36,6 +36,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -1117,7 +1118,7 @@ public class ClusterControlManagerTest {
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()));
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV0.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
@@ -1151,7 +1152,7 @@ public class ClusterControlManagerTest {
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()));
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV0.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
@@ -1161,13 +1162,13 @@ public class ClusterControlManagerTest {
             build();
         clusterControl.activate();
 
-        // Non-registered controller should throw ApiException
+        // Trying to unregister a non-registered controller should throw ApiException
         assertThrows(BrokerIdNotRegisteredException.class,
             () -> clusterControl.unregisterController(1));
 
-        // Replaying unregister for unknown controller should throw
+        // Replaying unregister record for unknown controller should throw RuntimeException
         assertThrows(RuntimeException.class,
-            () -> clusterControl.replay(new UnregisterBrokerRecord().setBrokerId(99).setBrokerEpoch(Long.MIN_VALUE)));
+            () -> clusterControl.replay(new UnregisterControllerRecord().setControllerId(99)));
     }
 
     @Test

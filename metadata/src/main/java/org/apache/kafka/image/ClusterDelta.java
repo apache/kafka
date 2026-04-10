@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -88,16 +89,16 @@ public final class ClusterDelta {
     }
 
     public void replay(UnregisterBrokerRecord record) {
-        if (ControllerRegistration.isUnregisterController(record)) {
-            changedControllers.put(record.brokerId(), Optional.empty());
-        } else {
-            changedBrokers.put(record.brokerId(), Optional.empty());
-        }
+        changedBrokers.put(record.brokerId(), Optional.empty());
     }
 
     public void replay(RegisterControllerRecord record) {
         ControllerRegistration controller = new ControllerRegistration.Builder(record).build();
         changedControllers.put(controller.id(), Optional.of(controller));
+    }
+
+    public void replay(UnregisterControllerRecord record) {
+        changedControllers.put(record.controllerId(), Optional.empty());
     }
 
     private BrokerRegistration getBrokerOrThrow(int brokerId, long epoch, String action) {

@@ -130,7 +130,11 @@ public enum MetadataVersion {
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
-    IBP_4_4_IV0(31, "4.4", "IV0", false);
+
+    // Add support for controller unregistration.
+    IBP_4_4_IV0(31, "4.4", "IV0", true),
+
+    IBP_4_4_IV1(32, "4.4", "IV1", false);
 
 
     // NOTES when adding a new version:
@@ -245,6 +249,10 @@ public enum MetadataVersion {
 
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
+    }
+
+    public boolean isControllerUnregistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV0);
     }
 
     public short partitionChangeRecordVersion() {

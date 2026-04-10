@@ -35,6 +35,7 @@ import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -502,7 +503,7 @@ public class ClusterControlManager {
     }
 
     ControllerResult<Void> unregisterController(int controllerId) {
-        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isControllerUnregistrationSupported()) {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller unregistration.");
         }
@@ -511,9 +512,8 @@ public class ClusterControlManager {
                 " is not currently registered");
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
-            setBrokerId(controllerId).
-            setBrokerEpoch(ControllerRegistration.UNREGISTER_CONTROLLER_SENTINEL_EPOCH),
+        records.add(new ApiMessageAndVersion(new UnregisterControllerRecord().
+            setControllerId(controllerId),
                 (short) 0));
         return ControllerResult.atomicOf(records, null);
     }
@@ -629,10 +629,6 @@ public class ClusterControlManager {
     }
 
     public void replay(UnregisterBrokerRecord record) {
-        if (ControllerRegistration.isUnregisterController(record)) {
-            replayUnregisterController(record);
-            return;
-        }
         registerBrokerRecordOffsets.remove(record.brokerId());
         int brokerId = record.brokerId();
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
@@ -650,8 +646,8 @@ public class ClusterControlManager {
         }
     }
 
-    private void replayUnregisterController(UnregisterBrokerRecord record) {
-        int controllerId = record.brokerId();
+    public void replay(UnregisterControllerRecord record) {
+        int controllerId = record.controllerId();
         ControllerRegistration registration = controllerRegistrations.get(controllerId);
         if (registration == null) {
             throw new RuntimeException(String.format("Unable to replay %s: no controller " +

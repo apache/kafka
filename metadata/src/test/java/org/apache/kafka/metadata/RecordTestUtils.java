@@ -20,7 +20,7 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -275,7 +275,7 @@ public class RecordTestUtils {
             ));
     }
 
-    public static UnregisterBrokerRecord createTestControllerUnregistration(int id) {
-        return new UnregisterBrokerRecord().setBrokerId(id).setBrokerEpoch(Long.MIN_VALUE);
+    public static UnregisterControllerRecord createTestControllerUnregistration(int id) {
+        return new UnregisterControllerRecord().setControllerId(id);
     }
 }
