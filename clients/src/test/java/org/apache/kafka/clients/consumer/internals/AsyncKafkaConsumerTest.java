@@ -1993,48 +1993,34 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(CommitOnCloseEvent.class));
     }
 
+    private static Stream<CompletableBackgroundEvent<?>> assignmentEventsSource() {
+        return Stream.of(
+            new PartitionsAssignedEvent(Set.of(), new TreeSet<>(TOPIC_PARTITION_COMPARATOR)),
+            new StreamsTasksAssignedEvent(
+                new TreeSet<>(TOPIC_PARTITION_COMPARATOR),
+                new TreeSet<>(TOPIC_PARTITION_COMPARATOR),
+                new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), true))
+        );
+    }
+
     /**
      * Test to ensure that assignment updates are not applied while unsubscribing
      * (it would cause an IllegalArgumentException when calling unsubscribe()).
      * Validates the fix for KAFKA-20428.
      */
-    @Test
-    public void testUnsubscribeWithPendingPartitionsAssignedEvent() {
+    @ParameterizedTest
+    @MethodSource("assignmentEventsSource")
+    public void testUnsubscribeWithPendingAssignmentEvent(CompletableBackgroundEvent<?> assignedEvent) {
         consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList("topic"));
         completeUnsubscribeApplicationEventSuccessfully();
 
-        // Add PartitionsAssignedEvent to the background queue (simulating an ongoing reconciliation
+        // Add assignment event to the background queue (simulating an ongoing reconciliation
         // that completed just before unsubscribe was called)
-        PartitionsAssignedEvent assignedEvent = new PartitionsAssignedEvent(Set.of(), new TreeSet<>(TOPIC_PARTITION_COMPARATOR));
         backgroundEventQueue.add(assignedEvent);
 
-        // The call to unsubscribe should complete successfully (PartitionsAssignedEvent not processed and completed exceptionally)
-        assertDoesNotThrow(() -> consumer.unsubscribe());
-        verify(applicationEventHandler, never().description("Reconciled assignment updates shouldn't be processed while unsubscribing"))
-                .addAndGet(any(ApplyAssignmentEvent.class));
-        assertTrue(assignedEvent.future().isCompletedExceptionally());
-    }
-
-    /**
-     * Streams equivalent of {@link #testUnsubscribeWithPendingPartitionsAssignedEvent()}.
-     */
-    @Test
-    public void testUnsubscribeWithPendingStreamsTasksAssignedEvent() {
-        consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
-        completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singletonList("topic"));
-        completeUnsubscribeApplicationEventSuccessfully();
-
-        // Add StreamsTasksAssignedEvent to the background queue (simulating an ongoing reconciliation
-        // that completed just before unsubscribe was called)
-        StreamsTasksAssignedEvent assignedEvent = new StreamsTasksAssignedEvent(
-            new TreeSet<>(TOPIC_PARTITION_COMPARATOR), new TreeSet<>(TOPIC_PARTITION_COMPARATOR),
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), true));
-        backgroundEventQueue.add(assignedEvent);
-
-        // The call to unsubscribe should complete successfully (StreamsTasksAssignedEvent not processed and completed exceptionally)
+        // The call to unsubscribe should complete successfully (assignment event not processed and completed exceptionally)
         assertDoesNotThrow(() -> consumer.unsubscribe());
         verify(applicationEventHandler, never().description("Reconciled assignment updates shouldn't be processed while unsubscribing"))
                 .addAndGet(any(ApplyAssignmentEvent.class));
