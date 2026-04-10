@@ -318,6 +318,14 @@ org.apache.kafka.streams.integration.RocksDBMetricsIntegrationTest:
 org.apache.kafka.streams.integration.SelfJoinUpgradeIntegrationTest:
 - shouldRestartWithTopologyOptimizationOn
 - shouldUpgradeWithTopologyOptimizationOff
+org.apache.kafka.streams.integration.SelfManagedOffsetRecoveryIntegrationTest:
+- shouldNotThrowTaskCorruptedOnStandbyAfterStateWipe
+- shouldRecoverFromMissingOffsetsInColumnFamilyWithEos
+- shouldRecoverFromUncleanShutdownAndMissingOffsetsWithEos
+- shouldRecoverFromUncleanShutdownWithAlos
+- shouldRecoverFromUncleanShutdownWithEos
+- shouldRecoverMultipleStoresFromUncleanShutdown
+- shouldRecoverStandbyTaskFromUncleanShutdownWithEos
 org.apache.kafka.streams.integration.SessionsStoreWithHeadersTest:
 - shouldManualUpgradeFromTimestampedToHeaders
 - shouldPutFetchAndDelete
