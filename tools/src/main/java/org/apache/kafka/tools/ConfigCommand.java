@@ -108,7 +108,7 @@ import joptsimple.OptionSpec;
  * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
  * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
  */
-class ConfigCommand  {
+public class ConfigCommand  {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfigCommand.class);
 
@@ -516,7 +516,7 @@ class ConfigCommand  {
                             .noneMatch(group -> group.groupId().equals(name));
                     boolean noMatchInResources = listGroupConfigResources(adminClient)
                             .map(resources -> resources.stream().noneMatch(resource -> resource.name().equals(name)))
-                            .orElse(true);
+                            .orElse(false);
                     if (noMatchInGroups && noMatchInResources) {
                         System.out.println("The " + entityTypeSingular + " '" + name + "' doesn't exist and doesn't have dynamic config.");
                         return;
@@ -768,7 +768,6 @@ class ConfigCommand  {
             else throw (Exception)  ee.getCause();
         }
     }
-
 
     static class ConfigCommandOptions extends CommandDefaultOptions {
         private final OptionSpec<String> bootstrapServerOpt;
