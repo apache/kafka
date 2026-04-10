@@ -2422,7 +2422,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @param skipAssignmentEvents      If true, skip processing PARTITIONS_ASSIGNED and STREAMS_TASKS_ASSIGNED
      *                                  events and complete them exceptionally. These events should only be
      *                                  processed from poll(), not from unsubscribe() or other operations.
-     * @return {@code true} if the event completed within the timeout, {@code false} otherwise
+     * @return the completed result of the supplied {@code future}
+     * @throws TimeoutException if the operation does not complete before the timer expires
      */
     // Visible for testing
     <T> T processBackgroundEvents(Future<T> future, Timer timer, Predicate<Exception> ignoreErrorEventException,
