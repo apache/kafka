@@ -39,6 +39,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,6 +71,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkStreamState;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkTaskInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.processId;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -912,5 +915,77 @@ public class CustomStickyTaskAssignorTest {
             Collections.sort(topicGroupIds);
             assertThat(topicGroupIds, equalTo(asList(1, 2)));
         }
+    }
+
+    // --- KAFKA-20198 regression tests ---
+
+    @Test
+    public void shouldRetainFairShareOfPreviousTasksWhenScalingUp() {
+        final int numTasks = 450;
+        final int threadsPerInstance = 10;
+        final Map<TaskId, TaskInfo> tasks = buildStatelessTasks(numTasks);
+        final Set<TaskId> firstHalf = buildTaskIdRange(0, numTasks / 2);
+
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
+            mkStreamState(1, threadsPerInstance, Optional.empty(), firstHalf, Set.of()),
+            mkStreamState(2, threadsPerInstance, Optional.empty())
+        );
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments =
+            assign(streamStates, tasks, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+
+        final Set<TaskId> instance1Tasks = activeTasks(assignments, 1);
+        final int retained = (int) firstHalf.stream().filter(instance1Tasks::contains).count();
+
+        assertThat("Instance should retain all of its fair share tasks, but only retained " + retained + " of " + firstHalf.size(),
+            retained, equalTo(firstHalf.size()));
+    }
+
+    @Test
+    public void shouldConvergeWithinTwoRoundsWhenScalingUpWithUnevenCapacity() {
+        final int numTasks = 450;
+        final int maxRounds = 2;
+        final Map<TaskId, TaskInfo> tasks = buildStatelessTasks(numTasks);
+
+        // Uneven capacity: instance 1 has 10 threads, instance 2 has 5 threads
+        Set<TaskId> instance1Prev = buildTaskIdRange(0, numTasks);
+        Set<TaskId> instance2Prev = Set.of();
+
+        for (int round = 1; round <= maxRounds; round++) {
+            final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
+                mkStreamState(1, 10, Optional.empty(), instance1Prev, Set.of()),
+                mkStreamState(2, 5, Optional.empty(), instance2Prev, Set.of())
+            );
+
+            final Map<ProcessId, KafkaStreamsAssignment> assignments =
+                assign(streamStates, tasks, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+
+            final Set<TaskId> newInstance1 = activeTasks(assignments, 1);
+            final Set<TaskId> newInstance2 = activeTasks(assignments, 2);
+
+            if (newInstance1.equals(instance1Prev) && newInstance2.equals(instance2Prev)) {
+                return; // converged
+            }
+            instance1Prev = newInstance1;
+            instance2Prev = newInstance2;
+        }
+        fail("Assignment did not converge within " + maxRounds + " rounds");
+    }
+
+    private static Map<TaskId, TaskInfo> buildStatelessTasks(final int count) {
+        final Map<TaskId, TaskInfo> tasks = new HashMap<>();
+        for (int i = 0; i < count; i++) {
+            final TaskId taskId = new TaskId(0, i);
+            tasks.put(taskId, mkTaskInfo(taskId, false).getValue());
+        }
+        return tasks;
+    }
+
+    private static Set<TaskId> buildTaskIdRange(final int from, final int to) {
+        final Set<TaskId> set = new HashSet<>();
+        for (int i = from; i < to; i++) {
+            set.add(new TaskId(0, i));
+        }
+        return set;
     }
 }
