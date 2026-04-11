@@ -1231,6 +1231,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testSuccessfulStartupShutdown
 - testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled
 - testUnsubscribeGeneratesUnsubscribeEvent
+- testUnsubscribeWithPendingAssignmentEvent
 - testUnsubscribeWithoutGroupId
 - testVerifyApplicationEventOnShutdown
 - testWakeupAfterEmptyFetch
@@ -1370,6 +1371,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerMembershipManagerTest:
 - testHeartbeatSuccessfulResponseWhenLeavingGroupCompletesLeave
 - testIgnoreHeartbeatResponseWhenNotInGroup
 - testIgnoreLeaveResponseWhenNotLeavingGroup
+- testLeaveGroupDuringReconciliationThenRejoin
 - testLeaveGroupEpoch
 - testLeaveGroupEpochOnClose
 - testLeaveGroupWhenMemberAlreadyLeaving
@@ -2486,6 +2488,7 @@ org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testIsGroupReadyWithNoStatuses
 - testIsGroupReadyWithOtherStatuses
 - testJoining
+- testLeaveGroupDuringReconciliationThenRejoin
 - testLeaveGroupOnCloseWhenInGroupWithAssignment
 - testLeaveGroupOnCloseWhenNotInGroup
 - testLeaveGroupOnCloseWhenNotInGroupAndFenced
