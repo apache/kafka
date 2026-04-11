@@ -2810,6 +2810,10 @@ kafka.server.share.SharePartitionTest:
 - testAcknowledgeOffsetWithWriteShareGroupStateFailure
 - testAcknowledgeOutOfRangeCachedData
 - testAcknowledgeOutOfRangeCachedDataFirstBatch
+- testAcknowledgePerOffsetRejectWithDlqDisabled
+- testAcknowledgePerOffsetRejectWithDlqEnabled
+- testAcknowledgeRejectWithDlqDisabled
+- testAcknowledgeRejectWithDlqEnabled
 - testAcknowledgeRollbackWithFullBatchError
 - testAcknowledgeRollbackWithSubsetError
 - testAcknowledgeSingleRecordBatch
