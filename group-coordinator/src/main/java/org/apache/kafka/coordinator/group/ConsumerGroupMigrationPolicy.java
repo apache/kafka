@@ -65,7 +65,7 @@ public enum ConsumerGroupMigrationPolicy {
     /**
      * Parse a string into the corresponding {@code GroupProtocolMigrationPolicy} enum value, in a case-insensitive manner.
      *
-     * @return The {{@link ConsumerGroupMigrationPolicy}} according to the string passed. None is returned if
+     * @return The {{@link ConsumerGroupMigrationPolicy}} according to the string passed. DISABLED is returned if
      * the string doesn't correspond to a valid policy.
      */
     public static ConsumerGroupMigrationPolicy parse(String name) {
