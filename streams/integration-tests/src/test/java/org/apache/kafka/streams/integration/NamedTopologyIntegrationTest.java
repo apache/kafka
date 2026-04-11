@@ -660,13 +660,19 @@ public class NamedTopologyIntegrationTest {
 
         TestUtils.waitForCondition(
                 () -> streams.allLocalTasksRunningForTopology(TOPOLOGY_1),
-                "topology tasks are still transitioning before remove"
+                () -> "Not all local tasks for topology " + TOPOLOGY_1
+                        + " are initialized and in RUNNING state before remove. "
+                        + "streamsState=" + streams.state()
+                        + ", localThreads=" + streams.metadataForLocalThreads()
         );
         streams.removeNamedTopology(TOPOLOGY_1, true).all().get();
         
         TestUtils.waitForCondition(
                 () -> !streams.hasAnyLocalTaskForTopology(TOPOLOGY_1),
-                "tasks still exist internally after topology removed"
+                () -> "Topology " + TOPOLOGY_1
+                        + " still has local tasks after remove. "
+                        + "streamsState=" + streams.state()
+                        + ", localThreads=" + streams.metadataForLocalThreads()
         );
         streams.cleanUpNamedTopology(TOPOLOGY_1);
 

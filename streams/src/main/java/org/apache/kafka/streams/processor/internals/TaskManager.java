@@ -1635,7 +1635,17 @@ public class TaskManager {
     boolean hasAnyTaskForTopology(final String topologyName) {
         return allTasks().keySet().stream().anyMatch(taskId -> topologyName.equals(taskId.topologyName()));
     }
-    
+
+    /**
+     * Returns {@code true} if every task for the given topology is initialized and in
+     * {@link State#RUNNING}.
+     *
+     * <p>If there are no tasks for the given topology, this method returns {@code true}.
+     *
+     * @param topologyName the topology name
+     * @return {@code true} if all matching tasks are initialized and in {@link State#RUNNING},
+     *         or if there are no matching tasks; {@code false} otherwise
+     */
     // VisibleForTesting
     boolean allTasksRunningForTopology(final String topologyName) {
         final Map<TaskId, Task> allTasks = allTasks();
