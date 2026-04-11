@@ -240,7 +240,7 @@ public class WindowStoreMaterializerTest {
     }
 
     @Test
-    public void shouldCreateTimestampedStoreWithOnWindowCloseByDefault() {
+    public void shouldCreateTimestampedStoreWithOnWindowCloseByDefaultWithCachingDisabled() {
         emitStrategy = EmitStrategy.onWindowClose();
 
         final MaterializedInternal<String, String, WindowStore<Bytes, byte[]>> materialized =

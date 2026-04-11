@@ -74,6 +74,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -148,6 +149,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final BrokerTopicStats brokerTopicStats;
 
+    /**
+     * Supplier indicating whether DLQ support is enabled.
+     */
+    private final Supplier<Boolean> shareGroupDlqEnableSupplier;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -158,7 +164,8 @@ public class SharePartitionManager implements AutoCloseable {
         long remoteFetchMaxWaitMs,
         Persister persister,
         ShareGroupConfigProvider configProvider,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this(replicaManager,
             time,
@@ -171,7 +178,8 @@ public class SharePartitionManager implements AutoCloseable {
             persister,
             configProvider,
             new ShareGroupMetrics(time),
-            brokerTopicStats
+            brokerTopicStats,
+            shareGroupDlqEnableSupplier
         );
     }
 
@@ -187,7 +195,8 @@ public class SharePartitionManager implements AutoCloseable {
         Persister persister,
         ShareGroupConfigProvider configProvider,
         ShareGroupMetrics shareGroupMetrics,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this(replicaManager,
             time,
@@ -202,11 +211,13 @@ public class SharePartitionManager implements AutoCloseable {
             persister,
             configProvider,
             shareGroupMetrics,
-            brokerTopicStats
+            brokerTopicStats,
+            shareGroupDlqEnableSupplier
         );
     }
 
     // Visible for testing.
+    @SuppressWarnings("ParameterNumber")
     SharePartitionManager(
             ReplicaManager replicaManager,
             Time time,
@@ -220,7 +231,8 @@ public class SharePartitionManager implements AutoCloseable {
             Persister persister,
             ShareGroupConfigProvider configProvider,
             ShareGroupMetrics shareGroupMetrics,
-            BrokerTopicStats brokerTopicStats
+            BrokerTopicStats brokerTopicStats,
+            Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -236,6 +248,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.shareGroupMetrics = shareGroupMetrics;
         this.brokerTopicStats = brokerTopicStats;
         this.cache.registerShareGroupListener(new ShareGroupListenerImpl());
+        this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
     }
 
     /**
@@ -719,7 +732,8 @@ public class SharePartitionManager implements AutoCloseable {
                             persister,
                             replicaManager,
                             configProvider,
-                            listener
+                            listener,
+                            shareGroupDlqEnableSupplier
                     );
                 });
     }

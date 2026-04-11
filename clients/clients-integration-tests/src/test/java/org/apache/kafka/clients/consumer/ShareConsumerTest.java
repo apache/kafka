@@ -4237,39 +4237,8 @@ public class ShareConsumerTest {
         // dynamically set and read back via describe configs.
         alterSharePartitionMaxRecordLocks("group1", "500");
 
-        // Verify the config is readable via describe configs.
-        try (Admin adminClient = createAdminClient()) {
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            assertDoesNotThrow(() ->
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
-                        Config config = configs.get(configResource);
-                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-                        return entry != null && entry.value().equals("500");
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
-        }
-
         // Verify the config can be updated dynamically.
         alterSharePartitionMaxRecordLocks("group1", "1000");
-
-        try (Admin adminClient = createAdminClient()) {
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-            assertDoesNotThrow(() ->
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        Map<ConfigResource, Config> configs = adminClient.describeConfigs(List.of(configResource)).all().get(60, TimeUnit.SECONDS);
-                        Config config = configs.get(configResource);
-                        ConfigEntry entry = config.get(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG);
-                        return entry != null && entry.value().equals("1000");
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
-        }
     }
 
     /**
@@ -4568,6 +4537,18 @@ public class ShareConsumerTest {
                 .all()
                 .get(60, TimeUnit.SECONDS), "Failed to alter configs");
         }
+
+        // This config is changed dynamically in tests, and we need it to have propagated before the test proceeds.
+        // Describing the config with a new admin client is not totally foolproof, but it's better than just
+        // altering the config and continuing.
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() ->
+                TestUtils.waitForCondition(() -> {
+                    Config config = adminClient.describeConfigs(List.of(configResource)).all().get().get(configResource);
+                    ConfigEntry entry = config.get(configKey);
+                    return entry != null && entry.value().equals(newValue);
+                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
+        }
     }
 
     private void alterShareAutoOffsetReset(String groupId, String newValue) {
@@ -4576,23 +4557,6 @@ public class ShareConsumerTest {
 
     private void alterShareDeliveryCountLimit(String groupId, String newValue) {
         alterShareGroupConfig(groupId, GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, newValue);
-
-        // This config is changed dynamically in tests, and we need it to have propagated before the test proceeds.
-        // Describing the config with a new admin client is not totally foolproof, but it's better than just
-        // altering the config and continuing.
-        try (Admin adminClient = createAdminClient()) {
-            ConfigResource groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-            assertDoesNotThrow(() ->
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        Config config = adminClient.describeConfigs(List.of(groupConfigResource)).all().get().get(groupConfigResource);
-                        ConfigEntry entry = config.get(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG);
-                        return entry != null && entry.value().equals(newValue);
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }, 10000L, 100L, () -> "New config value did not propagate"), "Failed to describe configs");
-        }
     }
 
     private void alterShareIsolationLevel(String groupId, String newValue) {

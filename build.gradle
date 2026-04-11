@@ -40,7 +40,7 @@ plugins {
   id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '9.3.1' apply false
-  id 'com.diffplug.spotless' version "8.0.0"
+  id 'com.diffplug.spotless' version "8.3.0"
 }
 
 ext {
@@ -871,7 +871,14 @@ subprojects {
     java {
       targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
       importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      removeUnusedImports()
+      // The default engine (google-java-format) uses the JDK compiler's internal
+      // parser (com.sun.tools.javac.*), which JPMS blocks without --add-exports.
+      // Gradle 9.3+ / Spotless 8.x no longer pass those exports to the worker JVM,
+      // so the default engine fails at runtime. The cleanthat engine uses the
+      // JavaParser library instead, which ships its own Java parser and does not
+      // rely on any JDK internal classes, so it works out of the box.
+      // See KAFKA-20182.
+      removeUnusedImports('cleanthat-javaparser-unnecessaryimport')
     }
   }
 
@@ -1232,7 +1239,7 @@ project(':core') {
 
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    mainClass = 'org.apache.kafka.clients.consumer.internals.FetchMetricsRegistry'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
@@ -3439,6 +3446,7 @@ project(':jmh-benchmarks') {
     implementation project(':connect:json')
     implementation project(':clients').sourceSets.test.output
     implementation project(':server-common').sourceSets.test.output
+    implementation project(':server').sourceSets.test.output
     implementation project(':metadata').sourceSets.test.output
 
     implementation libs.jmhCore

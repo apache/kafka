@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -198,5 +199,17 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     @Override
     public int leaveGroupEpoch() {
         return ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * For the ShareConsumer, full reconciliations can always be triggered from the background thread
+     * (fully updates assignment).
+     */
+    @Override
+    public PollResult poll(final long currentTimeMs) {
+        maybeReconcile(true);
+        return PollResult.EMPTY;
     }
 }

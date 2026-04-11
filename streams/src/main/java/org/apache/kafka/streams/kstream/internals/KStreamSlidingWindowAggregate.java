@@ -19,12 +19,14 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -36,6 +38,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -484,7 +487,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
     @Override
     public KTableValueGetterSupplier<Windowed<KIn>, VAgg> view() {
-        return new KTableValueGetterSupplier<Windowed<KIn>, VAgg>() {
+        return new KTableValueGetterSupplier<>() {
 
             public KTableValueGetter<Windowed<KIn>, VAgg> get() {
                 return new KStreamWindowAggregateValueGetter();
@@ -502,7 +505,21 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            windowStore = context.getStateStore(storeName);
+            try {
+                windowStore = new WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter<>(context.getStateStore(storeName));
+            } catch (final ClassCastException swallow) {
+                // not timestamped store
+
+                // Try headers-aware timestamped store
+                try {
+                    windowStore = context.getStateStore(storeName);
+                } catch (final ClassCastException fatal) {
+                    final StateStore store = context.getStateStore(storeName);
+                    final String storeType = store == null ? "null" : store.getClass().getName();
+                    throw new InvalidStateStoreException("Sliding-KTable state store must implement either "
+                        + "TimestampedWindowStore, or TimestampedWindowStoreWithHeaders. Got: " + storeType);
+                }
+            }
         }
 
         @Override
@@ -510,9 +527,6 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             final KIn key = windowedKey.key();
             return windowStore.fetch(key, windowedKey.window().start());
         }
-
-        @Override
-        public void close() {}
 
         @Override
         public boolean isVersioned() {

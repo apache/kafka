@@ -290,7 +290,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
 
     @Setup(Level.Invocation)
     public void setupInvocation() {
-        GroupConfigManager configManager = new GroupConfigManager(new HashMap<>(), config, shareGroupConfig);
+        GroupConfigManager configManager = new GroupConfigManager(config, shareGroupConfig);
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
 

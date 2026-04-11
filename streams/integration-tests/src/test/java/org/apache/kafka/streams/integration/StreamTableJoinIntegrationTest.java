@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -45,13 +46,15 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     private static final String APP_ID = "stream-table-join-integration-test";
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInner(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInner(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -84,13 +87,15 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeft(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeft(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT);
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -123,14 +128,16 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testInnerWithVersionedStore(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testInnerWithVersionedStore(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
                 Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -163,14 +170,16 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeftWithVersionedStore(final boolean cacheEnabled) {
+    @CsvSource({"true, false", "true, true", "false, false", "false, true"})
+    public void testLeftWithVersionedStore(final boolean cacheEnabled, final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
                 Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(

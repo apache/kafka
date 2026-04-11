@@ -24,6 +24,10 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.DoubleDeserializer;
+import org.apache.kafka.common.serialization.DoubleSerializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -386,7 +390,6 @@ public abstract class TopologyTestDriverTest {
                 () -> new Processor<Object, Object, Void, Void>() {
                     KeyValueStore<Object, Object> store;
 
-                    @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext<Void, Void> context) {
                         store = context.getStateStore(sourceTopicName + "-globalStore");
@@ -602,6 +605,7 @@ public abstract class TopologyTestDriverTest {
         assertThat(record, equalTo(expectedResult));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldUseSourceSpecificDeserializers() {
         final Topology topology = new Topology();
@@ -610,23 +614,23 @@ public abstract class TopologyTestDriverTest {
         final String sourceName2 = "source-2";
         final String processor = "processor";
 
-        topology.addSource(sourceName1, Serdes.Long().deserializer(), Serdes.String().deserializer(), SOURCE_TOPIC_1);
-        topology.addSource(sourceName2, Serdes.Integer().deserializer(), Serdes.Double().deserializer(), SOURCE_TOPIC_2);
+        topology.addSource(sourceName1, new LongDeserializer(), new StringDeserializer(), SOURCE_TOPIC_1);
+        topology.addSource(sourceName2, new IntegerDeserializer(), new DoubleDeserializer(), SOURCE_TOPIC_2);
         topology.addProcessor(processor, new MockProcessorSupplier(), sourceName1, sourceName2);
         topology.addSink(
             "sink",
             SINK_TOPIC_1,
             (topic, data) -> {
                 if (data instanceof Long) {
-                    return Serdes.Long().serializer().serialize(topic, (Long) data);
+                    return new LongSerializer().serialize(topic, (Long) data);
                 }
-                return Serdes.Integer().serializer().serialize(topic, (Integer) data);
+                return new IntegerSerializer().serialize(topic, (Integer) data);
             },
             (topic, data) -> {
                 if (data instanceof String) {
-                    return Serdes.String().serializer().serialize(topic, (String) data);
+                    return new StringSerializer().serialize(topic, (String) data);
                 }
-                return Serdes.Double().serializer().serialize(topic, (Double) data);
+                return new DoubleSerializer().serialize(topic, (Double) data);
             },
             processor);
 
@@ -642,21 +646,21 @@ public abstract class TopologyTestDriverTest {
 
         testDriver.pipeRecord(SOURCE_TOPIC_1,
                 consumerRecord1,
-                Serdes.Long().serializer(),
-                Serdes.String().serializer(),
+                new LongSerializer(),
+                new StringSerializer(),
                 Instant.now());
         final TestRecord<Long, String> result1 =
-            testDriver.readRecord(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
+            testDriver.readRecord(SINK_TOPIC_1, new LongDeserializer(), new StringDeserializer());
         assertThat(result1.getKey(), equalTo(source1Key));
         assertThat(result1.getValue(), equalTo(source1Value));
 
         testDriver.pipeRecord(SOURCE_TOPIC_2,
                 consumerRecord2,
-                Serdes.Integer().serializer(),
-                Serdes.Double().serializer(),
+                new IntegerSerializer(),
+                new DoubleSerializer(),
                 Instant.now());
         final TestRecord<Integer, Double> result2 =
-            testDriver.readRecord(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
+            testDriver.readRecord(SINK_TOPIC_1, new IntegerDeserializer(), new DoubleDeserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
         assertThat(result2.getValue(), equalTo(source2Value));
     }
@@ -718,10 +722,10 @@ public abstract class TopologyTestDriverTest {
         final String sourceName1 = "source-1";
         final String sourceName2 = "source-2";
 
-        topology.addSource(sourceName1, Serdes.Long().deserializer(), Serdes.String().deserializer(), SOURCE_TOPIC_1);
-        topology.addSource(sourceName2, Serdes.Integer().deserializer(), Serdes.Double().deserializer(), SOURCE_TOPIC_2);
-        topology.addSink("sink-1", SINK_TOPIC_1, Serdes.Long().serializer(), Serdes.String().serializer(), sourceName1);
-        topology.addSink("sink-2", SINK_TOPIC_2, Serdes.Integer().serializer(), Serdes.Double().serializer(), sourceName2);
+        topology.addSource(sourceName1, new LongDeserializer(), new StringDeserializer(), SOURCE_TOPIC_1);
+        topology.addSource(sourceName2, new IntegerDeserializer(), new DoubleDeserializer(), SOURCE_TOPIC_2);
+        topology.addSink("sink-1", SINK_TOPIC_1, new LongSerializer(), new StringSerializer(), sourceName1);
+        topology.addSink("sink-2", SINK_TOPIC_2, new IntegerSerializer(), new DoubleSerializer(), sourceName2);
 
         testDriver = new TopologyTestDriver(topology);
 
@@ -735,21 +739,21 @@ public abstract class TopologyTestDriverTest {
 
         testDriver.pipeRecord(SOURCE_TOPIC_1,
                 consumerRecord1,
-                Serdes.Long().serializer(),
-                Serdes.String().serializer(),
+                new LongSerializer(),
+                new StringSerializer(),
                 Instant.now());
         final TestRecord<Long, String> result1 =
-                testDriver.readRecord(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
+                testDriver.readRecord(SINK_TOPIC_1, new LongDeserializer(), new StringDeserializer());
         assertThat(result1.getKey(), equalTo(source1Key));
         assertThat(result1.getValue(), equalTo(source1Value));
 
         testDriver.pipeRecord(SOURCE_TOPIC_2,
                 consumerRecord2,
-                Serdes.Integer().serializer(),
-                Serdes.Double().serializer(),
+                new IntegerSerializer(),
+                new DoubleSerializer(),
                 Instant.now());
         final TestRecord<Integer, Double> result2 =
-                testDriver.readRecord(SINK_TOPIC_2, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
+                testDriver.readRecord(SINK_TOPIC_2, new IntegerDeserializer(), new DoubleDeserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
         assertThat(result2.getValue(), equalTo(source2Value));
     }
@@ -880,8 +884,8 @@ public abstract class TopologyTestDriverTest {
                 Serdes.ByteArray(),
                 Time.SYSTEM).withLoggingDisabled(),
             "sourceProcessorName",
-            Serdes.ByteArray().deserializer(),
-            Serdes.ByteArray().deserializer(),
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
             "globalTopicName",
             "globalProcessorName",
             voidProcessorSupplier);
@@ -911,12 +915,16 @@ public abstract class TopologyTestDriverTest {
     private void shouldReturnCorrectStoreTypeOnly(final boolean persistent) {
         final String keyValueStoreName = "keyValueStore";
         final String timestampedKeyValueStoreName = "keyValueTimestampStore";
+        final String timestampedKeyValueStoreWithHeaderName = "keyValueTimestampStoreWithHeaders";
         final String versionedKeyValueStoreName = "keyValueVersionedStore";
         final String windowStoreName = "windowStore";
         final String timestampedWindowStoreName = "windowTimestampStore";
+        final String timestampedWindowStoreWithHeadersName = "windowTimestampStoreWithHeaders";
         final String sessionStoreName = "sessionStore";
+        final String sessionStoreWithHeadersName = "sessionStoreWithHeaders";
         final String globalKeyValueStoreName = "globalKeyValueStore";
         final String globalTimestampedKeyValueStoreName = "globalKeyValueTimestampStore";
+        final String globalTimestampedKeyValueStoreWithHeadersName = "globalKeyValueTimestampStoreWithHeaders";
         final String globalVersionedKeyValueStoreName = "globalKeyValueVersionedStore";
 
         final Topology topology = setupSingleProcessorTopology();
@@ -925,12 +933,16 @@ public abstract class TopologyTestDriverTest {
             persistent,
             keyValueStoreName,
             timestampedKeyValueStoreName,
+            timestampedKeyValueStoreWithHeaderName,
             versionedKeyValueStoreName,
             windowStoreName,
             timestampedWindowStoreName,
+            timestampedWindowStoreWithHeadersName,
             sessionStoreName,
+            sessionStoreWithHeadersName,
             globalKeyValueStoreName,
             globalTimestampedKeyValueStoreName,
+            globalTimestampedKeyValueStoreWithHeadersName,
             globalVersionedKeyValueStoreName);
 
 
@@ -939,70 +951,137 @@ public abstract class TopologyTestDriverTest {
         // verify state stores
         assertNotNull(testDriver.getKeyValueStore(keyValueStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(keyValueStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(keyValueStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(keyValueStoreName));
         assertNull(testDriver.getWindowStore(keyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(keyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(keyValueStoreName));
         assertNull(testDriver.getSessionStore(keyValueStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(keyValueStoreName));
 
         assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreName));
         assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(timestampedKeyValueStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(timestampedKeyValueStoreName));
         assertNull(testDriver.getWindowStore(timestampedKeyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(timestampedKeyValueStoreName));
         assertNull(testDriver.getSessionStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(timestampedKeyValueStoreName));
 
         if (persistent) { // versioned stores do not offer an in-memory version yet, so nothing to test/verify unless persistent
             assertNull(testDriver.getKeyValueStore(versionedKeyValueStoreName));
             assertNull(testDriver.getTimestampedKeyValueStore(versionedKeyValueStoreName));
+            assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(versionedKeyValueStoreName));
             assertNotNull(testDriver.getVersionedKeyValueStore(versionedKeyValueStoreName));
             assertNull(testDriver.getWindowStore(versionedKeyValueStoreName));
             assertNull(testDriver.getTimestampedWindowStore(versionedKeyValueStoreName));
+            assertNull(testDriver.getTimestampedWindowStoreWithHeaders(versionedKeyValueStoreName));
             assertNull(testDriver.getSessionStore(versionedKeyValueStoreName));
+            assertNull(testDriver.getSessionStoreWithHeaders(versionedKeyValueStoreName));
         }
+
+        assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreWithHeaderName));
+        assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreWithHeaderName));
+        assertNotNull(testDriver.getTimestampedKeyValueStoreWithHeaders(timestampedKeyValueStoreWithHeaderName));
+        assertNull(testDriver.getVersionedKeyValueStore(timestampedKeyValueStoreWithHeaderName));
+        assertNull(testDriver.getWindowStore(timestampedKeyValueStoreWithHeaderName));
+        assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreWithHeaderName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(timestampedKeyValueStoreWithHeaderName));
+        assertNull(testDriver.getSessionStore(timestampedKeyValueStoreWithHeaderName));
+        assertNull(testDriver.getSessionStoreWithHeaders(timestampedKeyValueStoreWithHeaderName));
 
         assertNull(testDriver.getKeyValueStore(windowStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(windowStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(windowStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(windowStoreName));
         assertNotNull(testDriver.getWindowStore(windowStoreName));
         assertNull(testDriver.getTimestampedWindowStore(windowStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(windowStoreName));
         assertNull(testDriver.getSessionStore(windowStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(windowStoreName));
 
         assertNull(testDriver.getKeyValueStore(timestampedWindowStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(timestampedWindowStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(timestampedWindowStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(timestampedWindowStoreName));
         assertNotNull(testDriver.getWindowStore(timestampedWindowStoreName));
         assertNotNull(testDriver.getTimestampedWindowStore(timestampedWindowStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(timestampedWindowStoreName));
         assertNull(testDriver.getSessionStore(timestampedWindowStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(timestampedWindowStoreName));
+
+        assertNull(testDriver.getKeyValueStore(timestampedWindowStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedKeyValueStore(timestampedWindowStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(timestampedWindowStoreWithHeadersName));
+        assertNull(testDriver.getVersionedKeyValueStore(timestampedWindowStoreWithHeadersName));
+        assertNotNull(testDriver.getWindowStore(timestampedWindowStoreWithHeadersName));
+        assertNotNull(testDriver.getTimestampedWindowStore(timestampedWindowStoreWithHeadersName));
+        assertNotNull(testDriver.getTimestampedWindowStoreWithHeaders(timestampedWindowStoreWithHeadersName));
+        assertNull(testDriver.getSessionStore(timestampedWindowStoreWithHeadersName));
+        assertNull(testDriver.getSessionStoreWithHeaders(timestampedWindowStoreWithHeadersName));
 
         assertNull(testDriver.getKeyValueStore(sessionStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(sessionStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(sessionStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(sessionStoreName));
         assertNull(testDriver.getWindowStore(sessionStoreName));
         assertNull(testDriver.getTimestampedWindowStore(sessionStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(sessionStoreName));
         assertNotNull(testDriver.getSessionStore(sessionStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(sessionStoreName));
+
+        assertNull(testDriver.getKeyValueStore(sessionStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedKeyValueStore(sessionStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(sessionStoreWithHeadersName));
+        assertNull(testDriver.getVersionedKeyValueStore(sessionStoreWithHeadersName));
+        assertNull(testDriver.getWindowStore(sessionStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedWindowStore(sessionStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(sessionStoreWithHeadersName));
+        assertNotNull(testDriver.getSessionStore(sessionStoreWithHeadersName));
+        assertNotNull(testDriver.getSessionStoreWithHeaders(sessionStoreWithHeadersName));
 
         // verify global stores
         assertNotNull(testDriver.getKeyValueStore(globalKeyValueStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(globalKeyValueStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(globalKeyValueStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(globalKeyValueStoreName));
         assertNull(testDriver.getWindowStore(globalKeyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(globalKeyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(globalKeyValueStoreName));
         assertNull(testDriver.getSessionStore(globalKeyValueStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(globalKeyValueStoreName));
 
         assertNotNull(testDriver.getKeyValueStore(globalTimestampedKeyValueStoreName));
         assertNotNull(testDriver.getTimestampedKeyValueStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getVersionedKeyValueStore(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getWindowStore(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getTimestampedWindowStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(globalTimestampedKeyValueStoreName));
         assertNull(testDriver.getSessionStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getSessionStoreWithHeaders(globalTimestampedKeyValueStoreName));
+
+        assertNotNull(testDriver.getKeyValueStore(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNotNull(testDriver.getTimestampedKeyValueStore(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNotNull(testDriver.getTimestampedKeyValueStoreWithHeaders(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getVersionedKeyValueStore(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getWindowStore(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedWindowStore(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getSessionStore(globalTimestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getSessionStoreWithHeaders(globalTimestampedKeyValueStoreWithHeadersName));
 
         if (persistent) { // versioned stores do not offer an in-memory version yet, so nothing to test/verify unless persistent
             assertNull(testDriver.getKeyValueStore(globalVersionedKeyValueStoreName));
             assertNull(testDriver.getTimestampedKeyValueStore(globalVersionedKeyValueStoreName));
+            assertNull(testDriver.getTimestampedKeyValueStoreWithHeaders(globalVersionedKeyValueStoreName));
             assertNotNull(testDriver.getVersionedKeyValueStore(globalVersionedKeyValueStoreName));
             assertNull(testDriver.getWindowStore(globalVersionedKeyValueStoreName));
             assertNull(testDriver.getTimestampedWindowStore(globalVersionedKeyValueStoreName));
+            assertNull(testDriver.getTimestampedWindowStoreWithHeaders(globalVersionedKeyValueStoreName));
             assertNull(testDriver.getSessionStore(globalVersionedKeyValueStoreName));
+            assertNull(testDriver.getSessionStoreWithHeaders(globalVersionedKeyValueStoreName));
         }
     }
 
@@ -1019,12 +1098,16 @@ public abstract class TopologyTestDriverTest {
     private void shouldThrowIfBuiltInStoreIsAccessedWithUntypedMethod(final boolean persistent) {
         final String keyValueStoreName = "keyValueStore";
         final String timestampedKeyValueStoreName = "keyValueTimestampStore";
+        final String timestampedKeyValueStoreWithHeadersName = "keyValueTimestampStoreWithHeaders";
         final String versionedKeyValueStoreName = "keyValueVersionedStore";
         final String windowStoreName = "windowStore";
         final String timestampedWindowStoreName = "windowTimestampStore";
+        final String timestampedWindowStoreWithHeadersName = "windowTimestampStoreWithHeaders";
         final String sessionStoreName = "sessionStore";
+        final String sessionStoreWithHeadersName = "sessionStoreWithHeaders";
         final String globalKeyValueStoreName = "globalKeyValueStore";
         final String globalTimestampedKeyValueStoreName = "globalKeyValueTimestampStore";
+        final String globalTimestampedKeyValueStoreWithHeadersName = "globalKeyValueTimestampStoreWithHeaders";
         final String globalVersionedKeyValueStoreName = "globalKeyValueVersionedStore";
 
         final Topology topology = setupSingleProcessorTopology();
@@ -1033,12 +1116,16 @@ public abstract class TopologyTestDriverTest {
             persistent,
             keyValueStoreName,
             timestampedKeyValueStoreName,
+            timestampedKeyValueStoreWithHeadersName,
             versionedKeyValueStoreName,
             windowStoreName,
             timestampedWindowStoreName,
+            timestampedWindowStoreWithHeadersName,
             sessionStoreName,
+            sessionStoreWithHeadersName,
             globalKeyValueStoreName,
             globalTimestampedKeyValueStoreName,
+            globalTimestampedKeyValueStoreWithHeadersName,
             globalVersionedKeyValueStoreName);
 
 
@@ -1127,6 +1214,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
+    // CAUTION: Do not replace with Lambda; Needs to return a new Processor instance each time
     final ProcessorSupplier<byte[], byte[], Void, Void> voidProcessorSupplier = () -> new Processor<byte[], byte[], Void, Void>() {
         @Override
         public void process(final Record<byte[], byte[]> record) {
@@ -1137,29 +1225,42 @@ public abstract class TopologyTestDriverTest {
                                      final boolean persistent,
                                      final String keyValueStoreName,
                                      final String timestampedKeyValueStoreName,
+                                     final String timestampedKeyValueStoreWithHeadersName,
                                      final String versionedKeyValueStoreName,
                                      final String windowStoreName,
                                      final String timestampedWindowStoreName,
+                                     final String timestampedWindowStoreWithHeadersName,
                                      final String sessionStoreName,
+                                     final String sessionStoreWithHeadersName,
                                      final String globalKeyValueStoreName,
                                      final String globalTimestampedKeyValueStoreName,
+                                     final String globalTimestampedKeyValueStoreWithHeadersName,
                                      final String globalVersionedKeyValueStoreName) {
 
         // add state stores
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
-                persistent ?
-                    Stores.persistentKeyValueStore(keyValueStoreName) :
-                    Stores.inMemoryKeyValueStore(keyValueStoreName),
+                persistent
+                    ? Stores.persistentKeyValueStore(keyValueStoreName)
+                    : Stores.inMemoryKeyValueStore(keyValueStoreName),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
             Stores.timestampedKeyValueStoreBuilder(
-                persistent ?
-                    Stores.persistentTimestampedKeyValueStore(timestampedKeyValueStoreName) :
-                    Stores.inMemoryKeyValueStore(timestampedKeyValueStoreName),
+                persistent
+                    ? Stores.persistentTimestampedKeyValueStore(timestampedKeyValueStoreName)
+                    : Stores.inMemoryKeyValueStore(timestampedKeyValueStoreName),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "processor");
+        topology.addStateStore(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                persistent
+                    ? Stores.persistentTimestampedKeyValueStoreWithHeaders(timestampedKeyValueStoreWithHeadersName)
+                    : Stores.inMemoryKeyValueStore(timestampedKeyValueStoreWithHeadersName),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
@@ -1175,69 +1276,91 @@ public abstract class TopologyTestDriverTest {
         }
         topology.addStateStore(
             Stores.windowStoreBuilder(
-                persistent ?
-                    Stores.persistentWindowStore(windowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false) :
-                    Stores.inMemoryWindowStore(windowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
+                persistent
+                    ? Stores.persistentWindowStore(windowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false)
+                    : Stores.inMemoryWindowStore(windowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
             Stores.timestampedWindowStoreBuilder(
-                persistent ?
-                    Stores.persistentTimestampedWindowStore(timestampedWindowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false) :
-                    Stores.inMemoryWindowStore(timestampedWindowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
+                persistent
+                    ? Stores.persistentTimestampedWindowStore(timestampedWindowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false)
+                    : Stores.inMemoryWindowStore(timestampedWindowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
-            persistent ?
-                Stores.sessionStoreBuilder(
-                    Stores.persistentSessionStore(sessionStoreName, Duration.ofMillis(1000L)),
-                    Serdes.ByteArray(),
-                    Serdes.ByteArray()) :
-                Stores.sessionStoreBuilder(
-                    Stores.inMemorySessionStore(sessionStoreName, Duration.ofMillis(1000L)),
-                    Serdes.ByteArray(),
-                    Serdes.ByteArray()),
+            Stores.timestampedWindowStoreWithHeadersBuilder(
+                persistent
+                    ? Stores.persistentTimestampedWindowStoreWithHeaders(timestampedWindowStoreWithHeadersName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false)
+                    : Stores.inMemoryWindowStore(timestampedWindowStoreWithHeadersName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "processor");
+        topology.addStateStore(
+            Stores.sessionStoreBuilder(
+                persistent
+                    ? Stores.persistentSessionStore(sessionStoreName, Duration.ofMillis(1000L))
+                    : Stores.inMemorySessionStore(sessionStoreName, Duration.ofMillis(1000L)),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "processor");
+        topology.addStateStore(
+            Stores.sessionStoreWithHeadersBuilder(
+                persistent
+                    ? Stores.persistentSessionStoreWithHeaders(sessionStoreWithHeadersName, Duration.ofMillis(1000L))
+                    : Stores.inMemorySessionStore(sessionStoreWithHeadersName, Duration.ofMillis(1000L)),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
             "processor");
         // add global stores
         topology.addGlobalStore(
-            persistent ?
-                Stores.keyValueStoreBuilder(
-                    Stores.persistentKeyValueStore(globalKeyValueStoreName),
-                    Serdes.ByteArray(),
-                    Serdes.ByteArray()
-                ).withLoggingDisabled() :
-                Stores.keyValueStoreBuilder(
-                    Stores.inMemoryKeyValueStore(globalKeyValueStoreName),
-                    Serdes.ByteArray(),
-                    Serdes.ByteArray()
-                ).withLoggingDisabled(),
+            Stores.keyValueStoreBuilder(
+                persistent
+                    ? Stores.persistentKeyValueStore(globalKeyValueStoreName)
+                    : Stores.inMemoryKeyValueStore(globalKeyValueStoreName),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ).withLoggingDisabled(),
             "sourceDummy1",
-            Serdes.ByteArray().deserializer(),
-            Serdes.ByteArray().deserializer(),
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
             "topicDummy1",
             "processorDummy1",
             voidProcessorSupplier);
         topology.addGlobalStore(
-            persistent ?
-                Stores.timestampedKeyValueStoreBuilder(
-                    Stores.persistentTimestampedKeyValueStore(globalTimestampedKeyValueStoreName),
-                    Serdes.ByteArray(),
-                    Serdes.ByteArray()
-                ).withLoggingDisabled() :
-                Stores.timestampedKeyValueStoreBuilder(
-                    Stores.inMemoryKeyValueStore(globalTimestampedKeyValueStoreName),
-                    Serdes.ByteArray(),
-                    Serdes.ByteArray()
-                ).withLoggingDisabled(),
+            Stores.timestampedKeyValueStoreBuilder(
+                persistent
+                    ? Stores.persistentTimestampedKeyValueStore(globalTimestampedKeyValueStoreName)
+                    : Stores.inMemoryKeyValueStore(globalTimestampedKeyValueStoreName),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ).withLoggingDisabled(),
             "sourceDummy2",
-            Serdes.ByteArray().deserializer(),
-            Serdes.ByteArray().deserializer(),
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
             "topicDummy2",
             "processorDummy2",
+            voidProcessorSupplier);
+        topology.addGlobalStore(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                persistent
+                    ? Stores.persistentTimestampedKeyValueStoreWithHeaders(globalTimestampedKeyValueStoreWithHeadersName)
+                    : Stores.inMemoryKeyValueStore(globalTimestampedKeyValueStoreWithHeadersName),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ).withLoggingDisabled(),
+            "sourceDummy3",
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
+            "topicDummy3",
+            "processorDummy3",
             voidProcessorSupplier);
         if (persistent) { // versioned stores do not offer an in-memory version yet
             topology.addGlobalStore(
@@ -1246,11 +1369,11 @@ public abstract class TopologyTestDriverTest {
                     Serdes.ByteArray(),
                     Serdes.ByteArray()
                 ).withLoggingDisabled(),
-                "sourceDummy3",
-                Serdes.ByteArray().deserializer(),
-                Serdes.ByteArray().deserializer(),
-                "topicDummy3",
-                "processorDummy3",
+                "sourceDummy4",
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(),
+                "topicDummy4",
+                "processorDummy4",
                 voidProcessorSupplier);
         }
     }
@@ -1271,8 +1394,8 @@ public abstract class TopologyTestDriverTest {
                 Serdes.ByteArray(),
                 Time.SYSTEM).withLoggingDisabled(),
             "sourceProcessorName",
-            Serdes.ByteArray().deserializer(),
-            Serdes.ByteArray().deserializer(),
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
             "globalTopicName",
             "globalProcessorName",
             voidProcessorSupplier);
@@ -1300,8 +1423,8 @@ public abstract class TopologyTestDriverTest {
                 "aggregator");
         topology.addSink("sinkProcessor", "result-topic", "aggregator");
 
-        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
         testDriver = new TopologyTestDriver(topology, config);
 
         store = testDriver.getKeyValueStore("aggStore");
@@ -1439,7 +1562,7 @@ public abstract class TopologyTestDriverTest {
             new ProcessorSupplier<String, Long, Void, Void>() {
                 @Override
                 public Processor<String, Long, Void, Void> get() {
-                    return new Processor<String, Long, Void, Void>() {
+                    return new Processor<>() {
                         private KeyValueStore<String, Long> store;
 
                         @Override
@@ -1463,8 +1586,8 @@ public abstract class TopologyTestDriverTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
@@ -1674,7 +1797,7 @@ public abstract class TopologyTestDriverTest {
             new StringDeserializer(),
             "global-topic",
             "globalProcessor",
-            () -> new Processor<String, String, Void, Void>() {
+            () -> new Processor<>() {
                 private KeyValueStore<String, String> stateStore;
 
                 @Override
