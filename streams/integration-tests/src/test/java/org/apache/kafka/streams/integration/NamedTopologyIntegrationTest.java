@@ -666,7 +666,7 @@ public class NamedTopologyIntegrationTest {
         
         TestUtils.waitForCondition(
                 () -> !streams.hasAnyLocalTaskForTopology(TOPOLOGY_1),
-                "topology tasks still exist internally after remove"
+                "tasks still exist internally after topology removed"
         );
         streams.cleanUpNamedTopology(TOPOLOGY_1);
 
