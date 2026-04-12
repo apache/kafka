@@ -268,6 +268,25 @@ Note that all substitutions are annotated with <> around them.
 """
 
 
+def github_token_instructions():
+    return """
+To trigger Docker image builds, you need a GitHub Personal Access Token.
+
+How to generate one:
+  1. Go to https://github.com/settings/tokens
+  2. Click "Generate new token" -> "Generate new token (classic)"
+  3. Set a name (e.g. "kafka-release")
+  4. Set an expiration (e.g. 7 days is sufficient for a release cycle)
+  5. Select the scope: "repo" (Full control of private repositories)
+     - This includes the required "actions" write permission
+  6. Click "Generate token"
+  7. Copy the token (starts with "ghp_...")
+
+Note: The token will be saved in your release preferences file for reuse.
+      You only need to generate it once per release cycle.
+"""
+
+
 def cmd_failed():
     return """
 *************************************************

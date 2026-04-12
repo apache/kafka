@@ -26,6 +26,7 @@ Set GITHUB_DRY_RUN=true to print API calls without executing them.
 
 import json
 import os
+import time
 import urllib.request
 
 from runtime import fail
@@ -64,6 +65,22 @@ def _api_request(token, method, path, body=None):
         fail(f"GitHub API error {e.code} for {method} {path}: {error_body}")
 
 
+def _get_latest_run_url(token, workflow_file):
+    """
+    Fetch the most recent run URL for a workflow. Returns the HTML URL
+    of the latest run, or a fallback URL to the workflow's runs page.
+    """
+    fallback = f"https://github.com/{GITHUB_REPO}/actions/workflows/{workflow_file}"
+    path = f"/repos/{GITHUB_REPO}/actions/workflows/{workflow_file}/runs?per_page=1"
+    try:
+        result = _api_request(token, "GET", path)
+        if result and result.get("workflow_runs"):
+            return result["workflow_runs"][0]["html_url"]
+    except Exception:
+        pass
+    return fallback
+
+
 def trigger_workflow(token, workflow_file, ref, inputs):
     """
     Trigger a GitHub Actions workflow_dispatch event.
@@ -74,6 +91,11 @@ def trigger_workflow(token, workflow_file, ref, inputs):
     print(f"Triggering workflow {workflow_file} on {GITHUB_REPO} with inputs: {json.dumps(inputs)}")
     _api_request(token, "POST", path, body)
     print(f"Successfully triggered {workflow_file}")
+    # Brief pause to allow GitHub to register the run before querying
+    if not DRY_RUN:
+        time.sleep(2)
+    run_url = _get_latest_run_url(token, workflow_file)
+    print(f"  View run: {run_url}")
 
 
 def trigger_docker_build_test(token, ref, image_type, kafka_url):
