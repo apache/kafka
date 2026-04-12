@@ -19,27 +19,60 @@ on:
     # This job will run at 3:30 UTC daily
     - cron: '30 3 * * *'
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to scan (e.g. trunk, 4.2, 4.1). Defaults to the branch the workflow runs on.'
+        required: false
+        default: ''
 jobs:
   scan_jvm:
     if: github.repository == 'apache/kafka'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # This is an array of supported tags. Make sure this array only contains the supported tags
-        supported_image_tag: ['latest', '3.9.2', '4.0.2', '4.1.2', '4.2.0']
     steps:
-      - name: Run CVE scan
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
-        if: always()
+      - name: Checkout code
+        uses: actions/checkout@v5
         with:
-          image-ref: apache/kafka:${{ matrix.supported_image_tag }}
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-          output: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
-          exit-code: '1'
+          ref: ${{ github.event.inputs.branch || github.ref }}
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build Kafka distribution tarball
+        run: ./gradlew releaseTarGz -x test
+      - name: Determine tarball path
+        id: tarball
+        run: |
+          VERSION=$(./gradlew properties -q | grep "^version:" | awk '{print $2}')
+          echo "path=core/build/distributions/kafka_2.13-${VERSION}.tgz" >> $GITHUB_OUTPUT
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docker/requirements.txt
+      - name: Build Docker image from current branch
+        working-directory: ./docker
+        run: |
+          python docker_build_test.py kafka/branch-scan -tag=test -type=native --kafka-archive=../${{ steps.tarball.outputs.path }} -b
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run CVE scan
+        run: |
+          trivy image \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --output scan_report_jvm.txt \
+            --exit-code 1 \
+            kafka/branch-scan:test
+
       - name: Upload CVE scan report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
-          path: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
+          name: scan_report_jvm.txt
+          path: scan_report_jvm.txt

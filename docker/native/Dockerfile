@@ -15,7 +15,7 @@
 
 FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
 
-ARG kafka_url
+ARG kafka_url=""
 
 WORKDIR /app
 
