@@ -282,8 +282,10 @@ How to generate one:
   6. Click "Generate token"
   7. Copy the token (starts with "ghp_...")
 
-Note: The token will be saved in your release preferences file for reuse.
+Note: The token will be saved in your release preferences file (.release-settings.json) for reuse.
       You only need to generate it once per release cycle.
+      To reset the saved token, remove the "github_token" entry from .release-settings.json
+      or delete the file entirely (this will clear all saved preferences).
 """
 
 
