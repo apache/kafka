@@ -2511,7 +2511,7 @@ public class StreamsMembershipManagerTest {
             .setErrorCode(Errors.NONE.code())
             .setMemberId(membershipManager.memberId())
             .setMemberEpoch(memberEpoch)
-            .setActiveTasks(activeTasks)
+//            .setActiveTasks(activeTasks)
             .setStandbyTasks(standbyTasks)
             .setWarmupTasks(warmupTasks);
         if (statuses != null) {

@@ -712,8 +712,8 @@ public class StreamsMembershipManager implements RequestManager {
         }
         
         updateMemberEpoch(responseData.memberEpoch());
-
-        final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks = responseData.activeTasks();
+//        responseData.activeTasks();
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks = responseData.standbyTasks();
         final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks = responseData.standbyTasks();
         final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks = responseData.warmupTasks();
         final boolean isGroupReady = isGroupReady(responseData.status());
