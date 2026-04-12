@@ -227,7 +227,8 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             logContext,
                             time,
-                            metrics);
+                            metrics, 
+                            metadata);
                         streamsMembershipManager.registerStateListener(commitRequestManager);
                         streamsMembershipManager.registerStateListener(applicationThreadMemberStateListener);
 

@@ -78,6 +78,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+
 
 @ExtendWith(MockitoExtension.class)
 public class StreamsMembershipManagerTest {
@@ -128,7 +130,8 @@ public class StreamsMembershipManagerTest {
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"),
             time,
-            metrics
+            metrics,
+            mock(ConsumerMetadata.class)
         );
         membershipManager.registerStateListener(memberStateListener);
         verifyInStateUnsubscribed(membershipManager);
@@ -2511,7 +2514,7 @@ public class StreamsMembershipManagerTest {
             .setErrorCode(Errors.NONE.code())
             .setMemberId(membershipManager.memberId())
             .setMemberEpoch(memberEpoch)
-//            .setActiveTasks(activeTasks)
+            .setActiveTasks(activeTasks)
             .setStandbyTasks(standbyTasks)
             .setWarmupTasks(warmupTasks);
         if (statuses != null) {
