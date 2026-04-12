@@ -20,10 +20,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.record.FileLogInputStream;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.FileLogInputStream;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -373,9 +374,9 @@ public class LocalLog {
     /**
      * This method deletes the given log segments by doing the following for each of them:
      * <ul>
-     *  <li>It removes the segment from the segment map so that it will no longer be used for reads.
-     *  <li>It renames the index and log files by appending .deleted to the respective file name
-     *  <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously
+     *  <li>It removes the segment from the segment map so that it will no longer be used for reads.</li>
+     *  <li>It renames the index and log files by appending .deleted to the respective file name.</li>
+     *  <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously.</li>
      * </ul>
      * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
      * physically deleting a file while it is being read.
@@ -540,7 +541,9 @@ public class LocalLog {
         List<FetchResponseData.AbortedTransaction> abortedTransactions = new ArrayList<>();
         Consumer<List<AbortedTxn>> accumulator = abortedTxns -> {
             for (AbortedTxn abortedTxn : abortedTxns)
-                abortedTransactions.add(abortedTxn.asAbortedTransaction());
+                abortedTransactions.add(new FetchResponseData.AbortedTransaction()
+                    .setProducerId(abortedTxn.producerId())
+                    .setFirstOffset(abortedTxn.firstOffset()));
         };
         collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator);
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
@@ -738,8 +741,8 @@ public class LocalLog {
         return topicPartition.topic() + "-" + topicPartition.partition();
     }
 
-    private static KafkaException exception(File dir) throws IOException {
-        return new KafkaException("Found directory " + dir.getCanonicalPath() + ", '" + dir.getName() + "' is not in the form of " +
+    private static KafkaException exception(File dir) {
+        return new KafkaException("Found directory " + dir.getAbsolutePath() + ", '" + dir.getName() + "' is not in the form of " +
                 "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
                 "Kafka's log directories (and children) should only contain Kafka topic data.");
     }
@@ -747,7 +750,7 @@ public class LocalLog {
     /**
      * Parse the topic and partition out of the directory name of a log
      */
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         if (dir == null) {
             throw new KafkaException("dir should not be null");
         }
@@ -883,13 +886,13 @@ public class LocalLog {
      * resulting segments will contain the exact same messages that are present in the input segment. On successful
      * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
      * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
-     * <br/>
+     * <p>
      * Note that this method assumes we have already determined that the segment passed in contains records that cause
      * offset overflow.
-     * <br/>
+     * <p>
      * The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
      * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
-     * and completeSwapOperations for the implementation to make this operation recoverable on crashes.</p>
+     * and completeSwapOperations for the implementation to make this operation recoverable on crashes.
      *
      * @param segment Segment to split
      * @param existingSegments The existing segments of the log
@@ -966,20 +969,25 @@ public class LocalLog {
      * <li>Cleaner creates one or more new segments with suffix .cleaned and invokes replaceSegments() on
      *   the Log instance. If broker crashes at this point, the clean-and-swap operation is aborted and
      *   the .cleaned files are deleted on recovery in LogLoader.
+     * </li>
      * <li>New segments are renamed .swap. If the broker crashes before all segments were renamed to .swap, the
      *   clean-and-swap operation is aborted - .cleaned as well as .swap files are deleted on recovery in
      *   LogLoader. We detect this situation by maintaining a specific order in which files are renamed
      *   from .cleaned to .swap. Basically, files are renamed in descending order of offsets. On recovery,
      *   all .swap files whose offset is greater than the minimum-offset .clean file are deleted.
+     * </li>
      * <li>If the broker crashes after all new segments were renamed to .swap, the operation is completed,
      *   the swap operation is resumed on recovery as described in the next step.
+     * </li>
      * <li>Old segment files are renamed to .deleted and asynchronous delete is scheduled. If the broker
      *   crashes, any .deleted files left behind are deleted on recovery in LogLoader.
      *   replaceSegments() is then invoked to complete the swap with newSegment recreated from the
      *   .swap file and oldSegments containing segments which were not renamed before the crash.
+     * </li>
      * <li>Swap segment(s) are renamed to replace the existing segments, completing this operation.
      *   If the broker crashes, any .deleted files which may be left behind are deleted
      *   on recovery in LogLoader.
+     * </li>
      * </ol>
      *
      * @param existingSegments The existing segments of the log
@@ -1029,9 +1037,10 @@ public class LocalLog {
         // delete the old files
         List<LogSegment> deletedNotReplaced = new ArrayList<>();
         for (LogSegment segment : sortedOldSegments) {
-            // remove the index entry
-            if (segment.baseOffset() != sortedNewSegments.get(0).baseOffset()) {
+            // remove the index entry; skip removal for base offsets that a new segment is replacing in-place
+            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
                 existingSegments.remove(segment.baseOffset());
+                deletedNotReplaced.add(segment);
             }
             deleteSegmentFiles(
                     List.of(segment),
@@ -1042,9 +1051,6 @@ public class LocalLog {
                     scheduler,
                     logDirFailureChannel,
                     logPrefix);
-            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
-                deletedNotReplaced.add(segment);
-            }
         }
 
         // okay we are safe now, remove the swap suffix

@@ -23,7 +23,6 @@ import java.nio.file.Paths
 import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
-import kafka.utils.CoreUtils
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
@@ -37,7 +36,8 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftManager, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.internals.KafkaRaftLog
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftLog, RaftManager, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -123,7 +123,7 @@ class KafkaRaftManager[T](
     }
   }
 
-  override val replicatedLog: ReplicatedLog = buildMetadataLog()
+  override val raftLog: RaftLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
   private val expirationTimer = new SystemTimer("raft-expiration-executor")
   private val expirationService = new TimingWheelExpirationService(expirationTimer)
@@ -142,13 +142,13 @@ class KafkaRaftManager[T](
   }
 
   def shutdown(): Unit = {
-    CoreUtils.swallow(expirationService.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => expirationService.shutdown())
     Utils.closeQuietly(expirationTimer, "expiration timer")
-    CoreUtils.swallow(clientDriver.shutdown(), this)
-    CoreUtils.swallow(scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => clientDriver.shutdown())
+    Utils.swallow(this.logger.underlying, () => scheduler.shutdown())
     Utils.closeQuietly(netChannel, "net channel")
-    Utils.closeQuietly(replicatedLog, "replicated log")
-    CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
+    Utils.closeQuietly(raftLog, "raft log")
+    Utils.swallow(this.logger.underlying, () => dataDirLock.foreach(_.destroy()))
   }
 
   override def handleRequest(
@@ -166,7 +166,7 @@ class KafkaRaftManager[T](
       metadataLogDirUuid,
       recordSerde,
       netChannel,
-      replicatedLog,
+      raftLog,
       time,
       expirationService,
       logContext,
@@ -190,14 +190,14 @@ class KafkaRaftManager[T](
     KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 
-  private def buildMetadataLog(): KafkaMetadataLog = {
-    KafkaMetadataLog(
+  private def buildMetadataLog(): KafkaRaftLog = {
+    KafkaRaftLog.createLog(
       topicPartition,
       topicId,
       dataDir,
       time,
       scheduler,
-      config = new MetadataLogConfig(config),
+      new MetadataLogConfig(config),
       config.nodeId
     )
   }

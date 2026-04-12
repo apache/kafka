@@ -29,8 +29,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Csv;
@@ -300,15 +300,10 @@ public class MetadataQuorumCommand {
         return node == null ? new ArrayList<>() : node.endpoints();
     }
 
-    private static class Node {
-        private final int id;
-        private final Uuid directoryId;
-        private final List<RaftVoterEndpoint> endpoints;
-
-        private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
-            this.id = id;
-            this.directoryId = Objects.requireNonNull(directoryId);
-            this.endpoints = Objects.requireNonNull(endpoints);
+    private record Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
+        private Node {
+            Objects.requireNonNull(directoryId);
+            Objects.requireNonNull(endpoints);
         }
 
         @Override

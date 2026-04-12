@@ -126,7 +126,7 @@ public class ShareGroupAssignorBenchmark {
         setupTopics();
 
         Map<String, ShareGroupMember> members = createMembers();
-        this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(members, subscriptionType, topicResolver);
+        this.groupSpec = AssignorBenchmarkUtils.createShareGroupSpec(members, subscriptionType, topicResolver);
 
         if (assignmentType == AssignmentType.INCREMENTAL) {
             simulateIncrementalRebalance();

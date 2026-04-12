@@ -18,29 +18,32 @@
 package kafka.server
 
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.partition.AlterPartitionManager
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito.mock
 
 import java.io.File
-import java.util.{Map => JMap}
+import java.util.{Properties, Map => JMap}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -62,7 +65,16 @@ class LocalLeaderEndPointTest extends Logging {
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(sourceBroker.id, port = sourceBroker.port)
     val config = KafkaConfig.fromProps(props)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
+
+    val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    // Keep cleanup.policy=delete (default), not compact, so remote storage is allowed
+    val defaultLogConfig = LogConfig.fromProps(Map.empty[String, Object].asJava, logProps)
+    val mockLogMgr = TestUtils.createLogManager(
+      config.logDirs.asScala.map(new File(_)),
+      defaultConfig = defaultLogConfig,
+      remoteStorageSystemEnable = true
+    )
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
@@ -78,7 +90,9 @@ class LocalLeaderEndPointTest extends Logging {
       alterPartitionManager = alterPartitionManager
     )
 
-    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -112,8 +126,8 @@ class LocalLeaderEndPointTest extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
-    CoreUtils.swallow(quotaManager.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => replicaManager.shutdown(checkpointHW = false))
+    Utils.swallow(this.logger.underlying, () => quotaManager.shutdown())
   }
 
   @Test
@@ -149,7 +163,7 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
+    replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, 7))
   }
@@ -233,6 +247,151 @@ class LocalLeaderEndPointTest extends Logging {
     assertEquals(expected, result)
   }
 
+  @Test
+  def testEarliestPendingUploadOffsetWhenNoSegmentsUploaded(): Unit = {
+    // Append some records; no remote upload happened yet
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val expected = endPoint.fetchEarliestOffset(topicPartition, 0)
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(expected, result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStart(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    // Bump epoch and advance local log start offset without changing log start offset
+    bumpLeaderEpoch()
+    replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 1)
+    assertEquals(new OffsetAndEpoch(-1L, -1), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenHighestRemoteOffsetKnown(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    // Highest remote is 1 => earliest pending should be max(1+1, logStart)
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+    log.updateHighestOffsetInRemoteStorage(1)
+
+    val expectedOffset = Math.max(2L, log.logStartOffset())
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStartWithKnownRemoteOffset(): Unit = {
+    // Append records to create initial log state
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Simulate remote upload up to offset 5
+    log.updateHighestOffsetInRemoteStorage(5)
+
+    // Simulate local log start advancing to offset 8
+    log.updateLocalLogStartOffset(8)
+
+    // Expected: max(highestRemoteOffset + 1, max(logStartOffset, localLogStartOffset))
+    //         = max(5 + 1, max(0, 8)) = max(6, 8) = 8
+    val expectedOffset = 8L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenLogStartGreaterThanLocalStartWithLowRemoteOffset(): Unit = {
+    // Append 12 records (offsets 0-11)
+    for (_ <- 1 to 4) {
+      appendRecords(replicaManager, topicIdPartition, records)
+        .onFire(response => assertEquals(Errors.NONE, response.error))
+    }
+
+    // Delete records to advance logStartOffset to 10
+    replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 10), _ => ())
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Set localLogStartOffset to 3 (less than logStartOffset)
+    log.updateLocalLogStartOffset(3)
+
+    // Set highestRemoteOffset to 5 (less than logStartOffset)
+    log.updateHighestOffsetInRemoteStorage(5)
+
+    // Expected: max(5+1, max(10, 3)) = max(6, 10) = 10
+    val expectedOffset = 10L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenRemoteOffsetDominatesLogStart(): Unit = {
+    // Append 18 records (offsets 0-17)
+    for (_ <- 1 to 6) {
+      appendRecords(replicaManager, topicIdPartition, records)
+        .onFire(response => assertEquals(Errors.NONE, response.error))
+    }
+
+    // Delete records to advance logStartOffset to 10
+    replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 10), _ => ())
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Set localLogStartOffset to 3 (less than logStartOffset)
+    log.updateLocalLogStartOffset(3)
+
+    // Set highestRemoteOffset to 15 (greater than logStartOffset)
+    log.updateHighestOffsetInRemoteStorage(15)
+
+    // Expected: max(15+1, max(10, 3)) = max(16, 10) = 16
+    val expectedOffset = 16L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenBothStartOffsetsEqualAndDominateRemote(): Unit = {
+    // Append 12 records (offsets 0-11)
+    for (_ <- 1 to 4) {
+      appendRecords(replicaManager, topicIdPartition, records)
+        .onFire(response => assertEquals(Errors.NONE, response.error))
+    }
+
+    // Delete records to advance both logStartOffset and localLogStartOffset to 10
+    replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 10), _ => ())
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Verify both offsets are equal (deleteRecords updates both)
+    assertEquals(10L, log.logStartOffset())
+    assertEquals(10L, log.localLogStartOffset())
+
+    // Set highestRemoteOffset to 5 (less than start offsets)
+    log.updateHighestOffsetInRemoteStorage(5)
+
+    // Expected: max(5+1, max(10, 10)) = max(6, 10) = 10
+    val expectedOffset = 10L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
   private class CallbackResult[T] {
     private var value: Option[T] = None
     private var fun: Option[T => Unit] = None
@@ -254,7 +413,9 @@ class LocalLeaderEndPointTest extends Logging {
   }
 
   private def bumpLeaderEpoch(): Unit = {
-    val delta = new MetadataDelta(image)
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new PartitionChangeRecord()
       .setTopicId(topicId)
       .setPartitionId(partition)
@@ -271,10 +432,10 @@ class LocalLeaderEndPointTest extends Logging {
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: scala.collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def appendCallback(responses: JMap[TopicIdPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
-      assertTrue(response.isDefined)
-      result.fire(response.get)
+      assertNotNull(response)
+      result.fire(response)
     }
 
     replicaManager.appendRecords(

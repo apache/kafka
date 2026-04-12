@@ -23,7 +23,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -63,7 +62,7 @@ import java.util.Set;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
-public class JsonConverter implements Converter, HeaderConverter, Versioned {
+public class JsonConverter implements Converter, HeaderConverter {
 
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 

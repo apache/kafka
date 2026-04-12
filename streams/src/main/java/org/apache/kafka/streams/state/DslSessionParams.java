@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 
 import java.time.Duration;
@@ -30,6 +31,7 @@ public class DslSessionParams {
     private final String name;
     private final Duration retentionPeriod;
     private final EmitStrategy emitStrategy;
+    private final DslStoreFormat storeFormat;
 
     /**
      * @param name              name of the store (cannot be {@code null})
@@ -38,15 +40,24 @@ public class DslSessionParams {
      *                          contain the inactivity gap of the session and the entire grace period.)
      * @param emitStrategy      defines how to emit results
      */
+    @Deprecated
     public DslSessionParams(
             final String name,
             final Duration retentionPeriod,
             final EmitStrategy emitStrategy
     ) {
+        this(name, retentionPeriod, emitStrategy, DslStoreFormat.PLAIN);
+    }
+
+    public DslSessionParams(final String name,
+                            final Duration retentionPeriod,
+                            final EmitStrategy emitStrategy,
+                            final DslStoreFormat storeFormat) {
         Objects.requireNonNull(name);
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.emitStrategy = emitStrategy;
+        this.storeFormat = storeFormat;
     }
 
     public String name() {
@@ -61,6 +72,10 @@ public class DslSessionParams {
         return emitStrategy;
     }
 
+    public DslStoreFormat storeFormat() {
+        return storeFormat;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -72,12 +87,13 @@ public class DslSessionParams {
         final DslSessionParams that = (DslSessionParams) o;
         return Objects.equals(name, that.name)
                 && Objects.equals(retentionPeriod, that.retentionPeriod)
-                && Objects.equals(emitStrategy, that.emitStrategy);
+                && Objects.equals(emitStrategy, that.emitStrategy)
+                && Objects.equals(storeFormat, that.storeFormat);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, retentionPeriod, emitStrategy);
+        return Objects.hash(name, retentionPeriod, emitStrategy, storeFormat);
     }
 
     @Override
@@ -86,6 +102,7 @@ public class DslSessionParams {
                 "name='" + name + '\'' +
                 ", retentionPeriod=" + retentionPeriod +
                 ", emitStrategy=" + emitStrategy +
+                ", storeFormat=" + storeFormat +
                 '}';
     }
 }

@@ -18,13 +18,12 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.Map;
 
-public class SampleTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public class SampleTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
     boolean closed = false;
     private R transformedRecord;

@@ -27,8 +27,6 @@ import java.util.Objects;
  * The schema for a compound record definition
  */
 public class Schema extends DocumentedType {
-    private static final String STRUCT_TYPE_NAME = "STRUCT";
-
     private static final Object[] NO_VALUES = new Object[0];
 
     private final BoundField[] fields;
@@ -227,7 +225,7 @@ public class Schema extends DocumentedType {
 
     @Override
     public String typeName() {
-        return STRUCT_TYPE_NAME;
+        return "STRUCT";
     }
 
     @Override

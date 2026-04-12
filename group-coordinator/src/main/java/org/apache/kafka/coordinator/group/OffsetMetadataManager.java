@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -34,20 +33,22 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -56,9 +57,7 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -86,7 +85,7 @@ public class OffsetMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private GroupMetadataManager groupMetadataManager = null;
-        private MetadataImage metadataImage = null;
+        private CoordinatorMetadataImage metadataImage = null;
         private GroupCoordinatorConfig config = null;
         private GroupCoordinatorMetricsShard metrics = null;
 
@@ -115,7 +114,7 @@ public class OffsetMetadataManager {
             return this;
         }
 
-        public Builder withMetadataImage(MetadataImage metadataImage) {
+        public Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
             this.metadataImage = metadataImage;
             return this;
         }
@@ -128,7 +127,7 @@ public class OffsetMetadataManager {
         public OffsetMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
 
             if (groupMetadataManager == null) {
@@ -165,6 +164,11 @@ public class OffsetMetadataManager {
      * The system time.
      */
     private final Time time;
+
+    /**
+     * The metadata image.
+     */
+    private CoordinatorMetadataImage metadataImage;
 
     /**
      * The group metadata manager.
@@ -427,7 +431,7 @@ public class OffsetMetadataManager {
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        MetadataImage metadataImage,
+        CoordinatorMetadataImage metadataImage,
         GroupMetadataManager groupMetadataManager,
         GroupCoordinatorConfig config,
         GroupCoordinatorMetricsShard metrics
@@ -435,6 +439,7 @@ public class OffsetMetadataManager {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
         this.time = time;
+        this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
         this.config = config;
         this.metrics = metrics;
@@ -694,6 +699,18 @@ public class OffsetMetadataManager {
             final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic().setName(topic.name());
             response.topics().add(topicResponse);
 
+            // Resolve topicId from the metadata image.
+            final Uuid resolvedTopicId = metadataImage
+                .topicMetadata(topic.name())
+                .map(CoordinatorMetadataImage.TopicMetadata::id)
+                .orElse(Uuid.ZERO_UUID);
+
+            // If the topic doesn't exist in metadata, and we need to validate the member's assignment,
+            // throw ILLEGAL_GENERATION.
+            if (resolvedTopicId.equals(Uuid.ZERO_UUID) && validator != CommitPartitionValidator.NO_OP) {
+                throw Errors.ILLEGAL_GENERATION.exception();
+            }
+
             topic.partitions().forEach(partition -> {
                 if (isMetadataInvalid(partition.committedMetadata())) {
                     topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
@@ -704,7 +721,7 @@ public class OffsetMetadataManager {
                     try {
                         validator.validate(
                             topic.name(),
-                            org.apache.kafka.common.Uuid.ZERO_UUID,
+                            resolvedTopicId,
                             partition.partitionIndex()
                         );
                     } catch (StaleMemberEpochException ex) {
@@ -1079,39 +1096,35 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Remove offsets of the partitions that have been deleted.
+     * Remove offsets of the topics that have been deleted.
      *
-     * @param topicPartitions   The partitions that have been deleted.
+     * @param deletedTopics   The topics that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public List<CoordinatorRecord> onPartitionsDeleted(
-        List<TopicPartition> topicPartitions
+    public List<CoordinatorRecord> onTopicsDeleted(
+        List<DeletedTopic> deletedTopics
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
 
-        Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
-        topicPartitions.forEach(tp -> partitionsByTopic
-            .computeIfAbsent(tp.topic(), __ -> new ArrayList<>())
-            .add(tp.partition())
-        );
-
         Consumer<Offsets> delete = offsetsToClean -> {
             offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) -> {
-                topicOffsets.forEach((topic, partitionOffsets) -> {
-                    if (partitionsByTopic.containsKey(topic)) {
-                        partitionsByTopic.get(topic).forEach(partition -> {
-                            if (partitionOffsets.containsKey(partition)) {
-                                appendOffsetCommitTombstone(groupId, topic, partition, records);
+                for (DeletedTopic deletedTopic : deletedTopics) {
+                    var partitionOffsets = topicOffsets.get(deletedTopic.name());
+                    if (partitionOffsets != null) {
+                        partitionOffsets.forEach((partition, offsetAndMetadata) -> {
+                            // Delete if the topic ID matches or if the stored topic ID is ZERO_UUID (legacy records).
+                            if (offsetAndMetadata.topicId.equals(Uuid.ZERO_UUID) || offsetAndMetadata.topicId.equals(deletedTopic.id())) {
+                                appendOffsetCommitTombstone(groupId, deletedTopic.name(), partition, records);
                             }
                         });
                     }
-                });
+                }
             });
         };
 
-        // Delete the partitions from the main storage.
+        // Delete the offsets from the main storage.
         delete.accept(offsets);
-        // Delete the partitions from the pending transactional offsets.
+        // Delete the offsets from the pending transactional offsets.
         pendingTransactionalOffsets.forEach((__, offsets) -> delete.accept(offsets));
 
         return records;
@@ -1277,6 +1290,16 @@ public class OffsetMetadataManager {
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
+    }
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
+     */
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
+        this.metadataImage = newImage;
     }
 
     /**

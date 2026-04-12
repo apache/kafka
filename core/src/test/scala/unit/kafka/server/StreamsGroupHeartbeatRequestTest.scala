@@ -30,23 +30,31 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull
 
 import scala.jdk.CollectionConverters._
 
+object StreamsGroupHeartbeatRequestTest {
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    )
+  )
+  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends StreamsGroupHeartbeatRequestTest(cluster) {
+  }
+}
+
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,streams"),
-    new ClusterConfigProperty(key = "group.streams.initial.rebalance.delay.ms", value = "0")
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0")
   )
 )
 class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,streams"),
-    )
-  )
+  @ClusterTest
   def testStreamsGroupHeartbeatWithInvalidAPIVersion(): Unit = {
     // Test that invalid API version throws UnsupportedVersionException
     assertThrows(classOf[UnsupportedVersionException], () =>
@@ -58,9 +66,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,streams"),
-    ),
     features = Array(
       new ClusterFeature(feature = Feature.STREAMS_VERSION, version = 0)
     )
@@ -111,12 +116,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(expectedResponse, streamsGroupHeartbeatResponse)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,streams"),
-    )
-  )
-  def testStreamsGroupHeartbeatIsInaccessibleWhenUnstableLatestVersionNotEnabled(): Unit = {
+  @ClusterTest
+  def testStreamsGroupHeartbeatIsInaccessibleWhenOffsetTopicNotExist(): Unit = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List().asJava)
@@ -202,7 +203,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           warmupTasks = List.empty,
           topology = topology
         )
-        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse.memberEpoch > 2
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Active task assignment should be available
@@ -298,7 +300,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .getOrElse(List.empty),
           topology = topology
         )
-        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.memberEpoch > streamsGroupHeartbeatResponse1.memberEpoch()
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify second member gets assigned
@@ -692,12 +695,17 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           processId = "process-2"
         )
         streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.memberEpoch > streamsGroupHeartbeatResponse1.memberEpoch() &&
           streamsGroupHeartbeatResponse2.activeTasks() != null
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify both members do not have standby tasks initially
       assertEquals(0, streamsGroupHeartbeatResponse1.standbyTasks().size(), "Member 1 should have no standby tasks initially")
       assertEquals(0, streamsGroupHeartbeatResponse2.standbyTasks().size(), "Member 2 should have no standby tasks initially")
+
+      // Verify both members picked up `task.offset.interval.ms`
+      assertEquals(60_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
+      assertEquals(60_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
 
       // Both members continue to send heartbeats with their assigned tasks
       TestUtils.waitUntilTrue(() => {
@@ -749,6 +757,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }
       assertEquals(0, member2StandbyTasksSize, "Member 2 should have no standby tasks in this configuration")
 
+      // Verify both members picked up `task.offset.interval.ms`
+      assertEquals(60_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
+      assertEquals(60_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
+
       // Change streams.num.standby.replicas = 1
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
       val alterConfigOp = new AlterConfigOp(
@@ -758,6 +770,16 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val configChanges = Map(groupConfigResource -> List(alterConfigOp).asJavaCollection).asJava
       val options = new org.apache.kafka.clients.admin.AlterConfigsOptions()
       admin.incrementalAlterConfigs(configChanges, options).all().get()
+
+      // Change streams.task.offset.interval.ms = 45000
+      val groupConfigResource2 = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+      val alterConfigOp2 = new AlterConfigOp(
+        new ConfigEntry("streams.task.offset.interval.ms", "45000"),
+        AlterConfigOp.OpType.SET
+      )
+      val configChanges2 = Map(groupConfigResource2 -> List(alterConfigOp2).asJavaCollection).asJava
+      val options2 = new org.apache.kafka.clients.admin.AlterConfigsOptions()
+      admin.incrementalAlterConfigs(configChanges2, options2).all().get()
 
       // Send heartbeats to trigger rebalance after config change
       TestUtils.waitUntilTrue(() => {
@@ -802,6 +824,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val totalActiveTasks = member1ActiveTasksNum + member2ActiveTasksNum
       val totalStandbyTasks = member1StandbyTasksNum + member2StandbyTasksNum
       assertEquals(totalActiveTasks, totalStandbyTasks, "Each active task should have one standby task")
+
+      // Verify both members picked up change of `task.offset.interval.ms`
+      assertEquals(45_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
+      assertEquals(45_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
 
     } finally {
       admin.close()
@@ -1003,6 +1029,93 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertNull(streamsGroupHeartbeatResponse.standbyTasks())
       assertNull(streamsGroupHeartbeatResponse.warmupTasks())
 
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testFencedMemberCanRejoinWithEpochZero(): Unit = {
+    val admin = cluster.admin()
+    val memberId = "test-fenced-rejoin-member"
+    val groupId = "test-fenced-rejoin-group"
+    val topicName = "test-fenced-topic"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Create topic first.
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+
+      val topology = createMockTopology(topicName)
+
+      // Join the group.
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.activeTasks()))
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.standbyTasks()))
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.warmupTasks()))
+            .getOrElse(List.empty),
+          topology = topology
+        )
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse.activeTasks() != null &&
+          !streamsGroupHeartbeatResponse.activeTasks().isEmpty
+      }, "Could not join the group successfully.")
+
+      // Verify initial join success with assignment.
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
+
+      // Expected assignment.
+      val expectedActiveTasks = List(new StreamsGroupHeartbeatResponseData.TaskIds()
+        .setSubtopologyId(streamsGroupHeartbeatResponse.activeTasks().get(0).subtopologyId())
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava
+
+      // Simulate a fenced member attempting to rejoin with epoch=0.
+      val rejoinResponse = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        memberEpoch = 0,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty,
+        topology = topology
+      )
+
+      // Verify the full response.
+      // Since the topology hasn't changed, the member should get their current
+      // state back with the same epoch (2) and assignment.
+      val expectedRejoinResponse = new StreamsGroupHeartbeatResponseData()
+        .setErrorCode(Errors.NONE.code())
+        .setMemberId(memberId)
+        .setMemberEpoch(2)
+        .setHeartbeatIntervalMs(rejoinResponse.heartbeatIntervalMs())
+        .setActiveTasks(expectedActiveTasks)
+        .setStandbyTasks(List.empty.asJava)
+        .setWarmupTasks(List.empty.asJava)
+        .setTaskOffsetIntervalMs(60_000)
+
+      assertEquals(expectedRejoinResponse, rejoinResponse)
     } finally {
       admin.close()
     }

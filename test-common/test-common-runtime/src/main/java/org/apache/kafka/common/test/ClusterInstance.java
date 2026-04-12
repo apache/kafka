@@ -72,8 +72,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import scala.jdk.javaapi.CollectionConverters;
-
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 
@@ -289,7 +287,7 @@ public interface ClusterInstance {
 
         // Ensure that the topic is removed from all cleaner offsets
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker -> {
-            List<File> liveLogDirs = CollectionConverters.asJava(broker.logManager().liveLogDirs());
+            Collection<File> liveLogDirs = broker.logManager().liveLogDirs();
             return liveLogDirs.stream().allMatch(logDir -> {
                 OffsetCheckpointFile checkpointFile;
                 try {
@@ -323,6 +321,14 @@ public interface ClusterInstance {
     default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
             admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
+            waitTopicCreation(topicName, partitions);
+        }
+    }
+
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment)));
+            int partitions = replicaAssignment.size();
             waitTopicCreation(topicName, partitions);
         }
     }
@@ -362,7 +368,7 @@ public interface ClusterInstance {
 
     default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
         for (ControllerServer controller : controllers) {
-            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
+            long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");

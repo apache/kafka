@@ -21,7 +21,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, Br
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiMessage, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -814,7 +814,6 @@ class MetadataCacheTest {
     checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
-    System.out.println("here")
     response = metadataCache.describeTopicResponse(util.List.of(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
@@ -900,7 +899,7 @@ class MetadataCacheTest {
           setBrokerId(broker.id).setLogDirs(broker.dirs).
           setEndPoints(new BrokerEndpointCollection(Collections.singleton(
             new RegisterBrokerRecord.BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
-              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}")).iterator()))))
+              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}"))))))
       val topicId = Uuid.fromString("95OVr1IPRYGrcNCLlpImCA")
       delta.replay(new TopicRecord().setTopicId(topicId).setName("foo"))
       partitions.foreach(partition => delta.replay(

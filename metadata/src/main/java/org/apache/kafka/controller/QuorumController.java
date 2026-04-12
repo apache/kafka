@@ -100,6 +100,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
@@ -209,6 +210,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
@@ -345,6 +347,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
+            return this;
+        }
+
         public Builder setStaticConfig(Map<String, Object> staticConfig) {
             this.staticConfig = staticConfig;
             return this;
@@ -436,6 +443,7 @@ public final class QuorumController implements Controller {
                     createTopicPolicy,
                     alterConfigPolicy,
                     configurationValidator,
+                    supportedConfigChecker,
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
@@ -479,10 +487,8 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!(clusterControl.brokerRegistrations().containsKey(nodeId) ||
-                            featureControl.isControllerId(nodeId))) {
-                        throw new BrokerIdNotRegisteredException("No node with id " +
-                            nodeId + " found.");
+                    if (!isNodeIdRegistered(nodeId)) {
+                        throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
                 case TOPIC:
@@ -494,6 +500,19 @@ public final class QuorumController implements Controller {
                 default:
                     break;
             }
+        }
+
+        /**
+         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         */
+        private boolean isNodeIdRegistered(int nodeId) {
+            if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
+                return true;
+            }
+            if (featureControl.isControllerId(nodeId)) {
+                return true;
+            }
+            return clusterControl.controllerRegistrations().containsKey(nodeId);
         }
     }
 
@@ -621,7 +640,7 @@ public final class QuorumController implements Controller {
         }
     }
 
-    void appendControlEvent(String name, Runnable handler) {
+    public void appendControlEvent(String name, Runnable handler) {
         ControllerEvent event = new ControllerEvent(name, handler);
         queue.append(event);
     }
@@ -1055,6 +1074,11 @@ public final class QuorumController implements Controller {
         }
 
         @Override
+        public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+            reader.close();
+        }
+
+        @Override
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             appendRaftEvent("handleLeaderChange[" + newLeader.epoch() + "]", () -> {
                 final String newLeaderName = newLeader.leaderId().isPresent() ?
@@ -1475,6 +1499,7 @@ public final class QuorumController implements Controller {
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
+        SupportedConfigChecker supportedConfigChecker,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
@@ -1537,6 +1562,7 @@ public final class QuorumController implements Controller {
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
             setFeatureControl(featureControl).
+            setSupportedConfigChecker(supportedConfigChecker).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).

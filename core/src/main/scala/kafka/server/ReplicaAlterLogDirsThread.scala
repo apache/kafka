@@ -26,6 +26,7 @@ import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncr
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
@@ -67,6 +68,8 @@ class ReplicaAlterLogDirsThread(name: String,
   override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
+
+  override protected def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = false
 
   // process fetched data
   override def processPartitionData(

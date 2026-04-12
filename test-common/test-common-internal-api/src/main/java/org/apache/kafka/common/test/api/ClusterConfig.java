@@ -59,13 +59,15 @@ public class ClusterConfig {
     private final List<String> tags;
     private final Map<Integer, Map<String, String>> perServerProperties;
     private final Map<Feature, Short> features;
+    private final boolean standalone;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
                   SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName,
                   SecurityProtocol controllerSecurityProtocol, ListenerName controllerListenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties,
-                  Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features) {
+                  Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features,
+                  boolean standalone) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -86,6 +88,7 @@ public class ClusterConfig {
         this.perServerProperties = Objects.requireNonNull(perServerProperties);
         this.tags = Objects.requireNonNull(tags);
         this.features = Objects.requireNonNull(features);
+        this.standalone = standalone;
     }
 
     public Set<Type> clusterTypes() {
@@ -134,6 +137,10 @@ public class ClusterConfig {
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
+    }
+
+    public boolean standalone() {
+        return standalone;
     }
 
     public Map<Integer, Map<String, String>> perServerOverrideProperties() {
@@ -192,7 +199,8 @@ public class ClusterConfig {
                 .setServerProperties(clusterConfig.serverProperties)
                 .setPerServerProperties(clusterConfig.perServerProperties)
                 .setTags(clusterConfig.tags)
-                .setFeatures(clusterConfig.features);
+                .setFeatures(clusterConfig.features)
+                .setStandalone(clusterConfig.standalone);
     }
 
     public static class Builder {
@@ -211,6 +219,7 @@ public class ClusterConfig {
         private Map<Integer, Map<String, String>> perServerProperties = Map.of();
         private List<String> tags = List.of();
         private Map<Feature, Short> features = Map.of();
+        private boolean standalone = false;
 
         private Builder() {}
 
@@ -291,10 +300,15 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder setStandalone(boolean standalone) {
+            this.standalone = standalone;
+            return this;
+        }
+
         public ClusterConfig build() {
             return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart,
                     brokerSecurityProtocol, brokerListenerName, controllerSecurityProtocol, controllerListenerName,
-                    trustStoreFile, metadataVersion, serverProperties, perServerProperties, tags, features);
+                    trustStoreFile, metadataVersion, serverProperties, perServerProperties, tags, features, standalone);
         }
     }
 }

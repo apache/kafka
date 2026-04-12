@@ -194,18 +194,19 @@ public class InternalTopicManager {
                         (streamsSide, brokerSide) -> validateCleanupPolicy(validationResult, streamsSide, brokerSide)
                     );
                 }
-                
+
+                final Set<String> topicsStillToValidate = new HashSet<>();
+                topicsStillToValidate.addAll(topicDescriptionsStillToValidate);
+                topicsStillToValidate.addAll(topicConfigsStillToValidate);
+
                 maybeThrowTimeout(new TimeoutContext(
-                        new HashSet<String>() {{
-                            addAll(topicDescriptionsStillToValidate);
-                            addAll(topicConfigsStillToValidate);
-                        }},
-                        deadline,
-                        "Validation timeout",
-                        String.format("Could not validate internal topics within %d milliseconds. " +
-                            "This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
-                        null
-                    ));
+                    topicsStillToValidate,
+                    deadline,
+                    "Validation timeout",
+                    String.format("Could not validate internal topics within %d milliseconds. " +
+                        "This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
+                    null
+                ));
 
                 if (!descriptionsForTopic.isEmpty() || !configsForTopic.isEmpty()) {
                     Utils.sleep(100);
@@ -497,7 +498,7 @@ public class InternalTopicManager {
             }
             if (!topicsNotReady.isEmpty()) {
                 maybeThrowTimeout(new TimeoutContext(
-                    Collections.singleton("makeReadyCheck"), // dummy collection just to trigger if `topicsNotReady` is non-empty
+                    topicsNotReady,
                     deadlineMs,
                     "MakeReady timeout",
                     String.format("Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
@@ -613,8 +614,6 @@ public class InternalTopicManager {
                     deadlineMs - time.milliseconds()
                 );
                 Utils.sleep(retryBackOffMs);
-            } else {
-                continue;
             }
         } 
         return createdTopics;

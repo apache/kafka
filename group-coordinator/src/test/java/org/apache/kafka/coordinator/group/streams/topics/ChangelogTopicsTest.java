@@ -17,12 +17,13 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicConfig;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ChangelogTopicsTest {
 
-    private static final LogContext LOG_CONTEXT = new LogContext();
+    private static final Logger LOG = LoggerFactory.getLogger(ChangelogTopicsTest.class);
     private static final String SOURCE_TOPIC_NAME = "source";
     private static final String SINK_TOPIC_NAME = "sink";
     private static final String REPARTITION_TOPIC_NAME = "repartition";
@@ -102,7 +103,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE_NO_REPARTITION_SOURCE);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         StreamsInvalidTopologyException e = assertThrows(StreamsInvalidTopologyException.class, changelogTopics::setup);
 
         assertTrue(e.getMessage().contains("No source topics found for subtopology"));
@@ -113,7 +114,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         assertDoesNotThrow(changelogTopics::setup);
     }
 
@@ -122,7 +123,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_REPARTITION_SOURCE);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         assertDoesNotThrow(changelogTopics::setup);
     }
 
@@ -131,7 +132,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_STATELESS);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
         assertEquals(Map.of(), setup);
@@ -142,7 +143,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_STATEFUL);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
         assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3), setup);
@@ -153,7 +154,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_SOURCE_CHANGELOG);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
         assertEquals(Map.of(SOURCE_TOPIC_NAME, 3), setup);
@@ -164,7 +165,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_BOTH);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
         assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3, SOURCE_TOPIC_NAME, 3), setup);

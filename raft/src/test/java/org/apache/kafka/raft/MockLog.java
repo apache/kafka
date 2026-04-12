@@ -21,13 +21,13 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -54,7 +54,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-public class MockLog implements ReplicatedLog {
+public class MockLog implements RaftLog {
     private static final AtomicLong ID_GENERATOR = new AtomicLong();
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
@@ -419,7 +419,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation isolation) {
+    public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
         verifyOffsetInRange(startOffset);
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
@@ -444,7 +444,13 @@ public class MockLog implements ReplicatedLog {
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
-            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset && !batch.entries.isEmpty()) {
+            // Since we operate in batches, it is possible for byte size of returned batches to exceed
+            // maxTotalBatchBytes. To keep to that invariant, we exit the loop as soon as the buffer contains
+            // more bytes than maxTotalBatchBytes.
+            if (batch.lastOffset() >= startOffset
+                && batch.lastOffset() < maxOffset
+                && !batch.entries.isEmpty()
+                && buffer.position() < maxTotalBatchBytes) {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
@@ -462,6 +468,9 @@ public class MockLog implements ReplicatedLog {
 
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
+        if (batchCount > 1) {
+            records = records.slice(0, maxTotalBatchBytes);
+        }
 
         if (batchStartOffset == null) {
             throw new RuntimeException("Expected to find at least one entry starting from offset " +
@@ -513,7 +522,11 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            1 // Only needs to read the first batch.
+        ).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                 String.format(

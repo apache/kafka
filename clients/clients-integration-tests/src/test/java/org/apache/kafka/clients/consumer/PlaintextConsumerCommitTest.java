@@ -179,6 +179,97 @@ public class PlaintextConsumerCommitTest {
     }
 
     @ClusterTest
+    public void testClassicConsumerNoCommittedOffsets() {
+        testNoCommittedOffsets(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerNoCommittedOffsets() {
+        testNoCommittedOffsets(GroupProtocol.CONSUMER);
+    }
+
+    private void testNoCommittedOffsets(GroupProtocol groupProtocol) {
+        try (var consumer = createConsumer(groupProtocol, true)) {
+            consumer.assign(List.of(tp));
+            // commit for one partition
+            var metadata = new OffsetAndMetadata(5, Optional.of(15), "foo");
+            consumer.commitSync(Map.of(tp, metadata));
+
+            TopicPartition tp2 = new TopicPartition(topic, 2);
+            // fetch offset for three partitions:
+            // 1. tp: exists and has committed offset
+            // 2. tp1: exists but has NO committed offset
+            // 3. tp2: does not exist
+            var committed = consumer.committed(Set.of(tp, tp1, tp2));
+            assertEquals(3, committed.size());
+            assertEquals(metadata, committed.get(tp));
+            assertNull(committed.get(tp1));
+            assertNull(committed.get(tp2));
+        }
+    }
+
+    /**
+     * Test that calling consumer.committed() for a deleted topic returns null for each partition.
+     * This validates the fix for KAFKA-20165.
+     */
+    @ClusterTest
+    public void testClassicConsumerCommittedDeletedTopic() throws Exception {
+        testConsumerCommittedDeletedTopic(GroupProtocol.CLASSIC);
+    }
+
+    /**
+     * Test that calling consumer.committed() for a deleted topic returns null for each partition.
+     * This validates the fix for KAFKA-20165.
+     */
+    @ClusterTest
+    public void testAsyncConsumerCommittedDeletedTopic() throws Exception {
+        testConsumerCommittedDeletedTopic(GroupProtocol.CONSUMER);
+    }
+
+    /**
+     * Common test logic for both Classic and Async consumer.
+     * Tests that calling consumer.committed() for a deleted topic returns null.
+     * As per the Javadoc for committed(): "If any of the partitions requested do not exist, the result
+     * map will contain null as the value for that partition."
+     *
+     * For Classic consumer (topic names only), the GroupCoordinator returns no error for deleted topics (offsets -1).
+     *
+     * For Async consumer (topic IDs and topic names), the GroupCoordinator returns UNKNOWN_TOPIC_ID for the deleted topic
+     * when the client uses topic IDs.
+     * The consumer handles this as a retriable partition error and eventually returns null,
+     * keeping the same contract as the ClassicConsumer.
+     */
+    private void testConsumerCommittedDeletedTopic(GroupProtocol groupProtocol) throws Exception {
+        String topicToDelete = "topic-to-delete";
+        cluster.createTopic(topicToDelete, 1, (short) BROKER_COUNT);
+        TopicPartition tpToDelete = new TopicPartition(topicToDelete, 0);
+
+        try (var consumer = createConsumer(groupProtocol, false);
+             var admin = cluster.admin()) {
+            consumer.assign(List.of(tpToDelete));
+
+            // Commit an offset to ensure the consumer has the topic ID cached and there's data to fetch
+            consumer.commitSync(Map.of(tpToDelete, new OffsetAndMetadata(0)));
+
+            // Verify the commit was successful
+            assertEquals(0, consumer.committed(Set.of(tpToDelete)).get(tpToDelete).offset());
+
+            // Delete the topic
+            admin.deleteTopics(List.of(topicToDelete)).all().get();
+
+            // Eventually, the response should return null for the deleted topic partition.
+            TestUtils.waitForCondition(
+                () -> {
+                    var committed = consumer.committed(Set.of(tpToDelete), Duration.ofMillis(5000));
+                    return committed.get(tpToDelete) == null;
+                },
+                10000,
+                "Expected null for deleted topic partition"
+            );
+        }
+    }
+
+    @ClusterTest
     public void testClassicConsumerAsyncCommit() throws InterruptedException {
         testAsyncCommit(GroupProtocol.CLASSIC);
     }

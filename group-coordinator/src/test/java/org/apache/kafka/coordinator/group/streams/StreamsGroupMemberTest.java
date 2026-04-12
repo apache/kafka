@@ -23,6 +23,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.KeyValue;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -46,6 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupMemberTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(StreamsGroupMemberTest.class);
+    private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "member-id";
     private static final int MEMBER_EPOCH = 10;
     private static final int PREVIOUS_MEMBER_EPOCH = 9;
@@ -226,7 +230,7 @@ public class StreamsGroupMemberTest {
             .setWarmupTasksPendingRevocation(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY2).setPartitions(TASKS6)));
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_ID)
-            .updateWith(record)
+            .updateWith(LOG, GROUP_ID, record)
             .build();
 
         assertEquals(MEMBER_ID, member.memberId());

@@ -52,6 +52,7 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Serdes;
@@ -71,6 +72,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -247,7 +249,6 @@ public class StreamThreadTest {
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
-    private final TaskId task3 = new TaskId(1, 1);
 
     private Properties configProps(final boolean enableEoS, final boolean processingThreadsEnabled) {
         return mkProperties(mkMap(
@@ -1069,7 +1070,7 @@ public class StreamThreadTest {
             null
         ) {
             @Override
-            int commit(final Collection<Task> tasksToCommit) {
+            int commit(final Collection<? extends Task> tasksToCommit) {
                 committed.set(true);
                 // we advance time to make sure the commit delay is considered when computing the next commit timestamp
                 mockTime.sleep(commitLatency);
@@ -1138,7 +1139,7 @@ public class StreamThreadTest {
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
-        final Task task = mock(Task.class);
+        final StreamTask task = mock(StreamTask.class);
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.singleton(task));
         when(activeTaskCreator.producerClientIds()).thenReturn("producerClientId");
@@ -1177,7 +1178,7 @@ public class StreamThreadTest {
             schedulingTaskManager
         ) {
             @Override
-            int commit(final Collection<Task> tasksToCommit) {
+            int commit(final Collection<? extends Task> tasksToCommit) {
                 mockTime.sleep(10L);
                 return 1;
             }
@@ -1450,6 +1451,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
@@ -1457,7 +1459,7 @@ public class StreamThreadTest {
 
         assertThat(thrown.getCause(), isA(IllegalStateException.class));
         // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
-        assertEquals("No current assignment for partition topic1-1", thrown.getCause().getMessage());
+        assertEquals("Cannot add records for a partition that is not assigned to the consumer", thrown.getCause().getMessage());
         assertFalse(consumer.shouldRebalance());
 
         verify(taskManager).handleLostAll();
@@ -2475,6 +2477,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         ) {
             @Override
@@ -2536,6 +2539,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         ) {
             @Override
@@ -2605,6 +2609,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         ) {
             @Override
@@ -2671,6 +2676,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         ) {
             @Override
@@ -2734,6 +2740,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         ) {
             @Override
@@ -2966,6 +2973,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
@@ -3025,6 +3033,7 @@ public class StreamThreadTest {
             (e, b) -> { },
             null,
             Optional.empty(),
+            null,
             null
         ) {
             @Override
@@ -3577,6 +3586,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             UUID.randomUUID(),
             Optional.empty(),
+            Optional.empty(),
             Map.of(),
             Map.of()
         );
@@ -3611,7 +3621,8 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            streamsMetadataState
+            streamsMetadataState,
+            null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3635,6 +3646,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -3671,7 +3683,8 @@ public class StreamThreadTest {
                 HANDLER,
                 null,
                 Optional.of(streamsRebalanceData),
-                streamsMetadataState
+                streamsMetadataState,
+                null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3705,6 +3718,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
                 Optional.empty(),
+                Optional.empty(),
                 Map.of(),
                 Map.of()
         );
@@ -3740,7 +3754,8 @@ public class StreamThreadTest {
                 HANDLER,
                 null,
                 Optional.of(streamsRebalanceData),
-                streamsMetadataState
+                streamsMetadataState,
+                null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3765,6 +3780,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             UUID.randomUUID(),
+            Optional.empty(),
             Optional.empty(),
             Map.of(),
             Map.of()
@@ -3800,7 +3816,8 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            streamsMetadataState
+            streamsMetadataState,
+            null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3824,6 +3841,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
+                Optional.empty(),
                 Optional.empty(),
                 Map.of(),
                 Map.of()
@@ -3860,7 +3878,8 @@ public class StreamThreadTest {
                 HANDLER,
                 null,
                 Optional.of(streamsRebalanceData),
-                streamsMetadataState
+                streamsMetadataState,
+                null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3894,6 +3913,7 @@ public class StreamThreadTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 UUID.randomUUID(),
                 Optional.empty(),
+                Optional.empty(),
                 Map.of(),
                 Map.of()
         );
@@ -3929,7 +3949,8 @@ public class StreamThreadTest {
                 HANDLER,
                 null,
                 Optional.of(streamsRebalanceData),
-                streamsMetadataState
+                streamsMetadataState,
+                null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3993,6 +4014,34 @@ public class StreamThreadTest {
         );
     }
 
+    @Test
+    public void shouldRemoveMetricsDelegatingReporterOnShutdown() throws InterruptedException {
+        thread = createStreamThread(CLIENT_ID, false);
+
+        final List<MetricsReporter> reportersAfterCreate = thread.streamsMetrics().metricsRegistry().reporters();
+        assertThat(
+                reportersAfterCreate.stream()
+                        .filter(r -> r instanceof StreamsThreadMetricsDelegatingReporter)
+                        .count(),
+                equalTo(1L)
+        );
+
+        thread.shutdown(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        TestUtils.waitForCondition(
+                () -> thread.state() == StreamThread.State.DEAD,
+                10 * 1000,
+                "Thread never shut down."
+        );
+
+        final List<MetricsReporter> reportersAfterShutdown = thread.streamsMetrics().metricsRegistry().reporters();
+        assertThat(
+                reportersAfterShutdown.stream()
+                        .filter(r -> r instanceof StreamsThreadMetricsDelegatingReporter)
+                        .count(),
+                equalTo(0L)
+        );
+    }
+
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
@@ -4025,6 +4074,7 @@ public class StreamThreadTest {
             null,
             null,
             Optional.empty(),
+            null,
             null
         );
     }
@@ -4061,8 +4111,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.setStreamsConfig(config);
     }
 
-    // TODO: change return type to `StandbyTask`
-    private Collection<Task> createStandbyTask(final StreamsConfig config) {
+    private Collection<StandbyTask> createStandbyTask(final StreamsConfig config) {
         final LogContext logContext = new LogContext("test");
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
@@ -4127,6 +4176,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
+            null,
             null
         );
     }
