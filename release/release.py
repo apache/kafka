@@ -294,7 +294,7 @@ print("Updating streams quickstart archetype pom")
 textfiles.replace(f"{repo_dir}/streams/quickstart/java/src/main/resources/archetype-resources/pom.xml", "-SNAPSHOT", "", regex=True)
 print("Updating ducktape version.py")
 textfiles.replace(f"{repo_dir}/tests/kafkatest/version.py", "^DEV_VERSION =.*",
-    f"DEV_VERSION = KafkaVersion(\"{release_version}-SNAPSHOT\")", regex=True)
+    f"DEV_VERSION = KafkaVersion(\"{release_version}\")", regex=True)
 git.commit(f"Bump version to {release_version}")
 git.create_tag(rc_tag)
 git.switch_branch(starting_branch)
