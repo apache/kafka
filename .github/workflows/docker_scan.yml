@@ -32,7 +32,8 @@ jobs:
         uses: lhotari/sandboxed-trivy-action@555963036b2012b44c1071508a236e569db28ebb # v1.0.1
         if: always()
         with:
-          image-ref: apache/kafka:${{ matrix.supported_image_tag }}
+          scan-type: 'image'
+          scan-ref: apache/kafka:${{ matrix.supported_image_tag }}
           format: 'table'
           severity: 'CRITICAL,HIGH'
           output: scan_report_jvm_${{ matrix.supported_image_tag }}.txt

@@ -56,7 +56,8 @@ jobs:
     - name: Run CVE scan
       uses: lhotari/sandboxed-trivy-action@555963036b2012b44c1071508a236e569db28ebb # v1.0.1
       with:
-        image-ref: 'kafka/test:test'
+        scan-type: 'image'
+        scan-ref: 'kafka/test:test'
         format: 'table'
         severity: 'CRITICAL,HIGH'
         output: scan_report_${{ github.event.inputs.image_type }}.txt
