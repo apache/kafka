@@ -501,87 +501,27 @@ For Streams API changes in version older than 2.4.x, please check [3.9 upgrade d
 
 The following table shows which versions of the Kafka Streams API are compatible with various Kafka broker versions. For Kafka Stream version older than 2.4.x, please check [3.9 upgrade document](/39/documentation/streams/upgrade-guide).  
   
-<table>  
-<tr>  
-<th>
-
-
-</th>  
-<th>
-
-Kafka Broker (columns)
-</th> </tr>  
-<tr>  
-<td>
-
-Kafka Streams API (rows)
-</td>  
-<td>
-
-2.4.x and  
-2.5.x and  
-2.6.x and  
-2.7.x and  
-2.8.x and  
-3.0.x and  
-3.1.x and  
-3.2.x and  
-3.3.x and  
-3.4.x and  
-3.5.x and  
-3.6.x and  
-3.7.x and  
-3.8.x and  
-3.9.x and  
-4.0.x
-</td>  
-<td>
-
-4.1.x and
-4.2.x
-</td> </tr>  
-<tr>  
-<td>
-
-2.4.x and  
-2.5.x
-</td>  
-<td>
-
-compatible
-</td>  
-<td>
-
-compatible
-</td> </tr>  
-<tr>  
-<td>
-
-2.6.x and  
-2.7.x and  
-2.8.x and  
-3.0.x and  
-3.1.x and  
-3.2.x and  
-3.3.x and  
-3.4.x and  
-3.5.x and  
-3.6.x and  
-3.7.x and  
-3.8.x and  
-3.9.x and  
-4.0.x and  
-4.1.x and  
-4.2.x
-</td>  
-<td>
-
-compatible; enabling exactly-once v2 requires broker version 2.5.x or higher
-</td>  
-<td>
-
-compatible
-</td> </tr> </table>
+<table>
+<tr>
+<th></th>
+<th colspan="2">Kafka Broker (columns)</th>
+</tr>
+<tr>
+<th>Kafka Streams API (rows)</th>
+<th>2.4.x - 4.0.x</th>
+<th>4.1.x - 4.3.x</th>
+</tr>
+<tr>
+<td>2.4.x - 2.5.x</td>
+<td>compatible</td>
+<td>compatible</td>
+</tr>
+<tr>
+<td>2.6.x - 4.3.x</td>
+<td>compatible; enabling exactly-once v2 requires broker version 2.5.x or higher</td>
+<td>compatible</td>
+</tr>
+</table>
 
 [Previous](/43/documentation/streams/developer-guide/app-reset-tool) Next
 
