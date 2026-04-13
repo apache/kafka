@@ -61,7 +61,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests local state store and global application cleanup.
  */
-@Tag("integration")
 @Timeout(600)
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";

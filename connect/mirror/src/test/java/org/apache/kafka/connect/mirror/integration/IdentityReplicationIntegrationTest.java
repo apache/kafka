@@ -31,7 +31,6 @@ import java.util.Map;
  * migrated from the primary cluster to the backup cluster. Tests validate that consumer offsets
  * are translated and replicated from the primary cluster to the backup cluster during this failover.
  */
-@Tag("integration")
 public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
     @BeforeEach
     public void startClusters() throws Exception {

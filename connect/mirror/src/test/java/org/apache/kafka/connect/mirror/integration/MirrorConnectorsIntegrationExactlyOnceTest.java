@@ -32,7 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests MM2 replication with exactly-once support enabled on the Connect clusters.
  */
-@Tag("integration")
 public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectorsIntegrationBaseTest {
 
     @BeforeEach

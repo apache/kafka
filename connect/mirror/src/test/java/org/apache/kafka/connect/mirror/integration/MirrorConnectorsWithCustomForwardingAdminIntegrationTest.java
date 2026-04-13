@@ -62,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests MM2 is using provided ForwardingAdmin to create/alter topics, partitions and ACLs.
  */
-@Tag("integration")
 public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
 
     private static final int TOPIC_ACL_SYNC_DURATION_MS = 30_000;

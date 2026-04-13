@@ -36,7 +36,6 @@ import java.util.Properties;
 /**
  * Tests command line SSL setup for reset tool.
  */
-@Tag("integration")
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER;

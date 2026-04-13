@@ -34,7 +34,6 @@ import java.util.stream.Collectors;
 /**
  * Tests MM2 replication with SSL enabled at backup kafka cluster
  */
-@Tag("integration")
 public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrationBaseTest {
 
     @BeforeEach
