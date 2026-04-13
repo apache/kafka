@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, Consumer
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.Feature
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -1272,5 +1272,82 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       .setHeartbeatIntervalMs(response4.data.heartbeatIntervalMs)
       .setAssignment(expectedAssignment4)
     assertEquals(expectedResponse4, response4.data)
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    )
+  )
+  def testStaticMembersRejoinWithDifferentServerAssignor(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    val groupId = "grp"
+    val instanceIds = List("instance-1", "instance-2", "instance-3")
+
+    // A helper that joins a static member with the given server assignor and waits until
+    // the heartbeat returns a successful response. Returns the member epoch from the response.
+    def joinStaticMember(memberId: String, instanceId: String, serverAssignor: String): Int = {
+      val joinRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId)
+          .setInstanceId(instanceId)
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(5 * 60 * 1000)
+          .setServerAssignor(serverAssignor)
+          .setSubscribedTopicNames(List("foo").asJava)
+          .setTopicPartitions(List.empty.asJava)
+      ).build()
+
+      var response: ConsumerGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        response = connectAndReceive[ConsumerGroupHeartbeatResponse](joinRequest)
+        response.data.errorCode == Errors.NONE.code
+      }, msg = s"Static member $instanceId could not join the group. Last response $response.")
+      response.data.memberEpoch
+    }
+
+    // Three static members join the group with the "uniform" assignor.
+    val initialMemberIds = instanceIds.map(_ => Uuid.randomUuid.toString)
+    val initialEpochs = initialMemberIds.zip(instanceIds).map { case (memberId, instanceId) =>
+      joinStaticMember(memberId, instanceId, "uniform")
+    }
+    val epochBeforeRejoin = initialEpochs.max
+
+    // All three members leave the group.
+    initialMemberIds.zip(instanceIds).foreach { case (memberId, instanceId) =>
+      val leaveRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId)
+          .setInstanceId(instanceId)
+          .setMemberEpoch(-2)
+      ).build()
+      val leaveResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](leaveRequest)
+      assertEquals(Errors.NONE.code, leaveResponse.data.errorCode)
+      assertEquals(-2, leaveResponse.data.memberEpoch)
+    }
+
+    // All three members rejoin with the "range" assignor and new member ids. This is the
+    // scenario that was buggy: without the fix, the group does not detect that the preferred
+    // server assignor has shifted from "uniform" to "range" once the majority of members
+    // has switched, so the group epoch is not bumped and the old assignment is returned.
+    val rejoinEpochs = instanceIds.map { instanceId =>
+      joinStaticMember(Uuid.randomUuid.toString, instanceId, "range")
+    }
+
+    // Verify that the group epoch was bumped after the assignor change. The bump happens once
+    // a majority of members has switched assignor, so the maximum epoch across all rejoins
+    // must be greater than the maximum epoch before the leave/rejoin cycle.
+    val maxRejoinEpoch = rejoinEpochs.max
+    assertTrue(maxRejoinEpoch > epochBeforeRejoin,
+      s"Static members rejoined with assignor 'range' but the maximum epoch ($maxRejoinEpoch) " +
+      s"is not greater than the maximum epoch before the rejoin ($epochBeforeRejoin). " +
+      s"This indicates that the group epoch was not bumped, so the assignment was not recomputed. " +
+      s"Rejoin epochs: ${rejoinEpochs.mkString(", ")}.")
   }
 }
