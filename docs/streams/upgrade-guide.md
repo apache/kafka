@@ -512,12 +512,12 @@ The following table shows which versions of the Kafka Streams API are compatible
 <th>4.1.x - 4.3.x</th>
 </tr>
 <tr>
-<td>2.4.x - 2.5.x</td>
+<th>2.4.x - 2.5.x</th>
 <td>compatible</td>
 <td>compatible</td>
 </tr>
 <tr>
-<td>2.6.x - 4.3.x</td>
+<th>2.6.x - 4.3.x</th>
 <td>compatible; enabling exactly-once v2 requires broker version 2.5.x or higher</td>
 <td>compatible</td>
 </tr>
