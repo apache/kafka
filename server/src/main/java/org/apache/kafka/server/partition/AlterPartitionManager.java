@@ -15,24 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share.dlq;
+package org.apache.kafka.server.partition;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A no op implementation of {@link ShareGroupDLQ}. This will be useful
- * in development cycle and testing. All methods return immediately with
- * a successfully completed future.
+ * Handles updating the ISR by sending AlterPartition requests to the controller. Updating the ISR is an asynchronous
+ * operation, so partitions will learn about the result of their request through a callback.
+ * <p>
+ * Note that ISR state changes can still be initiated by the controller and sent to the partitions via LeaderAndIsr
+ * requests.
  */
-public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
-    private static final Logger log = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
+public interface AlterPartitionManager {
+    void start();
 
-    @Override
-    public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
-        log.trace("Enqueuing share group dlq record parameter: {}", param);
-        return CompletableFuture.completedFuture(null);
-    }
+    void shutdown() throws InterruptedException;
+
+    CompletableFuture<LeaderAndIsr> submit(TopicIdPartition topicIdPartition, LeaderAndIsr leaderAndIsr);
 }

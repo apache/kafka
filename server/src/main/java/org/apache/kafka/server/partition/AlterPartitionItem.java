@@ -15,24 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share.dlq;
+package org.apache.kafka.server.partition;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.concurrent.CompletableFuture;
 
-/**
- * A no op implementation of {@link ShareGroupDLQ}. This will be useful
- * in development cycle and testing. All methods return immediately with
- * a successfully completed future.
- */
-public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
-    private static final Logger log = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
-
-    @Override
-    public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
-        log.trace("Enqueuing share group dlq record parameter: {}", param);
-        return CompletableFuture.completedFuture(null);
-    }
+public record AlterPartitionItem(TopicIdPartition topicIdPartition, LeaderAndIsr leaderAndIsr,
+                                 CompletableFuture<LeaderAndIsr> future) {
 }

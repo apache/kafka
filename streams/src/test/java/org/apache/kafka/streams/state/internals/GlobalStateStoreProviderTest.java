@@ -25,16 +25,19 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -125,6 +128,14 @@ public class GlobalStateStoreProviderTest {
                     false),
                 Serdes.String(),
                 Serdes.String()).build());
+        stores.put(
+            "s-store-with-headers",
+            Stores.sessionStoreWithHeadersBuilder(
+                Stores.inMemorySessionStore(
+                    "s-store-with-headers",
+                    Duration.ofMillis(10L)),
+                Serdes.String(),
+                Serdes.String()).build());
 
         final InternalProcessorContext<?, ?> mockContext = mock(InternalProcessorContext.class);
         when(mockContext.applicationId()).thenReturn("appId");
@@ -175,6 +186,7 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyKeyValueStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
         }
     }
 
@@ -187,11 +199,12 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, instanceOf(TimestampedKeyValueStore.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
         }
     }
 
     @Test
-    public void shouldNotReturnKeyValueStoreAsTimestampedStore() {
+    public void shouldNotReturnKeyValueStoreAsTimestampedKeyValueStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> stores =
             provider.stores("kv-store", QueryableStoreTypes.timestampedKeyValueStore());
@@ -201,12 +214,13 @@ public class GlobalStateStoreProviderTest {
     @Test
     public void shouldReturnTimestampedKeyValueStoreAsKeyValueStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
-        final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> stores =
+        final List<ReadOnlyKeyValueStore<String, String>> stores =
             provider.stores("ts-kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(1, stores.size());
-        for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
+        for (final ReadOnlyKeyValueStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
         }
     }
 
@@ -219,11 +233,25 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyWindowStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
         }
     }
 
     @Test
-    public void shouldNotReturnWindowStoreAsTimestampedStore() {
+    public void shouldReturnTimestampedWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores("ts-w-store", QueryableStoreTypes.timestampedWindowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, instanceOf(TimestampedWindowStore.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldNotReturnWindowStoreAsTimestampedWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
                 provider.stores("w-store", QueryableStoreTypes.timestampedWindowStore());
@@ -233,12 +261,13 @@ public class GlobalStateStoreProviderTest {
     @Test
     public void shouldReturnTimestampedWindowStoreAsWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
-        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+        final List<ReadOnlyWindowStore<String, String>> stores =
             provider.stores("ts-w-store", QueryableStoreTypes.windowStore());
         assertEquals(1, stores.size());
-        for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
+        for (final ReadOnlyWindowStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
         }
     }
 
@@ -250,11 +279,36 @@ public class GlobalStateStoreProviderTest {
         assertEquals(1, stores.size());
         for (final ReadOnlySessionStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlySessionStore.class));
+            assertThat(store, not(instanceOf(SessionStoreWithHeaders.class)));
         }
     }
 
     @Test
-    public void shouldReturnKeyValueStoreWithHeadersFacadeForHeadersAwareStore() {
+    public void shouldReturnTimestampedKeyValueStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>>> stores =
+            provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+            assertThat(store, instanceOf(TimestampedKeyValueStoreWithHeaders.class));
+        }
+    }
+
+    @Test
+    public void shouldReturnTimestampedKeyValueStoreWithHeadersAsTimestampedKeyValueStores() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnTimestampedKeyValueStoreWithHeadersAsKeyValueStores() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyKeyValueStore<String, String>> stores =
             provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.keyValueStore());
@@ -267,33 +321,35 @@ public class GlobalStateStoreProviderTest {
     }
 
     @Test
-    public void shouldReturnTimestampedKeyValueStoreWithHeadersFacadeForHeadersAwareStore() {
+    public void shouldNotReturnTimestampedKeyValueStoreAsTimestampedKeyValueStoreWithHeaders() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
-        final List<ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>>> stores =
-            provider.stores("ts-kv-store-with-headers", QueryableStoreTypes.timestampedKeyValueStore());
+        final List<ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>>> stores =
+            provider.stores("ts-kv-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+        assertEquals(0, stores.size());
+    }
+
+    @Test
+    public void shouldNotReturnKeyValueStoreAsTimestampedKeyValueStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>>> stores =
+            provider.stores("kv-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+        assertEquals(0, stores.size());
+    }
+
+    @Test
+    public void shouldReturnTimestampedWindowStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, ValueTimestampHeaders<String>>> stores =
+            provider.stores("ts-w-store-with-headers", QueryableStoreTypes.timestampedWindowStoreWithHeaders());
         assertEquals(1, stores.size());
-        for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
-            assertThat(store, instanceOf(GenericReadOnlyKeyValueStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
-            assertThat(store, not(instanceOf(TimestampedKeyValueStoreWithHeaders.class)));
+        for (final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, instanceOf(TimestampedWindowStoreWithHeaders.class));
         }
     }
 
     @Test
-    public void shouldReturnWindowStoreWithHeadersFacadeForHeadersAwareWindowStore() {
-        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
-        final List<ReadOnlyWindowStore<String, String>> stores =
-            provider.stores("ts-w-store-with-headers", QueryableStoreTypes.windowStore());
-        assertEquals(1, stores.size());
-        for (final ReadOnlyWindowStore<String, String> store : stores) {
-            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
-            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
-        }
-    }
-
-    @Test
-    public void shouldReturnTimestampedWindowStoreWithHeadersFacadeForHeadersAwareWindowStore() {
+    public void shouldReturnTimestampedWindowStoreWithHeadersAsTimestampedWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
             provider.stores("ts-w-store-with-headers", QueryableStoreTypes.timestampedWindowStore());
@@ -301,8 +357,69 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
-            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
             assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
         }
     }
+
+    @Test
+    public void shouldReturnTimestampedWindowStoreWithHeadersAsWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, String>> stores =
+            provider.stores("ts-w-store-with-headers", QueryableStoreTypes.windowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, String> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, instanceOf(GenericReadOnlyWindowStoreFacade.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldNotReturnTimestampedWindowStoreAsTimestampedWindowStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>>> stores =
+            provider.stores("ts-w-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+        assertEquals(0, stores.size());
+    }
+
+    @Test
+    public void shouldNotReturnWindowStoreAsTimestampedWindowStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>>> stores =
+            provider.stores("w-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+        assertEquals(0, stores.size());
+    }
+
+    @Test
+    public void shouldReturnSessionStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlySessionStore<String, AggregationWithHeaders<String>>> stores =
+            provider.stores("s-store-with-headers", QueryableStoreTypes.sessionStoreWithHeaders());
+        assertEquals(1, stores.size());
+        for (final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store : stores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
+            assertThat(store, instanceOf(SessionStoreWithHeaders.class));
+        }
+    }
+
+    @Test
+    public void shouldReturnSessionStoreWithHeadersAsSessionStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlySessionStore<String, String>> stores =
+            provider.stores("s-store-with-headers", QueryableStoreTypes.sessionStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlySessionStore<String, String> store : stores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
+            assertThat(store, not(instanceOf(SessionStoreWithHeaders.class)));
+        }
+    }
+
+    @Test
+    public void shouldNotReturnSessionStoreAsSessionStoreWithHeaders() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlySessionStore<String, AggregationWithHeaders<String>>> stores =
+            provider.stores("s-store", QueryableStoreTypes.sessionStoreWithHeaders());
+        assertEquals(0, stores.size());
+    }
+
 }

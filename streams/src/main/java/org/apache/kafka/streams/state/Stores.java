@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.RocksDbSessionHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbWindowHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
@@ -44,6 +45,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+import static org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -360,7 +362,7 @@ public final class Stores {
         final Duration windowSize,
         final boolean retainDuplicates
     ) throws IllegalArgumentException {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
     }
 
     private static WindowBytesStoreSupplier persistentWindowStore(
@@ -390,14 +392,24 @@ public final class Stores {
                 + windowSize + "], retention=[" + retentionPeriod + "]");
         }
 
-        return new RocksDbWindowBytesStoreSupplier(
-            name,
-            retentionMs,
-            defaultSegmentInterval,
-            windowSizeMs,
-            retainDuplicates,
-            storeType
-        );
+        if (storeType == TIMESTAMPED_WINDOW_STORE_WITH_HEADERS) {
+            return new RocksDbWindowHeadersBytesStoreSupplier(
+                name,
+                retentionMs,
+                defaultSegmentInterval,
+                windowSizeMs,
+                retainDuplicates
+            );
+        } else {
+            return new RocksDbWindowBytesStoreSupplier(
+                name,
+                retentionMs,
+                defaultSegmentInterval,
+                windowSizeMs,
+                retainDuplicates,
+                storeType
+            );
+        }
     }
 
     /**
@@ -712,12 +724,11 @@ public final class Stores {
      * @return an instance of {@link StoreBuilder} than can build a {@link SessionStoreWithHeaders}
      */
     public static <K, V> StoreBuilder<SessionStoreWithHeaders<K, V>> sessionStoreWithHeadersBuilder(
-            final SessionBytesStoreSupplier supplier,
-            final Serde<K> keySerde,
-            final Serde<V> valueSerde
+        final SessionBytesStoreSupplier supplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde
     ) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
-
 }

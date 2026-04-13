@@ -1510,15 +1510,15 @@ class ShareCoordinatorServiceTest {
             .thenReturn(List.of(tp1, tp2));
 
         when(writer.deleteRecords(
-            any(),
-            eq(10L)
+            eq(tp1),
+            anyLong()
         )).thenReturn(
             CompletableFuture.completedFuture(null)
         );
 
         when(writer.deleteRecords(
-            any(),
-            eq(20L)
+            eq(tp2),
+            anyLong()
         )).thenReturn(
             CompletableFuture.failedFuture(new Exception("bad stuff"))
         );
