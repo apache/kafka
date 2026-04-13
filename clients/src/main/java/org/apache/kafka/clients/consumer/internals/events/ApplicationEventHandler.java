@@ -160,10 +160,16 @@ public class ApplicationEventHandler implements Closeable {
     }
 
     /**
-     * Verifies that the consumer network thread is still alive. If not, it means the thread has
-     * terminated (either due to a failure or shutdown) and will never process any events from the
-     * queue. Rather than blocking indefinitely or timing out with a misleading error, this fails
-     * fast with a clear error message.
+     * Best-effort check that the consumer network thread is still alive. If the thread has
+     * already terminated (due to a failure or shutdown), it will never process any events from
+     * the queue. Rather than blocking indefinitely or timing out with a misleading error, this
+     * fails fast with a clear error message.
+     *
+     * <p>Note: this is inherently racy — the thread could die between this check and the
+     * subsequent {@code applicationEventQueue.add()}. That narrow window is acceptable because
+     * any subsequent call to {@code add()} will detect the dead thread immediately, and any
+     * orphaned events will be expired by the {@link CompletableEventReaper} during consumer
+     * {@link #close() close}.
      *
      * @throws KafkaException if the background thread is not alive
      */
