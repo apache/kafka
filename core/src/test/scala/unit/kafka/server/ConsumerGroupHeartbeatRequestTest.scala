@@ -1316,7 +1316,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     val initialEpochs = initialMemberIds.zip(instanceIds).map { case (memberId, instanceId) =>
       joinStaticMember(memberId, instanceId, "uniform")
     }
-    val epochBeforeRejoin = initialEpochs.max
+    val epochBeforeRejoin = initialEpochs.last
 
     // All three members leave the group.
     initialMemberIds.zip(instanceIds).foreach { case (memberId, instanceId) =>
@@ -1332,22 +1332,19 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       assertEquals(-2, leaveResponse.data.memberEpoch)
     }
 
-    // All three members rejoin with the "range" assignor and new member ids. This is the
-    // scenario that was buggy: without the fix, the group does not detect that the preferred
-    // server assignor has shifted from "uniform" to "range" once the majority of members
-    // has switched, so the group epoch is not bumped and the old assignment is returned.
+    // All three members rejoin with the "range" assignor and new member ids. The group
+    // epoch must be bumped once a majority of members has switched assignor so that the
+    // target assignment is recomputed with the new assignor.
     val rejoinEpochs = instanceIds.map { instanceId =>
       joinStaticMember(Uuid.randomUuid.toString, instanceId, "range")
     }
 
-    // Verify that the group epoch was bumped after the assignor change. The bump happens once
-    // a majority of members has switched assignor, so the maximum epoch across all rejoins
-    // must be greater than the maximum epoch before the leave/rejoin cycle.
-    val maxRejoinEpoch = rejoinEpochs.max
-    assertTrue(maxRejoinEpoch > epochBeforeRejoin,
-      s"Static members rejoined with assignor 'range' but the maximum epoch ($maxRejoinEpoch) " +
-      s"is not greater than the maximum epoch before the rejoin ($epochBeforeRejoin). " +
-      s"This indicates that the group epoch was not bumped, so the assignment was not recomputed. " +
+    // The last rejoin epoch must be greater than the epoch before the leave/rejoin cycle,
+    // confirming that the group epoch was bumped and the assignment was recomputed.
+    val lastRejoinEpoch = rejoinEpochs.last
+    assertTrue(lastRejoinEpoch > epochBeforeRejoin,
+      s"Expected the last rejoin epoch ($lastRejoinEpoch) to be greater than " +
+      s"the epoch before the rejoin ($epochBeforeRejoin). " +
       s"Rejoin epochs: ${rejoinEpochs.mkString(", ")}.")
   }
 }

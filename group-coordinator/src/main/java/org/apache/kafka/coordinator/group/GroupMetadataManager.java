@@ -2364,12 +2364,6 @@ public class GroupMetadataManager {
             .setClassicMemberMetadata(null)
             .build();
 
-        boolean preferredServerAssignorChanged = hasPreferredServerAssignorChanged(
-            group,
-            member,
-            updatedMember
-        );
-
         boolean subscribedTopicNamesChanged = hasMemberSubscriptionChanged(
             groupId,
             member,
@@ -2382,6 +2376,11 @@ public class GroupMetadataManager {
             member,
             updatedMember,
             records
+        );
+        boolean preferredServerAssignorChanged = hasPreferredServerAssignorChanged(
+            group,
+            member,
+            updatedMember
         );
 
         // The subscription has changed when either the subscribed topic names or subscribed topic
