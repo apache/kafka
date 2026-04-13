@@ -145,7 +145,6 @@ public class TransactionManager {
     private volatile boolean clientSideEpochBumpRequired = false;
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
-    private final boolean enable2PC;
     private volatile ProducerIdAndEpoch preparedTxnState = ProducerIdAndEpoch.NONE;
 
     private enum State {
@@ -228,8 +227,7 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
-                              final ApiVersions apiVersions,
-                              final boolean enable2PC) {
+                              final ApiVersions apiVersions) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -246,7 +244,6 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
-        this.enable2PC = enable2PC;
     }
 
     /**
@@ -523,10 +520,6 @@ public class TransactionManager {
 
     public boolean isTransactionV2Enabled() {
         return isTransactionV2Enabled;
-    }
-
-    public boolean is2PCEnabled() {
-        return enable2PC;
     }
 
     synchronized boolean hasPartitionsToAdd() {
@@ -1514,21 +1507,7 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                // If this is a transaction with keepPreparedTxn=true, transition directly
-                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
-                if (builder.data.keepPreparedTxn() &&
-                    initProducerIdResponse.data().ongoingTxnProducerId() != RecordBatch.NO_PRODUCER_ID
-                ) {
-                    transitionTo(State.PREPARED_TRANSACTION);
-                    // Update the preparedTxnState with the ongoing pid and epoch from the response.
-                    // This will be used to complete the transaction later.
-                    TransactionManager.this.preparedTxnState = new ProducerIdAndEpoch(
-                        initProducerIdResponse.data().ongoingTxnProducerId(),
-                        initProducerIdResponse.data().ongoingTxnProducerEpoch()
-                    );
-                } else {
-                    transitionTo(State.READY);
-                }
+                transitionTo(State.READY);
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();

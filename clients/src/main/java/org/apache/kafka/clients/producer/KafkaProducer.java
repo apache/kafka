@@ -607,7 +607,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-            final boolean enable2PC = config.getBoolean(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             
@@ -616,8 +615,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 transactionalId,
                 transactionTimeoutMs,
                 retryBackoffMs,
-                apiVersions,
-                enable2PC
+                apiVersions
             );
 
             if (transactionManager.isTransactional())

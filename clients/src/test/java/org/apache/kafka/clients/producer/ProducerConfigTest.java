@@ -157,30 +157,6 @@ public class ProducerConfigTest {
         assertDoesNotThrow(() -> new ProducerConfig(configs));
     }
 
-    @Test
-    void testTwoPhaseCommitIncompatibleWithTransactionTimeout() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
-        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-txn-id");
-        configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, true);
-        configs.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60000);
-        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-
-        ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
-        assertTrue(ce.getMessage().contains(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
-        assertTrue(ce.getMessage().contains(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG));
-
-        // Verify that setting one but not the other is valid
-        configs.remove(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-        assertDoesNotThrow(() -> new ProducerConfig(configs));
-
-        configs.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60000);
-        configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, false);
-        assertDoesNotThrow(() -> new ProducerConfig(configs));
-    }
-
     /**
      * Validates config/producer.properties file to avoid getting out of sync with ProducerConfig.
      */

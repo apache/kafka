@@ -114,8 +114,6 @@ class TransactionStateManager(brokerId: Int,
     version
   }
 
-  private[transaction] def isTransaction2pcEnabled(): Boolean = { config.transaction2PCEnable }
-
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
@@ -419,16 +417,13 @@ class TransactionStateManager(brokerId: Int,
 
   /**
    * Validates the provided transaction timeout.
-   * - If 2PC is enabled, the timeout is always valid (set to Int.MAX by default).
-   * - Otherwise, the timeout must be a positive value and not exceed the
-   *   configured transaction max timeout.
+   * The timeout must be a positive value and not exceed the configured transaction max timeout.
    *
-   * @param enableTwoPC       Whether Two-Phase Commit (2PC) is enabled.
    * @param txnTimeoutMs      The requested transaction timeout in milliseconds.
    * @return `true` if the timeout is valid, `false` otherwise.
    */
-  def validateTransactionTimeoutMs(enableTwoPC: Boolean, txnTimeoutMs: Int): Boolean = {
-    enableTwoPC || (txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0)
+  def validateTransactionTimeoutMs(txnTimeoutMs: Int): Boolean = {
+    txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0
   }
 
   def transactionTopicConfigs: Properties = {
@@ -857,7 +852,6 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogMinInsyncReplicas: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT,
                                                   abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT,
                                                   removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT,
-                                                  transaction2PCEnable: Boolean = TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_DEFAULT,
                                                   requestTimeoutMs: Int = ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {

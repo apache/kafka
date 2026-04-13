@@ -250,42 +250,6 @@ public abstract class TransactionsCommand {
         }
     }
 
-    static class ForceTerminateTransactionsCommand extends TransactionsCommand {
-
-        ForceTerminateTransactionsCommand(Time time) {
-            super(time);
-        }
-
-        @Override
-        String name() {
-            return "forceTerminateTransaction";
-        }
-
-        @Override
-        void addSubparser(Subparsers subparsers) {
-            Subparser subparser = subparsers.addParser(name())
-                .description("Force abort an ongoing transaction on transactionalId")
-                .help("Force abort an ongoing transaction on transactionalId (requires administrative privileges)");
-
-            subparser.addArgument("--transactionalId")
-                .help("transactional id")
-                .action(store())
-                .type(String.class)
-                .required(true);
-        }
-
-        @Override
-        void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
-            String transactionalId = ns.getString("transactionalId");
-
-            try {
-                admin.forceTerminateTransaction(transactionalId).result().get();
-            } catch (ExecutionException e) {
-                printErrorAndExit("Failed to force terminate transactionalId `" + transactionalId + "`", e.getCause());
-            }
-        }
-    }
-
     static class DescribeProducersCommand extends TransactionsCommand {
         static final List<String> HEADERS = List.of(
             "ProducerId",
@@ -1018,8 +982,7 @@ public abstract class TransactionsCommand {
             new DescribeTransactionsCommand(time),
             new DescribeProducersCommand(time),
             new AbortTransactionCommand(time),
-            new FindHangingTransactionsCommand(time),
-            new ForceTerminateTransactionsCommand(time)
+            new FindHangingTransactionsCommand(time)
         );
 
         ArgumentParser parser = buildBaseParser();

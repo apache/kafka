@@ -142,8 +142,6 @@ public class TransactionManagerTest {
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final long producerId = 13131L;
     private final short epoch = 1;
-    private final long ongoingProducerId = 999L;
-    private final short bumpedOngoingEpoch = 11;
     private final String consumerGroupId = "myConsumerGroup";
     private final String memberId = "member";
     private final int generationId = 5;
@@ -168,20 +166,12 @@ public class TransactionManagerTest {
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
         this.brokerNode = new Node(0, "localhost", 2211);
 
-        initializeTransactionManager(Optional.of(transactionalId), false, false);
+        initializeTransactionManager(Optional.of(transactionalId), false);
     }
 
     private void initializeTransactionManager(
         Optional<String> transactionalId,
         boolean transactionV2Enabled
-    ) {
-        initializeTransactionManager(transactionalId, transactionV2Enabled, false);
-    }
-
-    private void initializeTransactionManager(
-        Optional<String> transactionalId,
-        boolean transactionV2Enabled,
-        boolean enable2pc
     ) {
         Metrics metrics = new Metrics(time);
 
@@ -209,7 +199,7 @@ public class TransactionManagerTest {
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
         this.transactionManager = new TestableTransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, enable2pc);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
 
         int batchSize = 16 * 1024;
@@ -1060,7 +1050,7 @@ public class TransactionManagerTest {
                 .setMinVersionLevel((short) 1)),
             0));
         this.transactionManager = new TestableTransactionManager(logContext, transactionalId,
-            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, false);
+            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -4106,16 +4096,12 @@ public class TransactionManagerTest {
             .setErrorCode(error.code())
             .setProducerEpoch(producerEpoch)
             .setProducerId(producerId)
-            .setThrottleTimeMs(0)
-            .setOngoingTxnProducerId(ongoingProducerId)
-            .setOngoingTxnProducerEpoch(ongoingProducerEpoch);
+            .setThrottleTimeMs(0);
 
         client.prepareResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
             assertEquals(transactionalId, initProducerIdRequest.data().transactionalId());
             assertEquals(transactionTimeoutMs, initProducerIdRequest.data().transactionTimeoutMs());
-            assertEquals(keepPreparedTxn, initProducerIdRequest.data().keepPreparedTxn());
-            assertEquals(enable2Pc, initProducerIdRequest.data().enable2Pc());
             return true;
         }, new InitProducerIdResponse(responseData), shouldDisconnect);
     }
@@ -4394,48 +4380,6 @@ public class TransactionManagerTest {
         assertTrue(result.isAcked());
     }
 
-    private void doInitTransactionsWith2PCEnabled(boolean keepPrepared) {
-        initializeTransactionManager(Optional.of(transactionalId), true, true);
-        TransactionalRequestResult result = transactionManager.initializeTransactions(keepPrepared);
-
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
-
-        if (keepPrepared) {
-            // Simulate an ongoing prepared transaction (ongoingProducerId != -1).
-            short ongoingEpoch = bumpedOngoingEpoch - 1;
-            prepareInitPidResponse(
-                Errors.NONE,
-                false,
-                ongoingProducerId,
-                bumpedOngoingEpoch,
-                true,
-                true,
-                ongoingProducerId,
-                ongoingEpoch
-            );
-        } else {
-            prepareInitPidResponse(
-                Errors.NONE,
-                false,
-                producerId,
-                epoch,
-                false,
-                true,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH
-            );
-        }
-
-        runUntil(transactionManager::hasProducerId);
-        transactionManager.maybeUpdateTransactionV2Enabled(true);
-
-        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
-        assertTrue(result.isSuccessful());
-        assertTrue(result.isAcked());
-    }
-
     private void assertAbortableError(Class<? extends RuntimeException> cause) {
         try {
             transactionManager.beginCommit();
@@ -4498,9 +4442,8 @@ public class TransactionManagerTest {
                                           String transactionalId,
                                           int transactionTimeoutMs,
                                           long retryBackoffMs,
-                                          ApiVersions apiVersions,
-                                          boolean enable2Pc) {
-            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, enable2Pc);
+                                          ApiVersions apiVersions) {
+            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions);
             this.shouldPoisonStateOnInvalidTransitionOverride = Optional.empty();
         }
 
