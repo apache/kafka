@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.tools;
 
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -26,15 +30,8 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
 
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,70 +39,63 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 public class ConnectInternalTopics {
 
-    private static final Logger log = LoggerFactory.getLogger(ConnectInternalTopics.class);
-
     private static final String CREATE_COMMAND = "create";
 
     public static void main(String[] args) {
-        Exit.exit(mainNoExit(args));
+        Exit.exit(mainNoExit(args, System.out, System.err));
     }
 
-    static int mainNoExit(String... args) {
+    static int mainNoExit(String[] args, PrintStream out, PrintStream err) {
         var parser = parser();
         try {
             var namespace = parser.parseArgs(args);
-            var workerProperties = parseWorkerProperties(namespace);
-            log.info("Parsed arguments and loaded worker properties");
-            execute(parser, namespace, workerProperties);
-            log.info("Command executed successfully");
+            var workerProperties = parseWorkerProperties(parser, namespace);
+            out.println("Parsed arguments and loaded worker properties");
+            execute(parser, namespace, workerProperties, out, err);
+            out.println("Command executed successfully");
             return 0;
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            log.error("Argument parsing error: {}", e.getMessage());
-            System.err.println("Argument parsing error: " + e.getMessage());
             return 1;
-        } catch (ConfigException e) {
-            log.error("Configuration error: {}", e.getMessage());
-            System.err.println("Configuration error: " + e.getMessage());
+        } catch (TerseException | ConfigException e) {
+            err.println(e.getMessage());
             return 2;
         } catch (Throwable e) {
-            log.error("Unexpected error: {}", e.getMessage(), e);
-            System.err.println("Unexpected error: " + e.getMessage());
-            System.err.println(Utils.stackTrace(e));
+            err.println("Unexpected error: " + e.getMessage());
+            err.println(Utils.stackTrace(e));
             return 3;
         }
     }
 
-    private static void execute(ArgumentParser parser, Namespace namespace, Map<String, String> workerProperties) throws ArgumentParserException {
+    private static void execute(ArgumentParser parser, Namespace namespace, Map<String, String> workerProperties, PrintStream out, PrintStream err) throws ArgumentParserException {
         var subcommand = namespace.getString("subcommand");
-        log.info("Subcommand: {}", subcommand);
+        out.println("Subcommand: " + subcommand);
         if (subcommand == null) {
-            log.error("No subcommand specified");
             throw new ArgumentParserException("No subcommand specified", parser);
         }
         if (CREATE_COMMAND.equals(subcommand)) {
             var internalTopicsConfig = new InternalTopicsConfig(workerProperties);
             internalTopicsConfig.validateTopicNames();
-            log.info("Running create command for internal topics");
-            runCommand(internalTopicsConfig);
+            out.println("Running create command for internal topics");
+            runCommand(internalTopicsConfig, out, err);
         } else {
-            log.error("Unrecognized subcommand: '{}'", subcommand);
             throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
         }
     }
 
-    private static void runCommand(InternalTopicsConfig config) {
+    private static void runCommand(InternalTopicsConfig config, PrintStream out, PrintStream err) {
         var adminProps = new HashMap<>(config.originals());
-        log.info("Admin properties loaded for topic admin");
+        out.println("Admin properties loaded for topic admin");
         try (var sharedAdmin = new SharedTopicAdmin(adminProps)) {
-            createInternalTopic(sharedAdmin, buildOffsetTopicSettings(config));
-            createInternalTopic(sharedAdmin, buildConfigTopicSettings(config));
-            createInternalTopic(sharedAdmin, buildStatusTopicSettings(config));
+            createInternalTopic(sharedAdmin, buildOffsetTopicSettings(config, out), out, err);
+            createInternalTopic(sharedAdmin, buildConfigTopicSettings(config, out), out, err);
+            createInternalTopic(sharedAdmin, buildStatusTopicSettings(config, out), out, err);
         }
     }
 
-    private static void createInternalTopic(SharedTopicAdmin sharedAdmin, TopicSettings settings) {
-        log.info("Creating internal topic: {}", settings.topicName);
+    @SuppressWarnings("unused")
+    private static void createInternalTopic(SharedTopicAdmin sharedAdmin, TopicSettings settings, PrintStream out, PrintStream err) {
+        out.println("Creating internal topic: " + settings.topicName);
         var topicDescription = TopicAdmin.defineTopic(settings.topicName)
                 .config(settings.topicSettings)
                 .compacted()
@@ -113,31 +103,31 @@ public class ConnectInternalTopics {
                 .replicationFactor(settings.replicationFactor)
                 .build();
         sharedAdmin.topicAdmin().createTopics(topicDescription);
-        System.out.println("Created internal topic: " + settings.topicName);
+        out.println("Created internal topic: " + settings.topicName);
     }
 
-    private static TopicSettings buildOffsetTopicSettings(InternalTopicsConfig config) {
+    private static TopicSettings buildOffsetTopicSettings(InternalTopicsConfig config, PrintStream out) {
         return new TopicSettings(
                 config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG),
-                config.topicSettings(DistributedConfig.OFFSET_STORAGE_PREFIX),
+                config.topicSettings(DistributedConfig.OFFSET_STORAGE_PREFIX, out),
                 config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG),
                 config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)
         );
     }
 
-    private static TopicSettings buildConfigTopicSettings(InternalTopicsConfig config) {
+    private static TopicSettings buildConfigTopicSettings(InternalTopicsConfig config, PrintStream out) {
         return new TopicSettings(
                 config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG),
-                config.topicSettings(DistributedConfig.CONFIG_STORAGE_PREFIX),
+                config.topicSettings(DistributedConfig.CONFIG_STORAGE_PREFIX, out),
                 1,
                 config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)
         );
     }
 
-    private static TopicSettings buildStatusTopicSettings(InternalTopicsConfig config) {
+    private static TopicSettings buildStatusTopicSettings(InternalTopicsConfig config, PrintStream out) {
         return new TopicSettings(
                 config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG),
-                config.topicSettings(DistributedConfig.STATUS_STORAGE_PREFIX),
+                config.topicSettings(DistributedConfig.STATUS_STORAGE_PREFIX, out),
                 config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG),
                 config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG)
         );
@@ -147,8 +137,17 @@ public class ConnectInternalTopics {
                                 short replicationFactor) {
     }
 
-    private static Map<String, String> parseWorkerProperties(Namespace namespace) throws IOException {
-        return Utils.propsToStringMap(Utils.loadProps(namespace.getString("worker_config")));
+    private static Map<String, String> parseWorkerProperties(ArgumentParser parser, Namespace namespace) throws ArgumentParserException, TerseException {
+        String workerConfigPath = namespace.getString("worker_config");
+        if (workerConfigPath == null || workerConfigPath.isBlank()) {
+            throw new ArgumentParserException("--worker-config must be specified and non-blank", parser);
+        }
+
+        try {
+            return Utils.propsToStringMap(Utils.loadProps(workerConfigPath));
+        } catch (IOException e) {
+            throw new TerseException("Unable to read worker config at " + workerConfigPath);
+        }
     }
 
     private static ArgumentParser parser() {
@@ -226,14 +225,14 @@ public class ConnectInternalTopics {
             }
         }
 
-        private Map<String, Object> topicSettings(String prefix) {
+        private Map<String, Object> topicSettings(String prefix, PrintStream out) {
             var result = originalsWithPrefix(prefix);
             if (DistributedConfig.CONFIG_STORAGE_PREFIX.equals(prefix) && result.containsKey(DistributedConfig.PARTITIONS_SUFFIX)) {
-                log.warn("Ignoring '{}{}={}' setting, since config topic partitions is always 1", prefix, DistributedConfig.PARTITIONS_SUFFIX, result.get(DistributedConfig.PARTITIONS_SUFFIX));
+                out.println("Ignoring '" + prefix + DistributedConfig.PARTITIONS_SUFFIX + "=" + result.get(DistributedConfig.PARTITIONS_SUFFIX) + "' setting, since config topic partitions is always 1");
             }
             var removedPolicy = result.remove(TopicConfig.CLEANUP_POLICY_CONFIG);
             if (removedPolicy != null) {
-                log.warn("Ignoring '{}cleanup.policy={}' setting, since compaction is always used", prefix, removedPolicy);
+                out.println("Ignoring '" + prefix + "cleanup.policy=" + removedPolicy + "' setting, since compaction is always used");
             }
             result.remove(DistributedConfig.TOPIC_SUFFIX);
             result.remove(DistributedConfig.REPLICATION_FACTOR_SUFFIX);

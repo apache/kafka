@@ -22,11 +22,11 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -35,6 +35,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class ConnectInternalTopicsTest {
@@ -54,7 +55,8 @@ public class ConnectInternalTopicsTest {
         properties.setProperty("status.storage.topic", STATUS_TOPIC_NAME);
         properties.setProperty("offset.storage.topic", OFFSET_TOPIC_NAME);
         var workerConfigPath = setupWorkerConfig(workspace.resolve("worker.properties"), properties);
-        ConnectInternalTopics.mainNoExit("create", "--worker-config", workerConfigPath.toString());
+        var res = runCommand("create", "--worker-config", workerConfigPath.toString());
+        assertEquals(0, res.returnCode);
         try (var adminClient = cluster.admin()) {
             waitForTopics(adminClient, Set.of(CONFIG_TOPIC_NAME, STATUS_TOPIC_NAME, OFFSET_TOPIC_NAME));
             assertTopicPartitions(adminClient, CONFIG_TOPIC_NAME, 1);
@@ -65,15 +67,22 @@ public class ConnectInternalTopicsTest {
 
     @ClusterTest
     void testNoWorkerConfig() {
-        var exitCode = ConnectInternalTopics.mainNoExit("create");
-        assertNotEquals(0, exitCode);
+        var res = runCommand("create");
+        assertNotEquals(0, res.returnCode);
+    }
+
+    @ClusterTest
+    void testWorkerConfigBlank() {
+        var res = runCommand("create", "--worker-config", "");
+        assertNotEquals(0, res.returnCode);
     }
 
     @ClusterTest
     void testWorkerConfigFileDoesNotExist() {
         var nonExistentPath = workspace.resolve("nonexistent-worker.properties").toString();
-        var exitCode = ConnectInternalTopics.mainNoExit("create", "--worker-config", nonExistentPath);
-        assertNotEquals(0, exitCode);
+        var res = runCommand("create", "--worker-config", nonExistentPath);
+        assertNotEquals(0, res.returnCode);
+        assertTrue(res.err.contains("Unable to read worker config"));
     }
 
     @ClusterTest(brokers = 3)
@@ -81,8 +90,22 @@ public class ConnectInternalTopicsTest {
         var properties = new Properties();
         properties.setProperty("bootstrap.servers", cluster.bootstrapServers());
         var configPath = setupWorkerConfig(workspace.resolve("worker-no-topics.properties"), properties);
-        var exitCode = ConnectInternalTopics.mainNoExit("create", "--worker-config", configPath.toString());
-        assertNotEquals(0, exitCode);
+        var res = runCommand("create", "--worker-config", configPath.toString());
+        assertNotEquals(0, res.returnCode);
+        assertEquals("Missing required configuration \"offset.storage.topic\" which has no default value.\n", res.err);
+    }
+
+    @ClusterTest(brokers = 3)
+    void testEmptyTopicNamesInWorkerConfig(ClusterInstance cluster) throws IOException {
+        var properties = new Properties();
+        properties.setProperty("bootstrap.servers", cluster.bootstrapServers());
+        properties.setProperty("config.storage.topic", "config");
+        properties.setProperty("status.storage.topic", "status");
+        properties.setProperty("offset.storage.topic", "");
+        var configPath = setupWorkerConfig(workspace.resolve("worker-empty-topics.properties"), properties);
+        var res = runCommand("create", "--worker-config", configPath.toString());
+        assertNotEquals(0, res.returnCode);
+        assertEquals("Must specify non-empty value for required internal topic config: 'offset.storage.topic'.\n", res.err);
     }
 
     @ClusterTest(brokers = 3)
@@ -96,8 +119,8 @@ public class ConnectInternalTopicsTest {
         properties.setProperty("offset.storage.topic", OFFSET_TOPIC_NAME);
         properties.setProperty("offset.storage.retention.ms", "3000");
         var configPath = setupWorkerConfig(workspace.resolve("worker-topic-overrides.properties"), properties);
-        var exitCode = ConnectInternalTopics.mainNoExit("create", "--worker-config", configPath.toString());
-        assertEquals(0, exitCode);
+        var res = runCommand("create", "--worker-config", configPath.toString());
+        assertEquals(0, res.returnCode);
         try (var adminClient = cluster.admin()) {
             waitForTopics(adminClient, Set.of(CONFIG_TOPIC_NAME, STATUS_TOPIC_NAME, OFFSET_TOPIC_NAME));
             assertTopicConfig(adminClient, CONFIG_TOPIC_NAME, "retention.ms", "1000");
@@ -121,40 +144,43 @@ public class ConnectInternalTopicsTest {
         properties.setProperty("status.storage.topic", STATUS_TOPIC_NAME);
         properties.setProperty("offset.storage.topic", OFFSET_TOPIC_NAME);
         var configPath = setupWorkerConfig(workspace.resolve("worker-partial-topics.properties"), properties);
-        var exitCode = ConnectInternalTopics.mainNoExit("create", "--worker-config", configPath.toString());
-        assertEquals(0, exitCode);
+        var res = runCommand("create", "--worker-config", configPath.toString());
+        assertEquals(0, res.returnCode);
         try (var adminClient = cluster.admin()) {
             waitForTopics(adminClient, Set.of(CONFIG_TOPIC_NAME, STATUS_TOPIC_NAME, OFFSET_TOPIC_NAME));
             assertTopicConfig(adminClient, CONFIG_TOPIC_NAME, "retention.ms", "1000");
+            assertTopicPartitions(adminClient, CONFIG_TOPIC_NAME, 1);
             assertTopicPartitions(adminClient, STATUS_TOPIC_NAME, 5);
             assertTopicPartitions(adminClient, OFFSET_TOPIC_NAME, 25);
         }
     }
 
-    @ClusterTest(brokers = 3)
-    void testEmptyTopicNamesInWorkerConfig(ClusterInstance cluster) throws IOException {
-        var properties = new Properties();
-        properties.setProperty("bootstrap.servers", cluster.bootstrapServers());
-        properties.setProperty("config.storage.topic", "config");
-        properties.setProperty("status.storage.topic", "status");
-        properties.setProperty("offset.storage.topic", "");
-        var configPath = setupWorkerConfig(workspace.resolve("worker-empty-topics.properties"), properties);
-        var exitCode = ConnectInternalTopics.mainNoExit("create", "--worker-config", configPath.toString());
-        assertNotEquals(0, exitCode);
+    private record CommandResult(int returnCode, String out, String err) {
+    }
+
+    private static CommandResult runCommand(String... args) {
+        var out = new ByteArrayOutputStream();
+        var err = new ByteArrayOutputStream();
+        var code = ConnectInternalTopics.mainNoExit(
+                args,
+                new PrintStream(out, true),
+                new PrintStream(err, true)
+        );
+        return new CommandResult(code, out.toString(), err.toString());
     }
 
     private static void assertTopicConfig(Admin admin, String topic, String configKey, String expectedValue) throws Exception {
         var resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
         var describeResult = admin.describeConfigs(Collections.singleton(resource));
         var config = describeResult.all().get().get(resource);
-        Assertions.assertEquals(expectedValue, config.get(configKey).value());
+        assertEquals(expectedValue, config.get(configKey).value());
     }
 
     private static void assertTopicPartitions(Admin admin, String topic, int expectedPartitions) throws Exception {
         var topicDescriptionFuture = admin.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic);
         var topicDescription = topicDescriptionFuture.get();
         var partitions = topicDescription.partitions().size();
-        Assertions.assertEquals(expectedPartitions, partitions);
+        assertEquals(expectedPartitions, partitions);
     }
 
     private static void waitForTopics(Admin admin, Set<String> expectedTopics) throws InterruptedException {
