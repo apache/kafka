@@ -135,6 +135,9 @@ public class TransactionManager {
     private static final long ADD_PARTITIONS_RETRY_BACKOFF_MS = 20L;
 
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
+    // Set in TxnRequestHandler.onComplete() under the TransactionManager lock, and read in
+    // handleResponse() within the same synchronized block. Safe from interleaving because
+    // only one transactional request is in-flight at a time (enforced by inFlightRequestCorrelationId).
     private long currentRequestCompletionTimeMs = -1L;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
@@ -1599,7 +1602,7 @@ public class TransactionManager {
                     continue;
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-                    reenqueue();
+                    maybeReenqueueOrTimeout(topicPartition, error);
                     return;
                 } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
                     maybeOverrideRetryBackoffMs();
