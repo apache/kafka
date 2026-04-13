@@ -50,7 +50,7 @@ public abstract class KafkaTopicBasedBackingStore {
                     verifyTopicConfig(topic, admin);
                 }
             } else {
-                log.info("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
+                log.debug("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
                 Map<String, TopicDescription> existing = admin.describeTopics(topic);
                 if (existing.isEmpty()) {
                     String msg = String.format("Topic '%s' specified via the '%s' property is missing." +
