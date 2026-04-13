@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
@@ -35,8 +36,8 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConnectInternalTopicsTest {
 
