@@ -95,19 +95,16 @@ public class ShareGroupConfig {
 
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG = "errors.deadletterqueue.topic.name.prefix";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT = "dlq.";
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC = "The required prefix for dead-letter queue topic names when automatic topic creation is enabled.";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC = "The required prefix of topic names used by dead-letter queue topics for share groups. When set to \"\", there is no restriction on the names used for dead-letter queue topics.";
 
     // Group-level DLQ configs
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue for records that " +
-        "cannot be successfully processed by this share group.";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue (DLQ) topic for this share group. If blank (the default), the group does not have a DLQ topic.";
 
     public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG = "errors.deadletterqueue.copy.record.enable";
     public static final boolean ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DEFAULT = false;
-    public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DOC = "Controls whether to copy the full original record to the dead-letter queue " +
-        "or just write metadata. When set to <code>false</code> (the default), only contextual information is written to the DLQ. When set to <code>true</code>, " +
-        "the complete original record is copied to the DLQ along with the contextual metadata.";
+    public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DOC = "When writing onto the dead-letter queue topic, whether to copy the original record onto the DLQ topic, or just write a record containing the context information headers.";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
@@ -272,15 +269,6 @@ public class ShareGroupConfig {
                 ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
                 errorsDLQTopicName,
                 "DLQ topic name must not start with '__'");
-        }
-
-        // If auto-create is enabled and the topic name is specified, it must start with the configured prefix
-        if (errorsDLQAutoCreateTopicsEnable && errorsDLQTopicName != null &&
-            !errorsDLQTopicName.isEmpty() && !errorsDLQTopicName.startsWith(errorsDLQTopicNamePrefix)) {
-            throw new org.apache.kafka.common.config.ConfigException(
-                ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
-                errorsDLQTopicName,
-                String.format("DLQ topic name must start with prefix '%s' when auto-create is enabled", errorsDLQTopicNamePrefix));
         }
     }
 }

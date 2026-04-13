@@ -176,33 +176,6 @@ public class ShareGroupConfigTest {
     }
 
     @Test
-    public void testDLQTopicNameMustMatchPrefixWhenAutoCreateEnabled() {
-        // When auto-create is enabled, DLQ topic name must start with the configured prefix
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "dlq.");
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-topic");  // Does not start with "dlq."
-
-        ConfigException exception = assertThrows(ConfigException.class, () -> createConfig(configs));
-        assertEquals("Invalid value my-topic for configuration errors.deadletterqueue.topic.name: DLQ topic name must start with prefix 'dlq.' when auto-create is enabled",
-                exception.getMessage());
-    }
-
-    @Test
-    public void testDLQTopicNamePrefixNotRequiredWhenAutoCreateDisabled() {
-        // When auto-create is disabled, DLQ topic name does not need to match prefix
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "dlq.");
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-custom-topic");
-
-        ShareGroupConfig config = createConfig(configs);
-
-        assertFalse(config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals("my-custom-topic", config.errorsDLQTopicName());
-    }
-
-    @Test
     public void testDLQBlankTopicNameIsValid() {
         // Blank DLQ topic name is valid (means DLQ is disabled for that group)
         Map<String, Object> configs = new HashMap<>();
@@ -211,20 +184,6 @@ public class ShareGroupConfigTest {
         ShareGroupConfig config = createConfig(configs);
 
         assertEquals("", config.errorsDLQTopicName());
-    }
-
-    @Test
-    public void testDLQValidTopicNameWithAutoCreate() {
-        // Valid DLQ topic name with auto-create enabled
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "dlq.");
-        configs.put(ShareGroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "dlq.my-share-group");
-
-        ShareGroupConfig config = createConfig(configs);
-
-        assertTrue(config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals("dlq.my-share-group", config.errorsDLQTopicName());
     }
 
     public static ShareGroupConfig createShareGroupConfig(
