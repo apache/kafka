@@ -942,19 +942,21 @@ public class CustomStickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldConvergeWithinTwoRoundsWhenScalingUpWithUnevenCapacity() {
+    public void shouldConvergeWithinTwoRoundsWhenScalingUp() {
+        // Reporter's scenario: 450 tasks with 10+10=20 threads.
+        // 450/20 = 22.5, floor gives limit 220 per instance (10 task overflow),
+        // causing repeated reassignment across rounds.
         final int numTasks = 450;
         final int maxRounds = 2;
         final Map<TaskId, TaskInfo> tasks = buildStatelessTasks(numTasks);
 
-        // Uneven capacity: instance 1 has 10 threads, instance 2 has 5 threads
         Set<TaskId> instance1Prev = buildTaskIdRange(0, numTasks);
         Set<TaskId> instance2Prev = Set.of();
 
         for (int round = 1; round <= maxRounds; round++) {
             final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
                 mkStreamState(1, 10, Optional.empty(), instance1Prev, Set.of()),
-                mkStreamState(2, 5, Optional.empty(), instance2Prev, Set.of())
+                mkStreamState(2, 10, Optional.empty(), instance2Prev, Set.of())
             );
 
             final Map<ProcessId, KafkaStreamsAssignment> assignments =
