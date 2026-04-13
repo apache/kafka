@@ -61,7 +61,6 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1266,8 +1265,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         try {
             processBackgroundEvents();
         } catch (Exception e) {
-            if (!(e instanceof GroupAuthorizationException || e instanceof TopicAuthorizationException
-                || e instanceof InvalidTopicException || e instanceof UnknownServerException))
+            if (!(e instanceof GroupAuthorizationException || e instanceof TopicAuthorizationException || e instanceof InvalidTopicException))
                 throw e;
         }
     }
