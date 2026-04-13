@@ -469,6 +469,8 @@ object ConfigCommand extends Logging {
 
   private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Unit = {
     val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
+    if (quotaConfigs.isEmpty && entityTypes.contains(ConfigType.CLIENT))
+      System.out.println("No quota configs found.")
     quotaConfigs.foreachEntry { (entity, entries) =>
       val entityEntries = entity.entries.asScala
 
