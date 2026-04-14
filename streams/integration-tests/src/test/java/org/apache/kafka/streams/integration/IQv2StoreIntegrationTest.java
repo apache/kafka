@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -57,10 +56,6 @@ import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlySessionStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -69,7 +64,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -121,7 +115,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -337,56 +330,6 @@ public class IQv2StoreIntegrationTest {
             public boolean isSession() {
                 return true;
             }
-        },
-        TIME_ROCKS_KV_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME);
-            }
-
-            @Override
-            public boolean keyValue() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeadersAware() {
-                return true;
-            }
-        },
-        TIME_ROCKS_WINDOW_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentTimestampedWindowStoreWithHeaders(
-                    STORE_NAME, Duration.ofDays(1), WINDOW_SIZE, false
-                );
-            }
-
-            @Override
-            public boolean isWindowed() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeadersAware() {
-                return true;
-            }
-        },
-        ROCKS_SESSION_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentSessionStoreWithHeaders(STORE_NAME, Duration.ofDays(1));
-            }
-
-            @Override
-            public boolean isSession() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeadersAware() {
-                return true;
-            }
         };
 
         public abstract StoreSupplier<?> supplier();
@@ -408,10 +351,6 @@ public class IQv2StoreIntegrationTest {
         }
 
         public boolean isSession() {
-            return false;
-        }
-
-        public boolean isHeadersAware() {
             return false;
         }
     }
@@ -844,79 +783,62 @@ public class IQv2StoreIntegrationTest {
                 shouldRejectUnknownQuery();
                 shouldCollectExecutionInfo();
                 shouldCollectExecutionInfoUnderFailure();
-                // IQv2 is not supported for headers-aware stores.
-                if (!storeToTest.isHeadersAware()) {
-                    if (storeToTest.keyValue()) {
-                        if (storeToTest.timestamped()) {
-                            shouldHandleKeyQuery(2,  5);
-                            shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
-                            shouldHandleRangeQueries();
-                            shouldHandleTimestampedRangeQueries(true);
-                        } else {
-                            shouldHandleKeyQuery(2, 5);
-                            shouldHandleRangeQueries();
+                if (storeToTest.keyValue()) {
+                    if (storeToTest.timestamped()) {
+                        shouldHandleKeyQuery(2,  5);
+                        shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
+                        shouldHandleRangeQueries();
+                        shouldHandleTimestampedRangeQueries(true);
+                    } else {
+                        shouldHandleKeyQuery(2, 5);
+                        shouldHandleRangeQueries();
 
-                            if (kind.equals("DSL")) {
-                                shouldHandleTimestampedRangeQueries(false);
-                                shouldHandleRangeQueries();
-                                if (cache) {
-                                    shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
-                                } else {
-                                    shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
-                                }
-                            } else {
-                                assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
-                                assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
-                            }
-
-                        }
-                    }
-
-                    if (storeToTest.isWindowed()) {
-                        if (storeToTest.timestamped()) {
-                            final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                                ValueAndTimestamp::value;
-                            if (kind.equals("DSL")) {
-                                shouldHandleWindowKeyDSLQueries(valueExtractor);
-                                shouldHandleWindowRangeDSLQueries(valueExtractor);
-                            } else {
-                                shouldHandleWindowKeyPAPIQueries(valueExtractor);
-                                shouldHandleWindowRangePAPIQueries(valueExtractor);
-                            }
-                        } else {
-                            final Function<Integer, Integer> valueExtractor = Function.identity();
-                            if (kind.equals("DSL")) {
-                                shouldHandleWindowKeyDSLQueries(valueExtractor);
-                                shouldHandleWindowRangeDSLQueries(valueExtractor);
-                            } else {
-                                shouldHandleWindowKeyPAPIQueries(valueExtractor);
-                                shouldHandleWindowRangePAPIQueries(valueExtractor);
-                            }
-                        }
-                    }
-
-                    if (storeToTest.isSession()) {
-                        // Note there's no "timestamped" differentiation here.
-                        // Idiosyncratically, SessionStores are _never_ timestamped.
                         if (kind.equals("DSL")) {
-                            shouldHandleSessionKeyDSLQueries();
+                            shouldHandleTimestampedRangeQueries(false);
+                            shouldHandleRangeQueries();
+                            if (cache) {
+                                shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
+                            } else {
+                                shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
+                            }
                         } else {
-                            shouldHandleSessionKeyPAPIQueries();
+                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
+                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
+                        }
+
+                    }
+                }
+
+                if (storeToTest.isWindowed()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                            ValueAndTimestamp::value;
+                        if (kind.equals("DSL")) {
+                            shouldHandleWindowKeyDSLQueries(valueExtractor);
+                            shouldHandleWindowRangeDSLQueries(valueExtractor);
+                        } else {
+                            shouldHandleWindowKeyPAPIQueries(valueExtractor);
+                            shouldHandleWindowRangePAPIQueries(valueExtractor);
+                        }
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        if (kind.equals("DSL")) {
+                            shouldHandleWindowKeyDSLQueries(valueExtractor);
+                            shouldHandleWindowRangeDSLQueries(valueExtractor);
+                        } else {
+                            shouldHandleWindowKeyPAPIQueries(valueExtractor);
+                            shouldHandleWindowRangePAPIQueries(valueExtractor);
                         }
                     }
                 }
 
-                // Headers-aware stores are excluded from the IQv2 blocks above since IQv2 is not
-                // supported for them. Only IQv1 queries are verified below.
-                if (storeToTest.isHeadersAware()) {
-                    if (storeToTest.keyValue()) {
-                        shouldHandleIQv1KeyValueQuery();
-                    }
-                    if (storeToTest.isWindowed()) {
-                        shouldHandleIQv1WindowQuery();
-                    }
-                    if (storeToTest.isSession()) {
-                        shouldHandleIQv1SessionQuery();
+                if (storeToTest.isSession()) {
+                    // Note there's no "timestamped" differentiation here.
+                    // Idiosyncratically, SessionStores are _never_ timestamped.
+                    if (kind.equals("DSL")) {
+                        shouldHandleSessionKeyDSLQueries();
+                    } else {
+                        shouldHandleSessionKeyPAPIQueries();
                     }
                 }
             }
@@ -925,76 +847,6 @@ public class IQv2StoreIntegrationTest {
             throw e;
         }
     }
-
-    private void shouldHandleIQv1KeyValueQuery() {
-        final ReadOnlyKeyValueStore<Integer, ValueAndTimestamp<Integer>> store =
-            kafkaStreams.store(
-                StoreQueryParameters.fromNameAndType(
-                    STORE_NAME,
-                    QueryableStoreTypes.timestampedKeyValueStore()
-                )
-            );
-        assertThat(store, notNullValue());
-        final ValueAndTimestamp<Integer> result = store.get(2);
-        assertThat(result, notNullValue());
-        assertThat(result.value(), is(5));
-
-        // Verify all() iterator is accessible
-        try (final KeyValueIterator<Integer, ValueAndTimestamp<Integer>> it = store.all()) {
-            assertThat(it.hasNext(), is(true));
-        }
-
-        // Verify headers are accessible via the raw KeyValueStore type
-        final ReadOnlyKeyValueStore<Integer, ValueTimestampHeaders<Integer>> storeWithHeaders =
-            kafkaStreams.store(
-                StoreQueryParameters.fromNameAndType(
-                    STORE_NAME,
-                    QueryableStoreTypes.keyValueStore()
-                )
-            );
-        assertThat(storeWithHeaders, notNullValue());
-        final ValueTimestampHeaders<Integer> resultWithHeaders = storeWithHeaders.get(2);
-        assertThat(resultWithHeaders, notNullValue());
-        assertThat(resultWithHeaders.value(), is(5));
-        assertThat(resultWithHeaders.headers(), notNullValue());
-    }
-
-    private void shouldHandleIQv1WindowQuery() {
-        final ReadOnlyWindowStore<Integer, ValueAndTimestamp<Integer>> store =
-            kafkaStreams.store(
-                StoreQueryParameters.fromNameAndType(
-                    STORE_NAME,
-                    QueryableStoreTypes.timestampedWindowStore()
-                )
-            );
-        assertThat(store, notNullValue());
-        try (final WindowStoreIterator<ValueAndTimestamp<Integer>> it = store.fetch(
-            2,
-            Instant.ofEpochMilli(WINDOW_START),
-            Instant.ofEpochMilli(WINDOW_START + WINDOW_SIZE.toMillis())
-        )) {
-            assertThat(it.hasNext(), is(true));
-            final ValueAndTimestamp<Integer> result = it.next().value;
-            assertThat(result, notNullValue());
-            assertThat(result.value(), is(5));
-        }
-    }
-
-    private void shouldHandleIQv1SessionQuery() {
-        final ReadOnlySessionStore<Integer, Integer> store =
-            kafkaStreams.store(
-                StoreQueryParameters.fromNameAndType(
-                    STORE_NAME,
-                    QueryableStoreTypes.sessionStore()
-                )
-            );
-        assertThat(store, notNullValue());
-        try (final KeyValueIterator<Windowed<Integer>, Integer> it = store.fetch(2)) {
-            assertThat(it.hasNext(), is(true));
-            assertThat(it.next().value, is(5));
-        }
-    }
-
 
     private <T> void shouldHandleRangeQueries() {
         shouldHandleRangeQuery(
