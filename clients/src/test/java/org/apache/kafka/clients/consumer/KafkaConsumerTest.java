@@ -4200,8 +4200,8 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
     public void testConsumerBootstrapResolutionExceptionPropagatedToPoll(GroupProtocol protocol) throws InterruptedException {
-        // Use an invalid hostname that will fail DNS resolution
-        String invalidHost = "invalid-host-that-does-not-exist-12345.example.com:9092";
+        // Use an invalid hostname that will fail DNS resolution (using RFC 6761 reserved .invalid TLD)
+        String invalidHost = "unresolvable.invalid:9092";
 
         Map<String, Object> configs = Map.of(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),

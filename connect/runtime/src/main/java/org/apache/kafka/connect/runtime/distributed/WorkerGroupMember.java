@@ -45,7 +45,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -101,10 +100,6 @@ public class WorkerGroupMember {
             long retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
             Metadata metadata = new Metadata(retryBackoffMs, retryBackoffMaxMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
                     logContext, new ClusterResourceListeners());
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                    config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
-            metadata.bootstrap(addresses);
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(

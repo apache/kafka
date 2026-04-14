@@ -1521,7 +1521,8 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), null,
                 new LogContext(), new DefaultHostResolver(),
                 mockTelemetrySender, Long.MAX_VALUE,
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE,
+                NetworkClient.BootstrapConfiguration.disabled());
 
         long now = time.milliseconds();
 
@@ -1646,8 +1647,8 @@ public class NetworkClientTest {
     @Test
     public void testEnsureBootstrappedTimeoutThrowsException() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        // Use invalid addresses that cannot be resolved
-        List<String> invalidAddresses = List.of("invalid.host.that.does.not.exist:9092");
+        // Use invalid addresses that cannot be resolved (using RFC 6761 reserved .invalid TLD)
+        List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
         NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
@@ -1672,8 +1673,8 @@ public class NetworkClientTest {
     @Test
     public void testEnsureBootstrappedPollTimeoutReturnsWithoutError() {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        // Use invalid addresses that cannot be resolved
-        List<String> invalidAddresses = List.of("invalid.host.that.does.not.exist:9092");
+        // Use invalid addresses that cannot be resolved (using RFC 6761 reserved .invalid TLD)
+        List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
         NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
