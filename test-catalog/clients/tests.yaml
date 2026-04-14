@@ -5433,17 +5433,6 @@ org.apache.kafka.common.utils.ExitTest:
 - shouldExitImmediately
 - shouldHaltImmediately
 - shouldNotInvokeShutdownHookImmediately
-org.apache.kafka.common.utils.ExponentialBackoffManagerTest:
-- testBackOffWithJitter
-- testBackOffWithoutJitter
-- testCanAttempt
-- testIncrementAttempt
-- testInitialState
-- testResetAttempts
-org.apache.kafka.common.utils.ExponentialBackoffTest:
-- testExponentialBackoff
-- testExponentialBackoffWithInvalidJitter
-- testExponentialBackoffWithoutJitter
 org.apache.kafka.common.utils.FixedOrderMapTest:
 - shouldForbidConditionalRemove
 - shouldForbidRemove
@@ -5477,11 +5466,6 @@ org.apache.kafka.common.utils.ShellTest:
 org.apache.kafka.common.utils.SystemTimeTest:
 - testWaitObjectConditionSatisfied
 - testWaitObjectTimeout
-org.apache.kafka.common.utils.ThreadUtilsTest:
-- testThreadNameWithNumberDemon
-- testThreadNameWithNumberNoDemon
-- testThreadNameWithoutNumberDemon
-- testThreadNameWithoutNumberNoDemon
 org.apache.kafka.common.utils.TimerTest:
 - testNonMonotonicUpdate
 - testTimeoutOverflow
@@ -5584,6 +5568,17 @@ org.apache.kafka.common.utils.internals.ByteUtilsTest:
 - testVarlongSerde
 - testWriteUnsignedIntLEToArray
 - testWriteUnsignedIntLEToOutputStream
+org.apache.kafka.common.utils.internals.ExponentialBackoffManagerTest:
+- testBackOffWithJitter
+- testBackOffWithoutJitter
+- testCanAttempt
+- testIncrementAttempt
+- testInitialState
+- testResetAttempts
+org.apache.kafka.common.utils.internals.ExponentialBackoffTest:
+- testExponentialBackoff
+- testExponentialBackoffWithInvalidJitter
+- testExponentialBackoffWithoutJitter
 org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollectionTest:
 - testCollisions
 - testEmptyListIterator
@@ -5613,5 +5608,10 @@ org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollectionTest:
 - testManyInsertsAndDeletes
 - testNullForbidden
 - testTraversal
+org.apache.kafka.common.utils.internals.ThreadUtilsTest:
+- testThreadNameWithNumberDemon
+- testThreadNameWithNumberNoDemon
+- testThreadNameWithoutNumberDemon
+- testThreadNameWithoutNumberNoDemon
 org.apache.kafka.server.policy.AlterConfigPolicyTest:
 - testRequestMetadataEquals

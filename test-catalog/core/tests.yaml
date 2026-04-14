@@ -2308,6 +2308,8 @@ kafka.server.OffsetDeleteRequestTest:
 - testOffsetDeleteWithOldConsumerGroupProtocol
 kafka.server.OffsetFetchRequestTest:
 - testCommittedOffsetsDeletedWhenTopicDeleted
+- testFetchOffsetWithDeletedTopicUsingTopicIds
+- testFetchOffsetWithDeletedTopicUsingTopicNames
 - testFetchOffsetWithRecreatedTopic
 - testGroupErrors
 - testMultiGroupsOffsetFetchWithNewConsumerGroupProtocol
