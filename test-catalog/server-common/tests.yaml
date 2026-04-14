@@ -253,7 +253,9 @@ org.apache.kafka.server.immutable.pcollections.PCollectionsImmutableSetTest:
 - testSingletonSet
 - testUnderlying
 org.apache.kafka.server.metrics.KafkaMetricsGroupTest:
-- testConstructorWithPackageAndSimpleName
+- testTaggedMetricName
+- testTaggedMetricNameWithEmptyValue
+- testUntaggedMetricName
 org.apache.kafka.server.metrics.KafkaYammerMetricsTest:
 - testTaggedMetricName
 - testTaggedMetricNameWithEmptyValue
