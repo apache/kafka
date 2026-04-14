@@ -4353,10 +4353,12 @@ public class GroupMetadataManager {
 
             // If all members are being fenced, the group becomes empty so
             // we must also update the assignment epoch to match the group
-            // epoch.
+            // epoch. We use a timestamp of zero to mimic the behavior of
+            // a new group so that the assignment interval does not delay
+            // the next assignment computation.
             if (group.members().size() == members.size()) {
                 records.add(newConsumerGroupTargetAssignmentMetadataRecord(
-                    group.groupId(), groupEpoch, time.milliseconds()));
+                    group.groupId(), groupEpoch, 0L));
             }
 
             for (ConsumerGroupMember member : members) {
