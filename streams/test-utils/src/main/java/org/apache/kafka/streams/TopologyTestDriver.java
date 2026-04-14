@@ -1098,7 +1098,7 @@ public class TopologyTestDriver implements Closeable {
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
+     * @return the versioned store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
@@ -1131,7 +1131,7 @@ public class TopologyTestDriver implements Closeable {
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link WindowStore}, {@link TimestampedWindowStore}, or
+     * @return the window store, or {@code null} if no {@link WindowStore}, {@link TimestampedWindowStore}, or
      * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
@@ -1171,7 +1171,7 @@ public class TopologyTestDriver implements Closeable {
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link TimestampedWindowStore} or
+     * @return the window store, or {@code null} if no {@link TimestampedWindowStore} or
      * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
@@ -1232,7 +1232,7 @@ public class TopologyTestDriver implements Closeable {
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link SessionStore} or {@link SessionStoreWithHeaders}
+     * @return the session store, or {@code null} if no {@link SessionStore} or {@link SessionStoreWithHeaders}
      * has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
