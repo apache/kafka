@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
-
-import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+package org.apache.kafka.common.utils.internals;
 
 /**
  * Manages retry attempts and exponential backoff for requests.
