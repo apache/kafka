@@ -19987,7 +19987,9 @@ public class GroupMetadataManagerTest {
                             new TreeMap<>(Map.of(
                                 "num.standby.replicas", "0"
                             ))
-                        )
+                        ),
+                        StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
+                            groupId, 3, context.time.milliseconds())
                     )
                 )
             )),
