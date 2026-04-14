@@ -1,6 +1,6 @@
 Trogdor
 ========================================
-Trogdor is a test framework for Apache Kafka.
+Trogdor is a test framework for Apache Kafka, and is not designed to be used in production.
 
 Trogdor can run benchmarks and other workloads. Trogdor can also inject faults in order to stress test the system.
 
