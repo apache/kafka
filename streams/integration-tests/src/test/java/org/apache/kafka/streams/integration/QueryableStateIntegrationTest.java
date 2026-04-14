@@ -57,6 +57,7 @@ import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
@@ -1342,6 +1343,15 @@ public class QueryableStateIntegrationTest {
                 final ValueAndTimestamp<String> result = store.get("hello");
                 assertThat(result, notNullValue());
                 assertThat(result.value(), is("world"));
+
+                // Verify headers are accessible via the raw KeyValueStore type
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> storeWithHeaders =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+                assertThat(storeWithHeaders, notNullValue());
+                final ValueTimestampHeaders<String> resultWithHeaders = storeWithHeaders.get("hello");
+                assertThat(resultWithHeaders, notNullValue());
+                assertThat(resultWithHeaders.value(), is("world"));
+                assertThat(resultWithHeaders.headers(), notNullValue());
             });
         }
     }

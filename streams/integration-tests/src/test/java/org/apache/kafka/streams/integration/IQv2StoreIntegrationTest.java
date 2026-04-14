@@ -69,6 +69,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -843,62 +844,65 @@ public class IQv2StoreIntegrationTest {
                 shouldRejectUnknownQuery();
                 shouldCollectExecutionInfo();
                 shouldCollectExecutionInfoUnderFailure();
-                if (storeToTest.keyValue()) {
-                    if (storeToTest.timestamped()) {
-                        shouldHandleKeyQuery(2,  5);
-                        shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
-                        shouldHandleRangeQueries();
-                        shouldHandleTimestampedRangeQueries(true);
-                    } else {
-                        shouldHandleKeyQuery(2, 5);
-                        shouldHandleRangeQueries();
-
-                        if (kind.equals("DSL")) {
-                            shouldHandleTimestampedRangeQueries(false);
+                // IQv2 is not supported for headers-aware stores.
+                if (!storeToTest.isHeadersAware()) {
+                    if (storeToTest.keyValue()) {
+                        if (storeToTest.timestamped()) {
+                            shouldHandleKeyQuery(2,  5);
+                            shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                             shouldHandleRangeQueries();
-                            if (cache) {
-                                shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
+                            shouldHandleTimestampedRangeQueries(true);
+                        } else {
+                            shouldHandleKeyQuery(2, 5);
+                            shouldHandleRangeQueries();
+
+                            if (kind.equals("DSL")) {
+                                shouldHandleTimestampedRangeQueries(false);
+                                shouldHandleRangeQueries();
+                                if (cache) {
+                                    shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
+                                } else {
+                                    shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
+                                }
                             } else {
-                                shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
+                                assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
+                                assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
+                            }
+
+                        }
+                    }
+
+                    if (storeToTest.isWindowed()) {
+                        if (storeToTest.timestamped()) {
+                            final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                                ValueAndTimestamp::value;
+                            if (kind.equals("DSL")) {
+                                shouldHandleWindowKeyDSLQueries(valueExtractor);
+                                shouldHandleWindowRangeDSLQueries(valueExtractor);
+                            } else {
+                                shouldHandleWindowKeyPAPIQueries(valueExtractor);
+                                shouldHandleWindowRangePAPIQueries(valueExtractor);
                             }
                         } else {
-                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
-                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
-                        }
-
-                    }
-                }
-
-                if (storeToTest.isWindowed()) {
-                    if (storeToTest.timestamped()) {
-                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                            ValueAndTimestamp::value;
-                        if (kind.equals("DSL")) {
-                            shouldHandleWindowKeyDSLQueries(valueExtractor);
-                            shouldHandleWindowRangeDSLQueries(valueExtractor);
-                        } else {
-                            shouldHandleWindowKeyPAPIQueries(valueExtractor);
-                            shouldHandleWindowRangePAPIQueries(valueExtractor);
-                        }
-                    } else {
-                        final Function<Integer, Integer> valueExtractor = Function.identity();
-                        if (kind.equals("DSL")) {
-                            shouldHandleWindowKeyDSLQueries(valueExtractor);
-                            shouldHandleWindowRangeDSLQueries(valueExtractor);
-                        } else {
-                            shouldHandleWindowKeyPAPIQueries(valueExtractor);
-                            shouldHandleWindowRangePAPIQueries(valueExtractor);
+                            final Function<Integer, Integer> valueExtractor = Function.identity();
+                            if (kind.equals("DSL")) {
+                                shouldHandleWindowKeyDSLQueries(valueExtractor);
+                                shouldHandleWindowRangeDSLQueries(valueExtractor);
+                            } else {
+                                shouldHandleWindowKeyPAPIQueries(valueExtractor);
+                                shouldHandleWindowRangePAPIQueries(valueExtractor);
+                            }
                         }
                     }
-                }
 
-                if (storeToTest.isSession()) {
-                    // Note there's no "timestamped" differentiation here.
-                    // Idiosyncratically, SessionStores are _never_ timestamped.
-                    if (kind.equals("DSL")) {
-                        shouldHandleSessionKeyDSLQueries();
-                    } else {
-                        shouldHandleSessionKeyPAPIQueries();
+                    if (storeToTest.isSession()) {
+                        // Note there's no "timestamped" differentiation here.
+                        // Idiosyncratically, SessionStores are _never_ timestamped.
+                        if (kind.equals("DSL")) {
+                            shouldHandleSessionKeyDSLQueries();
+                        } else {
+                            shouldHandleSessionKeyPAPIQueries();
+                        }
                     }
                 }
 
@@ -939,6 +943,20 @@ public class IQv2StoreIntegrationTest {
         try (final KeyValueIterator<Integer, ValueAndTimestamp<Integer>> it = store.all()) {
             assertThat(it.hasNext(), is(true));
         }
+
+        // Verify headers are accessible via the raw KeyValueStore type
+        final ReadOnlyKeyValueStore<Integer, ValueTimestampHeaders<Integer>> storeWithHeaders =
+            kafkaStreams.store(
+                StoreQueryParameters.fromNameAndType(
+                    STORE_NAME,
+                    QueryableStoreTypes.keyValueStore()
+                )
+            );
+        assertThat(storeWithHeaders, notNullValue());
+        final ValueTimestampHeaders<Integer> resultWithHeaders = storeWithHeaders.get(2);
+        assertThat(resultWithHeaders, notNullValue());
+        assertThat(resultWithHeaders.value(), is(5));
+        assertThat(resultWithHeaders.headers(), notNullValue());
     }
 
     private void shouldHandleIQv1WindowQuery() {
