@@ -18,6 +18,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -57,17 +58,9 @@ public class SmokeTestClient extends SmokeTestUtil {
     private boolean started;
     private volatile boolean closed;
 
-    private static Thread createNonDaemonThread(final String name, final Runnable runnable) {
-        final Thread thread = new Thread(runnable, name);
-        thread.setDaemon(false);
-        thread.setUncaughtExceptionHandler((t, e) ->
-            System.err.println("Uncaught exception in thread '" + name + "': " + e));
-        return thread;
-    }
-
     private static void addShutdownHook(final String name, final Runnable runnable) {
         if (name != null) {
-            Runtime.getRuntime().addShutdownHook(createNonDaemonThread(name, runnable));
+            Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
         } else {
             Runtime.getRuntime().addShutdownHook(new Thread(runnable));
         }
