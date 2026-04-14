@@ -142,7 +142,7 @@ public class NetworkClient implements KafkaClient {
 
     private final BootstrapConfiguration bootstrapConfiguration;
 
-    private final Timer bootstrapTimer;
+    private Timer bootstrapTimer;
 
     private final TelemetrySender telemetrySender;
 
@@ -363,7 +363,8 @@ public class NetworkClient implements KafkaClient {
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
         this.bootstrapConfiguration = bootstrapConfiguration;
-        this.bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+        // Bootstrap timer is lazily initialized on first poll to ensure timeout starts when polling begins
+        this.bootstrapTimer = null;
     }
 
     /**
@@ -1254,7 +1255,11 @@ public class NetworkClient implements KafkaClient {
             throw new InterruptException(new InterruptedException());
         }
 
-        // Timer is already initialized in constructor, just update it with current time
+        // Lazy initialization: create timer on first poll to ensure timeout starts when polling begins
+        if (bootstrapTimer == null) {
+            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+        }
+        
         bootstrapTimer.update(currentTimeMs);
 
         // Attempt DNS resolution (single attempt per poll, typically fast)
