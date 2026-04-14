@@ -335,8 +335,7 @@ public class LogConfigTest {
     public void testEnableRemoteLogStorage(boolean sysRemoteStorageEnabled) {
         KafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled);
 
-        HashMap<String, String> logProps = new HashMap<>();
-        logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        Map<String, String> logProps = Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
         if (sysRemoteStorageEnabled) {
             LogConfig.validate(Map.of(), logProps, kafkaConfig.extractLogConfigMap(),
                     new RemoteLogManagerConfig(kafkaConfig).isRemoteStorageSystemEnabled());
@@ -409,9 +408,10 @@ public class LogConfigTest {
         KafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
 
         // Topic local retention size inherited from Broker is greater than the topic's complete log retention size
-        HashMap<String, String> logProps = new HashMap<>();
-        logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, String.valueOf(sysRemoteStorageEnabled));
-        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, "128");
+        Map<String, String> logProps = Map.of(
+            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, String.valueOf(sysRemoteStorageEnabled),
+            TopicConfig.RETENTION_MS_CONFIG, "500"
+        );
         if (sysRemoteStorageEnabled) {
             ConfigException message = assertThrows(ConfigException.class,
                     () -> LogConfig.validate(Map.of(), logProps, kafkaConfig.extractLogConfigMap(),
@@ -445,16 +445,14 @@ public class LogConfigTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testValidRemoteLogCopyDisabled(boolean copyDisabled) {
-        HashMap<String, String> logProps = new HashMap<>();
-        logProps.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, String.valueOf(copyDisabled));
+        Map<String, String> logProps = Map.of(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, String.valueOf(copyDisabled));
         LogConfig.validate(logProps);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testValidRemoteLogDeleteOnDisable(boolean deleteOnDisable) {
-        HashMap<String, String> logProps = new HashMap<>();
-        logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, String.valueOf(deleteOnDisable));
+        Map<String, String> logProps = Map.of(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, String.valueOf(deleteOnDisable));
         LogConfig.validate(logProps);
     }
 }
