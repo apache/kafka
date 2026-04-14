@@ -84,9 +84,7 @@ public class KStreamKTableJoinTest {
         table = builder.table(tableTopic, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         driver = new TopologyTestDriver(builder.build(), props);
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
@@ -161,7 +159,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
 
@@ -179,7 +177,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.inMemoryKeyValueStore("tableB")));
@@ -201,7 +199,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
@@ -220,7 +218,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
@@ -237,7 +235,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as(Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(0))));
@@ -319,7 +317,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
@@ -336,7 +334,7 @@ public class KStreamKTableJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
-        maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
@@ -601,9 +599,4 @@ public class KStreamKTableJoinTest {
                     + "      --> none\n"
                     + "      <-- KSTREAM-SOURCE-0000000005\n\n";
 
-    private static void maybeSetDslStoreFormatHeaders(final Properties streamsConfig, final boolean withHeaders) {
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
-    }
 }
