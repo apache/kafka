@@ -19,7 +19,7 @@ package org.apache.kafka.trogdor.coordinator;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;

@@ -43,7 +43,7 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
