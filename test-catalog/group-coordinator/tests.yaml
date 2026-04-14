@@ -604,6 +604,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStaticMembersFencedInstanceBatchLeaveGroup
 - testStaticMembersJoinGroupWithMaxSize
 - testStaticMembersLeaveUnknownGroup
+- testStaticMembersRejoinWithNewServerAssignor
 - testStaticMembersUnknownInstanceBatchLeaveGroup
 - testStaticMembersValidBatchLeaveGroup
 - testStreamsGroupAssignmentInterval
