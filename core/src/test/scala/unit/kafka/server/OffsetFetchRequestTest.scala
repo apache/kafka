@@ -790,39 +790,39 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     // Delete the bar topic.
     deleteTopic("bar")
 
+    val expectedResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("grp")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setTopicId(fooTopicId)
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100L),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(1)
+              .setCommittedOffset(101L),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(2)
+              .setCommittedOffset(102L)
+          ).asJava),
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setTopicId(barTopicId)
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(-1L)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(1)
+              .setCommittedOffset(-1L)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+          ).asJava)
+      ).asJava)
+
     // Wait for the deleted topic (bar) to return UNKNOWN_TOPIC_ID error for its partitions.
     // The undeleted topic (foo) should still return its committed offsets.
     for (version <- 10 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
-      val expectedResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId("grp")
-        .setTopics(List(
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setTopicId(fooTopicId)
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(0)
-                .setCommittedOffset(100L),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(1)
-                .setCommittedOffset(101L),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(2)
-                .setCommittedOffset(102L)
-            ).asJava),
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setTopicId(barTopicId)
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(0)
-                .setCommittedOffset(-1L)
-                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(1)
-                .setCommittedOffset(-1L)
-                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-            ).asJava)
-        ).asJava)
-
       TestUtils.waitUntilTrue(
         () => {
           expectedResponse == fetchOffsets(
@@ -857,37 +857,37 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     // Delete the bar topic.
     deleteTopic("bar")
 
+    val expectedResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("grp")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(-1L),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(1)
+              .setCommittedOffset(-1L)
+          ).asJava),
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100L),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(1)
+              .setCommittedOffset(101L),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(2)
+              .setCommittedOffset(102L)
+          ).asJava)
+      ).asJava)
+
     // Wait for the deleted topic (bar) to return -1 offset with NONE error for its partitions.
     // The undeleted topic (foo) should still return its committed offsets.
     for (version <- 1 to 9) {
-      val expectedResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId("grp")
-        .setTopics(List(
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("bar")
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(0)
-                .setCommittedOffset(-1L),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(1)
-                .setCommittedOffset(-1L)
-            ).asJava),
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("foo")
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(0)
-                .setCommittedOffset(100L),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(1)
-                .setCommittedOffset(101L),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(2)
-                .setCommittedOffset(102L)
-            ).asJava)
-        ).asJava)
-
       TestUtils.waitUntilTrue(
         () => {
           expectedResponse == fetchOffsets(
