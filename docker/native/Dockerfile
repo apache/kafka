@@ -57,6 +57,7 @@ LABEL org.label-schema.name="kafka" \
       org.opencontainers.image.authors="Apache Kafka"
 
 RUN apk update ; \
+    apk upgrade --no-cache libcrypto3 libssl3 zlib; \
     apk add --no-cache gcompat ; \
     apk add --no-cache bash ; \
     mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets ; \
