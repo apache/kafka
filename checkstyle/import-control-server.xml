@@ -116,6 +116,7 @@
 
   <subpackage name="network">
     <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="org.apache.kafka.network.metrics" />
   </subpackage>
 
 </import-control>
