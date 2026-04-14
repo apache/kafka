@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.server.util.timer;
 
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
-import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.ExecutorService;
