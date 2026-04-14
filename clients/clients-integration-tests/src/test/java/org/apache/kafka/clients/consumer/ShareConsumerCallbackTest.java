@@ -284,7 +284,7 @@ public class ShareConsumerCallbackTest extends ShareConsumerTestBase {
             producer.flush();
 
             // The acknowledgement commit callback will try to call a method of ShareConsumer
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWakeup<>(shareConsumer));
+            shareConsumer.setAcknowledgementCommitCallback((__, ___) -> shareConsumer.wakeup());
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
@@ -308,19 +308,6 @@ public class ShareConsumerCallbackTest extends ShareConsumerTestBase {
         }
     }
 
-    private static class TestableAcknowledgementCommitCallbackWakeup<K, V> implements AcknowledgementCommitCallback {
-        private final ShareConsumer<K, V> shareConsumer;
-
-        TestableAcknowledgementCommitCallbackWakeup(ShareConsumer<K, V> shareConsumer) {
-            this.shareConsumer = shareConsumer;
-        }
-
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            shareConsumer.wakeup();
-        }
-    }
-
     /**
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is not propagated
      * to the caller of poll().
@@ -336,7 +323,10 @@ public class ShareConsumerCallbackTest extends ShareConsumerTestBase {
             producer.flush();
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows(callbackCalled));
+            shareConsumer.setAcknowledgementCommitCallback((__, ___) -> {
+                callbackCalled.set(true);
+                throw new org.apache.kafka.common.errors.OutOfOrderSequenceException("Exception thrown in AcknowledgementCommitCallback.onComplete");
+            });
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
@@ -351,20 +341,6 @@ public class ShareConsumerCallbackTest extends ShareConsumerTestBase {
                 return callbackCalled.get();
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Received unexpected exception or callback not called");
             verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    private static class TestableAcknowledgementCommitCallbackThrows implements AcknowledgementCommitCallback {
-        private final AtomicBoolean callbackCalled;
-
-        public TestableAcknowledgementCommitCallbackThrows(AtomicBoolean callbackCalled) {
-            this.callbackCalled = callbackCalled;
-        }
-
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            callbackCalled.set(true);
-            throw new org.apache.kafka.common.errors.OutOfOrderSequenceException("Exception thrown in TestableAcknowledgementCommitCallbackThrows.onComplete");
         }
     }
 }
