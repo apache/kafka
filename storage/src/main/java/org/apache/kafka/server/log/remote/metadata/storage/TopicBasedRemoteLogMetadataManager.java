@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
