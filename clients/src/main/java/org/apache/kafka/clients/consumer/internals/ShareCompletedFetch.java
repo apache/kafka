@@ -34,8 +34,8 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import org.slf4j.Logger;
 

@@ -19,7 +19,7 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 /**
  * A mutable record batch is one that can be modified in place (without copying). This is used by the broker
