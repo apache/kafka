@@ -188,7 +188,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
 
     private List<String> requiredScope() {
         String requiredSpaceDelimitedScope = option(REQUIRED_SCOPE_OPTION);
-        return Utils.isBlank(requiredSpaceDelimitedScope) ? Collections.emptyList() : OAuthBearerScopeUtils.parseScope(requiredSpaceDelimitedScope.trim());
+        return Utils.isBlank(requiredSpaceDelimitedScope) ? List.of() : OAuthBearerScopeUtils.parseScope(requiredSpaceDelimitedScope.trim());
     }
 
     private int allowableClockSkewMs() {

@@ -19,7 +19,6 @@ package org.apache.kafka.common.telemetry;
 
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -119,12 +118,12 @@ public enum ClientTelemetryState {
         /*
          Client should only be transited to terminated state.
         */
-        VALID_NEXT_STATES.put(TERMINATING_PUSH_IN_PROGRESS, Collections.singletonList(TERMINATED));
+        VALID_NEXT_STATES.put(TERMINATING_PUSH_IN_PROGRESS, List.of(TERMINATED));
 
         /*
          Client should never be able to transition out of terminated state.
         */
-        VALID_NEXT_STATES.put(TERMINATED, Collections.emptyList());
+        VALID_NEXT_STATES.put(TERMINATED, List.of());
     }
 
     /**

@@ -49,7 +49,7 @@ public class MetricKey implements MetricKeyable {
      */
     public MetricKey(String name, Map<String, String> tags) {
         this.name = Objects.requireNonNull(name);
-        this.tags = tags != null ? Collections.unmodifiableMap(tags) : Collections.emptyMap();
+        this.tags = tags != null ? Collections.unmodifiableMap(tags) : Map.of();
     }
 
     public MetricKey(MetricName metricName) {

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import java.io.Closeable;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -69,7 +68,7 @@ public interface MetricsEmitter extends Closeable {
      * @return emitted metrics.
      */
     default List<SinglePointMetric> emittedMetrics() {
-        return Collections.emptyList();
+        return List.of();
     }
 
     /**
