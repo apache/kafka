@@ -906,8 +906,8 @@ public class IQv2StoreIntegrationTest {
                     }
                 }
 
-                // IQv1 verification for headers-aware stores: ensure ReadOnly store interfaces
-                // are accessible and return correct results when dsl.store.format=HEADERS is used.
+                // Headers-aware stores are excluded from the IQv2 blocks above since IQv2 is not
+                // supported for them. Only IQv1 queries are verified below.
                 if (storeToTest.isHeadersAware()) {
                     if (storeToTest.keyValue()) {
                         shouldHandleIQv1KeyValueQuery();
