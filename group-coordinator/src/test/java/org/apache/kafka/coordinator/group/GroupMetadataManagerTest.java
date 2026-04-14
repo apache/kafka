@@ -27560,7 +27560,7 @@ public class GroupMetadataManagerTest {
                             TaskAssignmentTestUtil.mkTasks(subtopology, 3, 4, 5)
                         ))
                 ),
-                List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds())),
+                List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, 0L)),
                 List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember3))
             ),
             result3.records()
