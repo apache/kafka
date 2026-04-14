@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -306,6 +307,12 @@ public class BrokerRegistration {
             }
         }
         return results;
+    }
+
+    public boolean cordonedDirChanged(List<Uuid> otherDirectories) {
+        Set<Uuid> cordonedDirs = Set.copyOf(cordonedDirectories);
+        Set<Uuid> otherDirs = Set.copyOf(otherDirectories);
+        return !cordonedDirs.equals(otherDirs);
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {

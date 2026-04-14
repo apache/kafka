@@ -1546,16 +1546,14 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> records
     ) {
         BrokerRegistration registration = clusterControl.registration(brokerId);
-        List<Uuid> newCordonedDirs = registration.directoryIntersection(cordonedDirs);
-        if (!newCordonedDirs.isEmpty()) {
+        boolean cordonedDirsChanged = registration.cordonedDirChanged(cordonedDirs);
+        if (cordonedDirsChanged) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
-                    setCordonedLogDirs(newCordonedDirs),
+                    setCordonedLogDirs(cordonedDirs),
                     (short) 3));
             if (log.isDebugEnabled()) {
-                List<Uuid> newUncordonedDirs = registration.directoryDifference(newCordonedDirs);
-                log.debug("Directories {} in broker {} marked cordoned, uncordoned directories: {}",
-                        newCordonedDirs, brokerId, newUncordonedDirs);
+                log.debug("Directories {} in broker {} marked cordoned", cordonedDirs, brokerId);
             }
         }
     }
@@ -1697,7 +1695,6 @@ public class ReplicationControlManager {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
         if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
-            clusterControl.updateCordonedLogDirs(brokerId, request.cordonedLogDirs());
             handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;

@@ -3420,6 +3420,8 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokersWithDirs(b1, List.of(dir1b1, dir2b1));
         ctx.unfenceBrokers(b1);
         assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // Cordon dir1b1, this will emit a BrokerRegistrationChangeRecord
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
         assertEquals(
@@ -3430,6 +3432,35 @@ public class ReplicationControlManagerTest {
         );
         ctx.replay(records);
         assertEquals(List.of(dir1b1), ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // Cordon dir1b1 again, this time no records are emitted
+        records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
+        assertTrue(records.isEmpty());
+
+        // Cordon dir2b1, this will emit a BrokerRegistrationChangeRecord
+        records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir2b1, dir1b1), records);
+        assertEquals(
+                List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                        .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                        .setCordonedLogDirs(List.of(dir2b1, dir1b1)), (short) 3)),
+                filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        ctx.replay(records);
+        assertEquals(List.of(dir2b1, dir1b1), ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // Uncordon all directories, this will emit a BrokerRegistrationChangeRecord
+        records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(), records);
+        assertEquals(
+                List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                        .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                        .setCordonedLogDirs(List.of()), (short) 3)),
+                filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        ctx.replay(records);
+        assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
     }
 
     @ParameterizedTest
