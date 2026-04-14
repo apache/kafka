@@ -102,6 +102,7 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, RecordValidationStats, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -162,7 +163,7 @@ class KafkaApisTest extends Logging {
     Utils.swallow(this.logger.underlying, () => quotas.shutdown())
     if (kafkaApis != null)
       Utils.swallow(this.logger.underlying, () => kafkaApis.close())
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     metrics.close()
   }
 

@@ -38,7 +38,7 @@ public final class ServerTestUtils {
      * @return The gauge value as a number.
      */
     public static Number yammerMetricValue(String name) {
-        Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+        Gauge<?> gauge = (Gauge<?>) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
             .filter(e -> e.getKey().getMBeanName().contains(name))
             .findFirst()
             .orElseThrow()
