@@ -1316,7 +1316,6 @@ public class NetworkClient implements KafkaClient {
 
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
                 log.info("Rebootstrap requested by server.");
-                log.error("REBOOTSTRAP REQUESTED BY SERVER.");
                 initiateRebootstrap();
             } else if (response.brokers().isEmpty()) {
                 // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
