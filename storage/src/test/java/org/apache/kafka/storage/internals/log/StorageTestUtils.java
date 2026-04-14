@@ -14,13 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.storage.internals.log.CleanerConfig;
 
 import java.io.File;
 import java.util.Properties;
@@ -48,17 +46,16 @@ public class StorageTestUtils {
 
         props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true");
         props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
-        // TODO: I wonder if we are okay with having some of the configuration hardcoded just for sake of few tests...
-        // Use string literals for KRaft/Quorum/GroupCoordinator configs to avoid
-        // pulling in raft and group-coordinator module dependencies.
+        // Use string literals for configs from modules not importable under
+        // the storage.internals import-control rules (network, raft, group-coordinator).
         props.setProperty("server.max.startup.time.ms", String.valueOf(TimeUnit.MINUTES.toMillis(10)));
         props.put("node.id", "0");
         props.put(ServerConfigs.BROKER_ID_CONFIG, "0");
 
-        props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:9092");
-        props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093");
+        props.put("advertised.listeners", "PLAINTEXT://localhost:9092");
+        props.put("listeners", "PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093");
         props.put("controller.listener.names", "CONTROLLER");
-        props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT");
+        props.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT");
 
         File dir = org.apache.kafka.test.TestUtils.tempDirectory();
         props.put(ServerLogConfigs.LOG_DIR_CONFIG, dir.getAbsolutePath());
@@ -82,7 +79,7 @@ public class StorageTestUtils {
         props.put("offsets.topic.num.partitions", "5");
         props.put("group.initial.rebalance.delay.ms", "0");
 
-        props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2");
+        props.put("num.network.threads", "2");
         props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2");
 
         return props;

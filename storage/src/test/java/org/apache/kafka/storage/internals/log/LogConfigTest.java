@@ -17,7 +17,6 @@
 package org.apache.kafka.storage.internals.log;
 
 import kafka.server.KafkaConfig;
-import org.apache.kafka.storage.StorageTestUtils;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
