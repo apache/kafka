@@ -53,10 +53,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
@@ -1311,7 +1311,7 @@ public class QueryableStateIntegrationTest {
         builder.table(
             inputTopic,
             Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(
+            Materialized.<String, String>as(
                 Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())

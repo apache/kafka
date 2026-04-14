@@ -950,13 +950,16 @@ public class IQv2StoreIntegrationTest {
                 )
             );
         assertThat(store, notNullValue());
-        final ValueAndTimestamp<Integer> result = store.fetch(
+        try (final WindowStoreIterator<ValueAndTimestamp<Integer>> it = store.fetch(
             2,
             Instant.ofEpochMilli(WINDOW_START),
             Instant.ofEpochMilli(WINDOW_START + WINDOW_SIZE.toMillis())
-        );
-        assertThat(result, notNullValue());
-        assertThat(result.value(), is(5));
+        )) {
+            assertThat(it.hasNext(), is(true));
+            final ValueAndTimestamp<Integer> result = it.next().value;
+            assertThat(result, notNullValue());
+            assertThat(result.value(), is(5));
+        }
     }
 
     private void shouldHandleIQv1SessionQuery() {
