@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# GraalVM 25+ required: earlier versions call getpwuid (not thread-safe), causing
+# intermittent segfaults (~2%) on startup. GraalVM 25 switches to getpwuid_r.
 FROM ghcr.io/graalvm/graalvm-community:25 AS build-native-image
 
 ARG kafka_url=""
