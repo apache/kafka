@@ -279,9 +279,9 @@ class OffsetFetcherUtils {
                 }
             } else {
                 if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-                    log.warn("Not updating last stable offset for partition {} as it is no longer assigned", partition);
+                    log.debug("Not updating last stable offset for partition {} as it is no longer assigned", partition);
                 } else {
-                    log.warn("Not updating high watermark for partition {} as it is no longer assigned", partition);
+                    log.debug("Not updating high watermark for partition {} as it is no longer assigned", partition);
                 }
             }
         }
