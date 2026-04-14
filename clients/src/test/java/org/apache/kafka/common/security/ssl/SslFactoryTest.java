@@ -34,6 +34,8 @@ import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnJre;
+import org.junit.jupiter.api.condition.JRE;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,6 +46,8 @@ import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -83,6 +87,48 @@ public abstract class SslFactoryTest {
             assertNotNull(engine);
             assertEquals(Set.of(tlsProtocol), Set.of(engine.getEnabledProtocols()));
             assertFalse(engine.getUseClientMode());
+        }
+    }
+
+    /**
+     * Regression test for KAFKA-20437.
+     *
+     * Verifies that a dynamic update to ssl.enabled.protocols is actually applied by
+     * SslFactory.reconfigure(). ssl.enabled.protocols must be in RECONFIGURABLE_CONFIGS so
+     * that createNewSslEngineFactory() copies the new value into nextConfigs, triggering
+     * shouldBeRebuilt() and rebuilding the SslEngineFactory with the restricted protocol set.
+     */
+    @Test
+    @DisabledOnJre(JRE.JAVA_8) // TLSv1.3 requires Java 11+
+    public void testReconfigureEnabledProtocolsIsApplied() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+        Map<String, Object> sslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .build();
+
+        // Start with both TLSv1.2 and TLSv1.3 enabled.
+        sslConfig.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2", "TLSv1.3"));
+
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER)) {
+            sslFactory.configure(sslConfig);
+
+            SSLEngine engineBefore = sslFactory.createSslEngine("localhost", 0);
+            Set<String> protocolsBefore = Set.of(engineBefore.getEnabledProtocols());
+            assertTrue(protocolsBefore.contains("TLSv1.2"), "TLSv1.2 should be enabled before reconfigure");
+            assertTrue(protocolsBefore.contains("TLSv1.3"), "TLSv1.3 should be enabled before reconfigure");
+
+            // Dynamically restrict to TLSv1.3 only.
+            Map<String, Object> updatedConfig = new HashMap<>(sslConfig);
+            updatedConfig.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of("TLSv1.3"));
+            sslFactory.reconfigure(updatedConfig);
+
+            SSLEngine engineAfter = sslFactory.createSslEngine("localhost", 0);
+            Set<String> protocolsAfter = Set.of(engineAfter.getEnabledProtocols());
+
+            assertFalse(protocolsAfter.contains("TLSv1.2"),
+                    "TLSv1.2 must be disabled after reconfiguring ssl.enabled.protocols to [TLSv1.3]");
+            assertTrue(protocolsAfter.contains("TLSv1.3"),
+                    "TLSv1.3 must remain enabled after reconfigure");
         }
     }
 
