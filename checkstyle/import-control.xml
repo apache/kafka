@@ -531,6 +531,14 @@
       </subpackage>
     </subpackage>
 
+    <subpackage name="openlineage">
+      <allow pkg="org.apache.kafka.common.utils" />
+      <allow pkg="org.apache.kafka.connect.rest" />
+      <allow pkg="org.apache.kafka.connect.health" />
+      <allow pkg="org.apache.kafka.connect.openlineage" />
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
+
     <subpackage name="mirror">
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.connect.source" />

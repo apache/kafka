@@ -951,6 +951,7 @@ if (userEnableTestCoverage) {
 def connectPkgs = [
     'connect:api',
     'connect:basic-auth-extension',
+    'connect:openlineage-extension',
     'connect:file',
     'connect:json',
     'connect:runtime',
@@ -1296,6 +1297,8 @@ project(':core') {
     from(project(':connect:file').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:basic-auth-extension').jar) { into("libs/") }
     from(project(':connect:basic-auth-extension').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:openlineage-extension').jar) { into("libs/") }
+    from(project(':connect:openlineage-extension').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:mirror').jar) { into("libs/") }
     from(project(':connect:mirror').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:mirror-client').jar) { into("libs/") }
@@ -3823,6 +3826,45 @@ project(':connect:basic-auth-extension') {
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly libs.jerseyContainerServlet
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:openlineage-extension') {
+  base {
+    archivesName = "connect-openlineage-extension"
+  }
+
+  dependencies {
+    implementation project(':connect:api')
+    implementation project(':connect:runtime')
+
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonDataformatYaml
+
+    testImplementation libs.mockitoCore
+    testImplementation libs.junitJupiter
+    testImplementation testLog4j2Libs
+    testImplementation project(':clients').sourceSets.test.output
+
     testRuntimeOnly runtimeTestLibs
   }
 
