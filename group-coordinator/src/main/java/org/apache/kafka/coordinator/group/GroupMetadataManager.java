@@ -4394,10 +4394,13 @@ public class GroupMetadataManager {
         records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
 
         // If this is the last member, the group becomes empty so we must
-        // also update the assignment epoch to match the group epoch.
+        // also update the assignment epoch to match the group epoch. We
+        // use a timestamp of zero to mimic the behavior of a new group
+        // so that the assignment interval does not delay the next
+        // assignment computation.
         if (group.members().size() == 1) {
             records.add(newShareGroupTargetAssignmentMetadataRecord(
-                group.groupId(), groupEpoch, time.milliseconds()));
+                group.groupId(), groupEpoch, 0L));
         }
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
