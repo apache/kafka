@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+
 /**
  * Manages retry attempts and exponential backoff for requests.
  */
