@@ -1110,10 +1110,13 @@ public class NetworkClient implements KafkaClient {
                 ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
                 String clusterId = this.metadataUpdater.clusterId();
                 int nodeId = Integer.parseInt(node);
-                if (clusterId != null && nodeId < Integer.MAX_VALUE / 2) {
-                    System.out.println("CLUSTER_ID(" + clusterId + "), NODE_ID(" + nodeId + ")");
+                if (clusterId != null && nodeId > 0 && nodeId < Integer.MAX_VALUE / 2) {
+                    // If we know the cluster ID and node ID we are connecting to, we can include
+                    // those details in the ApiVersions request for checking in the broker.
+                    // The client uses large positive node ID values for connecting to coordinators
+                    // which do not match the target broker's node ID so exclude those.
                     apiVersionRequestBuilder.setClusterId(clusterId);
-                    apiVersionRequestBuilder.setNodeId(Integer.parseInt(node));
+                    apiVersionRequestBuilder.setNodeId(nodeId);
                 }
                 ClientRequest clientRequest = newClientRequest(node, apiVersionRequestBuilder, now, true);
                 doSend(clientRequest, true, now);
