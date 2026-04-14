@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SerializationTest {
@@ -100,6 +102,42 @@ public class SerializationTest {
                 assertNull(serde.deserializer().deserialize(topic, null, (ByteBuffer) null),
                         "Should support null in " + cls.getSimpleName() + " deserialization");
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void allSerializersByteBufferShouldMatchByteArray() {
+        for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
+            try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
+                for (Object value : test.getValue()) {
+                    byte[] serialized = serde.serializer().serialize(topic, value);
+                    ByteBuffer serializedBuffer = serde.serializer().serializeToByteBuffer(topic, null, value);
+
+                    assertArrayEquals(serialized, Utils.toNullableArray(serializedBuffer),
+                            "serializeToByteBuffer should produce same bytes as serialize for " + test.getKey().getSimpleName());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void allSerializersByteBufferShouldSupportNull() {
+        for (Class<?> cls : testData.keySet()) {
+            try (Serde<?> serde = Serdes.serdeFrom(cls)) {
+                assertNull(serde.serializer().serializeToByteBuffer(topic, null, null),
+                        "serializeToByteBuffer should support null in " + cls.getSimpleName());
+            }
+        }
+    }
+
+    @Test
+    public void byteBufferSerializerShouldReturnSameInstance() {
+        try (ByteBufferSerializer serializer = new ByteBufferSerializer()) {
+            ByteBuffer input = ByteBuffer.allocate(4).putInt(42);
+            ByteBuffer result = serializer.serializeToByteBuffer(topic, null, input);
+            assertSame(input, result, "serializeToByteBuffer should return the same ByteBuffer instance");
+            assertEquals(0, result.position(), "Buffer should be rewound to position 0");
         }
     }
 

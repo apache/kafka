@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+
 public class DoubleSerializer implements Serializer<Double> {
     @Override
     public byte[] serialize(String topic, Double data) {
@@ -33,5 +37,16 @@ public class DoubleSerializer implements Serializer<Double> {
             (byte) (bits >>> 8),
             (byte) bits
         };
+    }
+
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, Double data) {
+        if (data == null)
+            return null;
+
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        buffer.putDouble(data);
+        buffer.flip();
+        return buffer;
     }
 }

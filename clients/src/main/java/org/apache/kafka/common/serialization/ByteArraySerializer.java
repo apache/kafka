@@ -16,9 +16,19 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
+
+import java.nio.ByteBuffer;
+
 public class ByteArraySerializer implements Serializer<byte[]> {
     @Override
     public byte[] serialize(String topic, byte[] data) {
         return data;
+    }
+
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, byte[] data) {
+        return Utils.wrapNullable(data);
     }
 }

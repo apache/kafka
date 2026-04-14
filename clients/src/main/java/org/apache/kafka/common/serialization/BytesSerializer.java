@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Bytes;
+
+import java.nio.ByteBuffer;
 
 public class BytesSerializer implements Serializer<Bytes> {
     public byte[] serialize(String topic, Bytes data) {
@@ -24,5 +27,13 @@ public class BytesSerializer implements Serializer<Bytes> {
             return null;
 
         return data.get();
+    }
+
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, Bytes data) {
+        if (data == null)
+            return null;
+
+        return ByteBuffer.wrap(data.get());
     }
 }
