@@ -54,7 +54,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -63,6 +64,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -130,9 +132,22 @@ public class SlidingWindowedKStreamIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
+    public static Stream<Arguments> data() {
+        return Stream.of(
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true)
+        );
+    }
+
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @MethodSource("data")
+    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -157,6 +172,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -197,8 +214,8 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @MethodSource("data")
+    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -223,6 +240,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -272,8 +291,8 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @MethodSource("data")
+    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "L1", 0),
@@ -313,6 +332,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 

@@ -47,24 +47,25 @@ The actual process of reading from an offset requires first locating the log seg
 The log provides the capability of getting the most recently written message to allow clients to start subscribing as of "right now". This is also useful in the case the consumer fails to consume its data within its SLA-specified number of days. In this case when the client attempts to consume a non-existent offset it is given an OutOfRangeException and can either reset itself or fail as appropriate to the use case. 
 
 The following is the format of the results sent to the consumer. 
-    
-    
-    MessageSetSend (fetch result)
-    
-    total length     : 4 bytes
-    error code       : 2 bytes
-    message 1        : x bytes
-    ...
-    message n        : x bytes
-    
-    
-    MultiMessageSetSend (multiFetch result)
-    
-    total length       : 4 bytes
-    error code         : 2 bytes
-    messageSetSend 1
-    ...
-    messageSetSend n
+
+```text
+MessageSetSend (fetch result)
+
+total length     : 4 bytes
+error code       : 2 bytes
+message 1        : x bytes
+...
+message n        : x bytes
+
+
+MultiMessageSetSend (multiFetch result)
+
+total length       : 4 bytes
+error code         : 2 bytes
+messageSetSend 1
+...
+messageSetSend n
+```
 
 ## Deletes
 

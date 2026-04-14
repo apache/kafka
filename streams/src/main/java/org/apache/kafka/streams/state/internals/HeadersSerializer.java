@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +59,14 @@ class HeadersSerializer {
             this.rawHeaderKeys = rawHeaderKeys;
             this.rawHeaderValues = rawHeaderValues;
         }
+    }
+
+    // for testing
+    static byte[] serialize(final Headers headers) {
+        final PreSerializedHeaders prep = prepareSerialization(headers);
+        final ByteBuffer buffer = ByteBuffer.allocate(prep.requiredBufferSizeForHeaders);
+        serialize(prep, buffer);
+        return buffer.array();
     }
 
     public static PreSerializedHeaders prepareSerialization(final Headers headers) {

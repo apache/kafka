@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -52,13 +54,14 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
 
     @FunctionalInterface
     private interface StoreKeySerializer<K> {
-        Bytes serialize(final K key, final long ts, final int seq, final StateSerdes<K, ?> serdes);
+        Bytes serialize(final K key, final long ts, final int seq, final Headers headers, final StateSerdes<K, ?> serdes);
     }
 
     private final List<KeyValue<Long, byte[]>> windowStoreKvPairs = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L,  new MockStreamsMetrics(new Metrics()));
     private final String namespace = "0.0-one";
     private final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
+    private final Headers headers = new RecordHeaders();
     private Function<byte[], Long> tsExtractor;
     private StoreKeySerializer<String> storeKeySerializer;
 
@@ -97,14 +100,14 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             final KeyValue<Long, byte[]> v1 = KeyValue.pair(t, v1Bytes);
             windowStoreKvPairs.add(v1);
             expectedKvPairs.add(KeyValue.pair(t, v1Bytes));
-            final Bytes keyBytes = storeKeySerializer.serialize("a", t + 10, 0, stateSerdes);
+            final Bytes keyBytes = storeKeySerializer.serialize("a", t + 10, 0, headers, stateSerdes);
             final byte[] valBytes = String.valueOf(t + 10).getBytes();
             expectedKvPairs.add(KeyValue.pair(t + 10, valBytes));
             cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(keyBytes), new LRUCacheEntry(valBytes));
         }
 
-        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, stateSerdes);
-        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, stateSerdes);
+        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes);
+        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, headers, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
 
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(
@@ -135,14 +138,14 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             final KeyValue<Long, byte[]> v1 = KeyValue.pair(t, v1Bytes);
             windowStoreKvPairs.add(v1);
             expectedKvPairs.add(KeyValue.pair(t, v1Bytes));
-            final Bytes keyBytes = storeKeySerializer.serialize("a", t + 10, 0, stateSerdes);
+            final Bytes keyBytes = storeKeySerializer.serialize("a", t + 10, 0, headers, stateSerdes);
             final byte[] valBytes = String.valueOf(t + 10).getBytes();
             expectedKvPairs.add(KeyValue.pair(t + 10, valBytes));
             cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(keyBytes), new LRUCacheEntry(valBytes));
         }
 
-        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, stateSerdes);
-        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, stateSerdes);
+        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes);
+        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, headers, stateSerdes);
         Collections.reverse(windowStoreKvPairs);
         final KeyValueIterator<Long, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
@@ -170,9 +173,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     public void shouldPeekNextStoreKey(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
-        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 0, 0, stateSerdes)), new LRUCacheEntry("b".getBytes()));
-        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, stateSerdes);
-        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, stateSerdes);
+        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes)), new LRUCacheEntry("b".getBytes()));
+        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes);
+        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, headers, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(
             namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(fromBytes), SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(toBytes)
@@ -191,9 +194,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     public void shouldPeekNextStoreKeyReverse(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
-        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 0, 0, stateSerdes)), new LRUCacheEntry("b".getBytes()));
-        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, stateSerdes);
-        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, stateSerdes);
+        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes)), new LRUCacheEntry("b".getBytes()));
+        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes);
+        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, headers, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.reverseRange(
@@ -214,9 +217,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     public void shouldPeekNextCacheKey(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(0L, "a".getBytes()));
-        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 10L, 0, stateSerdes)), new LRUCacheEntry("b".getBytes()));
-        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, stateSerdes);
-        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, stateSerdes);
+        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 10L, 0, headers, stateSerdes)), new LRUCacheEntry("b".getBytes()));
+        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes);
+        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, headers, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(
@@ -241,9 +244,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     public void shouldPeekNextCacheKeyReverse(final SchemaType schemaType) {
         setUp(schemaType);
         windowStoreKvPairs.add(KeyValue.pair(0L, "a".getBytes()));
-        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 10L, 0, stateSerdes)), new LRUCacheEntry("b".getBytes()));
-        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, stateSerdes);
-        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, stateSerdes);
+        cache.put(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize("a", 10L, 0, headers, stateSerdes)), new LRUCacheEntry("b".getBytes()));
+        final Bytes fromBytes = storeKeySerializer.serialize("a", 0, 0, headers, stateSerdes);
+        final Bytes toBytes = storeKeySerializer.serialize("a", 100, 0, headers, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.reverseRange(

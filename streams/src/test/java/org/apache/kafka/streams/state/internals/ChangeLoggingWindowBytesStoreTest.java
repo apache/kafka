@@ -27,7 +27,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,14 +63,9 @@ public class ChangeLoggingWindowBytesStoreTest {
         store.init(context, store);
     }
 
-    @AfterEach
-    public void tearDown() {
-        verify(inner).init(context, store);
-    }
-
     @Test
     public void shouldDelegateInit() {
-        // testing the combination of setUp and tearDown
+        verify(inner).init(context, store);
     }
 
     @Test

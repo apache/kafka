@@ -25,10 +25,12 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
@@ -60,7 +62,6 @@ import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
-import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
 import org.apache.kafka.storage.internals.log.EpochEntry;
@@ -1142,7 +1143,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private final Logger logger;
         private volatile boolean isAllSegmentsValid = false;
         private volatile boolean metricsRegistered = false;
-        private final Map<String, String> metricTags = new HashMap<>();
+        private final Map<String, String> metricTags;
         private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
         private final AtomicInteger localRetentionSizeInPercentValue = new AtomicInteger(0);
 
@@ -1157,8 +1158,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         public RLMExpirationTask(TopicIdPartition topicIdPartition) {
             super(topicIdPartition);
             this.logger = getLogContext().logger(RLMExpirationTask.class);
-            metricTags.put("topic", topicIdPartition.topic());
-            metricTags.put("partition", Integer.toString(topicIdPartition.partition()));
+            this.metricTags = MetricsUtils.getTags("topic", topicIdPartition.topic(),
+                    "partition", Integer.toString(topicIdPartition.partition()));
         }
 
         // Visible for testing
@@ -1893,7 +1894,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         Consumer<List<AbortedTxn>> accumulator =
                 abortedTxns -> abortedTransactions.addAll(abortedTxns.stream()
-                        .map(AbortedTxn::asAbortedTransaction).toList());
+                        .map(txn -> new FetchResponseData.AbortedTransaction()
+                                .setProducerId(txn.producerId())
+                                .setFirstOffset(txn.firstOffset())).toList());
 
         long startTimeNs = time.nanoseconds();
         collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator, log);

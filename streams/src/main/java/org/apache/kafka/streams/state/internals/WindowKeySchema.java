@@ -33,8 +33,6 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
-// TODO: replace with new method in follow-up PR of KIP-1271
-@SuppressWarnings("deprecation")
 public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     private static final Logger LOG = LoggerFactory.getLogger(WindowKeySchema.class);
@@ -168,8 +166,9 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     public static <K> Bytes toStoreKeyBinary(final K key,
                                              final long timestamp,
                                              final int seqnum,
+                                             final Headers headers,
                                              final StateSerdes<K, ?> serdes) {
-        final byte[] serializedKey = serdes.rawKey(key);
+        final byte[] serializedKey = serdes.rawKey(key, headers);
         return toStoreKeyBinary(serializedKey, timestamp, seqnum);
     }
 
@@ -181,8 +180,9 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
                                              final int seqnum,
+                                             final Headers headers,
                                              final StateSerdes<K, ?> serdes) {
-        final byte[] serializedKey = serdes.rawKey(timeKey.key());
+        final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
         return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
     }
 
@@ -205,10 +205,11 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     static <K> K extractStoreKey(final byte[] binaryKey,
+                                 final Headers headers,
                                  final StateSerdes<K, ?> serdes) {
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
-        return serdes.keyFrom(bytes);
+        return serdes.keyFrom(bytes, headers);
     }
 
     static long extractStoreTimestamp(final byte[] binaryKey) {
@@ -217,17 +218,6 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     static int extractStoreSequence(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
-    }
-
-    // TODO: Remove this method when MeteredWindowStore will use headers version
-    @Deprecated
-    public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
-                                               final long windowSize,
-                                               final Deserializer<K> deserializer,
-                                               final String topic) {
-        final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
-        final Window window = extractStoreWindow(binaryKey, windowSize);
-        return new Windowed<>(key, window);
     }
 
     public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,

@@ -97,14 +97,15 @@ Security settings for Kafka fall into three main categories, which are similar t
 When securing a multi-tenant Kafka environment, the most common administrative task is the third category (authorization), i.e., managing the user/client permissions that grant or deny access to certain topics and thus to the data stored by users within a cluster. This task is performed predominantly through the setting of access control lists (ACLs). Here, administrators of multi-tenant environments in particular benefit from putting a hierarchical topic naming structure in place as described in a previous section, because they can conveniently control access to topics through prefixed ACLs (`--resource-pattern-type Prefixed`). This significantly minimizes the administrative overhead of securing topics in multi-tenant environments: administrators can make their own trade-offs between higher developer convenience (more lenient permissions, using fewer and broader ACLs) vs. tighter security (more stringent permissions, using more and narrower ACLs). 
 
 In the following example, user Alice-a new member of ACME corporation's InfoSec team-is granted write permissions to all topics whose names start with "acme.infosec.", such as "acme.infosec.telemetry.logins" and "acme.infosec.syslogs.events". 
-    
-    
-    # Grant permissions to user Alice
-    $ bin/kafka-acls.sh \
-        --bootstrap-server localhost:9092 \
-        --add --allow-principal User:Alice \
-        --producer \
-        --resource-pattern-type prefixed --topic acme.infosec.
+
+```bash
+# Grant permissions to user Alice
+$ bin/kafka-acls.sh \
+    --bootstrap-server localhost:9092 \
+    --add --allow-principal User:Alice \
+    --producer \
+    --resource-pattern-type prefixed --topic acme.infosec.
+```
 
 You can similarly use this approach to isolate different customers on the same shared cluster. 
 

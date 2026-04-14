@@ -535,7 +535,7 @@ class TransactionsTest extends IntegrationTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       brokers.foreach { broker =>
-        error(s"log dirs: ${broker.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${broker.logManager.liveLogDirs.asScala.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -585,7 +585,7 @@ class TransactionsTest extends IntegrationTestHarness {
       val recordMetadata = result.get()
       error(s"Missed an exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       brokers.foreach { broker =>
-        error(s"log dirs: ${broker.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${broker.logManager.liveLogDirs.asScala.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
