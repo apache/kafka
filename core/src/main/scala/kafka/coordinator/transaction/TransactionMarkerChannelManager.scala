@@ -99,7 +99,7 @@ object TransactionMarkerChannelManager {
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      NetworkClient.BootstrapConfiguration.disabled
+      NetworkClient.BootstrapConfiguration.DISABLED
     )
 
     new TransactionMarkerChannelManager(config,

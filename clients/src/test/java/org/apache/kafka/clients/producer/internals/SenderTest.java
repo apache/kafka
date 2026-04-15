@@ -179,7 +179,7 @@ public class SenderTest {
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
-    private final NetworkClient.BootstrapConfiguration bootstrapConfig = NetworkClient.BootstrapConfiguration.disabled();
+    private final NetworkClient.BootstrapConfiguration bootstrapConfig = NetworkClient.BootstrapConfiguration.DISABLED;
 
     @BeforeEach
     public void setup() {
@@ -242,7 +242,7 @@ public class SenderTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext,
-                MetadataRecoveryStrategy.NONE, bootstrapConfig);
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.BROKER);

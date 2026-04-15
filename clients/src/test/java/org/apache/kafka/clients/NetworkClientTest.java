@@ -170,7 +170,7 @@ public class NetworkClientTest {
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata, boolean disableBootstrap) {
         if (disableBootstrap) {
-            bootstrapConfiguration = NetworkClient.BootstrapConfiguration.disabled();
+            bootstrapConfiguration = NetworkClient.BootstrapConfiguration.DISABLED;
         }
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -1522,7 +1522,7 @@ public class NetworkClientTest {
                 new LogContext(), new DefaultHostResolver(),
                 mockTelemetrySender, Long.MAX_VALUE,
                 MetadataRecoveryStrategy.NONE,
-                NetworkClient.BootstrapConfiguration.disabled());
+                NetworkClient.BootstrapConfiguration.DISABLED);
 
         long now = time.milliseconds();
 

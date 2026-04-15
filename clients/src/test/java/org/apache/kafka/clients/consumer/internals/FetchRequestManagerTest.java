@@ -209,7 +209,7 @@ public class FetchRequestManagerTest {
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
-        bootstrapConfiguration = NetworkClient.BootstrapConfiguration.disabled();
+        bootstrapConfiguration = NetworkClient.BootstrapConfiguration.DISABLED;
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {
@@ -1908,7 +1908,7 @@ public class FetchRequestManagerTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, bootstrapConfiguration);
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
                 400, ApiMessageType.ListenerType.BROKER);

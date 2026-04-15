@@ -86,7 +86,7 @@ public class NetworkUtils {
             new ApiVersions(),
             logContext,
             MetadataRecoveryStrategy.NONE,
-            NetworkClient.BootstrapConfiguration.disabled()
+            NetworkClient.BootstrapConfiguration.DISABLED
         );
     }
 }

@@ -241,8 +241,7 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
                          LogContext logContext,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy,
-                         BootstrapConfiguration bootstrapConfiguration) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
         this(null,
              metadata,
              selector,
@@ -264,7 +263,7 @@ public class NetworkClient implements KafkaClient {
              null,
              Long.MAX_VALUE,
              metadataRecoveryStrategy,
-             bootstrapConfiguration);
+             BootstrapConfiguration.DISABLED);
     }
 
     public NetworkClient(Selectable selector,
@@ -844,14 +843,22 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle the case when there are no nodes available.
-     * During bootstrap phase, return null node to allow DNS resolution to continue.
-     * After bootstrap, throw IllegalStateException.
+     * <p>
+     * If bootstrap is disabled, throw IllegalStateException.
+     * If bootstrap is enabled but not yet complete, return null to allow DNS resolution to continue.
+     * If bootstrap is complete but no nodes are available, throw IllegalStateException.
      */
     private LeastLoadedNode handleEmptyNodeList() {
+        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED) {
+            throw new IllegalStateException("There are no nodes in the Kafka cluster");
+        }
+
         if (!metadataUpdater.isBootstrapped()) {
             log.debug("No nodes available yet, still in bootstrap phase");
             return new LeastLoadedNode(null, false);
         }
+
+        // Bootstrap completed but no nodes available
         throw new IllegalStateException("There are no nodes in the Kafka cluster");
     }
 
@@ -1206,33 +1213,29 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static class BootstrapConfiguration {
+        public static final BootstrapConfiguration DISABLED =
+            new BootstrapConfiguration(List.of(), null, 0, 0);
+
         public final List<String> bootstrapServers;
         public final ClientDnsLookup clientDnsLookup;
         public final long bootstrapResolveTimeoutMs;
         public final long retryBackoffMs;
-        private final boolean isBootstrapDisabled;
 
         private BootstrapConfiguration(final List<String> bootstrapServers,
                                        final ClientDnsLookup clientDnsLookup,
                                        final long bootstrapResolveTimeoutMs,
-                                       final long retryBackoffMs,
-                                       final boolean isBootstrapDisabled) {
+                                       final long retryBackoffMs) {
             this.bootstrapServers = bootstrapServers;
             this.clientDnsLookup = clientDnsLookup;
             this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
             this.retryBackoffMs = retryBackoffMs;
-            this.isBootstrapDisabled = isBootstrapDisabled;
         }
 
         public static BootstrapConfiguration enabled(final List<String> bootstrapServers,
                                                       final ClientDnsLookup clientDnsLookup,
                                                       final long bootstrapResolveTimeoutMs,
                                                       final long retryBackoffMs) {
-            return new BootstrapConfiguration(bootstrapServers, clientDnsLookup, bootstrapResolveTimeoutMs, retryBackoffMs, false);
-        }
-
-        public static BootstrapConfiguration disabled() {
-            return new BootstrapConfiguration(List.of(), null, 0, 0, true);
+            return new BootstrapConfiguration(bootstrapServers, clientDnsLookup, bootstrapResolveTimeoutMs, retryBackoffMs);
         }
     }
 
@@ -1248,7 +1251,7 @@ public class NetworkClient implements KafkaClient {
      * @throws BootstrapResolutionException if the bootstrap timeout expires before DNS resolution succeeds
      */
     void ensureBootstrapped(final long currentTimeMs) {
-        if (bootstrapConfiguration.isBootstrapDisabled || metadataUpdater.isBootstrapped())
+        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped())
             return;
 
         if (Thread.interrupted()) {

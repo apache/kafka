@@ -253,7 +253,7 @@ class KafkaRaftManager[T](
       apiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      NetworkClient.BootstrapConfiguration.disabled
+      NetworkClient.BootstrapConfiguration.DISABLED
     )
 
     (controllerListenerName, networkClient)
