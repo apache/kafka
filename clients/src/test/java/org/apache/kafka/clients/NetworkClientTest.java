@@ -1623,7 +1623,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testEnsureBootstrappedSuccess() {
+    public void testEnsureBootstrappedSuccess() throws InterruptedException {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
@@ -1636,11 +1636,16 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, config);
 
-        // First poll should succeed in bootstrapping
+        // Async DNS resolution: first poll starts the resolution
         client.poll(1000, time.milliseconds());
 
-        // Verify bootstrap succeeded
+        // Wait for async DNS resolution to complete and poll again to process result
         MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
+        TestUtils.waitForCondition(() -> {
+            client.poll(100, time.milliseconds());
+            return metadataUpdater.isBootstrapped();
+        }, "Bootstrap should complete");
+
         assertTrue(metadataUpdater.isBootstrapped());
     }
 
@@ -1696,7 +1701,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testEnsureBootstrappedRetryUntilSuccess() {
+    public void testEnsureBootstrappedRetryUntilSuccess() throws InterruptedException {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
@@ -1709,11 +1714,16 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, config);
 
-        // First poll should succeed in bootstrapping
+        // Async DNS resolution: first poll starts the resolution
         client.poll(1000, time.milliseconds());
 
-        // Verify bootstrap succeeded
+        // Wait for async DNS resolution to complete and poll again to process result
         MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
+        TestUtils.waitForCondition(() -> {
+            client.poll(100, time.milliseconds());
+            return metadataUpdater.isBootstrapped();
+        }, "Bootstrap should complete");
+
         assertTrue(metadataUpdater.isBootstrapped());
 
         // Subsequent polls should not fail even if already bootstrapped
