@@ -253,7 +253,8 @@ class KafkaRaftManager[T](
       discoverBrokerVersions,
       apiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      false
     )
 
     (controllerListenerName, networkClient)

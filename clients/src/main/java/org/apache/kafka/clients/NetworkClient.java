@@ -121,6 +121,9 @@ public class NetworkClient implements KafkaClient {
 
     private final MetadataRecoveryStrategy metadataRecoveryStrategy;
 
+    /* Whether to send the cluster ID and node ID on ApiVersions RPC for checking by the broker */
+    private final boolean metadataClusterCheckEnable;
+
     private final Time time;
 
     /**
@@ -155,7 +158,8 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          LogContext logContext,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy,
+                         boolean metadataClusterCheckEnable) {
         this(selector,
              metadata,
              clientId,
@@ -172,7 +176,8 @@ public class NetworkClient implements KafkaClient {
              apiVersions,
              logContext,
              Long.MAX_VALUE,
-             metadataRecoveryStrategy);
+             metadataRecoveryStrategy,
+             metadataClusterCheckEnable);
     }
 
     public NetworkClient(Selectable selector,
@@ -191,7 +196,8 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          LogContext logContext,
                          long rebootstrapTriggerMs,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy,
+                         boolean metadataClusterCheckEnable) {
         this(null,
                 metadata,
                 selector,
@@ -212,7 +218,8 @@ public class NetworkClient implements KafkaClient {
                 new DefaultHostResolver(),
                 null,
                 rebootstrapTriggerMs,
-                metadataRecoveryStrategy);
+                metadataRecoveryStrategy,
+                metadataClusterCheckEnable);
     }
 
     public NetworkClient(Selectable selector,
@@ -231,7 +238,8 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
                          LogContext logContext,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy,
+                         boolean metadataClusterCheckEnable) {
         this(null,
              metadata,
              selector,
@@ -252,7 +260,8 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              Long.MAX_VALUE,
-             metadataRecoveryStrategy);
+             metadataRecoveryStrategy,
+             metadataClusterCheckEnable);
     }
 
     public NetworkClient(Selectable selector,
@@ -270,7 +279,8 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          LogContext logContext,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy,
+                         boolean metadataClusterCheckEnable) {
         this(metadataUpdater,
              null,
              selector,
@@ -291,7 +301,8 @@ public class NetworkClient implements KafkaClient {
              new DefaultHostResolver(),
              null,
              Long.MAX_VALUE,
-             metadataRecoveryStrategy);
+             metadataRecoveryStrategy,
+             metadataClusterCheckEnable);
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -314,7 +325,8 @@ public class NetworkClient implements KafkaClient {
                          HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender,
                          long rebootstrapTriggerMs,
-                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+                         MetadataRecoveryStrategy metadataRecoveryStrategy,
+                         boolean metadataClusterCheckEnable) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -347,6 +359,7 @@ public class NetworkClient implements KafkaClient {
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+        this.metadataClusterCheckEnable = metadataClusterCheckEnable;
     }
 
     /**
@@ -1108,15 +1121,17 @@ public class NetworkClient implements KafkaClient {
                 // not before ready.
                 this.connectionStates.checkingApiVersions(node);
                 ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
-                String clusterId = this.metadataUpdater.clusterId();
-                int nodeId = Integer.parseInt(node);
-                if (clusterId != null && nodeId > 0 && nodeId < Integer.MAX_VALUE / 2) {
-                    // If we know the cluster ID and node ID we are connecting to, we can include
-                    // those details in the ApiVersions request for checking in the broker.
-                    // The client uses large positive node ID values for connecting to coordinators
-                    // which do not match the target broker's node ID so exclude those.
-                    apiVersionRequestBuilder.setClusterId(clusterId);
-                    apiVersionRequestBuilder.setNodeId(nodeId);
+                // If we know the cluster ID and node ID we are connecting to, we can include
+                // those details in the ApiVersions request for checking in the broker.
+                if (metadataClusterCheckEnable) {
+                    String clusterId = this.metadataUpdater.clusterId();
+                    int nodeId = Integer.parseInt(node);
+                    if (clusterId != null && nodeId > 0 && nodeId < Integer.MAX_VALUE / 2) {
+                        // The client uses large positive node ID values for connecting to coordinators
+                        // which do not match the target broker's node ID so exclude those.
+                        apiVersionRequestBuilder.setClusterId(clusterId);
+                        apiVersionRequestBuilder.setNodeId(nodeId);
+                    }
                 }
                 ClientRequest clientRequest = newClientRequest(node, apiVersionRequestBuilder, now, true);
                 doSend(clientRequest, true, now);

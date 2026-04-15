@@ -132,7 +132,7 @@ public class NetworkClientTest {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
     }
 
     private NetworkClient createNetworkClientWithMaxInFlightRequestsPerConnection(
@@ -140,7 +140,7 @@ public class NetworkClientTest {
         return new NetworkClient(selector, metadataUpdater, "mock", maxInFlightRequestsPerConnection,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
     }
 
     private NetworkClient createNetworkClientWithMultipleNodes(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest, int nodeNumber) {
@@ -149,21 +149,21 @@ public class NetworkClientTest {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
@@ -171,7 +171,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
     }
 
     @BeforeEach
@@ -258,8 +258,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                rebootstrapTriggerMs,
-                MetadataRecoveryStrategy.REBOOTSTRAP);
+                rebootstrapTriggerMs, MetadataRecoveryStrategy.REBOOTSTRAP, true);
         MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999)));
 
@@ -313,7 +312,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
-                rebootstrapTriggerMs, MetadataRecoveryStrategy.REBOOTSTRAP);
+                rebootstrapTriggerMs, MetadataRecoveryStrategy.REBOOTSTRAP, true);
 
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
@@ -1152,7 +1151,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1213,7 +1212,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false);
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
@@ -1266,7 +1265,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1375,7 +1374,7 @@ public class NetworkClientTest {
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender,
-            Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+            Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, false);
 
         // Send the ApiVersionsRequest
         client.ready(node, time.milliseconds());
