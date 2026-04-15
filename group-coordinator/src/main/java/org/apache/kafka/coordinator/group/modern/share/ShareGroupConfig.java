@@ -27,7 +27,6 @@ import java.util.Map;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
@@ -83,29 +82,6 @@ public class ShareGroupConfig {
     public static final String SHARE_GROUP_PERSISTER_CLASS_NAME_DOC = "The fully qualified name of a class which implements " +
         "the <code>org.apache.kafka.server.share.Persister</code> interface.";
 
-    /** Dead Letter Queue Configurations (KIP-1191) **/
-
-    // Cluster-level DLQ configs
-    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG = "errors.deadletterqueue.auto.create.topics.enable";
-    public static final boolean ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT = false;
-    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC = "Enable automatic creation of dead-letter queue topics when a share group " +
-        "is configured to use a DLQ topic that does not yet exist. When set to <code>true</code>, the broker will automatically create the DLQ topic " +
-        "with default configurations when records need to be written to it. When set to <code>false</code> (the default), DLQ topics must be created " +
-        "manually before use.";
-
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG = "errors.deadletterqueue.topic.name.prefix";
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT = "dlq.";
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC = "The required prefix of topic names used by dead-letter queue topics for share groups. When set to \"\", there is no restriction on the names used for dead-letter queue topics.";
-
-    // Group-level DLQ configs
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
-    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue (DLQ) topic for this share group. If blank (the default), the group does not have a DLQ topic.";
-
-    public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG = "errors.deadletterqueue.copy.record.enable";
-    public static final boolean ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DEFAULT = false;
-    public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DOC = "When writing onto the dead-letter queue topic, whether to copy the original record onto the DLQ topic, or just write a record containing the context information headers.";
-
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
             .define(SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DEFAULT, between(5, 25), MEDIUM, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DOC)
@@ -118,12 +94,7 @@ public class ShareGroupConfig {
             .define(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 2000), MEDIUM, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DOC)
             .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, INT, SHARE_GROUP_MAX_SHARE_SESSIONS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_SHARE_SESSIONS_DOC)
-            .defineInternal(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC)
-            // DLQ configurations (KIP-1191)
-            .define(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, BOOLEAN, ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC)
-            .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, STRING, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC)
-            .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, STRING, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC)
-            .define(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, BOOLEAN, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DOC);
+            .defineInternal(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC);
 
     private final int shareGroupPartitionMaxRecordLocks;
     private final int shareGroupMaxPartitionMaxRecordLocks;
@@ -137,10 +108,6 @@ public class ShareGroupConfig {
     private final int shareFetchPurgatoryPurgeIntervalRequests;
     private final int shareGroupMaxShareSessions;
     private final String shareGroupPersisterClassName;
-    private final boolean errorsDLQAutoCreateTopicsEnable;
-    private final String errorsDLQTopicNamePrefix;
-    private final String errorsDLQTopicName;
-    private final boolean errorsDLQCopyRecordEnable;
     private final AbstractConfig config;
 
     public ShareGroupConfig(AbstractConfig config) {
@@ -157,10 +124,6 @@ public class ShareGroupConfig {
         shareFetchPurgatoryPurgeIntervalRequests = config.getInt(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
         shareGroupMaxShareSessions = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG);
         shareGroupPersisterClassName = config.getString(ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG);
-        errorsDLQAutoCreateTopicsEnable = config.getBoolean(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
-        errorsDLQTopicNamePrefix = config.getString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
-        errorsDLQTopicName = config.getString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
-        errorsDLQCopyRecordEnable = config.getBoolean(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG);
         validate();
     }
 
@@ -223,22 +186,6 @@ public class ShareGroupConfig {
         return shareGroupPersisterClassName;
     }
 
-    public boolean errorsDLQAutoCreateTopicsEnable() {
-        return errorsDLQAutoCreateTopicsEnable;
-    }
-
-    public String errorsDLQTopicNamePrefix() {
-        return errorsDLQTopicNamePrefix;
-    }
-
-    public String errorsDLQTopicName() {
-        return errorsDLQTopicName;
-    }
-
-    public boolean errorsDLQCopyRecordEnable() {
-        return errorsDLQCopyRecordEnable;
-    }
-
     private void validate() {
         Utils.require(shareGroupMaxDeliveryCountLimit >= shareGroupDeliveryCountLimit,
                 String.format("%s must be greater than or equal to %s",
@@ -261,14 +208,5 @@ public class ShareGroupConfig {
         Utils.require(shareGroupMaxShareSessions >= config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG),
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG));
-
-        // DLQ validation (KIP-1191)
-        // DLQ topic name must not start with "__" (reserved for internal topics)
-        if (errorsDLQTopicName != null && !errorsDLQTopicName.isEmpty() && errorsDLQTopicName.startsWith("__")) {
-            throw new org.apache.kafka.common.config.ConfigException(
-                ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
-                errorsDLQTopicName,
-                "DLQ topic name must not start with '__'");
-        }
     }
 }

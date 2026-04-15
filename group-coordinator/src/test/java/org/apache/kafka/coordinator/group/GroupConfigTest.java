@@ -126,7 +126,12 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
-            } else {
+            } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_boolean");
+            } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_boolean");
+            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG.equals(name) &&
+                       !GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
         });
@@ -425,6 +430,12 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
+
+        // DLQ configs
+        assertEquals(Optional.empty(), config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(Optional.empty(), config.errorsDLQTopicNamePrefix());
+        assertEquals(Optional.empty(), config.errorsDLQTopicName());
+        assertEquals(Optional.empty(), config.errorsDLQCopyRecordEnable());
     }
 
     @Test
@@ -452,6 +463,10 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
+        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
+        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
+        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
         GroupConfig config = new GroupConfig(props);
 
@@ -481,6 +496,12 @@ public class GroupConfigTest {
         assertEquals(Optional.of(1250), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.of(false), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
+
+        // DLQ configs
+        assertEquals(Optional.of(true), config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(Optional.of("my-dlq-"), config.errorsDLQTopicNamePrefix());
+        assertEquals(Optional.of("my-dlq-topic"), config.errorsDLQTopicName());
+        assertEquals(Optional.of(true), config.errorsDLQCopyRecordEnable());
     }
 
     @Test
@@ -775,5 +796,56 @@ public class GroupConfigTest {
                 SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS,
                 SHARE_GROUP_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT,
                 SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
+    }
+
+    @Test
+    public void testDLQConfigDefaults() {
+        // Test default DLQ configuration values (KIP-1191) - not configured, so all empty
+        Map<String, String> configs = new HashMap<>();
+        GroupConfig config = new GroupConfig(configs);
+
+        assertEquals(Optional.empty(), config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(Optional.empty(), config.errorsDLQTopicNamePrefix());
+        assertEquals(Optional.empty(), config.errorsDLQTopicName());
+        assertEquals(Optional.empty(), config.errorsDLQCopyRecordEnable());
+    }
+
+    @Test
+    public void testDLQConfigCustomValues() {
+        // Test custom DLQ configuration values
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        GroupConfig config = new GroupConfig(configs);
+
+        assertEquals(Optional.of(true), config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(Optional.of("my-dlq-"), config.errorsDLQTopicNamePrefix());
+        assertEquals(Optional.of("my-dlq-topic"), config.errorsDLQTopicName());
+        assertEquals(Optional.of(true), config.errorsDLQCopyRecordEnable());
+    }
+
+    @Test
+    public void testDLQTopicNameCannotStartWithDoubleUnderscore() {
+        // DLQ topic name must not start with "__" (reserved for internal topics)
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my-dlq");
+
+        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertTrue(exception.getMessage().contains("DLQ topic name must not start with '__'"));
+    }
+
+    @Test
+    public void testDLQBlankTopicNameIsValid() {
+        // Blank DLQ topic name is valid (means DLQ is disabled for that group)
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "");
+
+        GroupConfig config = new GroupConfig(configs);
+
+        assertEquals(Optional.of(""), config.errorsDLQTopicName());
     }
 }

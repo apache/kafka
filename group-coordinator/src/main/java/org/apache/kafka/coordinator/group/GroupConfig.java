@@ -105,6 +105,25 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
 
+    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG = "errors.deadletterqueue.auto.create.topics.enable";
+    public static final boolean ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT = false;
+    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC = "Enable automatic creation of dead-letter queue topics when a share group " +
+        "is configured to use a DLQ topic that does not yet exist. When set to <code>true</code>, the broker will automatically create the DLQ topic " +
+        "with default configurations when records need to be written to it. When set to <code>false</code> (the default), DLQ topics must be created " +
+        "manually before use.";
+
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG = "errors.deadletterqueue.topic.name.prefix";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT = "dlq.";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC = "The required prefix of topic names used by dead-letter queue topics for share groups. When set to \"\", there is no restriction on the names used for dead-letter queue topics.";
+
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue (DLQ) topic for this share group. If blank (the default), the group does not have a DLQ topic.";
+
+    public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG = "errors.deadletterqueue.copy.record.enable";
+    public static final boolean ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DEFAULT = false;
+    public static final String ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DOC = "When writing onto the dead-letter queue topic, whether to copy the original record onto the DLQ topic, or just write a record containing the context information headers.";
+
     private final Optional<Integer> consumerSessionTimeoutMs;
 
     private final Optional<Integer> consumerHeartbeatIntervalMs;
@@ -146,6 +165,14 @@ public final class GroupConfig extends AbstractConfig {
     private final Optional<IsolationLevel> shareIsolationLevel;
 
     private final Optional<Boolean> shareRenewAcknowledgeEnable;
+
+    private final Optional<Boolean> errorsDLQAutoCreateTopicsEnable;
+
+    private final Optional<String> errorsDLQTopicNamePrefix;
+
+    private final Optional<String> errorsDLQTopicName;
+
+    private final Optional<Boolean> errorsDLQCopyRecordEnable;
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -269,7 +296,29 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
+
+        // DLQ configurations (KIP-1191)
+        .define(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG,
+            BOOLEAN,
+            ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT,
+            MEDIUM,
+            ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC)
+        .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG,
+            STRING,
+            ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT,
+            MEDIUM,
+            ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC)
+        .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
+            STRING,
+            ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT,
+            MEDIUM,
+            ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC)
+        .define(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG,
+            BOOLEAN,
+            ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DEFAULT,
+            MEDIUM,
+            ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_DOC);
 
     /**
      * Mapping from GroupConfig name to its broker-level synonym config name.
@@ -301,7 +350,13 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG)),
         Map.entry(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
         Map.entry(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
-        Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG))
+        Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG)),
+
+        // DLQ configs
+        Map.entry(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, Optional.empty()),
+        Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, Optional.empty()),
+        Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, Optional.empty()),
+        Map.entry(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, Optional.empty())
     );
 
     /**
@@ -337,6 +392,10 @@ public final class GroupConfig extends AbstractConfig {
         this.shareIsolationLevel = optionalString(SHARE_ISOLATION_LEVEL_CONFIG)
             .map(s -> IsolationLevel.valueOf(s.toUpperCase(Locale.ROOT)));
         this.shareRenewAcknowledgeEnable = optionalBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
+        this.errorsDLQAutoCreateTopicsEnable = optionalBoolean(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
+        this.errorsDLQTopicNamePrefix = optionalString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
+        this.errorsDLQTopicName = optionalString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
+        this.errorsDLQCopyRecordEnable = optionalBoolean(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG);
     }
 
     private Optional<Integer> optionalInt(String key) {
@@ -535,6 +594,14 @@ public final class GroupConfig extends AbstractConfig {
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs()
         );
+
+        // DLQ validation (KIP-1191)
+        // DLQ topic name must not start with "__" (reserved for internal topics)
+        String dlqTopicName = (String) parsed.get(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
+        if (dlqTopicName != null && !dlqTopicName.isEmpty() && dlqTopicName.startsWith("__")) {
+            throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
+                ": DLQ topic name must not start with '__'");
+        }
     }
 
     /**
@@ -1058,6 +1125,34 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<Boolean> shareRenewAcknowledgeEnable() {
         return shareRenewAcknowledgeEnable;
+    }
+
+    /**
+     * Whether automatic creation of DLQ topics is enabled.
+     */
+    public Optional<Boolean> errorsDLQAutoCreateTopicsEnable() {
+        return errorsDLQAutoCreateTopicsEnable;
+    }
+
+    /**
+     * The required prefix for DLQ topic names.
+     */
+    public Optional<String> errorsDLQTopicNamePrefix() {
+        return errorsDLQTopicNamePrefix;
+    }
+
+    /**
+     * The DLQ topic name for this group.
+     */
+    public Optional<String> errorsDLQTopicName() {
+        return errorsDLQTopicName;
+    }
+
+    /**
+     * Whether to copy the original record to the DLQ topic.
+     */
+    public Optional<Boolean> errorsDLQCopyRecordEnable() {
+        return errorsDLQCopyRecordEnable;
     }
 
     public static void main(String[] args) {
