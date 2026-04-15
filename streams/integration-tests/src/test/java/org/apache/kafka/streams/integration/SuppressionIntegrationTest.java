@@ -48,8 +48,9 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -113,8 +114,9 @@ public class SuppressionIntegrationTest {
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
     }
 
-    @Test
-    public void shouldUseDefaultSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldUseDefaultSerdes(final boolean withHeaders) {
         final String testId = "-shouldInheritSerdes";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -140,7 +142,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -165,8 +167,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldInheritSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldInheritSerdes(final boolean withHeaders) {
         final String testId = "-shouldInheritSerdes";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -193,7 +196,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -246,8 +249,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutdownWhenRecordConstraintIsViolated() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownWhenRecordConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
         final String testId = "-shouldShutdownWhenRecordConstraintIsViolated";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -268,7 +272,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -287,8 +292,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldShutdownWhenBytesConstraintIsViolated() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldShutdownWhenBytesConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
         final String testId = "-shouldShutdownWhenBytesConstraintIsViolated";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -310,7 +316,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
+
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
@@ -329,8 +336,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAllowOverridingChangelogConfig() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAllowOverridingChangelogConfig(final boolean withHeaders) {
         final String testId = "-shouldAllowOverridingChangelogConfig";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -360,7 +368,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -389,8 +397,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldCreateChangelogByDefault() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCreateChangelogByDefault(final boolean withHeaders) {
         final String testId = "-shouldCreateChangelogByDefault";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -418,7 +427,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -445,8 +454,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldAllowDisablingChangelog() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAllowDisablingChangelog(final boolean withHeaders) {
         final String testId = "-shouldAllowDisablingChangelog";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -474,7 +484,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw);
 
-        final Properties streamsConfig = getStreamsConfig(appId);
+        final Properties streamsConfig = getStreamsConfig(appId, withHeaders);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
@@ -506,8 +516,8 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    private static Properties getStreamsConfig(final String appId) {
-        return mkProperties(mkMap(
+    private static Properties getStreamsConfig(final String appId, final boolean withHeaders) {
+        final Properties props = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
@@ -515,6 +525,8 @@ public class SuppressionIntegrationTest {
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
+        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        return props;
     }
 
     /**

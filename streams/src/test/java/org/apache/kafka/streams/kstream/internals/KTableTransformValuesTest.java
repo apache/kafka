@@ -54,6 +54,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -353,8 +355,9 @@ public class KTableTransformValuesTest {
         getter.close();
     }
 
-    @Test
-    public void shouldTransformValuesWithKey() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldTransformValuesWithKey(final boolean withHeaders) {
         builder
             .addStateStore(storeBuilder(STORE_NAME))
             .addStateStore(storeBuilder(OTHER_STORE_NAME))
@@ -365,7 +368,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -381,8 +384,9 @@ public class KTableTransformValuesTest {
         assertNull(driver.getKeyValueStore(QUERYABLE_NAME), "Store should not be materialized");
     }
 
-    @Test
-    public void shouldTransformValuesWithKeyAndMaterialize() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldTransformValuesWithKeyAndMaterialize(final boolean withHeaders) {
         builder
             .addStateStore(storeBuilder(STORE_NAME))
             .table(INPUT_TOPIC, CONSUMED)
@@ -395,7 +399,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "a", 5L);
@@ -420,8 +424,9 @@ public class KTableTransformValuesTest {
         }
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful(final boolean withHeaders) {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(
@@ -435,7 +440,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -453,8 +458,9 @@ public class KTableTransformValuesTest {
             equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized(final boolean withHeaders) {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier())
@@ -464,7 +470,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -479,8 +485,9 @@ public class KTableTransformValuesTest {
             equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName(final boolean withHeaders) {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier(),
@@ -492,7 +499,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
             driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -523,11 +530,14 @@ public class KTableTransformValuesTest {
         return Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long());
     }
 
-    public static Properties props() {
+    public static Properties props(final boolean withHeaders) {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         return props;
     }
 

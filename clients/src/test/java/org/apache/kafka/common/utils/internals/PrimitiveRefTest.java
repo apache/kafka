@@ -14,8 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.common.utils.internals;
 
-public interface WithRetentionPeriod {
-    long retentionPeriod();
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class PrimitiveRefTest {
+
+    @Test
+    public void testIntRef() {
+        PrimitiveRef.IntRef ref = PrimitiveRef.ofInt(3);
+        assertEquals(3, ref.value++);
+        assertEquals(4, ref.value);
+        assertEquals(5, ++ref.value);
+        assertEquals(5, ref.value);
+    }
+
+    @Test
+    public void testLongRef() {
+        PrimitiveRef.LongRef ref = PrimitiveRef.ofLong(5L);
+        assertEquals(5L, ref.value++);
+        assertEquals(6L, ref.value);
+        assertEquals(7L, ++ref.value);
+        assertEquals(7L, ref.value);
+    }
+
 }

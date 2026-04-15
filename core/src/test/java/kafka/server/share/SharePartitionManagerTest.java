@@ -78,6 +78,7 @@ import org.apache.kafka.server.share.session.ShareSessionKey;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -173,7 +174,7 @@ public class SharePartitionManagerTest {
     @BeforeEach
     public void setUp() {
         time = new MockTime();
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats();
         mockReplicaManager = mock(ReplicaManager.class);
         Partition partition = mockPartition();

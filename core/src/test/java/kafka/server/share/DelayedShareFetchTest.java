@@ -44,6 +44,7 @@ import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -123,7 +124,7 @@ public class DelayedShareFetchTest {
 
     @BeforeEach
     public void setUp() {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         mockTimer = new SystemTimerReaper("DelayedShareFetchTestReaper",
             new SystemTimer("DelayedShareFetchTestTimer"));
     }

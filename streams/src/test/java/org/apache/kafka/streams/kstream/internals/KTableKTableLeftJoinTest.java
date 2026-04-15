@@ -46,7 +46,8 @@ import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -69,16 +70,20 @@ public class KTableKTableLeftJoinTest {
     private final String topic2 = "topic2";
     private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
-    private StreamsBuilder createStreamBuilderInMemory() {
+    private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
     }
 
-    @Test
-    public void testJoin() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testJoin(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -197,9 +202,10 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void testNotSendingOldValue() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNotSendingOldValue(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -313,9 +319,10 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void testSendingOldValue() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSendingOldValue(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -438,8 +445,9 @@ public class KTableKTableLeftJoinTest {
      * It is based on a fairly complicated join used by the developer that reported the bug.
      * Before the fix this would trigger an IllegalStateException.
      */
-    @Test
-    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions(final boolean withHeaders) {
         final String agg = "agg";
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
@@ -449,7 +457,7 @@ public class KTableKTableLeftJoinTest {
         final String tableSix = "tableSix";
         final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
 
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
         final KTable<Long, String> aggTable = builder
             .table(agg, consumed, Materialized.as(Stores.inMemoryKeyValueStore("agg-base-store")))
@@ -501,9 +509,10 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         @SuppressWarnings("unchecked")
         final Processor<String, Change<String>, String, Change<Object>> join = new KTableKTableLeftJoin<>(

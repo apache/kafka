@@ -62,7 +62,7 @@ public final class QueryableStoreTypes {
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
-     * @return {@link QueryableStoreTypes.TimestampedKeyValueStoreType}
+     * @return {@link QueryableStoreTypes.TimestampedKeyValueStoreWithHeadersType}
      */
     public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>>> timestampedKeyValueStoreWithHeaders() {
         return new TimestampedKeyValueStoreWithHeadersType<>();
@@ -91,7 +91,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore&lt;K, ValueTimestampeHeaders&lt;V&gt;&gt;}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore&lt;K, ValueTimestampHeaders&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
@@ -113,7 +113,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore ReadOnlySessionStoree&lt;K, AggregationWithHeaders&lt;V&gt;&gt;}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore ReadOnlySessionStore&lt;K, AggregationWithHeaders&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.KafkaThread;
+
 /**
  * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
