@@ -372,7 +372,7 @@ public class OffsetFetcherTest {
 
         // First fetch() (during regroup) returns cluster with no leader; subsequent calls use real metadata
         ConsumerMetadata metadataSpy = spy(metadata);
-        when(metadataSpy.fetch()).thenReturn(clusterWithNoLeader).thenAnswer(invocation -> invocation.callRealMethod());
+        when(metadataSpy.fetch()).thenReturn(clusterWithNoLeader).thenAnswer(InvocationOnMock::callRealMethod);
 
         LogContext logContext = new LogContext();
         offsetFetcher = new OffsetFetcher(logContext,
