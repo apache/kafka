@@ -591,20 +591,6 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("Static membership is not yet supported."),
-                Map.of()
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setInstanceId(Uuid.randomUuid().toString())
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("TaskOffsets are not supported yet."),
                 Map.of()
             ),
