@@ -134,7 +134,7 @@ Streams has multiple sub-projects, but you can run all the tests:
 ### Building IDE project ####
 *Note Please ensure that JDK17 is used when developing Kafka.*
 
-IntelliJ supports Gradle natively and it will automatically check Java syntax and compatibility for each module, even if
+IntelliJ supports Gradle natively, and it will automatically check Java syntax and compatibility for each module, even if
 the Java version shown in the `Structure > Project Settings > Modules` may not be the correct one.
 
 When it comes to Eclipse, run:
@@ -142,7 +142,7 @@ When it comes to Eclipse, run:
     ./gradlew eclipse
 
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
-build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
+build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory, and we don't use Gradle's build directory
 to avoid known issues with this configuration.
 
 ### Publishing the streams quickstart archetype artifact to maven ###
