@@ -27,6 +27,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.internals.ChangeLoggingListValueBytesStore;
+import org.apache.kafka.streams.state.internals.ListValueStore;
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
@@ -59,6 +61,25 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
+        // Special case: ListValueStore logs raw serialized list bytes to changelog,
+        // NOT headers-wrapped bytes, even when the underlying store is headers-aware.
+        // We must use identity converter to avoid double-wrapping during restoration.
+        StateStore current = store;
+        while (current != null) {
+            // This will be removed in AK 4.4 when ListValueStore is a header store as well
+            if (current instanceof ListValueStore || current instanceof ChangeLoggingListValueBytesStore) {
+                return identity();
+            }
+
+            // If not a WrappedStateStore, we've reached the innermost store
+            if (!(current instanceof WrappedStateStore)) {
+                break;
+            }
+
+            // Unwrap one more level
+            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+        }
+
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
         if (isHeadersAware(store)) {
             if (store instanceof SessionStore) {
@@ -73,7 +94,7 @@ final class StateManagerUtil {
 
         // If top-level check didn't find the type, unwrap to find adapters
         // This handles persistent stores that use adapters
-        StateStore current = store;
+        current = store;
         while (current != null) {
             if (current instanceof TimestampedToHeadersStoreAdapter || current instanceof TimestampedToHeadersWindowStoreAdapter) {
                 // Adapter wraps a timestamped store, so restore in timestamped format
