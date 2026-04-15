@@ -1289,6 +1289,43 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testAuthenticationErrorInHeartbeatThreadTriggersRejoin() throws Exception {
+        setupCoordinator();
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        final AuthenticationException authError = new AuthenticationException("test auth failure");
+
+        mockClient.prepareResponse(body -> {
+            if (body instanceof HeartbeatRequest)
+                throw authError;
+            return false;
+        }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
+
+        coordinator.ensureActiveGroup();
+        assertFalse(coordinator.rejoinNeededOrPending(),
+            "Sanity: group should be stable before the auth error");
+
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        TestUtils.waitForCondition(() -> {
+            try {
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+                return false;
+            } catch (AuthenticationException e) {
+                assertSame(authError, e);
+                return true;
+            }
+        }, 3000, "HeartbeatThread did not propagate the authentication error in time");
+
+        assertTrue(coordinator.rejoinNeededOrPending(),
+            "Expected the heartbeat thread to request a rejoin after an AuthenticationException " +
+                "so the next poll() restarts the heartbeat machinery via ensureActiveGroup()");
+    }
+
+    @Test
     public void testPollHeartbeatAwakesHeartbeatThread() throws Exception {
         final int longRetryBackoffMs = 10000;
         final int longRetryBackoffMaxMs = 10000;
