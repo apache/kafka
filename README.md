@@ -133,7 +133,7 @@ Streams has multiple sub-projects, but you can run all the tests:
     ./gradlew idea
 
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
-build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
+build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory, and we don't use Gradle's build directory
 to avoid known issues with this configuration.
 
 IntelliJ Language Level awareness:
