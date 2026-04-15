@@ -62,7 +62,7 @@ public class ShareConsumerRackAwareTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
         }
     )
-    void testShareConsumerWithRackAwareAssignor(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testShareConsumerWithRackAwareAssignor(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String groupId = "group0";
         String topic = "test-topic";
         try (Admin admin = clusterInstance.admin();
