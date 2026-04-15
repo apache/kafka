@@ -14,8 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
 
-public interface WithRetentionPeriod {
-    long retentionPeriod();
+package org.apache.kafka.server.partition;
+
+import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.server.common.TopicIdPartition;
+
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Handles updating the ISR by sending AlterPartition requests to the controller. Updating the ISR is an asynchronous
+ * operation, so partitions will learn about the result of their request through a callback.
+ * <p>
+ * Note that ISR state changes can still be initiated by the controller and sent to the partitions via LeaderAndIsr
+ * requests.
+ */
+public interface AlterPartitionManager {
+    void start();
+
+    void shutdown() throws InterruptedException;
+
+    CompletableFuture<LeaderAndIsr> submit(TopicIdPartition topicIdPartition, LeaderAndIsr leaderAndIsr);
 }

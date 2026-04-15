@@ -50,6 +50,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -120,7 +121,7 @@ public abstract class ShareConsumerTestBase {
 
     @AfterEach
     public void tearDown() {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
     }
 
     /**

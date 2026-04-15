@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server;
 
-import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import org.junit.jupiter.api.Test;
 

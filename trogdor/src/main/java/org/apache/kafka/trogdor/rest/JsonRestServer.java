@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.rest;
 
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 
 import com.fasterxml.jackson.core.type.TypeReference;

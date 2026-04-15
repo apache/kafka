@@ -129,6 +129,9 @@
 
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
             <allow class="org.apache.kafka.test.TestUtils" />
+            <!-- ServerTestUtils uses yammer metrics for test cleanup -->
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="com.yammer.metrics.core" />
             <subpackage name="timer">
                 <allow class="org.apache.kafka.server.util.MockTime" />
                 <allow class="org.apache.kafka.server.util.ShutdownableThread" />

@@ -43,6 +43,7 @@ import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
@@ -349,7 +350,7 @@ abstract class QuorumTestHarness extends Logging {
     }
     Exit.resetExitProcedure()
     Exit.resetHaltProcedure()
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
     faultHandler.maybeRethrowFirstException()

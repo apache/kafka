@@ -45,7 +45,7 @@ import javax.security.auth.spi.LoginModule;
  * The absolute path of the file needs to specified using the option <b>file</b>
  *
  * <p><b>NOTE: This implementation is NOT intended to be used in production since the credentials are stored in PLAINTEXT in the
- * properties file.</b>
+ * properties file. For this reason, Apache Kafka project does not consider this a security issue.</b>
  */
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);

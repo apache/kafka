@@ -216,8 +216,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
     protected boolean shouldSendLeaveHeartbeatNow() {
         // If the consumer has dynamic membership,
         // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
-        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()) {
+            logger.debug("Dynamic member {} closed with REMAIN_IN_GROUP. No leave heartbeat will be sent, " +
+                "the member will be removed by the coordinator after session timeout.",
+                membershipManager.memberId());
             return false;
+        }
         return membershipManager().state() == MemberState.LEAVING;
     }
 

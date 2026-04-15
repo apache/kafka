@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -37,7 +38,8 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -54,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class KTableMapValuesTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
 
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
@@ -72,8 +75,10 @@ public class KTableMapValuesTest {
         }
     }
 
-    @Test
-    public void testKTable() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testKTable(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -86,8 +91,10 @@ public class KTableMapValuesTest {
         doTestKTable(builder, topic1, supplier);
     }
 
-    @Test
-    public void testQueryableKTable() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testQueryableKTable(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -172,8 +179,10 @@ public class KTableMapValuesTest {
         }
     }
 
-    @Test
-    public void testQueryableValueGetter() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testQueryableValueGetter(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName2 = "store2";
@@ -201,8 +210,10 @@ public class KTableMapValuesTest {
         doTestValueGetter(builder, topic1, table2, table3);
     }
 
-    @Test
-    public void testNotSendingOldValue() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNotSendingOldValue(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -242,8 +253,10 @@ public class KTableMapValuesTest {
         }
     }
 
-    @Test
-    public void shouldEnableSendingOldValuesOnParentIfMapValuesNotMaterialized() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldEnableSendingOldValuesOnParentIfMapValuesNotMaterialized(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -260,8 +273,10 @@ public class KTableMapValuesTest {
         testSendingOldValues(builder, topic1, table2);
     }
 
-    @Test
-    public void shouldNotEnableSendingOldValuesOnParentIfMapValuesMaterialized() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotEnableSendingOldValuesOnParentIfMapValuesMaterialized(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -319,6 +334,21 @@ public class KTableMapValuesTest {
             proc.checkAndClearProcessResult(
                 new KeyValueTimestamp<>("A", new Change<>(null, 3), 30)
             );
+        }
+    }
+
+    /**
+     * Configures the DSL store format to use headers if enabled.
+     * This is a helper method to reduce boilerplate in parameterized tests that test both
+     * with and without headers mode.
+     *
+     * @param withHeaders Whether to enable headers mode
+     */
+    private void setDslStoreFormat(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
     }
 }
