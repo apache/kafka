@@ -5376,9 +5376,6 @@ org.apache.kafka.common.telemetry.internals.TelemetryMetricNamingConventionTest:
 - testNullPrefix
 - testStandardConsumerMetrics
 - testStandardProducerMetrics
-org.apache.kafka.common.utils.AbstractIteratorTest:
-- testEmptyIterator
-- testIterator
 org.apache.kafka.common.utils.AppInfoParserTest:
 - testClientIdWontAddRepeatedly
 - testRegisterAppInfoRegistersMetrics
@@ -5418,10 +5415,6 @@ org.apache.kafka.common.utils.ChunkedBytesStreamTest:
 - testEndOfSourceForMethodSkip
 - testEofErrorForMethodReadFully
 - testInvalidInputsForMethodRead
-org.apache.kafka.common.utils.CircularIteratorTest:
-- testCycleCollection
-- testEmptyCollection
-- testNullCollection
 org.apache.kafka.common.utils.ConfigUtilsTest:
 - testConfigMapToRedactedStringForEmptyMap
 - testConfigMapToRedactedStringWithSecrets
@@ -5433,10 +5426,6 @@ org.apache.kafka.common.utils.ExitTest:
 - shouldExitImmediately
 - shouldHaltImmediately
 - shouldNotInvokeShutdownHookImmediately
-org.apache.kafka.common.utils.FixedOrderMapTest:
-- shouldForbidConditionalRemove
-- shouldForbidRemove
-- shouldMaintainOrderWhenAdding
 org.apache.kafka.common.utils.JavaTest:
 - testIsIBMJdk
 - testIsIBMJdkSemeru
@@ -5448,9 +5437,6 @@ org.apache.kafka.common.utils.MockTimeTest:
 - testAutoTickMs
 - testWaitObjectConditionSatisfied
 - testWaitObjectTimeout
-org.apache.kafka.common.utils.PrimitiveRefTest:
-- testIntRef
-- testLongRef
 org.apache.kafka.common.utils.SanitizerTest:
 - testJmxSanitize
 - testSanitize
@@ -5547,6 +5533,9 @@ org.apache.kafka.common.utils.annotation.ApiKeyVersionsProviderTest:
 - testProvideArgumentsWithDefaultRange
 - testProvideArgumentsWithExplicitRange
 - testToVersionTooNewThrowsException
+org.apache.kafka.common.utils.internals.AbstractIteratorTest:
+- testEmptyIterator
+- testIterator
 org.apache.kafka.common.utils.internals.ByteUtilsTest:
 - testBytesLexicographicCases
 - testCorrectnessReadUnsignedVarint
@@ -5568,6 +5557,10 @@ org.apache.kafka.common.utils.internals.ByteUtilsTest:
 - testVarlongSerde
 - testWriteUnsignedIntLEToArray
 - testWriteUnsignedIntLEToOutputStream
+org.apache.kafka.common.utils.internals.CircularIteratorTest:
+- testCycleCollection
+- testEmptyCollection
+- testNullCollection
 org.apache.kafka.common.utils.internals.ExponentialBackoffManagerTest:
 - testBackOffWithJitter
 - testBackOffWithoutJitter
@@ -5579,6 +5572,10 @@ org.apache.kafka.common.utils.internals.ExponentialBackoffTest:
 - testExponentialBackoff
 - testExponentialBackoffWithInvalidJitter
 - testExponentialBackoffWithoutJitter
+org.apache.kafka.common.utils.internals.FixedOrderMapTest:
+- shouldForbidConditionalRemove
+- shouldForbidRemove
+- shouldMaintainOrderWhenAdding
 org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollectionTest:
 - testCollisions
 - testEmptyListIterator
@@ -5608,6 +5605,9 @@ org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollectionTest:
 - testManyInsertsAndDeletes
 - testNullForbidden
 - testTraversal
+org.apache.kafka.common.utils.internals.PrimitiveRefTest:
+- testIntRef
+- testLongRef
 org.apache.kafka.common.utils.internals.ThreadUtilsTest:
 - testThreadNameWithNumberDemon
 - testThreadNameWithNumberNoDemon
