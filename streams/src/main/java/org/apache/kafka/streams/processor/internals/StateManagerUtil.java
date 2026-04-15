@@ -64,9 +64,9 @@ final class StateManagerUtil {
         // Special case: ListValueStore logs raw serialized list bytes to changelog,
         // NOT headers-wrapped bytes, even when the underlying store is headers-aware.
         // We must use identity converter to avoid double-wrapping during restoration.
+        // This will be removed in AK 4.4 when ListValueStore is a header store as well
         StateStore current = store;
         while (current != null) {
-            // This will be removed in AK 4.4 when ListValueStore is a header store as well
             if (current instanceof ListValueStore || current instanceof ChangeLoggingListValueBytesStore) {
                 return identity();
             }
