@@ -104,9 +104,13 @@ public record StreamsGroupMember(String memberId,
         }
 
         public Builder(StreamsGroupMember member) {
+            this(Objects.requireNonNull(member, "member cannot be null"), member.memberId);
+        }
+        
+        public Builder(StreamsGroupMember member, String memberId) {
             Objects.requireNonNull(member, "member cannot be null");
 
-            this.memberId = member.memberId;
+            this.memberId = memberId;
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
             this.instanceId = member.instanceId;
@@ -183,6 +187,10 @@ public record StreamsGroupMember(String memberId,
         public Builder setState(MemberState state) {
             this.state = state;
             return this;
+        }
+
+        public MemberState state() {
+            return this.state;
         }
 
         public Builder setTopologyEpoch(int topologyEpoch) {
@@ -322,6 +330,13 @@ public record StreamsGroupMember(String memberId,
      */
     public boolean isReconciledTo(int targetAssignmentEpoch) {
         return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
+    }
+
+    /**
+     * @return True if the member is in the Unrevoked state.
+     */
+    public boolean isUnrevokedState() {
+        return state == MemberState.UNREVOKED_TASKS;
     }
 
     /**

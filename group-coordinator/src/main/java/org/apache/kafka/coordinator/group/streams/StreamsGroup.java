@@ -525,12 +525,32 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Returns true if the static member exists.
+     *
+     * @param instanceId The instance id.
+     *
+     * @return A boolean indicating whether the member exists or not.
+     */
+    public boolean hasStaticMember(String instanceId) {
+        if (instanceId == null) return false;
+        return staticMembers.containsKey(instanceId);
+    }
+
+    /**
      * Returns the target assignment of the member.
      *
      * @return The StreamsGroupMemberAssignment or an EMPTY one if it does not exist.
      */
-    public TasksTuple targetAssignment(String memberId) {
-        return targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
+    public TasksTuple targetAssignment(String memberId, Optional<String> instanceId) {
+        if (instanceId.isEmpty()) {
+            return targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
+        } else {
+            StreamsGroupMember previousMember = staticMember(instanceId.get());
+            if (previousMember != null) {
+                return targetAssignment.getOrDefault(previousMember.memberId(), TasksTuple.EMPTY);
+            }
+        }
+        return TasksTuple.EMPTY;
     }
 
     /**
