@@ -283,9 +283,10 @@ public class OffsetsRequestManagerTest {
                 partitions, Collections.emptySet(), Collections.emptySet());
         when(metadata.fetch()).thenReturn(clusterWithNullLeader);
 
-        // Should not throw NPE; only PARTITION_1 has a leader in regroup, so one request for LEADER_1
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
-                assertDoesNotThrow(() -> requestManager.fetchOffsets(timestampsToSearch, false));
+                assertDoesNotThrow(
+                        () -> requestManager.fetchOffsets(timestampsToSearch, false),
+                        "Should not throw NPE; only PARTITION_1 has a leader in regroup, so one request for LEADER_1");
         assertEquals(1, requestManager.requestsToSend());
         // requestsToRetry is populated when the in-flight request completes and remainingToSearch is non-empty, not yet
         assertEquals(0, requestManager.requestsToRetry());
