@@ -40,10 +40,10 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
@@ -1049,7 +1049,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             brokerTopicStats.topicStats(log.topicPartition().topic()).remoteCopyRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteCopyRequestRate().mark();
             Optional<CustomMetadata> customMetadata;
-            
+
             try {
                 customMetadata = remoteStorageManagerPlugin.get().copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RetriableRemoteStorageException e) {
@@ -1284,7 +1284,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             private boolean deleteLogSegmentsDueToLeaderEpochCacheTruncation(EpochEntry earliestEpochEntry,
                                                                              RemoteLogSegmentMetadata metadata)
                     throws RemoteStorageException, ExecutionException, InterruptedException {
-                boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, 
+                boolean isSegmentDeleted = deleteRemoteLogSegment(metadata,
                     ignored -> metadata.segmentLeaderEpochs().keySet().stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch()));
                 if (isSegmentDeleted) {
                     logger.info("Deleted remote log segment {} due to leader-epoch-cache truncation. " +
@@ -1565,7 +1565,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsIterator.hasNext()) {
                         RemoteLogSegmentMetadata segmentMetadata = segmentsIterator.next();
-                        // Count only the size of segments in "COPY_SEGMENT_FINISHED" state because 
+                        // Count only the size of segments in "COPY_SEGMENT_FINISHED" state because
                         // "COPY_SEGMENT_STARTED" means copy didn't complete and we will count them later,
                         // "DELETE_SEGMENT_STARTED" means deletion failed in the previous attempt and we will retry later,
                         // "DELETE_SEGMENT_FINISHED" means deletion completed, so there is nothing to count.
@@ -1617,7 +1617,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             log.updateHighestOffsetInRemoteStorage(offsetAndEpoch.offset());
         }
     }
-    
+
     private boolean deleteRemoteLogSegment(
         RemoteLogSegmentMetadata segmentMetadata,
         Predicate<RemoteLogSegmentMetadata> predicate

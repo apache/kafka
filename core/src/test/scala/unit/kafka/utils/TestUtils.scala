@@ -1396,11 +1396,6 @@ object TestUtils extends Logging {
       }.sum
   }
 
-  def clearYammerMetrics(): Unit = {
-    for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
-      KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
-  }
-
   /**
    * Find an Authorizer that we can call createAcls or deleteAcls on.
    */

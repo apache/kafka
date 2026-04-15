@@ -915,7 +915,7 @@ public abstract class TopologyTestDriverTest {
     private void shouldReturnCorrectStoreTypeOnly(final boolean persistent) {
         final String keyValueStoreName = "keyValueStore";
         final String timestampedKeyValueStoreName = "keyValueTimestampStore";
-        final String timestampedKeyValueStoreWithHeaderName = "keyValueTimestampStoreWithHeaders";
+        final String timestampedKeyValueStoreWithHeadersName = "keyValueTimestampStoreWithHeaders";
         final String versionedKeyValueStoreName = "keyValueVersionedStore";
         final String windowStoreName = "windowStore";
         final String timestampedWindowStoreName = "windowTimestampStore";
@@ -933,7 +933,7 @@ public abstract class TopologyTestDriverTest {
             persistent,
             keyValueStoreName,
             timestampedKeyValueStoreName,
-            timestampedKeyValueStoreWithHeaderName,
+            timestampedKeyValueStoreWithHeadersName,
             versionedKeyValueStoreName,
             windowStoreName,
             timestampedWindowStoreName,
@@ -981,15 +981,15 @@ public abstract class TopologyTestDriverTest {
             assertNull(testDriver.getSessionStoreWithHeaders(versionedKeyValueStoreName));
         }
 
-        assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreWithHeaderName));
-        assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreWithHeaderName));
-        assertNotNull(testDriver.getTimestampedKeyValueStoreWithHeaders(timestampedKeyValueStoreWithHeaderName));
-        assertNull(testDriver.getVersionedKeyValueStore(timestampedKeyValueStoreWithHeaderName));
-        assertNull(testDriver.getWindowStore(timestampedKeyValueStoreWithHeaderName));
-        assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreWithHeaderName));
-        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(timestampedKeyValueStoreWithHeaderName));
-        assertNull(testDriver.getSessionStore(timestampedKeyValueStoreWithHeaderName));
-        assertNull(testDriver.getSessionStoreWithHeaders(timestampedKeyValueStoreWithHeaderName));
+        assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreWithHeadersName));
+        assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreWithHeadersName));
+        assertNotNull(testDriver.getTimestampedKeyValueStoreWithHeaders(timestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getVersionedKeyValueStore(timestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getWindowStore(timestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getTimestampedWindowStoreWithHeaders(timestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getSessionStore(timestampedKeyValueStoreWithHeadersName));
+        assertNull(testDriver.getSessionStoreWithHeaders(timestampedKeyValueStoreWithHeadersName));
 
         assertNull(testDriver.getKeyValueStore(windowStoreName));
         assertNull(testDriver.getTimestampedKeyValueStore(windowStoreName));

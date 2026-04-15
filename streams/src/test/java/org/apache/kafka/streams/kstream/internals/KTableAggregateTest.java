@@ -53,6 +53,8 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -76,17 +78,21 @@ public class KTableAggregateTest {
     private final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
     private static final Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
-    
-    private StreamsBuilder createStreamBuilderInMemory() {
+
+    private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
                     BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
         return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
     }
 
-    @Test
-    public void testAggBasic() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testAggBasic(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
@@ -134,9 +140,10 @@ public class KTableAggregateTest {
         }
     }
 
-    @Test
-    public void testAggRepartition() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testAggRepartition(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
@@ -275,9 +282,10 @@ public class KTableAggregateTest {
     }
 
 
-    @Test
-    public void testCount() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testCount(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "count-test-input";
 
         builder
@@ -290,9 +298,10 @@ public class KTableAggregateTest {
         testCountHelper(builder, input, supplier);
     }
 
-    @Test
-    public void testCountWithInternalStore() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testCountWithInternalStore(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "count-test-input";
 
         builder
@@ -344,9 +353,10 @@ public class KTableAggregateTest {
         }
     }
 
-    @Test
-    public void testRemoveOldBeforeAddNew() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testRemoveOldBeforeAddNew(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "count-test-input";
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -391,8 +401,8 @@ public class KTableAggregateTest {
         }
     }
 
-    private void testUpgradeFromConfig(final Properties config, final List<KeyValueTimestamp<String, Long>> expected) {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    private void testUpgradeFromConfig(final Properties config, final List<KeyValueTimestamp<String, Long>> expected, final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "input-topic";
         final String output = "output-topic";
         final Serde<String> stringSerde = Serdes.String();
@@ -421,8 +431,9 @@ public class KTableAggregateTest {
         }
     }
 
-    @Test
-    public void testShouldSendTransientStateWhenUpgrading() {
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testShouldSendTransientStateWhenUpgrading(final boolean withHeaders) {
         final Properties upgradingConfig = new Properties();
         upgradingConfig.putAll(CONFIG);
         upgradingConfig.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_33);
@@ -430,15 +441,16 @@ public class KTableAggregateTest {
                 new KeyValueTimestamp<>("1", 1L, 8),
                 new KeyValueTimestamp<>("1", 0L, 9), // transient inconsistent state
                 new KeyValueTimestamp<>("1", 1L, 9)
-        ));
+        ), withHeaders);
     }
 
-    @Test
-    public void testShouldNotSendTransientStateIfNotUpgrading() {
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testShouldNotSendTransientStateIfNotUpgrading(final boolean withHeaders) {
         testUpgradeFromConfig(CONFIG, asList(
                 new KeyValueTimestamp<>("1", 1L, 8),
                 new KeyValueTimestamp<>("1", 1L, 9)
-        ));
+        ), withHeaders);
     }
 
     private static class NoEqualsImpl {
@@ -474,8 +486,9 @@ public class KTableAggregateTest {
 
     private void testKeyWithNoEquals(
             final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
-            final List<TestRecord<NoEqualsImpl, Long>> expected) {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+            final List<TestRecord<NoEqualsImpl, Long>> expected,
+            final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "input-topic";
         final String output = "output-topic";
         final Serde<NoEqualsImpl> noEqualsImplSerde = new NoEqualsImplSerde();
@@ -507,8 +520,9 @@ public class KTableAggregateTest {
         }
     }
 
-    @Test
-    public void testNoEqualsAndNotSameObject() {
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testNoEqualsAndNotSameObject(final boolean withHeaders) {
         testKeyWithNoEquals(
                 // key changes, different object reference (deserializer returns a new object reference)
                 (k, v) -> new KeyValue<>(v, v),
@@ -516,19 +530,22 @@ public class KTableAggregateTest {
                         new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
                         new TestRecord<>(new NoEqualsImpl("1"), 0L, Instant.ofEpochMilli(9)), // transient inconsistent state
                         new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
-                )
+                ),
+                withHeaders
         );
     }
 
-    @Test
-    public void testNoEqualsAndSameObject() {
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    public void testNoEqualsAndSameObject(final boolean withHeaders) {
         testKeyWithNoEquals(
                 // key does not change, same object reference
                 KeyValue::new,
                 asList(
                         new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
                         new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
-                )
+                ),
+                withHeaders
         );
     }
 }
