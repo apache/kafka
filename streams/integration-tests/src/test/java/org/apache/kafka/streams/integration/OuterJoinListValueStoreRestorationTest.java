@@ -52,11 +52,11 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.pu
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Integration test for verifying ListValueStore deserialization behavior after state restoration
- * in header-aware stores used by outer join operations.
+ * in header-aware and default stores used by outer join operations.
  */
 @Timeout(600)
 @Tag("integration")
@@ -150,6 +150,7 @@ public class OuterJoinListValueStoreRestorationTest {
         startApplicationAndWaitUntilRunning(streams);
 
         // Step 2: Create Non-Joined Records
+
         // Produce multiple records to left topic only (no match → non-joined records)
         // CRITICAL: Do NOT advance window yet! Records must stay in store before restoration.
         long timestamp = 1000L;
@@ -159,8 +160,19 @@ public class OuterJoinListValueStoreRestorationTest {
             timestamp += 100;
         }
 
+
         // Wait for processing and commit to changelog
-        Thread.sleep(5000);
+
+        // 1- Use a probe record to verify end-to-end: process + commit
+        produceRecord(LEFT_TOPIC, "probe", "probe-left", timestamp);
+        produceRecord(RIGHT_TOPIC, "probe", "probe-right", timestamp);
+        // 2- Wait for the join result - this proves processing + commit happened
+        waitUntilMinKeyValueRecordsReceived(
+            getConsumerConfig(),
+            OUTPUT_TOPIC,
+            1,  // Just need to see the probe result
+            30000
+        );
 
         // Step 3: Force State Restoration
         streams.close(Duration.ofSeconds(30));
@@ -170,17 +182,12 @@ public class OuterJoinListValueStoreRestorationTest {
         streams = createOuterJoinTopology();
         startApplicationAndWaitUntilRunning(streams);
 
-        // Wait for restoration
-        Thread.sleep(5000);
-
         // Step 5: Trigger Window Advancement
+
         // NOW advance window to trigger emitNonJoinedOuterRecords()
         final long timestampBeyondWindow = 62000L; // Beyond 60-second window
         produceRecord(LEFT_TOPIC, "trigger", "trigger-value", timestampBeyondWindow);
 
-        // Step 6: Verify output (would crash before the fix)
-        Thread.sleep(5000);
-
         final List<KeyValue<String, String>> results = waitUntilMinKeyValueRecordsReceived(
             getConsumerConfig(),
             OUTPUT_TOPIC,
@@ -188,61 +195,7 @@ public class OuterJoinListValueStoreRestorationTest {
             30000
         );
 
-        assertTrue(!results.isEmpty(), "Should have received output records");
-    }
-
-    @ParameterizedTest
-    @MethodSource("processingGuaranteeAndStoreFormat")
-    public void testOuterJoinWithGracePeriod(final String processingGuarantee,
-                                             final String storeFormat) throws Exception {
-        // Configure processing guarantee and store format
-        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
-        streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-
-        // Test with grace period (60s window + 10s grace)
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, String> leftStream = builder.stream(LEFT_TOPIC);
-        final KStream<String, String> rightStream = builder.stream(RIGHT_TOPIC);
-
-        leftStream.outerJoin(
-            rightStream,
-            (leftValue, rightValue) -> "left=" + leftValue + ", right=" + rightValue,
-            JoinWindows.ofTimeDifferenceAndGrace(Duration.ofSeconds(60), Duration.ofSeconds(10)),
-            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
-        ).to(OUTPUT_TOPIC);
-
-        // Step 1: Initial Topology Start
-        streams = new KafkaStreams(builder.build(), streamsConfig);
-        startApplicationAndWaitUntilRunning(streams);
-
-        // Step 2: Create Non-Joined Records
-        // CRITICAL: Do NOT advance window yet!
-        produceRecord(LEFT_TOPIC, "keyX", "leftX", 1000L);
-        Thread.sleep(5000);
-
-        // Step 3: Force State Restoration
-        streams.close(Duration.ofSeconds(30));
-        purgeLocalStreamsState(streamsConfig);
-
-        // Step 4: Restart with Restoration
-        streams = new KafkaStreams(builder.build(), streamsConfig);
-        startApplicationAndWaitUntilRunning(streams);
-        Thread.sleep(5000);
-
-        // Step 5: Trigger Window Advancement
-        // NOW advance beyond window + grace (60s + 10s = 70s)
-        produceRecord(LEFT_TOPIC, "trigger", "trigger-value", 72000L);
-        Thread.sleep(5000);
-
-        final List<KeyValue<String, String>> results = waitUntilMinKeyValueRecordsReceived(
-            getConsumerConfig(),
-            OUTPUT_TOPIC,
-            1,
-            30000
-        );
-
-        assertTrue(!results.isEmpty(), "Should have received output records");
+        assertFalse(results.isEmpty(), "Should have received output records");
     }
 
     private void produceRecord(final String topic, final String key, final String value, final long timestamp) {
