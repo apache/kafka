@@ -189,10 +189,6 @@ public record StreamsGroupMember(String memberId,
             return this;
         }
 
-        public MemberState state() {
-            return this.state;
-        }
-
         public Builder setTopologyEpoch(int topologyEpoch) {
             this.topologyEpoch = topologyEpoch;
             return this;

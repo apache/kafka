@@ -1727,7 +1727,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates if the received instanceId has been released from the group
+     * Validates if the received instanceId has been fenced from the group
      *
      * @param member                The streams group member.
      * @param groupId               The streams group id.
@@ -1761,7 +1761,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates if the received instanceId has been released from the group
+     * Validates whether a static member exists for the given instanceId.
      *
      * @param staticMember          The static member in the group.
      * @param receivedInstanceId    The instance id received in the request.
@@ -2183,7 +2183,6 @@ public class GroupMetadataManager {
         // 4. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
         // replaces an existing static member.
         // The delta between the existing and the new target assignment is persisted to the partition.
-        // TODO : ASH 2167 LINE 이곳에 업데이트 필요.
         UpdateTargetAssignmentResult<TasksTuple> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
             group,
             groupEpoch,
@@ -3322,7 +3321,7 @@ public class GroupMetadataManager {
                 // here because it is taken care of later after the static membership replacement.
                 replaceStreamsMember(records, group, existingStaticMemberOrNull, newMember);
 
-                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the consumer group " +
+                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the stream group " +
                                 "using the streams protocol. Created a new member {} to replace the existing member {}.",
                         group.groupId(), memberId, instanceId, memberId, existingStaticMemberOrNull.memberId());
 
@@ -9224,7 +9223,7 @@ public class GroupMetadataManager {
         ));
     }
 
-    static boolean hasEpochRelevantMemberConfigChanged(
+    private static boolean hasEpochRelevantMemberConfigChanged(
             StreamsGroupMember oldMember,
             StreamsGroupMember newMember
     ) {
