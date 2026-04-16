@@ -19,8 +19,8 @@ package org.apache.kafka.common.utils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
-
 import org.apache.kafka.common.utils.internals.Sanitizer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
