@@ -1346,7 +1346,7 @@ public class QueryableStateIntegrationTest {
 
                 // Verify headers are accessible via the raw KeyValueStore type
                 final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> storeWithHeaders =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
                 assertThat(storeWithHeaders, notNullValue());
                 final ValueTimestampHeaders<String> resultWithHeaders = storeWithHeaders.get("hello");
                 assertThat(resultWithHeaders, notNullValue());
