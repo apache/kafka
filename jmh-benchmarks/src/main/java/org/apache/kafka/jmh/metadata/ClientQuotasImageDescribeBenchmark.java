@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.metadata;
 
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
+import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.DescribeClientQuotasRequest;
 import org.apache.kafka.image.ClientQuotaImage;
@@ -71,8 +72,8 @@ public class ClientQuotasImageDescribeBenchmark {
     }
 
     @Benchmark
-    public void describeSpecified() {
-        clientQuotasImage.describe(new DescribeClientQuotasRequestData()
+    public DescribeClientQuotasResponseData describeSpecified() {
+        return clientQuotasImage.describe(new DescribeClientQuotasRequestData()
             .setComponents(List.of(new DescribeClientQuotasRequestData.ComponentData()
                 .setEntityType(ClientQuotaEntity.USER)
                 .setMatchType(DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED)
@@ -80,8 +81,8 @@ public class ClientQuotasImageDescribeBenchmark {
     }
 
     @Benchmark
-    public void describeDefault() {
-        clientQuotasImage.describe(new DescribeClientQuotasRequestData()
+    public DescribeClientQuotasResponseData describeDefault() {
+        return clientQuotasImage.describe(new DescribeClientQuotasRequestData()
             .setComponents(List.of(new DescribeClientQuotasRequestData.ComponentData()
                 .setEntityType(ClientQuotaEntity.USER)
                 .setMatchType(DescribeClientQuotasRequest.MATCH_TYPE_DEFAULT)
@@ -89,8 +90,8 @@ public class ClientQuotasImageDescribeBenchmark {
     }
 
     @Benchmark
-    public void describeExact() {
-        clientQuotasImage.describe(new DescribeClientQuotasRequestData()
+    public DescribeClientQuotasResponseData describeExact() {
+        return clientQuotasImage.describe(new DescribeClientQuotasRequestData()
             .setComponents(List.of(new DescribeClientQuotasRequestData.ComponentData()
                 .setEntityType(ClientQuotaEntity.USER)
                 .setMatchType(DescribeClientQuotasRequest.MATCH_TYPE_EXACT)

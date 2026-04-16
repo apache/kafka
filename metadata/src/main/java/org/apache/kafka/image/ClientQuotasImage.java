@@ -227,6 +227,7 @@ public final class ClientQuotasImage {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o) return true;
         if (!(o instanceof ClientQuotasImage other)) return false;
         return entities.equals(other.entities);
     }
