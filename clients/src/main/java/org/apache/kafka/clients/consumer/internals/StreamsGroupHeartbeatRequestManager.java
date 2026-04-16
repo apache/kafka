@@ -640,6 +640,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
                 break;
+            case UNRELEASED_INSTANCE_ID:
+                logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
+                break;
 
             case UNSUPPORTED_VERSION:
                 logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, UNSUPPORTED_VERSION_ERROR_MESSAGE);

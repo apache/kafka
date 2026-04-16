@@ -499,7 +499,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             future.whenComplete(complete(event.future()));
         } else if (requestManagers.streamsMembershipManager.isPresent()) {
             log.debug("Signal the StreamsMembershipManager to leave the streams group since the member is closing");
-            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose();
+            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
             future.whenComplete(complete(event.future()));
         }
     }

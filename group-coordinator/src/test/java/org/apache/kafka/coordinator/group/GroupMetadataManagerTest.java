@@ -21953,6 +21953,7 @@ public class GroupMetadataManagerTest {
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
         String subtopology2 = "subtopology2";
+        
         String barTopicName = "bar";
         Uuid barTopicId = Uuid.randomUuid();
 
