@@ -724,6 +724,26 @@ public class GroupCoordinatorConfigTest {
         assertEquals(20000, config.streamsGroupMinTaskOffsetIntervalMs());
     }
 
+    @Test
+    public void testOffsetsRetentionMinutesInfinite() {
+        // -1 should be accepted and stored as -1L (infinite retention sentinel)
+        GroupCoordinatorConfig config = createConfig(
+            Map.of(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, -1)
+        );
+        assertEquals(-1L, config.offsetsRetentionMs());
+    }
+
+    @Test
+    public void testOffsetsRetentionMinutesInvalidValuesRejected() {
+        // 0 and values below -1 are not valid; only -1 (infinite) and positive integers are accepted
+        assertThrows(ConfigException.class, () ->
+            createConfig(Map.of(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, 0))
+        );
+        assertThrows(ConfigException.class, () ->
+            createConfig(Map.of(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, -2))
+        );
+    }
+
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
         return new GroupCoordinatorConfig(new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF,

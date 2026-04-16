@@ -38,6 +38,10 @@ public record OffsetExpirationConditionImpl(
      */
     @Override
     public boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestampMs, long offsetsRetentionMs) {
+        if (offsetsRetentionMs < 0) {
+            // Negative value means infinite retention; offsets never expire due to inactivity.
+            return false;
+        }
         if (offset.expireTimestampMs.isPresent()) {
             // Older versions with explicit expire_timestamp field => old expiration semantics is used
             return currentTimestampMs >= offset.expireTimestampMs.getAsLong();
