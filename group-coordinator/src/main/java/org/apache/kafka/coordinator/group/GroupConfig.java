@@ -166,13 +166,13 @@ public final class GroupConfig extends AbstractConfig {
 
     private final Optional<Boolean> shareRenewAcknowledgeEnable;
 
-    private final Optional<Boolean> errorsDLQAutoCreateTopicsEnable;
+    public final boolean errorsDLQAutoCreateTopicsEnable;
 
-    private final Optional<String> errorsDLQTopicNamePrefix;
+    public final String errorsDLQTopicNamePrefix;
 
-    private final Optional<String> errorsDLQTopicName;
+    public final String errorsDLQTopicName;
 
-    private final Optional<Boolean> errorsDLQCopyRecordEnable;
+    public final boolean errorsDLQCopyRecordEnable;
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -392,10 +392,10 @@ public final class GroupConfig extends AbstractConfig {
         this.shareIsolationLevel = optionalString(SHARE_ISOLATION_LEVEL_CONFIG)
             .map(s -> IsolationLevel.valueOf(s.toUpperCase(Locale.ROOT)));
         this.shareRenewAcknowledgeEnable = optionalBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
-        this.errorsDLQAutoCreateTopicsEnable = optionalBoolean(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
-        this.errorsDLQTopicNamePrefix = optionalString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
-        this.errorsDLQTopicName = optionalString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
-        this.errorsDLQCopyRecordEnable = optionalBoolean(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG);
+        this.errorsDLQAutoCreateTopicsEnable = getBoolean(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
+        this.errorsDLQTopicNamePrefix = getString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
+        this.errorsDLQTopicName = getString(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
+        this.errorsDLQCopyRecordEnable = getBoolean(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG);
     }
 
     private Optional<Integer> optionalInt(String key) {
@@ -1130,28 +1130,28 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Whether automatic creation of DLQ topics is enabled.
      */
-    public Optional<Boolean> errorsDLQAutoCreateTopicsEnable() {
+    public boolean errorsDLQAutoCreateTopicsEnable() {
         return errorsDLQAutoCreateTopicsEnable;
     }
 
     /**
      * The required prefix for DLQ topic names.
      */
-    public Optional<String> errorsDLQTopicNamePrefix() {
+    public String errorsDLQTopicNamePrefix() {
         return errorsDLQTopicNamePrefix;
     }
 
     /**
      * The DLQ topic name for this group.
      */
-    public Optional<String> errorsDLQTopicName() {
+    public String errorsDLQTopicName() {
         return errorsDLQTopicName;
     }
 
     /**
      * Whether to copy the original record to the DLQ topic.
      */
-    public Optional<Boolean> errorsDLQCopyRecordEnable() {
+    public boolean errorsDLQCopyRecordEnable() {
         return errorsDLQCopyRecordEnable;
     }
 

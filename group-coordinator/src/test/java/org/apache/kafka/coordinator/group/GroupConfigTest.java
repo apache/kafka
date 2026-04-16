@@ -61,6 +61,7 @@ import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.S
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -431,11 +432,11 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
 
-        // DLQ configs
-        assertEquals(Optional.empty(), config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals(Optional.empty(), config.errorsDLQTopicNamePrefix());
-        assertEquals(Optional.empty(), config.errorsDLQTopicName());
-        assertEquals(Optional.empty(), config.errorsDLQCopyRecordEnable());
+        // DLQ configs - have defaults from CONFIG_DEF
+        assertFalse(config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
+        assertEquals("", config.errorsDLQTopicName());
+        assertFalse(config.errorsDLQCopyRecordEnable());
     }
 
     @Test
@@ -498,10 +499,10 @@ public class GroupConfigTest {
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
 
         // DLQ configs
-        assertEquals(Optional.of(true), config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals(Optional.of("my-dlq-"), config.errorsDLQTopicNamePrefix());
-        assertEquals(Optional.of("my-dlq-topic"), config.errorsDLQTopicName());
-        assertEquals(Optional.of(true), config.errorsDLQCopyRecordEnable());
+        assertTrue(config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
+        assertEquals("my-dlq-topic", config.errorsDLQTopicName());
+        assertTrue(config.errorsDLQCopyRecordEnable());
     }
 
     @Test
@@ -800,14 +801,14 @@ public class GroupConfigTest {
 
     @Test
     public void testDLQConfigDefaults() {
-        // Test default DLQ configuration values (KIP-1191) - not configured, so all empty
+        // Test default DLQ configuration values (KIP-1191)
         Map<String, String> configs = new HashMap<>();
         GroupConfig config = new GroupConfig(configs);
 
-        assertEquals(Optional.empty(), config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals(Optional.empty(), config.errorsDLQTopicNamePrefix());
-        assertEquals(Optional.empty(), config.errorsDLQTopicName());
-        assertEquals(Optional.empty(), config.errorsDLQCopyRecordEnable());
+        assertFalse(config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
+        assertEquals("", config.errorsDLQTopicName());
+        assertFalse(config.errorsDLQCopyRecordEnable());
     }
 
     @Test
@@ -821,10 +822,10 @@ public class GroupConfigTest {
 
         GroupConfig config = new GroupConfig(configs);
 
-        assertEquals(Optional.of(true), config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals(Optional.of("my-dlq-"), config.errorsDLQTopicNamePrefix());
-        assertEquals(Optional.of("my-dlq-topic"), config.errorsDLQTopicName());
-        assertEquals(Optional.of(true), config.errorsDLQCopyRecordEnable());
+        assertTrue(config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
+        assertEquals("my-dlq-topic", config.errorsDLQTopicName());
+        assertTrue(config.errorsDLQCopyRecordEnable());
     }
 
     @Test
@@ -846,6 +847,6 @@ public class GroupConfigTest {
 
         GroupConfig config = new GroupConfig(configs);
 
-        assertEquals(Optional.of(""), config.errorsDLQTopicName());
+        assertEquals("", config.errorsDLQTopicName());
     }
 }
