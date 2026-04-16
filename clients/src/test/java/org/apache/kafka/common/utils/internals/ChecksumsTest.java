@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.utils.internals;
 
-import org.apache.kafka.common.utils.internals.Crc32C;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
