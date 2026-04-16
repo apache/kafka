@@ -5400,11 +5400,6 @@ org.apache.kafka.common.utils.BytesTest:
 - wrapEmptyArrayProducesEmptyBytes
 - wrapReturnsBytesBackedBySameArray
 - wrapReturnsNullForNullInput
-org.apache.kafka.common.utils.ChecksumsTest:
-- testUpdateByteBuffer
-- testUpdateByteBufferWithOffsetPosition
-- testUpdateInt
-- testUpdateLong
 org.apache.kafka.common.utils.ChunkedBytesStreamTest:
 - testCorrectnessForMethodRead
 - testCorrectnessForMethodReadByte
@@ -5419,8 +5414,6 @@ org.apache.kafka.common.utils.ConfigUtilsTest:
 - testConfigMapToRedactedStringForEmptyMap
 - testConfigMapToRedactedStringWithSecrets
 - testGetBoolean
-org.apache.kafka.common.utils.Crc32CTest:
-- testValue
 org.apache.kafka.common.utils.ExitTest:
 - shouldAddShutdownHookImmediately
 - shouldExitImmediately
@@ -5437,9 +5430,6 @@ org.apache.kafka.common.utils.MockTimeTest:
 - testAutoTickMs
 - testWaitObjectConditionSatisfied
 - testWaitObjectTimeout
-org.apache.kafka.common.utils.SanitizerTest:
-- testJmxSanitize
-- testSanitize
 org.apache.kafka.common.utils.SecurityUtilsTest:
 - testAddCustomSecurityProvider
 - testParseKafkaPrincipalWithNonUserPrincipalType
@@ -5557,10 +5547,17 @@ org.apache.kafka.common.utils.internals.ByteUtilsTest:
 - testVarlongSerde
 - testWriteUnsignedIntLEToArray
 - testWriteUnsignedIntLEToOutputStream
+org.apache.kafka.common.utils.internals.ChecksumsTest:
+- testUpdateByteBuffer
+- testUpdateByteBufferWithOffsetPosition
+- testUpdateInt
+- testUpdateLong
 org.apache.kafka.common.utils.internals.CircularIteratorTest:
 - testCycleCollection
 - testEmptyCollection
 - testNullCollection
+org.apache.kafka.common.utils.internals.Crc32CTest:
+- testValue
 org.apache.kafka.common.utils.internals.ExponentialBackoffManagerTest:
 - testBackOffWithJitter
 - testBackOffWithoutJitter
@@ -5608,6 +5605,9 @@ org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollectionTest:
 org.apache.kafka.common.utils.internals.PrimitiveRefTest:
 - testIntRef
 - testLongRef
+org.apache.kafka.common.utils.internals.SanitizerTest:
+- testJmxSanitize
+- testSanitize
 org.apache.kafka.common.utils.internals.ThreadUtilsTest:
 - testThreadNameWithNumberDemon
 - testThreadNameWithNumberNoDemon
