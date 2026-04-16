@@ -83,12 +83,6 @@ import java.util.stream.Collectors;
  */
 public class NetworkClient implements KafkaClient {
 
-    private static final ExecutorService BOOTSTRAP_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "kafka-bootstrap-dns-resolver");
-        thread.setDaemon(true); // Don't prevent JVM shutdown
-        return thread;
-    });
-
     private enum State {
         ACTIVE,
         CLOSING,
@@ -155,6 +149,8 @@ public class NetworkClient implements KafkaClient {
     private Timer bootstrapTimer;
 
     private CompletableFuture<List<InetSocketAddress>> pendingBootstrapResolution;
+
+    private final ExecutorService bootstrapExecutor;
 
     private final TelemetrySender telemetrySender;
 
@@ -376,6 +372,16 @@ public class NetworkClient implements KafkaClient {
         this.bootstrapConfiguration = bootstrapConfiguration;
         // Bootstrap timer is lazily initialized on first poll to ensure timeout starts when polling begins
         this.bootstrapTimer = null;
+        // Create executor for async DNS resolution if bootstrap is enabled
+        if (bootstrapConfiguration != BootstrapConfiguration.DISABLED) {
+            this.bootstrapExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread thread = new Thread(r, "kafka-bootstrap-dns-resolver");
+                thread.setDaemon(true);
+                return thread;
+            });
+        } else {
+            this.bootstrapExecutor = null;
+        }
     }
 
     /**
@@ -767,10 +773,9 @@ public class NetworkClient implements KafkaClient {
     public void close() {
         state.compareAndSet(State.ACTIVE, State.CLOSING);
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
-            // Cancel any pending bootstrap DNS resolution
-            if (pendingBootstrapResolution != null) {
-                pendingBootstrapResolution.cancel(true);
-                pendingBootstrapResolution = null;
+            cancelBootstrapResolution();
+            if (bootstrapExecutor != null) {
+                bootstrapExecutor.shutdown();
             }
             this.selector.close();
             this.metadataUpdater.close();
@@ -778,6 +783,13 @@ public class NetworkClient implements KafkaClient {
                 telemetrySender.close();
         } else {
             log.warn("Attempting to close NetworkClient that has already been closed.");
+        }
+    }
+
+    private void cancelBootstrapResolution() {
+        if (pendingBootstrapResolution != null) {
+            pendingBootstrapResolution.cancel(true);
+            pendingBootstrapResolution = null;
         }
     }
 
@@ -1273,6 +1285,7 @@ public class NetworkClient implements KafkaClient {
             return;
 
         if (Thread.interrupted()) {
+            cancelBootstrapResolution();
             throw new InterruptException(new InterruptedException());
         }
 
@@ -1291,10 +1304,7 @@ public class NetworkClient implements KafkaClient {
      */
     private void checkBootstrapTimeout() {
         if (bootstrapTimer.isExpired()) {
-            if (pendingBootstrapResolution != null) {
-                pendingBootstrapResolution.cancel(true);
-                pendingBootstrapResolution = null;
-            }
+            cancelBootstrapResolution();
             throw new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
                 bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
                 "Please check your bootstrap.servers configuration and DNS settings.");
@@ -1312,7 +1322,7 @@ public class NetworkClient implements KafkaClient {
                     bootstrapConfiguration.bootstrapServers,
                     bootstrapConfiguration.clientDnsLookup
                 ),
-                BOOTSTRAP_EXECUTOR
+                bootstrapExecutor
             );
             return;
         }
