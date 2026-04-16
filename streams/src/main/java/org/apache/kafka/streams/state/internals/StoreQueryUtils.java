@@ -71,17 +71,16 @@ public final class StoreQueryUtils {
      * in a map.
      */
     @FunctionalInterface
-    public interface QueryHandler {
-        QueryResult<?> apply(
-            final Query<?> query,
+    public interface QueryHandler<R> {
+        QueryResult<R> apply(
+            final Query<R> query,
             final PositionBound positionBound,
             final QueryConfig config,
             final StateStore store
         );
     }
 
-    @SuppressWarnings("rawtypes")
-    private static final Map<Class, QueryHandler> QUERY_HANDLER_MAP =
+    private static final Map<Class<?>, QueryHandler<?>> QUERY_HANDLER_MAP =
         mkMap(
             mkEntry(
                 RangeQuery.class,
@@ -110,9 +109,8 @@ public final class StoreQueryUtils {
         );
 
     // make this class uninstantiable
+    private StoreQueryUtils() { }
 
-    private StoreQueryUtils() {
-    }
     @SuppressWarnings("unchecked")
     public static <R> QueryResult<R> handleBasicQueries(
         final Query<R> query,
@@ -126,7 +124,7 @@ public final class StoreQueryUtils {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
-        final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
+        final QueryHandler<?> handler = QUERY_HANDLER_MAP.get(query.getClass());
         synchronized (position) {
             if (handler == null) {
                 result = QueryResult.forUnknownQueryType(query, store);
@@ -137,7 +135,7 @@ public final class StoreQueryUtils {
                     context == null ? null : context.taskId().partition()
                 );
             } else {
-                result = (QueryResult<R>) handler.apply(
+                result = ((QueryHandler<R>) handler).apply(
                     query,
                     positionBound,
                     config,
@@ -154,10 +152,7 @@ public final class StoreQueryUtils {
         return result;
     }
 
-    public static void updatePosition(
-        final Position position,
-        final StateStoreContext stateStoreContext) {
-
+    public static void updatePosition(final Position position, final StateStoreContext stateStoreContext) {
         if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
             final RecordMetadata meta = stateStoreContext.recordMetadata().get();
             if (meta.topic() != null) {
@@ -363,10 +358,12 @@ public final class StoreQueryUtils {
     }
 
     @SuppressWarnings("unchecked")
-    private static <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
-                                                           final PositionBound positionBound,
-                                                           final QueryConfig config,
-                                                           final StateStore store) {
+    private static <R> QueryResult<R> runVersionedKeyQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store
+    ) {
         if (store instanceof VersionedKeyValueStore) {
             final VersionedKeyValueStore<Bytes, byte[]> versionedKeyValueStore =
                 (VersionedKeyValueStore<Bytes, byte[]>) store;
@@ -388,27 +385,29 @@ public final class StoreQueryUtils {
                     message
                 );
             }
-
         } else {
             return QueryResult.forUnknownQueryType(query, store);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
-                                                                final PositionBound positionBound,
-                                                                final QueryConfig config,
-                                                                final StateStore store) {
-
+    private static <R> QueryResult<R> runMultiVersionedKeyQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store
+    ) {
         if (store instanceof VersionedKeyValueStore) {
             final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
             try {
                 final VersionedRecordIterator<byte[]> segmentIterator =
-                        rocksDBVersionedStore.get(rawKeyQuery.key(),
-                                                  rawKeyQuery.fromTime().get().toEpochMilli(),
-                                                  rawKeyQuery.toTime().get().toEpochMilli(),
-                                                  rawKeyQuery.resultOrder());
+                        rocksDBVersionedStore.get(
+                            rawKeyQuery.key(),
+                            rawKeyQuery.fromTime().get().toEpochMilli(),
+                            rawKeyQuery.toTime().get().toEpochMilli(),
+                            rawKeyQuery.resultOrder()
+                        );
                 return (QueryResult<R>) QueryResult.forResult(segmentIterator);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
@@ -450,16 +449,19 @@ public final class StoreQueryUtils {
     public static <V> Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue(final StateSerdes<?, V> serdes) {
         final Serde<V> valueSerde = serdes.valueSerde();
         final Deserializer<V> deserializer = valueSerde.deserializer();
-        return rawVersionedRecord -> rawVersionedRecord.validTo().isPresent()
-            ? new VersionedRecord<>(
-                // deserializeValue s only used via IQ, so it's ok to not pass any headers
-                deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
-                rawVersionedRecord.timestamp(),
-                rawVersionedRecord.validTo().get())
-            : new VersionedRecord<>(
-                // deserializeValue s only used via IQ, so it's ok to not pass any headers
-                deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
-                rawVersionedRecord.timestamp());
+        return rawVersionedRecord ->
+            rawVersionedRecord.validTo().isPresent()
+                ? new VersionedRecord<>(
+                      // deserializeValue s only used via IQ, so it's ok to not pass any headers
+                      deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                      rawVersionedRecord.timestamp(),
+                      rawVersionedRecord.validTo().get()
+                  )
+                : new VersionedRecord<>(
+                      // deserializeValue s only used via IQ, so it's ok to not pass any headers
+                      deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                      rawVersionedRecord.timestamp()
+                  );
     }
 
     @SuppressWarnings("resource")
@@ -504,8 +506,7 @@ public final class StoreQueryUtils {
     private static Position topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
         final Map<String, Map<Integer, Long>> pos = new HashMap<>();
         for (final Entry<TopicPartition, Long> e : topicPartitions.entrySet()) {
-            pos
-                .computeIfAbsent(e.getKey().topic(), t -> new HashMap<>())
+            pos.computeIfAbsent(e.getKey().topic(), t -> new HashMap<>())
                 .put(e.getKey().partition(), e.getValue());
         }
         return Position.fromMap(pos);
@@ -514,8 +515,7 @@ public final class StoreQueryUtils {
     private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {
         final StringWriter stringWriter = new StringWriter();
         final PrintWriter printWriter = new PrintWriter(stringWriter);
-        printWriter.println(
-            store.getClass() + " failed to handle query " + query + ":");
+        printWriter.println(store.getClass() + " failed to handle query " + query + ":");
         e.printStackTrace(printWriter);
         printWriter.flush();
         return stringWriter.toString();

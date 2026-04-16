@@ -20,8 +20,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -55,7 +55,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,10 +109,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         if (value == null) {
             return null;
         }
-        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
-        final byte[] rawHeaders = HeadersSerializer
-            .serialize(preSerializedHeaders, ByteBuffer.allocate(preSerializedHeaders.requiredBufferSizeForHeaders))
-            .array();
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
@@ -129,8 +125,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldMigrateFromWithoutHeadersToWithHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, false);
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> oldStore = oldSupplier.get();
         oldStore.init(context, oldStore);
@@ -151,9 +146,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         oldStore.close();
 
         // Reopen with headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier newSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier newSupplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> newStore = newSupplier.get();
         newStore.init(context, newStore);
@@ -161,18 +155,18 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data readable with empty headers via lazy migration
         byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
+        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
+        assertEquals(0, Utils.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         fetch = newStore.fetchSession(key2, 150, 250);
         assertNotNull(fetch);
-        assertEquals("value2", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
+        assertEquals("value2", new String(Utils.rawAggregation(fetch)));
+        assertEquals(0, Utils.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         fetch = newStore.fetchSession(key3, 200, 300);
         assertNotNull(fetch);
-        assertEquals("value3", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length, "Old data should have empty headers after migration");
+        assertEquals("value3", new String(Utils.rawAggregation(fetch)));
+        assertEquals(0, Utils.headers(fetch).toArray().length, "Old data should have empty headers after migration");
 
         newStore.close();
     }
@@ -180,8 +174,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldMigrateFromWithIndexToWithIndexAndHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, false);
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> oldStore = oldSupplier.get();
         oldStore.init(context, oldStore);
@@ -191,9 +184,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         oldStore.close();
 
         // Upgrade to headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier newSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier newSupplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> newStore = newSupplier.get();
         newStore.init(context, newStore);
@@ -201,7 +193,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data still accessible
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
 
         newStore.close();
     }
@@ -209,8 +201,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldMigrateFromWithoutIndexToWithIndexAndHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, false, false);
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION_MS, false);
 
         final SessionStore<Bytes, byte[]> oldStore = oldSupplier.get();
         oldStore.init(context, oldStore);
@@ -220,9 +211,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         oldStore.close();
 
         // Upgrade to both index and headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier newSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier newSupplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> newStore = newSupplier.get();
         newStore.init(context, newStore);
@@ -230,7 +220,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data still accessible
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch);
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
+        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
 
         newStore.close();
     }
@@ -238,9 +228,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldWriteAndReadWithHeaders() {
         // Start fresh with headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier supplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier supplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> store = supplier.get();
         store.init(context, store);
@@ -260,15 +249,15 @@ public class TimeOrderedSessionStoreUpgradeTest {
             serializeValueWithHeaders("value2".getBytes(), headersWithData));
 
         // Verify values
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(store.fetchSession(key1, 100, 200))));
-        assertEquals("value2", new String(AggregationWithHeadersDeserializer.rawAggregation(store.fetchSession(key2, 150, 250))));
+        assertEquals("value1", new String(Utils.rawAggregation(store.fetchSession(key1, 100, 200))));
+        assertEquals("value2", new String(Utils.rawAggregation(store.fetchSession(key2, 150, 250))));
 
         // Verify headers for key1 (empty)
-        final Headers key1Headers = AggregationWithHeadersDeserializer.headers(store.fetchSession(key1, 100, 200));
+        final Headers key1Headers = Utils.headers(store.fetchSession(key1, 100, 200));
         assertEquals(0, key1Headers.toArray().length);
 
         // Verify headers for key2 (with data)
-        final Headers key2Headers = AggregationWithHeadersDeserializer.headers(store.fetchSession(key2, 150, 250));
+        final Headers key2Headers = Utils.headers(store.fetchSession(key2, 150, 250));
         assertEquals(2, key2Headers.toArray().length);
         assertEquals("header-value-1", new String(key2Headers.lastHeader("header-key-1").value()));
         assertEquals("header-value-2", new String(key2Headers.lastHeader("header-key-2").value()));
@@ -323,8 +312,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         // Verify old data readable with empty headers via lazy migration
         final byte[] fetch = newStore.fetchSession(key1, 100, 200);
         assertNotNull(fetch, "Old data should be readable after upgrade via DSL supplier path");
-        assertEquals("value1", new String(AggregationWithHeadersDeserializer.rawAggregation(fetch)));
-        assertEquals(0, AggregationWithHeadersDeserializer.headers(fetch).toArray().length,
+        assertEquals("value1", new String(Utils.rawAggregation(fetch)));
+        assertEquals(0, Utils.headers(fetch).toArray().length,
             "Old data should have empty headers after migration");
 
         newStore.close();

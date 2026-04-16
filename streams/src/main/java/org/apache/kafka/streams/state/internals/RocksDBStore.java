@@ -22,14 +22,16 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.BytesUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
@@ -140,6 +142,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected StateStoreContext context;
     protected Position position;
+    private TaskId taskId;
 
     public RocksDBStore(final String name,
                         final String metricsScope) {
@@ -165,6 +168,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
+        this.taskId = stateStoreContext.taskId();
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
         openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
@@ -245,21 +249,30 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
         setupStatistics(configs, dbOptions);
-        openRocksDB(dbOptions, columnFamilyOptions);
-        dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         try {
-            final Position existingPositionOrEmpty = cfAccessor.open(dbAccessor, !eosEnabled);
-            if (position == null) {
-                position = existingPositionOrEmpty;
-            } else {
-                // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
-                position.merge(existingPositionOrEmpty);
+            openRocksDB(dbOptions, columnFamilyOptions);
+            dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
+            try {
+                final Position existingPositionOrEmpty = cfAccessor.open(dbAccessor, !eosEnabled);
+                if (position == null) {
+                    position = existingPositionOrEmpty;
+                } else {
+                    // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
+                    position.merge(existingPositionOrEmpty);
+                }
+            } catch (final ProcessorStateException e) {
+                final String message = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
+                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(message, e));
+            }  catch (final StreamsException fatal) {
+                final String fatalMessage = "Fatal error while opening store " + name;
+                throw new ProcessorStateException(fatalMessage, fatal);
+            } catch (final RocksDBException fatal) {
+                final String fatalMessage = "Error opening store " + name;
+                throw new ProcessorStateException(fatalMessage, fatal);
             }
-        } catch (final StreamsException fatal) {
-            final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
-            throw new ProcessorStateException(fatalMessage, fatal);
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error opening store " + name, e);
+        } catch (final RuntimeException e) {
+            closeNativeResources();
+            throw e;
         }
 
         addValueProvidersToMetricsRecorder();
@@ -276,6 +289,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } else {
             userSpecifiedStatistics = true;
         }
+    }
+
+    void setTaskId(final TaskId taskId) {
+        this.taskId = taskId;
     }
 
     private void addValueProvidersToMetricsRecorder() {
@@ -361,10 +378,20 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     .filter(descriptor -> allExisting.stream().noneMatch(existing -> Arrays.equals(existing, descriptor.getName())))
                     .collect(Collectors.toList());
             final List<ColumnFamilyHandle> existingColumnFamilies = new ArrayList<>(existingDescriptors.size());
-            db = RocksDB.open(dbOptions, absolutePath, existingDescriptors, existingColumnFamilies);
-            final List<ColumnFamilyHandle> createdColumnFamilies = db.createColumnFamilies(toCreate);
-
-            return mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
+            final List<ColumnFamilyHandle> createdColumnFamilies = new ArrayList<>();
+            try {
+                db = RocksDB.open(dbOptions, absolutePath, existingDescriptors, existingColumnFamilies);
+                createdColumnFamilies.addAll(db.createColumnFamilies(toCreate));
+                return mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
+            } catch (final Exception e) {
+                for (final ColumnFamilyHandle handle : existingColumnFamilies) {
+                    handle.close();
+                }
+                for (final ColumnFamilyHandle handle : createdColumnFamilies) {
+                    handle.close();
+                }
+                throw e;
+            }
 
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
@@ -564,7 +591,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // RocksDB's deleteRange() does not support a null upper bound so in the event
         // of overflow from increment(), the operation cannot be performed and an
         // IndexOutOfBoundsException will be thrown.
-        cfAccessor.deleteRange(dbAccessor, keyFrom.get(), BytesUtils.increment(keyTo).get());
+        cfAccessor.deleteRange(dbAccessor, keyFrom.get(), ByteUtils.increment(keyTo).get());
     }
 
     @Override
@@ -787,6 +814,64 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         statistics = null;
     }
 
+    /**
+     * Close all native RocksDB resources with null-safety.
+     * Used only by the error cleanup path in {@link #openDB} where some resources
+     * may not have been initialized yet.
+     */
+    private void closeNativeResources() {
+        closeDbAndAccessors();
+        closeOptionsAndFilters();
+    }
+
+    private void closeDbAndAccessors() {
+        if (cfAccessor != null) {
+            try {
+                if (dbAccessor != null) {
+                    cfAccessor.close(dbAccessor);
+                }
+            } catch (final Exception e) {
+                log.error("Error while closing column family handles for store " + name, e);
+            }
+            cfAccessor = null;
+        }
+        if (dbAccessor != null) {
+            dbAccessor.close();
+            dbAccessor = null;
+        }
+        if (db != null) {
+            db.close();
+            db = null;
+        }
+    }
+
+    private void closeOptionsAndFilters() {
+        if (userSpecifiedOptions != null) {
+            userSpecifiedOptions.close();
+            userSpecifiedOptions = null;
+        }
+        if (wOptions != null) {
+            wOptions.close();
+            wOptions = null;
+        }
+        if (fOptions != null) {
+            fOptions.close();
+            fOptions = null;
+        }
+        if (filter != null) {
+            filter.close();
+            filter = null;
+        }
+        if (cache != null) {
+            cache.close();
+            cache = null;
+        }
+        if (statistics != null) {
+            statistics.close();
+            statistics = null;
+        }
+    }
+
     private void closeOpenIterators() {
         final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
         synchronized (openIterators) {
@@ -928,7 +1013,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         /**
          * Initializes the ColumnFamily.
          * @return the position of the store based on the data in the ColumnFamily. If no offset position is found, an empty position is returned.
-         * @throws StreamsException if an invalid state is found and ignoreInvalidState is false
+         * @throws ProcessorStateException if an invalid state is found and ignoreInvalidState is false
          */
         Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
@@ -1043,11 +1128,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
-            accessor.flush(columnFamily, offsetColumnFamilyHandle);
-        }
-
-        @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
                                final WriteBatchInterface batch) throws RocksDBException {
@@ -1095,7 +1175,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     /**
-     * Same as {@link BytesUtils#increment(Bytes)} but {@code null} is returned instead of throwing
+     * Same as {@link ByteUtils#increment(Bytes)} but {@code null} is returned instead of throwing
      * {@code IndexOutOfBoundsException} in the event of overflow.
      *
      * @param input bytes to increment
@@ -1104,7 +1184,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
      */
     static Bytes incrementWithoutOverflow(final Bytes input) {
         try {
-            return BytesUtils.increment(input);
+            return ByteUtils.increment(input);
         } catch (final IndexOutOfBoundsException e) {
             return null;
         }

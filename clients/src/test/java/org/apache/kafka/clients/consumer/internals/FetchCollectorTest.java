@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
@@ -71,7 +72,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -158,6 +161,35 @@ public class FetchCollectorTest {
         // However, once we read *past* the end of the records in the CompletedFetch, then we will call
         // drain on it, and it will be considered all consumed.
         assertTrue(completedFetch.isConsumed());
+    }
+
+    @Test
+    public void testPositionUpdatedBeforeDrainOnExhaustedFetch() {
+        // Set maxPollRecords to DEFAULT_RECORD_COUNT + 1 so the fetchRecords loop calls nextFetchedRecord
+        // one extra time, triggering exhaustion and drain within the same collectFetch.
+        buildDependencies(DEFAULT_RECORD_COUNT + 1);
+        assignAndSeek(topicAPartition0);
+
+        CompletedFetch completedFetch = spy(completedFetchBuilder
+            .recordCount(DEFAULT_RECORD_COUNT)
+            .build());
+
+        // Record the subscription position at the moment drain() is called.
+        AtomicLong positionAtDrainTime = new AtomicLong(-1);
+        doAnswer(invocation -> {
+            positionAtDrainTime.set(subscriptions.position(topicAPartition0).offset);
+            invocation.callRealMethod();
+            return null;
+        }).when(completedFetch).drain();
+
+        fetchBuffer.add(completedFetch);
+
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
+        assertTrue(completedFetch.isConsumed());
+
+        // Verify that when drain() was invoked, the position had already been advanced.
+        assertEquals(DEFAULT_RECORD_COUNT, positionAtDrainTime.get());
     }
 
     @Test

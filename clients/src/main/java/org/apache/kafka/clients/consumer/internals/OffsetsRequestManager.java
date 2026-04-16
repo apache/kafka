@@ -377,10 +377,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
             // Generate a new OffsetFetch request and update positions when a response is received
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
+            CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchOffsets =
                     commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsetsAndRefresh =
-                    fetchOffsets.whenComplete((offsets, error) -> {
+                    fetchOffsets.thenApply(CommitRequestManager.OffsetFetchResult::toOffsetMapWithNulls)
+                    .whenComplete((offsets, error) -> {
                         pendingOffsetFetchEvent = null;
                         // Update positions with the retrieved offsets
                         refreshOffsets(offsets, error, result);

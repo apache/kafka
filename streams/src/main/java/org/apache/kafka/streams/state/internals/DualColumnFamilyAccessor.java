@@ -17,7 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.internals.BytesUtils;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.internals.RocksDBStore.DBAccessor;
@@ -240,11 +241,6 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     @Override
-    public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
-        accessor.flush(oldColumnFamily, newColumnFamily, offsetColumnFamilyHandle);
-    }
-
-    @Override
     public void addToBatch(final byte[] key,
                            final byte[] value,
                            final WriteBatchInterface batch) throws RocksDBException {
@@ -265,13 +261,13 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     private static class RocksDBDualCFIterator
-        extends org.apache.kafka.common.utils.AbstractIterator<KeyValue<Bytes, byte[]>>
+        extends AbstractIterator<KeyValue<Bytes, byte[]>>
         implements ManagedKeyValueIterator<Bytes, byte[]> {
 
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = BytesUtils.BYTES_LEXICO_COMPARATOR;
+        private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
 
         private final String storeName;
         private final RocksIterator iterNewFormat;
@@ -401,7 +397,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     // RocksDB's JNI interface does not expose getters/setters that allow the
     // comparator to be pluggable, and the default is lexicographic, so it's
     // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = BytesUtils.BYTES_LEXICO_COMPARATOR;
+        private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
         private final byte[] rawLastKey;
         private final boolean forward;
         private final boolean toInclusive;

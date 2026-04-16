@@ -1823,6 +1823,49 @@ public class PlaintextConsumerTest {
         return result.get();
     }
 
+    @ClusterTest
+    public void testClassicConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CONSUMER);
+    }
+
+    /**
+     * Verify that {@link Consumer#unsubscribe()} does not commit offsets even when
+     * {@code enable.auto.commit} is enabled. A second consumer using the same group ID
+     * should see no committed offsets after the first consumer unsubscribes.
+     */
+    private void testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol groupProtocol) throws Exception {
+        var numRecords = 10;
+        var groupId = "unsubscribe-no-commit-test";
+        sendRecords(cluster, TP, numRecords);
+
+        // Consumer 1: subscribe, consume records, then unsubscribe (without explicit commit)
+        Map<String, Object> config = new HashMap<>();
+        config.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+        config.put(GROUP_ID_CONFIG, groupId);
+        config.put(ENABLE_AUTO_COMMIT_CONFIG, true);
+
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(config)) {
+            consumer1.subscribe(List.of(TOPIC));
+            consumeRecords(consumer1, numRecords);
+
+            // Unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+            consumer1.unsubscribe();
+        }
+
+        // Consumer 2: use the same group ID to check committed offsets
+        try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(config)) {
+            consumer2.subscribe(List.of(TOPIC));
+            OffsetAndMetadata committed = consumer2.committed(Set.of(TP)).get(TP);
+            assertNull(committed,
+                    "unsubscribe() should not commit offsets even when auto-commit is enabled");
+        }
+    }
+
     private void awaitMetricsCleanup(
         Consumer<?, ?> consumer,
         String metricName,
@@ -1835,6 +1878,52 @@ public class PlaintextConsumerTest {
             consumer.poll(Duration.ofMillis(100));
             return consumer.metrics().get(metric1) == null && consumer.metrics().get(metric2) == null;
         }, "Metrics for removed partitions should be cleaned up");
+    }
+
+    /**
+     * Tests that when a static member closes with {@link CloseOptions.GroupMembershipOperation#LEAVE_GROUP},
+     * the other members in the group receive a rebalance callback. This is in contrast to the default
+     * behavior where static members remain in the group on close (no rebalance triggered).
+     */
+    @ClusterTest
+    public void testAsyncStaticMemberCloseWithLeaveGroupTriggersRebalance() throws Exception {
+        var topicName = "test-static-member-leave-group";
+        var groupId = "test-group-" + UUID.randomUUID();
+        cluster.createTopic(topicName, 2, (short) 1);
+
+        Map<String, Object> consumer1Config = new HashMap<>();
+        consumer1Config.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        consumer1Config.put(GROUP_ID_CONFIG, groupId);
+        consumer1Config.put(GROUP_INSTANCE_ID_CONFIG, "instance-1");
+
+        Map<String, Object> consumer2Config = new HashMap<>();
+        consumer2Config.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        consumer2Config.put(GROUP_ID_CONFIG, groupId);
+        consumer2Config.put(GROUP_INSTANCE_ID_CONFIG, "instance-2");
+
+        var listener1 = new TestConsumerReassignmentListener();
+        var listener2 = new TestConsumerReassignmentListener();
+
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumer1Config);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumer2Config)) {
+
+            consumer1.subscribe(List.of(topicName), listener1);
+            consumer2.subscribe(List.of(topicName), listener2);
+
+            awaitRebalance(consumer1, listener1);
+            awaitRebalance(consumer2, listener2);
+
+            var initialAssignedCalls = listener2.callsToAssigned;
+
+            // Consumer 1 closes with LEAVE_GROUP - this should trigger a rebalance
+            consumer1.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+            awaitRebalance(consumer2, listener2);
+
+            // Consumer 2 should have received another assignment callback due to the rebalance
+            assertTrue(listener2.callsToAssigned > initialAssignedCalls,
+                "Consumer 2 should have received a rebalance after static consumer 1 left the group permanently. " +
+                "Initial assigned calls: " + initialAssignedCalls + ", current: " + listener2.callsToAssigned);
+        }
     }
 
     public static class SerializerImpl implements Serializer<byte[]> {

@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ControllerRegistrationResponseData
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ControllerRegistrationResponse
-import org.apache.kafka.common.utils.ExponentialBackoff
+import org.apache.kafka.common.utils.internals.ExponentialBackoff
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
@@ -30,6 +30,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, LeaderAndEpoch, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.controller.ControllerRegistrationManager
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -71,7 +72,6 @@ class ControllerRegistrationManagerTest {
     context: RegistrationTestContext,
   ): ControllerRegistrationManager = {
     new ControllerRegistrationManager(context.config.nodeId,
-      context.clusterId,
       context.time,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),

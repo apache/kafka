@@ -557,7 +557,7 @@ public class OffsetMetadataManagerTest {
                         .setPartitions(List.of(
                             new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(partition)
                         ))
-                ).iterator());
+                ));
 
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection expectedResponsePartitionCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
@@ -572,7 +572,7 @@ public class OffsetMetadataManagerTest {
                     new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
                         .setName(topic)
                         .setPartitions(expectedResponsePartitionCollection)
-                ).iterator());
+                ));
 
             List<CoordinatorRecord> expectedRecords = List.of();
             if (hasOffset(groupId, topic, partition) && expectedError == Errors.NONE) {
@@ -3740,7 +3740,7 @@ public class OffsetMetadataManagerTest {
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0),
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(1)
                     ))
-            ).iterator());
+            ));
 
         context.deleteOffsets(
             new OffsetDeleteRequestData()
@@ -3927,7 +3927,7 @@ public class OffsetMetadataManagerTest {
                 List.of(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("range")
                     .setMetadata(new byte[0])
-                ).iterator()
+                )
             )
         );
     }

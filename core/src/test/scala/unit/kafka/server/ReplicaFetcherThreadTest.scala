@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.log.LogManager
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
@@ -39,7 +38,11 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, RecordValidationStats, UnifiedLog}
+import org.apache.kafka.server.util.ServerTestUtils
+
+import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, LogManager, RecordValidationStats, UnifiedLog}
+
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -80,7 +83,7 @@ class ReplicaFetcherThreadTest {
 
   @AfterEach
   def cleanup(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def createReplicaFetcherThread(

@@ -54,7 +54,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
             final StreamJoinedInternal<K, V1, V2> joinedInternal,
             final Type type
     ) {
-        super(joinedInternal.dslStoreSuppliers());
+        super(joinedInternal.dslStoreSuppliers(), DslStoreFormat.PLAIN);
         this.name = name + "-store";
         this.joinedInternal = joinedInternal;
         this.windows = windows;
@@ -82,7 +82,6 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : dslStoreFormat();
         final WindowBytesStoreSupplier supplier = storeSupplier == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         this.name,
@@ -91,7 +90,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                         true,
                         EmitStrategy.onWindowUpdate(),
                         false,
-                        storeFormat
+                        dslStoreFormat()
                 ))
                 : storeSupplier;
 
