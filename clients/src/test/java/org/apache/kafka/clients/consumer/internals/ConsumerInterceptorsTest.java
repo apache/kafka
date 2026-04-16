@@ -349,6 +349,14 @@ public class ConsumerInterceptorsTest {
             // within the foreach loop of ConsumerRecords/List<ConsumerRecord> per partition
             // which can break reporting UIs.
             assertEquals(5, totalProcessTimeMs);
+
+            // With a per-record context processor, users can load a context from the record
+            // during process time.
+            // futures.add(() -> {
+            //    try (ConsumerContext recordContext = record.newContext()) {
+            //        // Register a context processor with the Consumer that can asyncTime.sleep(PROCESS_TIME_MS);
+            //    }
+            // });
         }
     }
 
