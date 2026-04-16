@@ -42,6 +42,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.hamcrest.Matchers;
@@ -525,7 +526,7 @@ public class SuppressionIntegrationTest {
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         return props;
     }
 

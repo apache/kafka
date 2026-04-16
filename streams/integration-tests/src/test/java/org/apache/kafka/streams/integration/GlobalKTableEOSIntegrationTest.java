@@ -41,6 +41,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -356,7 +357,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
     
     private void startStreams(final boolean withHeaders) {
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         startStreams(null);
     }
 

@@ -42,6 +42,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -154,7 +155,7 @@ public class InternalTopicIntegrationTest {
         if (streamsProtocolEnabled) {
             streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsProp, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsProp, withHeaders);
     }
 
     /*

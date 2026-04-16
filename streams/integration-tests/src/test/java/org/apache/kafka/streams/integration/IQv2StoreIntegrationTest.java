@@ -67,6 +67,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -2048,7 +2049,7 @@ public class IQv2StoreIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
         return config;
     }
 }

@@ -220,7 +220,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         CLUSTER.createTopics(inputTopic);
         CLUSTER.createTopics(outputTopic);
@@ -279,7 +279,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -342,7 +342,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -411,7 +411,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -465,7 +465,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(builder.build(), props);
         try {
             startApplicationAndWaitUntilRunning(kafkaStreams);
@@ -509,7 +509,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(topology, props);
 
         final CountDownLatch latch = new CountDownLatch(1);
@@ -545,7 +545,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props1.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props1, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props1, withHeaders);
         purgeLocalStreamsState(props1);
         final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
@@ -555,7 +555,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props2.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props2, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props2, withHeaders);
         purgeLocalStreamsState(props2);
         final KafkaStreams streams2 = new KafkaStreams(builder.build(), props2);
 
@@ -694,7 +694,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
 
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
@@ -761,7 +761,7 @@ public class RestoreIntegrationTest {
         if (useNewProtocol) {
             streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
         kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
