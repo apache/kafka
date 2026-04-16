@@ -26,10 +26,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -191,6 +195,161 @@ public class ConsumerInterceptorsTest {
         assertEquals(4, onCommitCount);
 
         interceptors.close();
+    }
+
+    /**
+     * Simulates how OpenTelemetry / Datadog agents instrument the Kafka consumer
+     * today: onConsume() wraps each partition's record list with a custom List whose iterator()
+     * returns a TracingIterator.  The TracingIterator drives a per-record span lifecycle:
+     * time spent between next() and hasNext().
+     */
+    private static class TracingConsumerInterceptor<K, V> implements ConsumerInterceptor<K, V> {
+
+        private final Time time;
+        private final List<Long> spans;
+        private final long iterTickMs;
+
+        TracingConsumerInterceptor(Time time, List<Long> spans, long iterTickMs) {
+            this.time = time;
+            this.spans = spans;
+            this.iterTickMs = iterTickMs;
+        }
+
+        @Override
+        public ConsumerRecords<K, V> onConsume(ConsumerRecords<K, V> records) {
+            Map<TopicPartition, List<ConsumerRecord<K, V>>> wrappedMap = new HashMap<>();
+            for (TopicPartition p : records.partitions()) {
+                List<ConsumerRecord<K, V>> orig = records.records(p);
+                wrappedMap.put(p, new AbstractList<>() {
+                    @Override
+                    public ConsumerRecord<K, V> get(int i) {
+                        return orig.get(i);
+                    }
+
+                    @Override
+                    public int size() {
+                        return orig.size();
+                    }
+
+                    @Override
+                    public Iterator<ConsumerRecord<K, V>> iterator() {
+                        return new TracingIterator(orig.iterator());
+                    }
+                });
+            }
+
+            return new ConsumerRecords<>(wrappedMap, records.nextOffsets());
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {}
+
+        @Override
+        public void close() {}
+
+        @Override
+        public void configure(Map<String, ?> configs) {}
+
+        private class TracingIterator implements Iterator<ConsumerRecord<K, V>> {
+
+            private final Iterator<ConsumerRecord<K, V>> delegate;
+            private long spanStartMs = -1;
+
+            TracingIterator(Iterator<ConsumerRecord<K, V>> delegate) {
+                this.delegate = delegate;
+            }
+
+            @Override
+            public boolean hasNext() {
+                boolean more = delegate.hasNext();
+                // final element
+                if (!more && spanStartMs >= 0) {
+                    // iteration tick
+                    time.sleep(iterTickMs);
+                    // process time
+                    spans.add(time.milliseconds() - spanStartMs);
+                    // reset clock
+                    spanStartMs = -1;
+                }
+                return more;
+            }
+
+            @Override
+            public ConsumerRecord<K, V> next() {
+                // iteration tick
+                time.sleep(iterTickMs);
+                if (spanStartMs >= 0) {
+                    spans.add(time.milliseconds() - spanStartMs);
+                }
+                spanStartMs = time.milliseconds();
+                return delegate.next();
+            }
+        }
+    }
+
+    @Test
+    public void testTracingIteratorSpanLifetimeBreaksOnAsyncDispatch() {
+        int PROCESS_TIME_MS = 50;
+        int ITER_TICK_MS = 1;
+
+        List<ConsumerRecord<Integer, Integer>> batch = new ArrayList<>();
+        for (int offset = 0; offset < 5; offset++) {
+            batch.add(new ConsumerRecord<>(topic, partition, offset, 0L,
+                    TimestampType.CREATE_TIME, 0, 0, offset, offset,
+                    new RecordHeaders(), Optional.empty()));
+        }
+        Map<TopicPartition, List<ConsumerRecord<Integer, Integer>>> recordMap = new HashMap<>();
+        recordMap.put(tp, batch);
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
+        nextOffsets.put(tp, new OffsetAndMetadata(batch.size(), Optional.empty(), ""));
+        ConsumerRecords<Integer, Integer> records = new ConsumerRecords<>(recordMap, nextOffsets);
+
+        MockTime syncTime = new MockTime();
+        List<Long> syncSpans = new ArrayList<>();
+        try (ConsumerInterceptors<Integer, Integer> syncInterceptors = new ConsumerInterceptors<>(
+                List.of(new TracingConsumerInterceptor<>(syncTime, syncSpans, ITER_TICK_MS)), null)) {
+
+            ConsumerRecords<Integer, Integer> syncWrapped = syncInterceptors.onConsume(records);
+            for (ConsumerRecord<Integer, Integer> ignored : syncWrapped) {
+                syncTime.sleep(PROCESS_TIME_MS);
+            }
+
+            assertEquals(batch.size(), syncSpans.size());
+            assertTrue(syncSpans.stream().allMatch(d -> d == PROCESS_TIME_MS + ITER_TICK_MS));
+
+            long totalTimeMs = syncSpans.stream()
+                    .mapToLong(Long::longValue)
+                    .sum();
+
+            assertEquals(255, totalTimeMs);
+        }
+
+        MockTime asyncTime = new MockTime();
+        List<Long> asyncSpans = new ArrayList<>();
+        try (ConsumerInterceptors<Integer, Integer> asyncInterceptors = new ConsumerInterceptors<>(
+                List.of(new TracingConsumerInterceptor<>(asyncTime, asyncSpans, ITER_TICK_MS)), null)) {
+
+            ConsumerRecords<Integer, Integer> asyncWrapped = asyncInterceptors.onConsume(records);
+            List<Runnable> futures = new ArrayList<>();
+            for (ConsumerRecord<Integer, Integer> ignored : asyncWrapped) {
+                futures.add(() -> asyncTime.sleep(PROCESS_TIME_MS));
+            }
+            futures.forEach(Runnable::run);
+
+            assertEquals(batch.size(), asyncSpans.size());
+            // process time not captured, only iteration loop
+            assertTrue(asyncSpans.stream().allMatch(d -> d == ITER_TICK_MS));
+
+            long totalProcessTimeMs = asyncSpans.stream()
+                    .mapToLong(Long::longValue)
+                    .sum();
+
+            // While the interceptor correctly reports time between iteration here,
+            // the contract is tightly coupled to processing records strictly
+            // within the foreach loop of ConsumerRecords/List<ConsumerRecord> per partition
+            // which can break reporting UIs.
+            assertEquals(5, totalProcessTimeMs);
+        }
     }
 
     private void validateNextOffsets(Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap, int size) {
