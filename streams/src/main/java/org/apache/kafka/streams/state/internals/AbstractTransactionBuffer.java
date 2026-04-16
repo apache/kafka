@@ -58,6 +58,18 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
         return newBaseIterator(from, to);
     }
 
+    /**
+     * Create a base iterator that is isolated from concurrent base-store mutation.
+     * <p>
+     * Called only from the non-owner ({@link #snapshotScan}) path while the {@link #snapshotLock}
+     * read-lock is held. Subclasses must provide mutation isolation appropriate to their backend
+     * (e.g. an eager range copy for in-memory, a native snapshot for RocksDB).
+     * <p>
+     * The owner fast path uses the live {@link #newBaseIterator} and must not use this method.
+     */
+    abstract ManagedKeyValueIterator<K, byte[]> newBaseSnapshotIterator(K from, K to,
+                                                                        boolean forward, boolean toInclusive);
+
     /** Atomically apply the accumulated writes to the base store. */
     abstract void flushToBase();
 
@@ -149,7 +161,7 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
         snapshotLock.readLock().lock();
         try {
             final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(boundStaging(from, to, toInclusive));
-            final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(from, to, forward, toInclusive);
+            final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseSnapshotIterator(from, to, forward, toInclusive);
             return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         } finally {
             snapshotLock.readLock().unlock();
