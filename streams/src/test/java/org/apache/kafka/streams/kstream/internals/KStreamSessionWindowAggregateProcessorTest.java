@@ -115,9 +115,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         // Always process
         final Properties prop = StreamsTestUtils.getStreamsConfig();
         prop.put(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-        if (withHeaders) {
-            prop.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(prop, withHeaders);
         final StreamsConfig config = new StreamsConfig(prop);
 
         mockContext = new InternalMockProcessorContext<>(

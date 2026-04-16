@@ -26,13 +26,13 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +72,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     @ParameterizedTest
     @CsvSource({"false, false, false", "false, false, true", "true, false, false", "true, false, true", "true, true, false", "true, true, true"})
     public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable, final boolean withHeaders) {
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         final Topology topology = getTopology(streamsConfig, "store", materialized, queryable);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());

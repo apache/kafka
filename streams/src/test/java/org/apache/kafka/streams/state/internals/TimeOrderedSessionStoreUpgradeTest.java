@@ -340,9 +340,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @MethodSource("dslStoreFormats")
     public void shouldAggregateSessionsViaDslWithOnWindowClose(final boolean withHeaders) {
         final Properties dslProps = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        if (withHeaders) {
-            dslProps.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(dslProps, withHeaders);
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))

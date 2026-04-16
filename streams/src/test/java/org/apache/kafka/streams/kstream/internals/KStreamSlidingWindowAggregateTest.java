@@ -126,9 +126,7 @@ public class KStreamSlidingWindowAggregateTest {
         withCache = inputWithCache;
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
-        if (withHeaders) {
-            props.put(org.apache.kafka.streams.StreamsConfig.DSL_STORE_FORMAT_CONFIG, org.apache.kafka.streams.StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
     }
 
     @ParameterizedTest
