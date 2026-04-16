@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -34,6 +35,8 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBStoreTestingUtils;
@@ -422,20 +425,40 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         // After clean shutdown with no data, status should still be closed
         assertStoreStatus(0L);
 
-        // Restart — should not treat empty CF as corruption
-        startStreams(false);
+        // Restart — should not treat empty CF as corruption.
+        // Capture logs from ProcessorStateManager and StateDirectory to verify
+        // no corruption-related warnings are emitted during restart.
+        try (final LogCaptureAppender stateManagerAppender = LogCaptureAppender.createAndRegister(ProcessorStateManager.class);
+             final LogCaptureAppender stateDirAppender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
 
-        final List<KeyValue<String, String>> records = Arrays.asList(
-            new KeyValue<>("A", "v1"),
-            new KeyValue<>("B", "v1")
-        );
-        produceRecords(records);
+            startStreams(false);
 
-        final List<KeyValue<String, Long>> output = waitForOutput(records.size());
-        final Map<String, Long> counts = latestCountsFromOutput(output);
+            final List<KeyValue<String, String>> records = Arrays.asList(
+                new KeyValue<>("A", "v1"),
+                new KeyValue<>("B", "v1")
+            );
+            produceRecords(records);
 
-        assertEquals(1L, counts.get("A"));
-        assertEquals(1L, counts.get("B"));
+            final List<KeyValue<String, Long>> output = waitForOutput(records.size());
+            final Map<String, Long> counts = latestCountsFromOutput(output);
+
+            assertEquals(1L, counts.get("A"));
+            assertEquals(1L, counts.get("B"));
+
+            assertNoCorruptionWarnings(stateManagerAppender);
+            assertNoCorruptionWarnings(stateDirAppender);
+        }
+    }
+
+    private void assertNoCorruptionWarnings(final LogCaptureAppender appender) {
+        for (final String message : appender.getMessages()) {
+            if (message.contains("did not find checkpoint offsets while stores are not empty")) {
+                throw new AssertionError("Unexpected corruption warning in logs: " + message);
+            }
+            if (message.contains("Failed to register startup state stores for task")) {
+                throw new AssertionError("Unexpected startup store failure in logs: " + message);
+            }
+        }
     }
 
     /**
