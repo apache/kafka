@@ -23,8 +23,8 @@ import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEnt
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.utils.internals.Sanitizer
 import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity
-import org.apache.kafka.common.utils.Sanitizer
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Optional
