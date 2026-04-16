@@ -1004,10 +1004,7 @@ public class ConfigCommand {
                 Stream.of(entityName, ip)
                         .filter(options::has)
                         .map(options::valueOf)
-                        .forEach(ipEntity -> {
-                            if (!isValidIpEntity(ipEntity))
-                                throw new IllegalArgumentException("The entity name for " + entityTypeVals.get(0) + " must be a valid IP or resolvable host, but it is: " + ipEntity);
-                        });
+                        .forEach(ipEntity -> validateIpEntity(ipEntity, entityTypeVals.get(0)));
             }
 
             if (options.has(describeOpt)) {
@@ -1045,12 +1042,11 @@ public class ConfigCommand {
         }
     }
 
-    private static boolean isValidIpEntity(String ip) {
+    private static void validateIpEntity(String ip, String entityType) {
         try {
             InetAddress.getByName(ip);
-            return true;
         } catch (UnknownHostException uhe) {
-            return false;
+            throw new IllegalArgumentException("The entity name for " + entityType + " must be a valid IP or resolvable host, but it is: " + ip);
         }
     }
 
