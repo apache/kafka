@@ -1928,7 +1928,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             try {
                 // If users have fatal error, they will get some exceptions in the background queue.
                 // When running unsubscribe, these exceptions should be ignored, or users can't unsubscribe successfully.
-                processBackgroundEvents(unsubscribeEvent.future(), timer, e -> (e instanceof GroupAuthorizationException || e instanceof TopicAuthorizationException));
+                // We also skip processing assignment events (PARTITIONS_ASSIGNED, STREAMS_TASKS_ASSIGNED) because
+                // they are not relevant anymore (consumer already unsubscribing).
+                processBackgroundEvents(unsubscribeEvent.future(), timer,
+                    e -> (e instanceof GroupAuthorizationException || e instanceof TopicAuthorizationException),
+                    true);
                 log.info("Unsubscribed all topics or patterns and assigned partitions");
             } catch (TimeoutException e) {
                 log.error("Failed while waiting for the unsubscribe event to complete");
@@ -2310,6 +2314,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * Visible for testing.
      */
     boolean processBackgroundEvents() {
+        return processBackgroundEvents(false);
+    }
+
+    /**
+     * Checks if the given background event is an assignment update event.
+     * Those are to update reconciled assignments, so should only be processed from poll() and not from unsubscribe().
+     */
+    private static boolean isAssignmentEvent(BackgroundEvent event) {
+        return event.type() == BackgroundEvent.Type.PARTITIONS_ASSIGNED ||
+               event.type() == BackgroundEvent.Type.STREAMS_TASKS_ASSIGNED;
+    }
+
+    /**
+     * Process the events produced by the background thread.
+     * It is possible that {@link ErrorEvent an error}
+     * could occur when processing the events. In such cases, the processor will take a reference to the first
+     * error, continue to process the remaining events, and then throw the first error that occurred.
+     * Visible for testing.
+     *
+     * @param skipAssignmentEvents If true, skip processing events that update a new assignment after a reconciliation
+     *                             (PARTITIONS_ASSIGNED and STREAMS_TASKS_ASSIGNED)
+     *                             These events should only be processed from poll(), not from unsubscribe().
+     * @return true if any events were drained from the queue
+     */
+    boolean processBackgroundEvents(boolean skipAssignmentEvents) {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
         List<BackgroundEvent> events = backgroundEventHandler.drainEvents();
@@ -2320,6 +2349,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 try {
                     if (event instanceof CompletableEvent)
                         backgroundEventReaper.add((CompletableEvent<?>) event);
+
+                    // Skip assignment events if requested (e.g., during unsubscribe).
+                    // These events should only be processed from poll().
+                    // Complete them exceptionally to unblock the reconciliation in the background.
+                    if (skipAssignmentEvents && isAssignmentEvent(event)) {
+                        if (event instanceof CompletableEvent) {
+                            ((CompletableEvent<?>) event).future().completeExceptionally(
+                                new KafkaException("Assignment event skipped because consumer is unsubscribing"));
+                        }
+                        log.debug("Skipped processing {} during unsubscribe", event.type());
+                        continue;
+                    }
 
                     backgroundEventProcessor.process(event);
                 } catch (Throwable t) {
@@ -2378,14 +2419,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @param timer                     Overall timer that bounds how long to wait for the event to complete
      * @param ignoreErrorEventException Predicate to ignore background errors.
      *                                  Any exceptions found while processing background events that match the predicate won't be propagated.
-     * @return {@code true} if the event completed within the timeout, {@code false} otherwise
+     * @param skipAssignmentEvents      If true, skip processing PARTITIONS_ASSIGNED and STREAMS_TASKS_ASSIGNED
+     *                                  events and complete them exceptionally. These events should only be
+     *                                  processed from poll(), not from unsubscribe() or other operations.
+     * @return the completed result of the supplied {@code future}
+     * @throws TimeoutException if the operation does not complete before the timer expires
      */
     // Visible for testing
-    <T> T processBackgroundEvents(Future<T> future, Timer timer, Predicate<Exception> ignoreErrorEventException) {
+    <T> T processBackgroundEvents(Future<T> future, Timer timer, Predicate<Exception> ignoreErrorEventException,
+                                  boolean skipAssignmentEvents) {
         do {
             boolean hadEvents = false;
             try {
-                hadEvents = processBackgroundEvents();
+                hadEvents = processBackgroundEvents(skipAssignmentEvents);
             } catch (Exception e) {
                 if (!ignoreErrorEventException.test(e))
                     throw e;

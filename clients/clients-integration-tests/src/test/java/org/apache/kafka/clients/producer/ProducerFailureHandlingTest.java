@@ -88,7 +88,7 @@ public class ProducerFailureHandlingTest {
      * With ack == 0 the future metadata will have no exceptions with offset -1
      */
     @ClusterTest
-    void testTooLargeRecordWithAckZero(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testTooLargeRecordWithAckZero(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(0))) {
@@ -107,7 +107,7 @@ public class ProducerFailureHandlingTest {
      * With ack == 1 the future metadata will throw ExecutionException caused by RecordTooLargeException
      */
     @ClusterTest
-    void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) throws InterruptedException {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
@@ -123,7 +123,7 @@ public class ProducerFailureHandlingTest {
      * This should succeed as the replica fetcher thread can handle oversized messages since KIP-74
      */
     @ClusterTest
-    void testPartitionTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testPartitionTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         checkTooLargeRecordForReplicationWithAckAll(clusterInstance, replicaFetchMaxPartitionBytes);
     }
@@ -132,7 +132,7 @@ public class ProducerFailureHandlingTest {
      * This should succeed as the replica fetcher thread can handle oversized messages since KIP-74
      */
     @ClusterTest
-    void testResponseTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testResponseTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         checkTooLargeRecordForReplicationWithAckAll(clusterInstance, replicaFetchMaxResponseBytes);
     }
@@ -142,7 +142,7 @@ public class ProducerFailureHandlingTest {
      * With non-exist-topic the future metadata should return ExecutionException caused by TimeoutException
      */
     @ClusterTest
-    void testNonExistentTopic(ClusterInstance clusterInstance) {
+    public void testNonExistentTopic(ClusterInstance clusterInstance) {
         // send a record with non-exist topic
         ProducerRecord<byte[], byte[]> record =
                 new ProducerRecord<>(topic2, null, "key".getBytes(), "value".getBytes());
@@ -156,7 +156,7 @@ public class ProducerFailureHandlingTest {
      * With incorrect broker-list the future metadata should return ExecutionException caused by TimeoutException
      */
     @ClusterTest
-    void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {
         clusterInstance.createTopic(topic1, 1, (short) 1);
         // producer with incorrect broker list
         Map<String, Object> producerConfig = new HashMap<>(producerConfig(1));
@@ -174,7 +174,7 @@ public class ProducerFailureHandlingTest {
      * when partition is higher than the upper bound of partitions.
      */
     @ClusterTest
-    void testInvalidPartition(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testInvalidPartition(ClusterInstance clusterInstance) throws InterruptedException {
         // create topic with a single partition
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
@@ -192,7 +192,7 @@ public class ProducerFailureHandlingTest {
      * The send call after producer closed should throw IllegalStateException
      */
     @ClusterTest
-    void testSendAfterClosed(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testSendAfterClosed(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         // create topic
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
@@ -216,7 +216,7 @@ public class ProducerFailureHandlingTest {
     }
 
     @ClusterTest
-    void testCannotSendToInternalTopic(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testCannotSendToInternalTopic(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             Map<String, String> topicConfig = new HashMap<>();
             clusterInstance.brokers().get(0)
@@ -237,7 +237,7 @@ public class ProducerFailureHandlingTest {
     }
 
     @ClusterTest
-    void testNotEnoughReplicasAfterBrokerShutdown(ClusterInstance clusterInstance) throws InterruptedException,
+    public void testNotEnoughReplicasAfterBrokerShutdown(ClusterInstance clusterInstance) throws InterruptedException,
             ExecutionException {
         String topicName = "minisrtest2";
         int brokerNum = clusterInstance.brokers().size();

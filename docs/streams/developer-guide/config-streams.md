@@ -1511,31 +1511,32 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > ```java
 > public class DlqProcessingExceptionHandler implements ProcessingExceptionHandler {
 >
->     private String deadLetterQueueTopic;
+>     private String deadLetterQueueTopic;
 >
->     @Override
->     public Response handleError(final ErrorHandlerContext context,
->                                 final Record<?, ?> record,
->                                 final Exception exception) {
+>     @Override
+>     public Response handleError(final ErrorHandlerContext context,
+>                                 final Record<?, ?> record,
+>                                 final Exception exception) {
 >
->       // Example: forward the raw record to a DLQ topic
->       Record<byte[], byte[]> dlqRecord =
->           new Record<>(deadLetterQueueTopic,
->                        context.sourceRawKey(),
->                        context.sourceRawValue(),
->                        context.timestamp());
+>       // Example: forward the raw record to a DLQ topic
+>       ProducerRecord<byte[], byte[]> dlqRecord =
+>           new ProducerRecord<>(deadLetterQueueTopic,
+>                                null,
+>                                context.timestamp(),
+>                                context.sourceRawKey(),
+>                                context.sourceRawValue());
 >
 >       // Applications may choose how to construct DLQ records. For example,
 >       // they may forward the raw key/value bytes, transform the payload,
 >       // or add headers with error metadata.
 >       return Response.resume(List.of(dlqRecord));
->      }
+>      }
 >
->     @Override
->     public void configure(final Map<String, ?> configs) {
+>     @Override
+>     public void configure(final Map<String, ?> configs) {
 >         // Retrieve the DLQ topic name from the configs map, or any other source
->         deadLetterQueueTopic = (String) configs.get("my.dlq.topic.config.key");
->     }
+>         deadLetterQueueTopic = (String) configs.get("my.dlq.topic.config.key");
+>     }
 > }
 > ```
 > To enable the custom exception handler and configure the DLQ topic:
@@ -1544,15 +1545,15 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > Properties props = new Properties();
 >
 > props.put(
->     StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
->     DlqProcessingExceptionHandler.class
+>     StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+>     DlqProcessingExceptionHandler.class
 > );
 >
 >//   Optional: if your custom handler reads the DLQ topic from StreamsConfig,
 >//   set it here. Otherwise, configure the topic name via your own properties.
 > //  props.put(
-> //    StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
-> //    "dlq-topic"
+> //    StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+> //    "dlq-topic"
 > //  );
 > ```
 ### processing.exception.handler.global.enabled (deprecated)
@@ -2051,5 +2052,3 @@ Admin
    * [Documentation](/documentation)
    * [Kafka Streams](/documentation/streams)
    * [Developer Guide](/documentation/streams/developer-guide/)
- 
-

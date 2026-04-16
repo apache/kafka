@@ -38,6 +38,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.util.ServerTestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Test
@@ -97,7 +98,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   override def tearDown(): Unit = {
     authorizer1.close()
     authorizer2.close()
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     super.tearDown()
   }
 

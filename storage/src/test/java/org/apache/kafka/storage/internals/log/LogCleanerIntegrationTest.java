@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -118,7 +119,7 @@ public class LogCleanerIntegrationTest {
 
     @AfterEach
     public void teardown() throws IOException, InterruptedException {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         if (cleaner != null) {
             cleaner.shutdown();
         }

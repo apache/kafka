@@ -54,7 +54,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager, RequestLocal}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.partition.{AlterPartitionListener, OngoingReassignmentState, PartitionListener, PendingShrinkIsr, SimpleAssignmentState}
+import org.apache.kafka.server.partition.{AlterPartitionListener, AlterPartitionManager, DefaultAlterPartitionManager, OngoingReassignmentState, PartitionListener, PendingShrinkIsr, SimpleAssignmentState}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
@@ -1270,7 +1270,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Expansion does not affect the ISR
     assertEquals(util.Set.of(leader, follower2), partition.partitionState.isr, "ISR")
     assertEquals(util.Set.of(leader, follower1, follower2), partition.partitionState.maximalIsr, "ISR")
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.asScala.toSet,
+    assertEquals(alterPartitionManager.isrUpdates.peek().leaderAndIsr.isr.asScala.toSet,
       Set(leader, follower1, follower2), "AlterIsr")
   }
 
@@ -1511,7 +1511,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(util.Set.of(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
-    assertEquals(Set(brokerId, remoteBrokerId), alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.asScala.toSet)
+    assertEquals(Set(brokerId, remoteBrokerId), alterPartitionManager.isrUpdates.peek().leaderAndIsr.isr.asScala.toSet)
 
     // Simulate invalid request failure
     alterPartitionManager.failIsrUpdate(Errors.INVALID_REQUEST)
@@ -1566,7 +1566,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    val isrItem = alterPartitionManager.isrUpdates.head
+    val isrItem = alterPartitionManager.isrUpdates.peek()
     assertEquals(isrItem.leaderAndIsr.isr, util.Set.of[Integer](brokerId, remoteBrokerId))
     isrItem.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       // the broker epochs should be equal to broker epoch of the leader
@@ -1830,7 +1830,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
     // Expansion succeeds.
-    alterPartitionManager.completeIsrUpdate(newPartitionEpoch = 1)
+    alterPartitionManager.completeIsrUpdate(1)
 
     // ISR is committed.
     assertEquals(replicas.toSet.asJava, partition.partitionState.isr)
@@ -1923,7 +1923,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr.toSet.asJava, partition.partitionState.isr)
     assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
-    val isrUpdate = alterPartitionManager.isrUpdates.head
+    val isrUpdate = alterPartitionManager.isrUpdates.peek()
     isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       if (brokerState.brokerId() == remoteBrokerId2) {
         // remoteBrokerId2 has not received any fetch request yet, it does not have broker epoch.
@@ -2085,7 +2085,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
     // Expansion succeeds.
-    alterPartitionManager.completeIsrUpdate(newPartitionEpoch= 1)
+    alterPartitionManager.completeIsrUpdate(1)
 
     // ISR is committed.
     assertEquals(replicas.toSet.asJava, partition.partitionState.isr)
@@ -2121,7 +2121,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Try to shrink the ISR
     partition.maybeShrinkIsr()
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, util.Set.of[Integer](brokerId))
+    assertEquals(alterPartitionManager.isrUpdates.peek().leaderAndIsr.isr, util.Set.of[Integer](brokerId))
     assertEquals(util.Set.of(brokerId, remoteBrokerId), partition.partitionState.isr)
     assertEquals(util.Set.of(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
 
@@ -2136,7 +2136,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // The shrink succeeds after retrying
-    alterPartitionManager.completeIsrUpdate(newPartitionEpoch = 2)
+    alterPartitionManager.completeIsrUpdate(2)
     assertEquals(1, alterPartitionListener.shrinks.get)
     assertEquals(2, partition.getPartitionEpoch)
     assertEquals(alterPartitionManager.isrUpdates.size, 0)
@@ -2206,8 +2206,8 @@ class PartitionTest extends AbstractPartitionTest {
     partition.maybeShrinkIsr()
     assertEquals(0, alterPartitionListener.shrinks.get)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, util.Set.of[Integer](brokerId, remoteBrokerId1))
-    val isrUpdate = alterPartitionManager.isrUpdates.head
+    assertEquals(alterPartitionManager.isrUpdates.peek().leaderAndIsr.isr, util.Set.of[Integer](brokerId, remoteBrokerId1))
+    val isrUpdate = alterPartitionManager.isrUpdates.peek()
     isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       assertEquals(defaultBrokerEpoch(brokerState.brokerId()), brokerState.brokerEpoch())
     }
@@ -2217,7 +2217,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // After the ISR shrink completes, the ISR state should be updated and the
     // high watermark should be advanced
-    alterPartitionManager.completeIsrUpdate(newPartitionEpoch = 2)
+    alterPartitionManager.completeIsrUpdate(2)
     assertEquals(1, alterPartitionListener.shrinks.get)
     assertEquals(2, partition.getPartitionEpoch)
     assertEquals(alterPartitionManager.isrUpdates.size, 0)
@@ -2601,11 +2601,10 @@ class PartitionTest extends AbstractPartitionTest {
   def testPartitionShouldRetryAlterPartitionRequest(): Unit = {
     val mockChannelManager = mock(classOf[NodeToControllerChannelManager])
     val alterPartitionManager = new DefaultAlterPartitionManager(
-      controllerChannelManager = mockChannelManager,
-      scheduler = mock(classOf[KafkaScheduler]),
-      time = time,
-      brokerId = brokerId,
-      brokerEpochSupplier = () => 0
+      mockChannelManager,
+      mock(classOf[KafkaScheduler]),
+      brokerId,
+      () => 0
     )
 
     partition = new Partition(topicPartition,

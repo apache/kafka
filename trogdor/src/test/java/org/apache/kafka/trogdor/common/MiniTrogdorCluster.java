@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.agent.AgentRestResource;

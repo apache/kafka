@@ -34,10 +34,10 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.PrimitiveRef;
-import org.apache.kafka.common.utils.PrimitiveRef.LongRef;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
+import org.apache.kafka.common.utils.internals.PrimitiveRef.LongRef;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

@@ -14,18 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
 
-import org.junit.jupiter.api.Test;
+package org.apache.kafka.server.partition;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.server.common.TopicIdPartition;
 
-public class Crc32CTest {
+import java.util.concurrent.CompletableFuture;
 
-    @Test
-    public void testValue() {
-        final byte[] bytes = "Some String".getBytes();
-        assertEquals(608512271, Crc32C.compute(bytes, 0, bytes.length));
-    }
-
+public record AlterPartitionItem(TopicIdPartition topicIdPartition, LeaderAndIsr leaderAndIsr,
+                                 CompletableFuture<LeaderAndIsr> future) {
 }

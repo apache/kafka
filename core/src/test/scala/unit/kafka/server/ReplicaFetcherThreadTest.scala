@@ -38,6 +38,7 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.util.ServerTestUtils
 
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, LogManager, RecordValidationStats, UnifiedLog}
@@ -82,7 +83,7 @@ class ReplicaFetcherThreadTest {
 
   @AfterEach
   def cleanup(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def createReplicaFetcherThread(
