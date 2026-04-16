@@ -44,7 +44,7 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.internals.Crc32C;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;

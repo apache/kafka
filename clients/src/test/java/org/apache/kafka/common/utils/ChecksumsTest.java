@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.Crc32C;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

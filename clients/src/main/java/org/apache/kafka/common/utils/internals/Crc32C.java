@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.utils.internals;
+
+import org.apache.kafka.common.utils.Checksums;
 
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32C;
