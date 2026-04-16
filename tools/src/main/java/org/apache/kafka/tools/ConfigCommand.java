@@ -108,7 +108,7 @@ import joptsimple.OptionSpec;
  * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
  * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
  */
-public class ConfigCommand  {
+public class ConfigCommand {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfigCommand.class);
 
@@ -660,7 +660,7 @@ public class ConfigCommand  {
 
             Function<String, Optional<String>> entitySubstr = entityType -> {
                 String name = entityEntries.get(entityType);
-                if (name == null) {
+                if (name == null && !entityEntries.containsKey(entityType)) {
                     return Optional.empty();
                 }
                 String typeStr = switch (entityType) {
@@ -669,7 +669,7 @@ public class ConfigCommand  {
                     case ClientQuotaEntity.IP -> "ip";
                     default -> throw new IllegalArgumentException("Unknown entity type: " + entityType);
                 };
-                String result = name.isEmpty() ? "the default " + typeStr : typeStr + " '" + name + "'";
+                String result = (name == null || name.isEmpty()) ? "the default " + typeStr : typeStr + " '" + name + "'";
                 return Optional.of(result);
             };
 
@@ -765,7 +765,7 @@ public class ConfigCommand  {
             // (KIP-1142) 4.1+ admin client vs older broker: treat UnsupportedVersionException and ClusterAuthorizationException as None
             if (ee.getCause() instanceof UnsupportedVersionException) return Optional.empty();
             if (ee.getCause() instanceof ClusterAuthorizationException) return Optional.empty();
-            else throw (Exception)  ee.getCause();
+            else throw (Exception) ee.getCause();
         }
     }
 
