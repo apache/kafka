@@ -773,7 +773,7 @@ The average fraction of time the network processors are idle
 </td>  
 <td>
 
-kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent
+kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent,nodeId=[nodeId],listenerType=[BROKER|CONTROLLER]
 </td>  
 <td>
 
@@ -799,7 +799,7 @@ The total number of connections disconnected, across all processors, due to a cl
 </td>  
 <td>
 
-kafka.network:type=SocketServer,name=ExpiredConnectionsKilledCount
+kafka.network:type=SocketServer,name=ExpiredConnectionsKilledCount,nodeId=[nodeId],listenerType=[BROKER|CONTROLLER]
 </td>  
 <td>
 

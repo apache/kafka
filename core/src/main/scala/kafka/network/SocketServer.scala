@@ -87,6 +87,7 @@ class SocketServer(
   private val maxQueuedRequests = config.queuedMaxRequests
 
   protected val nodeId: Int = config.brokerId
+  private val metricsTags = MetricsUtils.getTags("nodeId", nodeId.toString, "listenerType", apiVersionManager.listenerType.name)
 
   private val logContext = new LogContext(s"[SocketServer listenerType=${apiVersionManager.listenerType}, nodeId=$nodeId] ")
 
@@ -127,10 +128,10 @@ class SocketServer(
         Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }.sum / dataPlaneProcessors.size
     }
-  })
+  }, metricsTags)
 
-  metricsGroup.newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
-  metricsGroup.newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
+  metricsGroup.newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory, metricsTags)
+  metricsGroup.newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory, metricsTags)
   metricsGroup.newGauge(s"ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
@@ -139,7 +140,7 @@ class SocketServer(
     expiredConnectionsKilledCountMetricNames.map { metricName =>
       Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
     }.sum
-  })
+  }, metricsTags)
 
   // Create acceptors and processors for the statically configured endpoints when the
   // SocketServer is constructed. Note that this just opens the ports and creates the data
@@ -260,6 +261,10 @@ class SocketServer(
       dataPlaneRequestChannel.shutdown()
       connectionQuotas.close()
     }
+    metricsGroup.removeMetric("NetworkProcessorAvgIdlePercent", metricsTags)
+    metricsGroup.removeMetric("MemoryPoolAvailable", metricsTags)
+    metricsGroup.removeMetric("MemoryPoolUsed", metricsTags)
+    metricsGroup.removeMetric("ExpiredConnectionsKilledCount", metricsTags)
     info("Shutdown completed")
   }
 

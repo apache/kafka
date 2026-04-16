@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import kafka.network.SocketServer;
-import kafka.server.KafkaBroker;
-
-import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -28,10 +24,12 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.IntegrationTestUtils;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
 
 import java.io.EOFException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
@@ -96,16 +94,15 @@ public class SocketServerMemoryPoolTest {
         assertEquals(initialMemoryPoolAvailable, finalMemoryPoolAvailable);
     }
 
-    // This test uses reflection to read the SocketServer memoryPool availableMemory.
-    // The metric "MemoryPoolAvailable" from Yammer Metrics default registry
-    // can be overwritten in a @ClusterTest as the registry is a singleton.
-    long getMemoryPoolAvailable(ClusterInstance clusterInstance) throws Exception {
-        KafkaBroker broker = clusterInstance.aliveBrokers().values().iterator().next();
-        SocketServer socketServer = broker.socketServer();
-        Field memoryPoolField = socketServer.getClass().getDeclaredField("memoryPool");
-        memoryPoolField.setAccessible(true);
-        MemoryPool memoryPool = (MemoryPool) memoryPoolField.get(socketServer);
-        return memoryPool.availableMemory();
+    @SuppressWarnings("unchecked")
+    long getMemoryPoolAvailable(ClusterInstance clusterInstance) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+            .filter(e -> e.getKey().getType().equals("SocketServer"))
+            .filter(e -> e.getKey().getName().equals("MemoryPoolAvailable"))
+            .filter(e -> e.getKey().getMBeanName().contains("listenerType=BROKER"))
+            .map(e -> ((Gauge<Long>) e.getValue()).value())
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("MemoryPoolAvailable metric not found for broker SocketServer"));
     }
 
     /**

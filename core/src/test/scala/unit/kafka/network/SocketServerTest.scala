@@ -1242,6 +1242,42 @@ class SocketServerTest {
     }
   }
 
+  @Test
+  def testSocketServerMetricsTags(): Unit = {
+    val socketServerMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getType == "SocketServer" }
+      .collect { case (k, _: Gauge[_]) => k }
+
+    val expectedMetricNames = Set(
+      "NetworkProcessorAvgIdlePercent",
+      "MemoryPoolAvailable",
+      "MemoryPoolUsed",
+      "ExpiredConnectionsKilledCount"
+    )
+
+    val foundMetricNames = socketServerMetrics.map(_.getName).toSet
+    assertEquals(expectedMetricNames, foundMetricNames)
+
+    socketServerMetrics.foreach { metricName =>
+      assertTrue(metricName.getMBeanName.contains("nodeId=0"),
+        s"Metric ${metricName.getName} should have nodeId tag, but MBean name is: ${metricName.getMBeanName}")
+      assertTrue(metricName.getMBeanName.contains("listenerType=BROKER"),
+        s"Metric ${metricName.getName} should have listenerType tag, but MBean name is: ${metricName.getMBeanName}")
+    }
+  }
+
+  @Test
+  def testSocketServerMetricsRemovedOnShutdown(): Unit = {
+    shutdownServerAndMetrics(server)
+
+    val socketServerMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getType == "SocketServer" }
+      .collect { case (k, _: Gauge[_]) => k }
+
+    assertTrue(socketServerMetrics.isEmpty,
+      s"SocketServer metrics should be removed after shutdown, but found: ${socketServerMetrics.map(_.getName).mkString(", ")}")
+  }
+
   /**
    * Tests exception handling in [[Processor.configureNewConnections]]. Exception is
    * injected into [[Selector.register]] which is used to register each new connection.
