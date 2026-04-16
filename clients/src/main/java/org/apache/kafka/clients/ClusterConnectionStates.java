@@ -17,8 +17,8 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import org.slf4j.Logger;
 

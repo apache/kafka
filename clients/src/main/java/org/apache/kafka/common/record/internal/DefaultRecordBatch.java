@@ -24,9 +24,9 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.IOException;
 import java.io.InputStream;

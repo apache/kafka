@@ -94,9 +94,7 @@ public class SessionWindowedKStreamImplTest {
         type = inputType;
         final EmitStrategy emitStrategy = EmitStrategy.StrategyType.forType(type);
         emitFinal = type.equals(EmitStrategy.StrategyType.ON_WINDOW_CLOSE);
-        if (withHeaders) {
-            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
 
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         this.stream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))

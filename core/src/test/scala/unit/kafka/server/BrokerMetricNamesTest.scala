@@ -18,9 +18,9 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.ClusterTest
-import kafka.utils.TestUtils
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.ServerTestUtils
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 class BrokerMetricNamesTest(cluster: ClusterInstance) {
   @AfterEach
   def tearDown(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   @ClusterTest

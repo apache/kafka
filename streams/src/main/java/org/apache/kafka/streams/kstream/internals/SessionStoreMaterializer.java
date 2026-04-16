@@ -70,7 +70,7 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
 
         final StoreBuilder<?> builder;
         if (supplier instanceof HeadersBytesStoreSupplier) {
-            builder = Stores.sessionStoreBuilderWithHeaders(
+            builder = Stores.sessionStoreWithHeadersBuilder(
                 supplier,
                 materialized.keySerde(),
                 materialized.valueSerde()

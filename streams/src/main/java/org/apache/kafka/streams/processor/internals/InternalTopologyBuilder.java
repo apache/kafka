@@ -625,7 +625,7 @@ public class InternalTopologyBuilder {
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
-                Objects.requireNonNull(processorName, "processor cannot not be null");
+                Objects.requireNonNull(processorName, "processor cannot be null");
                 connectProcessorAndStateStore(processorName, storeName);
             }
         }
