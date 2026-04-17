@@ -22,6 +22,7 @@ import org.apache.kafka.server.util.timer.Timer;
 
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.server.share.fetch.InFlightState.EMPTY_MEMBER_ID;
 
@@ -56,6 +57,8 @@ public class InFlightBatch {
     // different. The states can be different when explicit offset acknowledgement is done which
     // is different from the batch state.
     private NavigableMap<Long, InFlightState> offsetState;
+    // Supplier indicating share group DLQ support.
+    private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
     public InFlightBatch(
         Timer timer,
@@ -67,7 +70,8 @@ public class InFlightBatch {
         int deliveryCount,
         AcquisitionLockTimerTask acquisitionLockTimeoutTask,
         AcquisitionLockTimeoutHandler timeoutHandler,
-        SharePartitionMetrics sharePartitionMetrics
+        SharePartitionMetrics sharePartitionMetrics,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this.timer = timer;
         this.time = time;
@@ -75,7 +79,8 @@ public class InFlightBatch {
         this.lastOffset = lastOffset;
         this.timeoutHandler = timeoutHandler;
         this.sharePartitionMetrics = sharePartitionMetrics;
-        this.batchState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+        this.batchState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask, shareGroupDlqEnableSupplier);
+        this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
     }
 
     /**
@@ -206,10 +211,10 @@ public class InFlightBatch {
             for (long offset = this.firstOffset; offset <= this.lastOffset; offset++) {
                 if (offset <= targetOffset) {
                     AcquisitionLockTimerTask timerTask = acquisitionLockTimerTask(batchState.memberId(), offset, offset, delayMs);
-                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId(), timerTask));
+                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId(), timerTask, shareGroupDlqEnableSupplier));
                     timer.add(timerTask);
                 } else {
-                    offsetState.put(offset, new InFlightState(RecordState.AVAILABLE, batchState.deliveryCount() - 1, EMPTY_MEMBER_ID));
+                    offsetState.put(offset, new InFlightState(RecordState.AVAILABLE, batchState.deliveryCount() - 1, EMPTY_MEMBER_ID, shareGroupDlqEnableSupplier));
                 }
             }
             batchState = null;
@@ -232,10 +237,10 @@ public class InFlightBatch {
                     // the acquisition lock timeout task for the offset as well.
                     long delayMs = batchState.acquisitionLockTimeoutTask().expirationMs() - time.hiResClockMs();
                     AcquisitionLockTimerTask timerTask = acquisitionLockTimerTask(batchState.memberId(), offset, offset, delayMs);
-                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId(), timerTask));
+                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId(), timerTask, shareGroupDlqEnableSupplier));
                     timer.add(timerTask);
                 } else {
-                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId()));
+                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId(), shareGroupDlqEnableSupplier));
                 }
             }
             // Cancel the acquisition lock timeout task for the batch as the offset state is maintained.

@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * The InFlightState is used to track the state and delivery count of a record that has been
@@ -53,17 +54,20 @@ public class InFlightState {
     // The boolean determines if the record has achieved a terminal state of ARCHIVED from which it cannot transition
     // to any other state. This could happen because of LSO movement etc.
     private boolean isTerminalState = false;
+    // Supplier indicating share group DLQ support.
+    private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
     // Visible for testing.
-    public InFlightState(RecordState state, int deliveryCount, String memberId) {
-        this(state, deliveryCount, memberId, null);
+    public InFlightState(RecordState state, int deliveryCount, String memberId, Supplier<Boolean> shareGroupDlqEnableSupplier) {
+        this(state, deliveryCount, memberId, null, shareGroupDlqEnableSupplier);
     }
 
-    InFlightState(RecordState state, int deliveryCount, String memberId, AcquisitionLockTimerTask acquisitionLockTimeoutTask) {
+    InFlightState(RecordState state, int deliveryCount, String memberId, AcquisitionLockTimerTask acquisitionLockTimeoutTask, Supplier<Boolean> shareGroupDlqEnableSupplier) {
         this.state = state;
         this.deliveryCount = deliveryCount;
         this.memberId = memberId;
         this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
+        this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
     }
 
     /**
@@ -161,7 +165,7 @@ public class InFlightState {
             }
 
             if (newState == RecordState.AVAILABLE && ops != DeliveryCountOps.DECREASE && deliveryCount >= maxDeliveryCount) {
-                newState = RecordState.ARCHIVED;
+                newState = shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
             }
             state = state.validateTransition(newState);
             if (newState != RecordState.ARCHIVED) {
@@ -201,7 +205,7 @@ public class InFlightState {
      *         helps update chaining.
      */
     public InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
-        InFlightState currentState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+        InFlightState currentState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask, shareGroupDlqEnableSupplier);
         InFlightState updatedState = tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
         if (updatedState != null) {
             rollbackState = new RollbackState(currentState, maxDeliveryCount);
