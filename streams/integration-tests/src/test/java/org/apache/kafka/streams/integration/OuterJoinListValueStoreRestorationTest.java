@@ -52,6 +52,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.pu
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
@@ -116,7 +117,7 @@ public class OuterJoinListValueStoreRestorationTest {
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
@@ -166,13 +167,16 @@ public class OuterJoinListValueStoreRestorationTest {
         // 1- Use a probe record to verify end-to-end: process + commit
         produceRecord(LEFT_TOPIC, "probe", "probe-left", timestamp);
         produceRecord(RIGHT_TOPIC, "probe", "probe-right", timestamp);
-        // 2- Wait for the join result - this proves processing + commit happened
+        // 2- Wait for the join result - this proves processing happened
         waitUntilMinKeyValueRecordsReceived(
             getConsumerConfig(),
             OUTPUT_TOPIC,
-            1,  // Just need to see the probe result
+            1,
             30000
         );
+        // 3- Wait for all records to be processed and committed (zero lag)
+        // This ensures changelog commits have completed before we close
+        waitForCompletion(streams, 2, 30000);
 
         // Step 3: Force State Restoration
         streams.close(Duration.ofSeconds(30));
