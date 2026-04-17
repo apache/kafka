@@ -1067,7 +1067,8 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null
+            null,
+            300_000L
         ) {
             @Override
             int commit(final Collection<? extends Task> tasksToCommit) {
@@ -1175,7 +1176,8 @@ public class StreamThreadTest {
             null,
             stateDirectory,
             stateUpdater,
-            schedulingTaskManager
+            schedulingTaskManager,
+            300_000L
         ) {
             @Override
             int commit(final Collection<? extends Task> tasksToCommit) {
