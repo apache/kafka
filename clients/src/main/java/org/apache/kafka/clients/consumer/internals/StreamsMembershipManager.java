@@ -482,14 +482,12 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     public int leaveGroupEpoch() {
-        boolean isStaticMember = groupInstanceId.isPresent();
-        // Currently, the server doesn't have a mechanism for static members to permanently leave the group.
-        // Therefore, we use LEAVE_GROUP_MEMBER_EPOCH to force the GroupMetadataManager to fence
-        // this member, effectively removing it from the group.
+        // After KIP-1284, we should revisit here.
         if (LEAVE_GROUP == leaveGroupOperation) {
             return StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         }
 
+        boolean isStaticMember = groupInstanceId.isPresent();
         if (isStaticMember && REMAIN_IN_GROUP == leaveGroupOperation) {
             return StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
         }
@@ -943,6 +941,8 @@ public class StreamsMembershipManager implements RequestManager {
      *
      * @return future that will complete when the heartbeat to leave the group has been sent out.
      */
+    // Only test code calls this function.
+    // So, we consider removing this function.
     public CompletableFuture<Void> leaveGroupOnClose() {
         return leaveGroup(true);
     }
