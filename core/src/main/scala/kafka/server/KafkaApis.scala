@@ -2057,7 +2057,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         txnOffsetCommitRequest.data.topics.asScala
       )(_.name)
 
-      val responseBuilder = new TxnOffsetCommitResponse.Builder()
+      val responseBuilder = TxnOffsetCommitResponse.newBuilder()
       val authorizedTopicCommittedOffsets = new mutable.ArrayBuffer[TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic]()
       txnOffsetCommitRequest.data.topics.forEach { topic =>
         if (!authorizedTopics.contains(topic.name)) {
