@@ -127,12 +127,9 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
-            } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG.equals(name)) {
-                assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
-            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG.equals(name) &&
-                       !GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
+            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
         });
@@ -433,8 +430,6 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
 
         // DLQ configs - have defaults from CONFIG_DEF
-        assertFalse(config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
         assertEquals("", config.errorsDLQTopicName());
         assertFalse(config.errorsDLQCopyRecordEnable());
     }
@@ -464,8 +459,6 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
-        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
-        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
@@ -499,8 +492,6 @@ public class GroupConfigTest {
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
 
         // DLQ configs
-        assertTrue(config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
         assertEquals("my-dlq-topic", config.errorsDLQTopicName());
         assertTrue(config.errorsDLQCopyRecordEnable());
     }
@@ -805,8 +796,6 @@ public class GroupConfigTest {
         Map<String, String> configs = new HashMap<>();
         GroupConfig config = new GroupConfig(configs);
 
-        assertFalse(config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
         assertEquals("", config.errorsDLQTopicName());
         assertFalse(config.errorsDLQCopyRecordEnable());
     }
@@ -815,15 +804,11 @@ public class GroupConfigTest {
     public void testDLQConfigCustomValues() {
         // Test custom DLQ configuration values
         Map<String, String> configs = new HashMap<>();
-        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
-        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
         configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
         configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
         GroupConfig config = new GroupConfig(configs);
 
-        assertTrue(config.errorsDLQAutoCreateTopicsEnable());
-        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
         assertEquals("my-dlq-topic", config.errorsDLQTopicName());
         assertTrue(config.errorsDLQCopyRecordEnable());
     }

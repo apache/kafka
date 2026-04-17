@@ -315,6 +315,17 @@ public class GroupCoordinatorConfig {
         "If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
 
     ///
+    /// DLQ configs (KIP-1191)
+    ///
+    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG = "errors.deadletterqueue.auto.create.topics.enable";
+    public static final boolean ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT = false;
+    public static final String ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC = "Whether automatic creation of DLQ topics is enabled (KIP-1191). When a share group has a DLQ topic configured, this setting controls whether the broker will automatically create the topic if it does not exist.";
+
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG = "errors.deadletterqueue.topic.name.prefix";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT = "dlq.";
+    public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC = "The required prefix of topic names used by dead-letter queue topics for share groups. When set to \"\", there is no restriction on the names used for dead-letter queue topics.";
+
+    ///
     /// Streams group configs
     ///
     public static final String STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
@@ -451,6 +462,10 @@ public class GroupCoordinatorConfig {
         .define(SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .defineInternal(SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT, atLeast(1), LOW, SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC)
 
+        // DLQ configs (KIP-1191)
+        .define(ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, BOOLEAN, ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DOC)
+        .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, STRING, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT, MEDIUM, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DOC)
+
         // Streams group configs
         .define(STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
         .define(STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
@@ -515,6 +530,9 @@ public class GroupCoordinatorConfig {
     private final int shareGroupMinAssignmentIntervalMs;
     private final int shareGroupMaxAssignmentIntervalMs;
     private final int shareGroupInitializeRetryIntervalMs;
+    // DLQ configurations
+    private final boolean errorsDLQAutoCreateTopicsEnable;
+    private final String errorsDLQTopicNamePrefix;
     // Streams group configurations
     private final int streamsGroupSessionTimeoutMs;
     private final int streamsGroupMinSessionTimeoutMs;
@@ -579,6 +597,9 @@ public class GroupCoordinatorConfig {
         this.shareGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.shareGroupInitializeRetryIntervalMs = Math.max(initializeRetryMs, this.offsetCommitTimeoutMs);
+        // DLQ configurations
+        this.errorsDLQAutoCreateTopicsEnable = config.getBoolean(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
+        this.errorsDLQTopicNamePrefix = config.getString(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
         // Streams group configurations
         this.streamsGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -1186,6 +1207,20 @@ public class GroupCoordinatorConfig {
      */
     public int shareGroupInitializeRetryIntervalMs() {
         return shareGroupInitializeRetryIntervalMs;
+    }
+
+    /**
+     * Whether automatic creation of DLQ topics is enabled.
+     */
+    public boolean errorsDLQAutoCreateTopicsEnable() {
+        return errorsDLQAutoCreateTopicsEnable;
+    }
+
+    /**
+     * The required prefix for DLQ topic names.
+     */
+    public String errorsDLQTopicNamePrefix() {
+        return errorsDLQTopicNamePrefix;
     }
 
     /**
