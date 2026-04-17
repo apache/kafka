@@ -1155,7 +1155,6 @@ project(':core') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -2571,7 +2570,6 @@ project(':tools') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
-      exclude('plexus-utils-*')
     }
     from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
@@ -2631,7 +2629,6 @@ project(':trogdor') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -2682,7 +2679,6 @@ project(':shell') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       include('jline-*jar')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -2772,7 +2768,6 @@ project(':streams') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -2883,7 +2878,6 @@ project(':streams:streams-scala') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -2981,7 +2975,6 @@ project(':streams:test-utils') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -3020,7 +3013,6 @@ project(':streams:examples') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
@@ -3516,7 +3508,6 @@ project(':connect:api') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3552,7 +3543,6 @@ project(':connect:transforms') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3592,7 +3582,6 @@ project(':connect:json') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3691,7 +3680,6 @@ project(':connect:runtime') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3801,7 +3789,6 @@ project(':connect:file') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3842,7 +3829,6 @@ project(':connect:basic-auth-extension') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3912,7 +3898,6 @@ project(':connect:mirror') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
@@ -3975,7 +3960,6 @@ project(':connect:mirror-client') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
-      exclude('plexus-utils-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
     duplicatesStrategy 'exclude'
