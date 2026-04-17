@@ -3304,7 +3304,6 @@ public class GroupMetadataManager {
             if (existingStaticMemberOrNull == null) {
                 // New static member.
                 StreamsGroupMember newMember = group.getOrCreateDefaultMember(memberId);
-                throwIfStreamsGroupMemberEpochIsInvalid(newMember, memberEpoch, ownedActiveTasks, ownedStandbyTasks, ownedWarmupTasks);
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} joins the streams group.",
                         group.groupId(), memberId, memberId, instanceId);
                 return newMember;
