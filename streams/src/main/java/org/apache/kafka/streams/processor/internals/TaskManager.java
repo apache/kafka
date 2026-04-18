@@ -110,6 +110,7 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
+    private final long waitForFutureTimeoutMs;
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final ProcessId processId,
@@ -121,7 +122,8 @@ public class TaskManager {
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StateUpdater stateUpdater,
-                final DefaultTaskManager schedulingTaskManager
+                final DefaultTaskManager schedulingTaskManager,
+                final long waitForFutureTimeoutMs
                 ) {
         this.time = time;
         this.processId = processId;
@@ -139,6 +141,7 @@ public class TaskManager {
 
         this.stateUpdater = stateUpdater;
         this.schedulingTaskManager = schedulingTaskManager;
+        this.waitForFutureTimeoutMs = waitForFutureTimeoutMs;
         this.tasks = tasks;
         this.taskExecutor = new TaskExecutor(
             this.tasks,
@@ -705,7 +708,7 @@ public class TaskManager {
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
         final StateUpdater.RemovedTaskResult removedTaskResult;
         try {
-            removedTaskResult = future.get(5, TimeUnit.MINUTES);
+            removedTaskResult = future.get(waitForFutureTimeoutMs, TimeUnit.MILLISECONDS);
             if (removedTaskResult == null) {
                 throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
                     + BUG_ERROR_MESSAGE);

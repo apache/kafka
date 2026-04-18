@@ -483,6 +483,11 @@ public class StreamThread extends Thread implements ProcessingThread {
                 threadIdx
             );
 
+        final int dummyThreadIdxForConfig = 1;
+        final long maxPollIntervalMs = new InternalConsumerConfig(
+            config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdxForConfig))
+            .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
@@ -495,7 +500,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             adminClient,
             stateDirectory,
             stateUpdater,
-            schedulingTaskManager
+            schedulingTaskManager,
+            maxPollIntervalMs / 2
         );
         referenceContainer.taskManager = taskManager;
 
