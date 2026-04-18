@@ -14,24 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.utils.internals;
 
-import java.util.Locale;
+public final class Java {
 
-public final class OperatingSystem {
+    private Java() { }
 
-    private OperatingSystem() {
+    public static boolean isIbmJdk() {
+        return System.getProperty("java.vendor").contains("IBM");
     }
-    
-    public static final String NAME;
 
-    public static final boolean IS_WINDOWS;
-
-    public static final boolean IS_ZOS;
-
-    static {
-        NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        IS_WINDOWS = NAME.startsWith("windows");
-        IS_ZOS = NAME.startsWith("z/os");
+    public static boolean isIbmJdkSemeru() {
+        return isIbmJdk() && System.getProperty("java.runtime.name", "").contains("Semeru");
     }
 }

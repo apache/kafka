@@ -16,8 +16,8 @@
  */
 package kafka.security.minikdc;
 
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Java;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.internals.Java;
 import org.apache.kafka.common.utils.Utils;
 
 import org.apache.commons.lang.text.StrSubstitutor;

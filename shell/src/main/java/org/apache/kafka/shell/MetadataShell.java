@@ -17,7 +17,7 @@
 
 package org.apache.kafka.shell;
 
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
 import org.apache.kafka.metadata.SupportedConfigChecker;

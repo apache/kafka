@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
-
-import org.apache.kafka.common.utils.internals.KafkaThread;
+package org.apache.kafka.common.utils.internals;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

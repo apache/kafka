@@ -18,7 +18,7 @@
 package org.apache.kafka.trogdor.agent;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;

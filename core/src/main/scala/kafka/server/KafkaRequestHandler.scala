@@ -25,8 +25,8 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.internals.KafkaThread
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.internals.{Exit, KafkaThread}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 

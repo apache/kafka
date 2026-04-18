@@ -17,7 +17,7 @@
 package org.apache.kafka.common.test;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
