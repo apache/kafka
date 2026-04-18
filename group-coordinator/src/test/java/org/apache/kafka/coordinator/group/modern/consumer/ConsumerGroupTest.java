@@ -1226,6 +1226,7 @@ public class ConsumerGroupTest {
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
+        group.setCreationTimeMs(98765L);
         group.updateMember(new ConsumerGroupMember.Builder("member1")
                 .setMemberEpoch(1)
                 .setSubscribedTopicNames(List.of("foo"))
@@ -1242,6 +1243,7 @@ public class ConsumerGroupTest {
             .setGroupEpoch(1)
             .setAssignmentEpoch(1)
             .setAssignorName("assignorName")
+            .setGroupCreationTimeMs(98765L)
             .setMembers(Arrays.asList(
                 new ConsumerGroupDescribeResponseData.Member()
                     .setMemberId("member1")

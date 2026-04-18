@@ -283,6 +283,12 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
           assertEquals(expectedMemberIds, actualMemberIds)
           assertEquals(authorizedOperationsInt, describedGroup.authorizedOperations)
 
+          // Verify groupCreationTimeMs is present and valid for version 1+ (KIP-1282).
+          if (version >= 1) {
+            assertTrue(s"Group creation time should be set for version $version but was ${describedGroup.groupCreationTimeMs}",
+              describedGroup.groupCreationTimeMs > 0)
+          }
+
           describedGroup.members.asScala.foreach { member =>
             assertTrue("Group epoch is not equal to the member epoch", member.memberEpoch == describedGroup.assignmentEpoch)
             assertEquals(1, member.topologyEpoch)

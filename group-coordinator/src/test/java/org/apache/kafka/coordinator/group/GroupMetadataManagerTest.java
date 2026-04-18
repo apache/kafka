@@ -28019,6 +28019,187 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testNewGroupWithRegexOnlyPersistsCreationTimeMs() {
+        String groupId = "regex-grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        long groupCreationTimeMs = context.time.milliseconds();
+
+        // Join a new group with only a regex subscription (no topic names).
+        // In this case the group epoch is NOT bumped because the regex has not
+        // been resolved yet. The isNewGroup guard should still persist the
+        // creationTimeMs via a ConsumerGroupEpochRecord.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result =
+            context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicRegex("foo.*")
+                    .setTopicPartitions(List.of()));
+
+        // Verify the response includes the group creation time.
+        assertEquals(groupCreationTimeMs, result.response().groupCreationTimeMs());
+
+        // Verify that the records include a ConsumerGroupEpochRecord with the
+        // correct creationTimeMs, even though the group epoch was not bumped.
+        // The initial group epoch for a new ModernGroup is 1.
+        CoordinatorRecord expectedEpochRecord = GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(
+            groupId, 1, 0, groupCreationTimeMs);
+        assertTrue(
+            result.records().contains(expectedEpochRecord),
+            "Expected a ConsumerGroupEpochRecord with creationTimeMs=" + groupCreationTimeMs
+                + " but records were: " + result.records()
+        );
+    }
+
+    @Test
+    public void testNewStreamsGroupPersistsCreationTimeMsInMetadataRecord() {
+        String groupId = "streams-new-grp";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology = "sub1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology).setSourceTopics(List.of(fooTopicName))
+        ));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .buildCoordinatorMetadataImage();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        long groupCreationTimeMs = context.time.milliseconds();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2)
+        )));
+
+        // First heartbeat creates the streams group.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(90000)
+                    .setTopology(topology)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of()));
+
+        // Verify the response includes the group creation time.
+        assertEquals(groupCreationTimeMs, result.response().data().groupCreationTimeMs());
+
+        // Verify that the records include a StreamsGroupMetadataRecord with the
+        // correct creationTimeMs.
+        assertTrue(
+            result.records().stream().anyMatch(record ->
+                record.value() != null
+                    && record.value().message() instanceof StreamsGroupMetadataValue
+                    && ((StreamsGroupMetadataValue) record.value().message()).creationTimeMs() == groupCreationTimeMs
+            ),
+            "Expected a StreamsGroupMetadataRecord with creationTimeMs=" + groupCreationTimeMs
+                + " but records were: " + result.records()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupCreationTimeMsSetOnceAndNotOverwritten() {
+        String groupId = "streams-immut-grp";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String subtopology = "sub1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology).setSourceTopics(List.of(fooTopicName))
+        ));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .buildCoordinatorMetadataImage();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        long groupCreationTimeMs = context.time.milliseconds();
+
+        assignor.prepareGroupAssignment(Map.of(memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2)
+        )));
+
+        // Member 1 joins — group is created and creationTimeMs is recorded.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result1 =
+            context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId1)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(90000)
+                    .setTopology(topology)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of()));
+
+        assertEquals(groupCreationTimeMs, result1.response().data().groupCreationTimeMs());
+
+        // Advance time so that a later epoch bump would produce a different timestamp
+        // if creationTimeMs were incorrectly re-recorded.
+        context.sleep(5000);
+
+        // Member 2 joins — group epoch bumps but creationTimeMs must not change.
+        assignor.prepareGroupAssignment(Map.of(
+            memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1)),
+            memberId2, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology, 2))
+        ));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result2 =
+            context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId2)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(90000)
+                    .setTopology(topology)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of()));
+
+        assertEquals(groupCreationTimeMs, result2.response().data().groupCreationTimeMs());
+        assertNotEquals(groupCreationTimeMs, context.time.milliseconds());
+
+        // Also verify the metadata record written during the second heartbeat
+        // still contains the original creationTimeMs.
+        assertTrue(
+            result2.records().stream()
+                .filter(record -> record.value() != null
+                    && record.value().message() instanceof StreamsGroupMetadataValue)
+                .allMatch(record ->
+                    ((StreamsGroupMetadataValue) record.value().message()).creationTimeMs() == groupCreationTimeMs
+                ),
+            "All StreamsGroupMetadataRecords should have creationTimeMs=" + groupCreationTimeMs
+        );
+    }
+
+    @Test
     public void testCreationTimeMsRestoredFromRecord() {
         long consumerCreationTimeMs = 12345L;
         long streamsCreationTimeMs = 67890L;

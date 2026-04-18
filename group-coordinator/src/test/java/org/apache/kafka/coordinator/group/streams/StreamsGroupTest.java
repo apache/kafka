@@ -911,6 +911,7 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.setGroupEpoch(1);
+        group.setCreationTimeMs(98765L);
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
         group.setValidatedTopologyEpoch(1);
@@ -955,6 +956,7 @@ public class StreamsGroupTest {
             .setGroupEpoch(1)
             .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(1).setSubtopologies(List.of()))
             .setAssignmentEpoch(1)
+            .setGroupCreationTimeMs(98765L)
             .setMembers(Arrays.asList(
                 new StreamsGroupDescribeResponseData.Member()
                     .setMemberId("member1")

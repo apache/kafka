@@ -1988,6 +1988,7 @@ public class GroupMetadataManager {
 
         // Get or create the streams group.
         boolean isJoining = memberEpoch == 0;
+        boolean isNewGroup = isJoining && !groups.containsKey(groupId);
         StreamsGroup group;
         if (isJoining) {
             group = getOrCreateStreamsGroup(groupId, records);
@@ -2096,6 +2097,13 @@ public class GroupMetadataManager {
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
+        }
+
+        // If a new group was just created but the group epoch was not bumped,
+        // still write a metadata record to persist the group creation time so
+        // that it survives a coordinator restart.
+        if (isNewGroup && groupEpoch == group.groupEpoch()) {
+            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs, group.creationTimeMs()));
         }
 
         // Schedule initial rebalance delay for new streams groups to coalesce joins.

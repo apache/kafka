@@ -387,6 +387,15 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     // Describe the group and verify that member-1's assignment includes
     // both assigned partitions and partitions pending revocation.
+    val actual = consumerGroupDescribe(
+      groupIds = List("grp"),
+      includeAuthorizedOperations = true,
+      version = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled),
+    )
+
+    // groupCreationTimeMs is only present in version 2+; read it from actual so expected matches.
+    val grpCreationTimeMs = actual.find(_.groupId == "grp").map(_.groupCreationTimeMs).getOrElse(-1L)
+
     val expected = List(
       new DescribedGroup()
         .setGroupId("grp")
@@ -394,6 +403,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
         .setGroupEpoch(member2Response.memberEpoch)
         .setAssignmentEpoch(member2Response.memberEpoch)
         .setAssignorName("range")
+        .setGroupCreationTimeMs(grpCreationTimeMs)
         .setAuthorizedOperations(authorizedOperationsInt)
         .setMembers(List(
           new ConsumerGroupDescribeResponseData.Member()
@@ -435,12 +445,6 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
               ).asJava))
             .setMemberType(1.toByte),
         ).asJava)
-    )
-
-    val actual = consumerGroupDescribe(
-      groupIds = List("grp"),
-      includeAuthorizedOperations = true,
-      version = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled),
     )
 
     Assertions.assertResponseEquals(
