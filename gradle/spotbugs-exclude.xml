@@ -497,7 +497,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.clients.consumer.internals.CompletedFetch"/>
             <Class name="org.apache.kafka.clients.producer.MockProducer"/>
             <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
-            <Class name="org.apache.kafka.common.utils.ChunkedBytesStream"/>
+            <Class name="org.apache.kafka.common.utils.internals.ChunkedBytesStream"/>
             <Class name="org.apache.kafka.common.security.authenticator.LoginManager"/>
             <Class name="org.apache.kafka.storage.internals.log.AbstractIndex"/>
             <Class name="org.apache.kafka.server.AssignmentsManager"/>
@@ -588,7 +588,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
             <Class name="org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler"/>
             <Class name="org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks"/>
-            <Class name="org.apache.kafka.common.utils.ChunkedBytesStream"/>
+            <Class name="org.apache.kafka.common.utils.internals.ChunkedBytesStream"/>
             <Class name="org.apache.kafka.common.utils.Shell"/>
             <Class name="org.apache.kafka.clients.producer.internals.TransactionManager$TxnRequestHandler"/>
             <Class name="org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask"/>

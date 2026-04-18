@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.ByteBufferUnmapper;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;

@@ -18,9 +18,9 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.slf4j.Logger;
