@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -29,6 +29,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.test.TestUtils;
 
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -38,16 +39,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-
-import scala.jdk.javaapi.CollectionConverters;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -83,16 +86,16 @@ public class LeaderElectionCommandTest {
 
             TopicPartition topicPartition = new TopicPartition(topic, partition);
 
-            TestUtils.assertLeader(client, topicPartition, broker2);
+            assertLeader(client, topicPartition, broker2);
             cluster.shutdownBroker(broker3);
-            TestUtils.waitForBrokersOutOfIsr(client,
-                    CollectionConverters.asScala(List.of(topicPartition)).toSet(),
-                    CollectionConverters.asScala(List.of(broker3)).toSet()
+            waitForBrokersOutOfIsr(client,
+                    Set.of(topicPartition),
+                    Set.of(broker3)
             );
             cluster.shutdownBroker(broker2);
-            TestUtils.assertNoLeader(client, topicPartition);
+            assertNoLeader(client, topicPartition);
             cluster.startBroker(broker3);
-            TestUtils.waitForOnlineBroker(client, broker3);
+            waitForOnlineBroker(client, broker3);
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
@@ -100,7 +103,7 @@ public class LeaderElectionCommandTest {
                     "--all-topic-partitions"
             ));
 
-            TestUtils.assertLeader(client, topicPartition, broker3);
+            assertLeader(client, topicPartition, broker3);
         }
     }
 
@@ -189,17 +192,17 @@ public class LeaderElectionCommandTest {
 
             TopicPartition topicPartition = new TopicPartition(topic, partition);
 
-            TestUtils.assertLeader(client, topicPartition, broker2);
+            assertLeader(client, topicPartition, broker2);
 
             cluster.shutdownBroker(broker3);
-            TestUtils.waitForBrokersOutOfIsr(client,
-                    CollectionConverters.asScala(List.of(topicPartition)).toSet(),
-                    CollectionConverters.asScala(List.of(broker3)).toSet()
+            waitForBrokersOutOfIsr(client,
+                    Set.of(topicPartition),
+                    Set.of(broker3)
             );
             cluster.shutdownBroker(broker2);
-            TestUtils.assertNoLeader(client, topicPartition);
+            assertNoLeader(client, topicPartition);
             cluster.startBroker(broker3);
-            TestUtils.waitForOnlineBroker(client, broker3);
+            waitForOnlineBroker(client, broker3);
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
@@ -208,7 +211,7 @@ public class LeaderElectionCommandTest {
                     "--partition", Integer.toString(partition)
             ));
 
-            TestUtils.assertLeader(client, topicPartition, broker3);
+            assertLeader(client, topicPartition, broker3);
         }
     }
 
@@ -227,17 +230,17 @@ public class LeaderElectionCommandTest {
 
             TopicPartition topicPartition = new TopicPartition(topic, partition);
 
-            TestUtils.assertLeader(client, topicPartition, broker2);
+            assertLeader(client, topicPartition, broker2);
 
             cluster.shutdownBroker(broker3);
-            TestUtils.waitForBrokersOutOfIsr(client,
-                    CollectionConverters.asScala(List.of(topicPartition)).toSet(),
-                    CollectionConverters.asScala(List.of(broker3)).toSet()
+            waitForBrokersOutOfIsr(client,
+                    Set.of(topicPartition),
+                    Set.of(broker3)
             );
             cluster.shutdownBroker(broker2);
-            TestUtils.assertNoLeader(client, topicPartition);
+            assertNoLeader(client, topicPartition);
             cluster.startBroker(broker3);
-            TestUtils.waitForOnlineBroker(client, broker3);
+            waitForOnlineBroker(client, broker3);
 
             Path topicPartitionPath = tempTopicPartitionFile(List.of(topicPartition));
 
@@ -247,7 +250,7 @@ public class LeaderElectionCommandTest {
                     "--path-to-json-file", topicPartitionPath.toString()
             ));
 
-            TestUtils.assertLeader(client, topicPartition, broker3);
+            assertLeader(client, topicPartition, broker3);
         }
     }
 
@@ -266,14 +269,12 @@ public class LeaderElectionCommandTest {
 
             TopicPartition topicPartition = new TopicPartition(topic, partition);
 
-            TestUtils.assertLeader(client, topicPartition, broker2);
+            assertLeader(client, topicPartition, broker2);
 
             cluster.shutdownBroker(broker2);
-            TestUtils.assertLeader(client, topicPartition, broker3);
+            assertLeader(client, topicPartition, broker3);
             cluster.startBroker(broker2);
-            TestUtils.waitForBrokersInIsr(client, topicPartition,
-                    CollectionConverters.asScala(List.of(broker2)).toSet()
-            );
+            waitForBrokersInIsr(client, topicPartition, Set.of(broker2));
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
@@ -282,7 +283,7 @@ public class LeaderElectionCommandTest {
                     "--partition", Integer.toString(partition)
             ));
 
-            TestUtils.assertLeader(client, topicPartition, broker2);
+            assertLeader(client, topicPartition, broker2);
         }
     }
 
@@ -319,18 +320,14 @@ public class LeaderElectionCommandTest {
             topicPartition0 = new TopicPartition(topic, partition0);
             topicPartition1 = new TopicPartition(topic, partition1);
 
-            TestUtils.assertLeader(client, topicPartition0, broker2);
-            TestUtils.assertLeader(client, topicPartition1, broker3);
+            assertLeader(client, topicPartition0, broker2);
+            assertLeader(client, topicPartition1, broker3);
 
             cluster.shutdownBroker(broker2);
-            TestUtils.assertLeader(client, topicPartition0, broker3);
+            assertLeader(client, topicPartition0, broker3);
             cluster.startBroker(broker2);
-            TestUtils.waitForBrokersInIsr(client, topicPartition0,
-                    CollectionConverters.asScala(List.of(broker2)).toSet()
-            );
-            TestUtils.waitForBrokersInIsr(client, topicPartition1,
-                    CollectionConverters.asScala(List.of(broker2)).toSet()
-            );
+            waitForBrokersInIsr(client, topicPartition0, Set.of(broker2));
+            waitForBrokersInIsr(client, topicPartition1, Set.of(broker2));
         }
 
         Path topicPartitionPath = tempTopicPartitionFile(List.of(topicPartition0, topicPartition1));
@@ -395,5 +392,98 @@ public class LeaderElectionCommandTest {
         }
         sb.append("]}");
         return sb.toString();
+    }
+
+    private void waitForBrokersOutOfIsr(
+            Admin client, 
+            Set<TopicPartition> partitions, 
+            Set<Integer> brokerIds
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> {
+                    Set<String> topics = partitions.stream()
+                            .map(TopicPartition::topic)
+                            .collect(Collectors.toSet());
+
+                    Map<String, TopicDescription> description = client.describeTopics(topics).allTopicNames().get();
+
+                    Set<Integer> isr = description.values().stream()
+                            .flatMap(desc -> desc.partitions().stream())
+                            .flatMap(info -> info.isr().stream())
+                            .map(Node::id)
+                            .collect(Collectors.toSet());
+
+                    return Collections.disjoint(brokerIds, isr);
+                },
+                "Expected brokers " + brokerIds + " to no longer be in the ISR for " + partitions
+        );
+    }
+
+    private void waitForBrokersInIsr(Admin client, TopicPartition partition, Set<Integer> brokerIds) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> {
+                    Set<Integer> isr = client.describeTopics(Set.of(partition.topic()))
+                            .allTopicNames()
+                            .get()
+                            .values().stream()
+                            .flatMap(desc -> desc.partitions().stream())
+                            .flatMap(info -> info.isr().stream())
+                            .map(Node::id)
+                            .collect(Collectors.toSet());
+
+                    return isr.containsAll(brokerIds);
+                },
+                "Expected brokers " + brokerIds + " to be in the ISR for " + partition
+        );
+    }
+
+    private void waitForOnlineBroker(Admin client, int brokerId) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> client.describeCluster().nodes().get().stream()
+                        .anyMatch(node -> node.id() == brokerId),
+                "Timed out waiting for brokerId " + brokerId + " to come online"
+        );
+    }
+
+    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws InterruptedException {
+        waitForLeaderToBecome(client, topicPartition, Optional.of(expectedLeader));
+    }
+
+    private void assertNoLeader(Admin client, TopicPartition topicPartition) throws InterruptedException {
+        waitForLeaderToBecome(client, topicPartition, Optional.empty());
+    }
+
+    private void waitForLeaderToBecome(
+            Admin client,
+            TopicPartition topicPartition,
+            Optional<Integer> expectedLeaderOpt
+    ) throws InterruptedException {
+        String topic = topicPartition.topic();
+        int partitionId = topicPartition.partition();
+        AtomicReference<String> lastLeaderRef = new AtomicReference<>("unknown");
+
+        TestUtils.waitForCondition(
+                () -> {
+                    try {
+                        TopicDescription topicDescription = client.describeTopics(List.of(topic))
+                                .allTopicNames().get().get(topic);
+                        Optional<Integer> currentLeader = topicDescription.partitions().stream()
+                                .filter(p -> p.partition() == partitionId)
+                                .findFirst()
+                                .flatMap(p -> Optional.ofNullable(p.leader()))
+                                .map(Node::id);
+
+                        lastLeaderRef.set(currentLeader.map(String::valueOf).orElse("none"));
+                        return currentLeader.equals(expectedLeaderOpt);
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                            return false;
+                        }
+                        throw new RuntimeException(e);
+                    }
+                },
+                "Timed out waiting for leader to become " + expectedLeaderOpt.map(String::valueOf).orElse("none") +
+                        ". Last metadata lookup returned leader = " + lastLeaderRef.get()
+        );
     }
 }

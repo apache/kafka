@@ -72,8 +72,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.jdk.javaapi.CollectionConverters;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -791,7 +789,7 @@ public class ConfigCommandTest {
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = kafka.utils.TestUtils.tempPropertiesFile(CollectionConverters.asScala(addedConfigs));
+            File f = tempPropertiesFile(addedConfigs);
             filePath = f.getPath();
         }
 
@@ -1519,6 +1517,12 @@ public class ConfigCommandTest {
         return res;
     }
 
+    private File tempPropertiesFile(Map<String, String> prop) throws IOException {
+        String content = prop.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining(System.lineSeparator()));
+        return TestUtils.tempFile(content);
+    }
 
     static class DummyAdminClient extends MockAdminClient {
         public DummyAdminClient(Node node) {
