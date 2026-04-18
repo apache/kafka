@@ -43,7 +43,8 @@ public interface ClientQuotaEntity {
      */
     interface ConfigEntity {
         /**
-         * Returns the name of this entity. For default quotas, an empty string is returned.
+         * Returns the name of this entity. For default quotas, {@code null} is returned,
+         * consistent with how the Admin API represents default client quota entities.
          */
         String name();
 
