@@ -158,6 +158,11 @@ public class TaskManager {
         this.mainConsumer = mainConsumer;
     }
 
+    // visible for testing
+    long waitForFutureTimeoutMs() {
+        return waitForFutureTimeoutMs;
+    }
+
     public double totalProducerBlockedTime() {
         return activeTaskCreator.totalProducerBlockedTime();
     }

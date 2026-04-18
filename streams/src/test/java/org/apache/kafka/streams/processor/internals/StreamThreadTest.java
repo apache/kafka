@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -4197,6 +4198,23 @@ public class StreamThreadTest {
             action.run();
             mockTime.sleep(10);
         }
+    }
+
+    @Test
+    public void shouldSetWaitForFutureTimeoutFromMaxPollIntervalMs() {
+        final Properties properties = configProps(false, false);
+        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "20000");
+        final StreamsConfig config = new StreamsConfig(properties);
+        thread = createStreamThread(CLIENT_ID, config);
+
+        assertThat(thread.taskManager().waitForFutureTimeoutMs(), equalTo(10_000L));
+    }
+
+    @Test
+    public void shouldSetDefaultWaitForFutureTimeoutFromDefaultMaxPollIntervalMs() {
+        thread = createStreamThread(CLIENT_ID, false);
+
+        assertThat(thread.taskManager().waitForFutureTimeoutMs(), equalTo(150_000L));
     }
 
     private boolean runUntilTimeoutOrCondition(final Runnable action, final TestCondition testCondition) throws Exception {
