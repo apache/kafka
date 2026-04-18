@@ -1122,13 +1122,14 @@ public class NetworkClient implements KafkaClient {
                 this.connectionStates.checkingApiVersions(node);
                 ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
                 // If we know the cluster ID and node ID we are connecting to, we can include
-                // those details in the ApiVersions request for checking in the broker.
-                if (metadataClusterCheckEnable) {
+                // those details in the ApiVersions request for checking in the broker,
+                // provided that the metadata recovery strategy is not NONE. (KIP-1242)
+                if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
                     String clusterId = this.metadataUpdater.clusterId();
                     int nodeId = Integer.parseInt(node);
+                    // When connecting to coordinators, the client uses large positive node ID
+                    // values which do not match the target broker's node ID. Exclude those.
                     if (clusterId != null && nodeId > 0 && nodeId < Integer.MAX_VALUE / 2) {
-                        // The client uses large positive node ID values for connecting to coordinators
-                        // which do not match the target broker's node ID so exclude those.
                         apiVersionRequestBuilder.setClusterId(clusterId);
                         apiVersionRequestBuilder.setNodeId(nodeId);
                     }
