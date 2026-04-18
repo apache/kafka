@@ -212,6 +212,8 @@ org.apache.kafka.streams.integration.NamedTopologyIntegrationTest:
 - shouldRemoveAndReplaceTopologicallyIncompatibleNamedTopology
 org.apache.kafka.streams.integration.OptimizedKTableIntegrationTest:
 - shouldApplyUpdatesToStandbyStore
+org.apache.kafka.streams.integration.OuterJoinListValueStoreRestorationTest:
+- testOuterJoinRestorationWithMultipleRecords
 org.apache.kafka.streams.integration.PapiDslIntegrationTest:
 - processorShouldAccessAggregatedKTableStoreAsTimestampedStore
 - processorShouldAccessFKJoinedKTableStoreAsTimestampedStore

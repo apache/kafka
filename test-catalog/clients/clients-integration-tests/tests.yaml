@@ -44,7 +44,6 @@ org.apache.kafka.clients.admin.AutoTopicCreationTest:
 - testAutoCreateTopicWithMixedConfig
 org.apache.kafka.clients.admin.ClientTelemetryTest:
 - testClientInstanceId
-- testIntervalMsParser
 - testMetrics
 org.apache.kafka.clients.admin.ConcurrentListOffsetsRequestTest:
 - correctlyHandleConcurrentModificationOfPartitionLeaderCache

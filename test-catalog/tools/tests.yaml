@@ -75,6 +75,7 @@ org.apache.kafka.tools.ConfigCommandIntegrationTest:
 - testDynamicBrokerConfigUpdateUsingKraft
 - testExitWithNonZeroStatusOnUpdatingUnallowedConfig
 - testGroupConfigUpdateUsingKraft
+- testIntervalMsParser
 - testNullStatusOnKraftCommandAlterClientMetrics
 - testNullStatusOnKraftCommandAlterGroup
 - testNullStatusOnKraftCommandAlterUserQuota
