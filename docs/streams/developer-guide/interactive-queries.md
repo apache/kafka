@@ -123,11 +123,13 @@ Supported
 Not supported (you must configure)
 </td> </tr> </table>
 
-# Querying local state stores for an app instance
+# Querying local state stores for an app instance {#querying-local-state-stores-for-an-app-instance}
 
 A Kafka Streams application typically runs on multiple instances. The state that is locally available on any given instance is only a subset of the [application's entire state](../architecture.html#streams-architecture-state). Querying the local stores on an instance will only return data locally available on that particular instance.
 
 The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](processor-api.html#streams-developer-guide-state-store-versioned) at this time.
+
+Headers-aware state stores added in Kafka 4.3 ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)) work with the same **`QueryableStoreTypes`** helpers as headerless stores—for example `timestampedKeyValueStore()` and `timestampedWindowStore()` also match the corresponding `*WithHeaders` implementations, and `sessionStore()` applies to `SessionStoreWithHeaders`. However, **`KafkaStreams#store(...)`** still exposes the usual read-only shapes: plain values or **`ValueAndTimestamp`** for timestamped key-value and window stores; **record headers are not included** in those IQv1 results (facades strip them). Session queries return only the aggregation value, not header metadata. **[`ValueTimestampHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html)** is what processors see when reading the store inside the topology. IQv2 may still omit headers in some query paths—see the KIP, release notes, and [Processor API: Headers in State Stores](processor-api.html#headers-in-state-stores).
 
 ![](/43/images/streams-interactive-queries-api-01.png)
 
