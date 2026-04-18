@@ -171,7 +171,8 @@ class LogCleanerTest extends Logging {
     val stats = new CleanerStats(Time.SYSTEM)
     val expectedBytesRead = segments.map(_.size).sum
     val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
-    cleaner.cleanSegments(log, segments.asJava, map, 0L, stats, new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
+    log.updateHighWatermark(segments.last.readNextOffset)
+    cleaner.cleanSegments(log, segments.asJava, map, 0L, stats, new CleanedTransactionMetadata, -1)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
   }
@@ -262,7 +263,8 @@ class LogCleanerTest extends Logging {
     val segments = log.logSegments(0, log.activeSegment.baseOffset).asScala.toSeq
     val stats = new CleanerStats(Time.SYSTEM)
     cleaner.buildOffsetMap(log, 0, log.activeSegment.baseOffset, offsetMap, stats)
-    cleaner.cleanSegments(log, segments.asJava, offsetMap, 0L, stats, new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
+    log.updateHighWatermark(segments.last.readNextOffset)
+    cleaner.cleanSegments(log, segments.asJava, offsetMap, 0L, stats, new CleanedTransactionMetadata, -1)
 
     // Validate based on the file name that log segment file is renamed exactly once for async deletion
     assertEquals(expectedFileName, firstLogFile.file().getPath)
@@ -431,7 +433,8 @@ class LogCleanerTest extends Logging {
       val segments = log.logSegments(0, log.activeSegment.baseOffset).asScala.toSeq
       val stats = new CleanerStats(time)
       cleaner.buildOffsetMap(log, dirtyOffset, log.activeSegment.baseOffset, offsetMap, stats)
-      cleaner.cleanSegments(log, segments.asJava, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata, Long.MaxValue, segments.last.readNextOffset)
+      log.updateHighWatermark(segments.last.readNextOffset)
+      cleaner.cleanSegments(log, segments.asJava, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata, Long.MaxValue)
       dirtyOffset = offsetMap.latestOffset + 1
     }
 
@@ -940,7 +943,8 @@ class LogCleanerTest extends Logging {
 
     // clean the log
     val stats = new CleanerStats(Time.SYSTEM)
-    cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), map, 0L, stats, new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+    log.updateHighWatermark(log.logSegments.asScala.head.readNextOffset)
+    cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), map, 0L, stats, new CleanedTransactionMetadata, -1)
     val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
@@ -953,7 +957,8 @@ class LogCleanerTest extends Logging {
     val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+    log.updateHighWatermark(log.logSegments.asScala.head.readNextOffset)
+    cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1)
     val shouldRemain = LogTestUtils.keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
@@ -971,8 +976,9 @@ class LogCleanerTest extends Logging {
     file.close()
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    log.updateHighWatermark(log.logSegments.asScala.head.readNextOffset)
     assertThrows(classOf[CorruptRecordException], () =>
-      cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
+      cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1)
     )
   }
 
@@ -988,9 +994,10 @@ class LogCleanerTest extends Logging {
     file.close()
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    assertThrows(classOf[CorruptRecordException], () =>
-      cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, log.logSegments.asScala.head.readNextOffset)
-    )
+
+    assertThrows(classOf[CorruptRecordException], () => {
+      cleaner.cleanSegments(log, util.List.of(log.logSegments.asScala.head), offsetMap, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1)
+    })
   }
 
   def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (UnifiedLog, FakeOffsetMap) = {
@@ -1371,12 +1378,17 @@ class LogCleanerTest extends Logging {
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
     val segments = log.logSegments.asScala.take(3).toSeq
+    log.updateHighWatermark(segments.last.readNextOffset)
     assertThrows(classOf[LogCleaningAbortedException], () =>
-      cleaner.cleanSegments(log, segments.asJava, map, 0L, new CleanerStats(Time.SYSTEM),
-        new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
+      cleaner.cleanSegments(log, segments.asJava, map, 0L, new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1)
     )
   }
 
+  /**
+   * Test that if a cleaned batch's next offset equals the high watermark, the batch is retained
+   * even if it is empty (i.e. all its records have been cleaned away). This ensures that the last
+   * offset information before the high watermark is not lost after log cleaning.
+   */
   @Test
   def testCleanSegmentsRetainingLastEmptyBatch(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
@@ -1398,12 +1410,45 @@ class LogCleanerTest extends Logging {
     // clean the log
     val segments = log.logSegments.asScala.take(3).toSeq
     val stats = new CleanerStats(Time.SYSTEM)
-    cleaner.cleanSegments(log, segments.asJava, map, 0L, stats, new CleanedTransactionMetadata, -1, segments.last.readNextOffset)
+    log.updateHighWatermark(segments.last.readNextOffset)
+    cleaner.cleanSegments(log, segments.asJava, map, 0L, stats, new CleanedTransactionMetadata, -1)
     assertEquals(2, log.logSegments.size)
     assertEquals(1, log.logSegments.asScala.head.log.batches.asScala.size, "one batch should be retained in the cleaned segment")
     val retainedBatch = log.logSegments.asScala.head.log.batches.asScala.head
     assertEquals(log.logSegments.asScala.last.baseOffset - 1, retainedBatch.lastOffset, "the retained batch should be the last batch")
     assertFalse(retainedBatch.iterator.hasNext,  "the retained batch should be an empty batch")
+  }
+
+  /**
+   * Test that if the high watermark is beyond the cleaned segments (i.e. no batch's next offset
+   * equals the high watermark), empty batches produced by cleaning are NOT retained and can be
+   * safely deleted. This is the counterpart to [[testCleanSegmentsRetainingLastEmptyBatch]].
+   */
+  @Test
+  def testCleanSegmentsNotRetainingLastEmptyBatch(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // append messages to the log until we have four segments
+    while (log.numberOfSegments < 4)
+      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), 0)
+    val keysFound = LogTestUtils.keysInLog(log)
+    assertEquals(0L until log.logEndOffset, keysFound)
+
+    // pretend all keys are deleted
+    val map = new FakeOffsetMap(Int.MaxValue)
+    keysFound.foreach(k => map.put(key(k), Long.MaxValue))
+
+    // clean the log
+    val segments = log.logSegments.asScala.take(3).toSeq
+    val stats = new CleanerStats(Time.SYSTEM)
+    log.updateHighWatermark(log.logSegments.asScala.last.readNextOffset)
+    cleaner.cleanSegments(log, segments.asJava, map, 0L, stats, new CleanedTransactionMetadata, -1)
+    assertEquals(2, log.logSegments.size)
+    assertEquals(0, log.logSegments.asScala.head.log.batches.asScala.size, "no batches should remain in the cleaned segment")
   }
 
   /**
@@ -1659,9 +1704,9 @@ class LogCleanerTest extends Logging {
 
     // Before: sourceSegment0, sourceSegment1, activeSegment = 3 total
     val segmentCountBefore = log.logSegments.size
-
+    log.updateHighWatermark(sourceSegments.last.readNextOffset)
     cleaner.cleanSegments(log, sourceSegments.asJava, offsetMap, 0L,
-      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, sourceSegments.last.readNextOffset)
+      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1)
 
     // With overflow, 2 source segments → 2 cleaned segments; net segment count unchanged.
     // Without overflow, 2 source → 1 cleaned; net count would be segmentCountBefore - 1.
@@ -1692,8 +1737,9 @@ class LogCleanerTest extends Logging {
 
     val segmentCountBefore = log.logSegments.size
 
+    log.updateHighWatermark(sourceSegments.last.readNextOffset)
     cleaner.cleanSegments(log, sourceSegments.asJava, offsetMap, 0L,
-      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1, sourceSegments.last.readNextOffset)
+      new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata, -1)
 
     assertEquals(segmentCountBefore, log.logSegments.size,
       "offset overflow should produce 2 cleaned segments, keeping total segment count the same")
@@ -1734,11 +1780,11 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
 
-    val upperBoundOffset = log.activeSegment.baseOffset
 
+    log.updateHighWatermark(log.activeSegment.baseOffset)
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq.asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-      new CleanedTransactionMetadata, -1, upperBoundOffset)
+      new CleanedTransactionMetadata, -1)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     var cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1754,7 +1800,7 @@ class LogCleanerTest extends Logging {
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq.asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-      new CleanedTransactionMetadata, -1, upperBoundOffset)
+      new CleanedTransactionMetadata, -1)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1771,7 +1817,7 @@ class LogCleanerTest extends Logging {
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq.asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-      new CleanedTransactionMetadata, -1, upperBoundOffset)
+      new CleanedTransactionMetadata, -1)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1793,7 +1839,7 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq.asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-      new CleanedTransactionMetadata, -1, upperBoundOffset)
+      new CleanedTransactionMetadata, -1)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1811,7 +1857,7 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq.asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-      new CleanedTransactionMetadata, -1, upperBoundOffset)
+      new CleanedTransactionMetadata, -1)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
@@ -1829,7 +1875,7 @@ class LogCleanerTest extends Logging {
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
     cleaner.cleanSegments(log, log.logSegments.asScala.take(9).toSeq.asJava, offsetMap, 0L, new CleanerStats(Time.SYSTEM),
-      new CleanedTransactionMetadata, -1, upperBoundOffset)
+      new CleanedTransactionMetadata, -1)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
