@@ -60,7 +60,6 @@ public class ClientQuotaManager {
 
     // Purge sensors after 1 hour of inactivity
     private static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
-    private static final String DEFAULT_NAME = "<default>";
 
     public record UserEntity(String sanitizedUser) implements ClientQuotaEntity.ConfigEntity {
 
@@ -105,7 +104,7 @@ public class ClientQuotaManager {
 
         @Override
         public String name() {
-            return DEFAULT_NAME;
+            return null;
         }
 
         @Override
@@ -121,7 +120,7 @@ public class ClientQuotaManager {
         }
         @Override
         public String name() {
-            return DEFAULT_NAME;
+            return null;
         }
         @Override
         public String toString() {
@@ -154,14 +153,15 @@ public class ClientQuotaManager {
         public String sanitizedUser() {
             if (userEntity instanceof UserEntity userRecord) {
                 return userRecord.sanitizedUser();
-            } else if (userEntity == DEFAULT_USER_ENTITY) {
-                return DEFAULT_NAME;
             }
             return "";
         }
 
         public String clientId() {
-            return clientIdEntity != null ? clientIdEntity.name() : "";
+            if (clientIdEntity instanceof ClientIdEntity clientIdRecord) {
+                return clientIdRecord.clientId();
+            }
+            return "";
         }
 
         @Override

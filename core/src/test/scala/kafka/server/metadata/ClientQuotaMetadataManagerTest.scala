@@ -18,7 +18,7 @@ package kafka.server.metadata
 
 import org.apache.kafka.image.ClientQuotaDelta
 import org.apache.kafka.server.quota.ClientQuotaManager
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 import java.util.Optional
@@ -72,5 +72,30 @@ class ClientQuotaMetadataManagerTest {
       (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)),
       ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserDefaultClientIdEntity)
     )
+  }
+
+  @Test
+  def testDefaultConfigEntityNameReturnsNull(): Unit = {
+    assertNull(ClientQuotaManager.DEFAULT_USER_ENTITY.name())
+    assertNull(ClientQuotaManager.DEFAULT_USER_CLIENT_ID.name())
+
+    val (defaultUser, _) = ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserEntity)
+    assertNull(defaultUser.get().name())
+
+    val (_, defaultClientId) = ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultClientIdEntity)
+    assertNull(defaultClientId.get().name())
+
+    val (defaultUser2, defaultClientId2) = ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserDefaultClientIdEntity)
+    assertNull(defaultUser2.get().name())
+    assertNull(defaultClientId2.get().name())
+  }
+
+  @Test
+  def testExplicitConfigEntityNameReturnsValue(): Unit = {
+    val (user, _) = ClientQuotaMetadataManager.transferToClientQuotaEntity(UserEntity("testUser"))
+    assertEquals("testUser", user.get().name())
+
+    val (_, clientId) = ClientQuotaMetadataManager.transferToClientQuotaEntity(ClientIdEntity("testClient"))
+    assertEquals("testClient", clientId.get().name())
   }
 }
