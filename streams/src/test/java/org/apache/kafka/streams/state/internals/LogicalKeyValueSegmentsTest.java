@@ -16,20 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
-import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -43,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class LogicalKeyValueSegmentsTest {
+public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKeyValueSegments> {
 
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
@@ -51,32 +42,16 @@ public class LogicalKeyValueSegmentsTest {
     private static final String METRICS_SCOPE = "metrics-scope";
     private static final String DB_FILE_DIR = "rocksdb";
 
-    private InternalMockProcessorContext<?, ?> context;
 
-    private LogicalKeyValueSegments segments;
-
-    @BeforeEach
-    public void setUp() {
-        context = new InternalMockProcessorContext<>(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.Long(),
-            new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-        );
-        segments = new LogicalKeyValueSegments(
+    @Override
+    public LogicalKeyValueSegments getSegments() {
+        return new LogicalKeyValueSegments(
             STORE_NAME,
             DB_FILE_DIR,
             RETENTION_PERIOD,
             SEGMENT_INTERVAL,
             new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME)
         );
-        segments.openExisting(context, 0L);
-    }
-
-    @AfterEach
-    public void tearDown() {
-        segments.close();
     }
 
     @Test

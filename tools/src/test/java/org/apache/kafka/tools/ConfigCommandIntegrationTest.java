@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.admin.ConfigCommand;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -137,7 +136,7 @@ public class ConfigCommandIntegrationTest {
             "--describe"));
         message = captureStandardOut(run(command));
         assertTrue(message.contains("Dynamic configs for group group are:"));
-        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000}"));
+        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000, DEFAULT_CONFIG:group.consumer.session.timeout.ms=45000}"));
 
         command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "groups",
@@ -145,7 +144,7 @@ public class ConfigCommandIntegrationTest {
             "--describe"));
         message = captureStandardOut(run(command));
         assertTrue(message.contains("Dynamic configs for group group are:"));
-        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000}"));
+        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000, DEFAULT_CONFIG:group.consumer.session.timeout.ms=45000}"));
     }
 
     @ClusterTest(serverProperties = {
@@ -293,10 +292,10 @@ public class ConfigCommandIntegrationTest {
             "--describe", "--all"));
         String message = captureStandardOut(run(command));
 
-        assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:streams.heartbeat.interval.ms=5000}"));
-        assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:streams.num.standby.replicas=0}"));
-        assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:streams.session.timeout.ms=45000}"));
-        assertTrue(message.contains("streams.task.offset.interval.ms=60000 sensitive=false synonyms={DEFAULT_CONFIG:streams.task.offset.interval.ms=60000}"));
+        assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.heartbeat.interval.ms=5000}"));
+        assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.num.standby.replicas=0}"));
+        assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.session.timeout.ms=45000}"));
+        assertTrue(message.contains("streams.task.offset.interval.ms=60000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.task.offset.interval.ms=60000}"));
     }
 
     @ClusterTest
@@ -574,12 +573,12 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
-    public void testUpdateInvalidBrokerConfigs() throws InterruptedException {
+    public void testUpdateInvalidBrokerConfigs() throws Exception {
         updateAndCheckInvalidBrokerConfig(Optional.empty());
         updateAndCheckInvalidBrokerConfig(Optional.of(String.valueOf((cluster.brokers().entrySet().iterator().next().getKey()))));
     }
 
-    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) throws InterruptedException {
+    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) throws Exception {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         try (Admin client = cluster.admin()) {
             alterConfigWithAdmin(client, brokerIdOrDefault, Map.of("invalid", "2"), alterOpts);
@@ -596,7 +595,7 @@ public class ConfigCommandIntegrationTest {
                 last.set(describeResult);
 
                 return describeResult.contains("invalid=null");
-            }, 5000, () -> "Dynamic broker config was not visible within 5s (missing 'invalid=null').\n" + 
+            }, 5000, () -> "Dynamic broker config was not visible within 5s (missing 'invalid=null').\n" +
                     "Last describe output:\n" + last.get());
 
             assertTrue(last.get().contains("sensitive=true"));
@@ -627,7 +626,7 @@ public class ConfigCommandIntegrationTest {
         // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
         @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154"),
     })
-    public void testUpdateBrokerConfigNotAffectedByInvalidConfig() {
+    public void testUpdateBrokerConfigNotAffectedByInvalidConfig() throws Exception {
         try (Admin client = cluster.admin()) {
             ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(
                     toArray(List.of("--bootstrap-server", cluster.bootstrapServers(),
@@ -702,6 +701,18 @@ public class ConfigCommandIntegrationTest {
         });
     }
 
+    @ClusterTest
+    public void testIntervalMsParser(ClusterInstance clusterInstance) {
+        List<String> alterOpts = List.of("--bootstrap-server", clusterInstance.bootstrapServers(),
+                "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
+        try (Admin client = clusterInstance.admin()) {
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(alterOpts.toArray(String[]::new));
+
+            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
+            assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
+        }
+    }
+
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
@@ -762,7 +773,7 @@ public class ConfigCommandIntegrationTest {
         verifyBrokerLoggerConfig(client, brokerId, config);
     }
 
-    private void alterConfigWithAdmin(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) {
+    private void alterConfigWithAdmin(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) throws Exception {
         String configStr = transferConfigMapToString(config);
         List<String> bootstrapOpts = quorumArgs().toList();
         ConfigCommand.ConfigCommandOptions addOpts =
@@ -774,7 +785,7 @@ public class ConfigCommandIntegrationTest {
         ConfigCommand.alterConfig(client, addOpts);
     }
 
-    private void alterConfigWithAdmin(Admin client, Map<String, String> config, List<String> alterOpts) {
+    private void alterConfigWithAdmin(Admin client, Map<String, String> config, List<String> alterOpts) throws Exception {
         String configStr = transferConfigMapToString(config);
         List<String> bootstrapOpts = quorumArgs().toList();
         ConfigCommand.ConfigCommandOptions addOpts =

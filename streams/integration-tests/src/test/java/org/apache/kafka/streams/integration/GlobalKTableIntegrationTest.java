@@ -47,6 +47,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessorSupplier;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -54,9 +55,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -139,8 +141,10 @@ public class GlobalKTableIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @Test
-    public void shouldKStreamGlobalKTableLeftJoin() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldKStreamGlobalKTableLeftJoin(final boolean withHeaders) throws Exception {
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
@@ -224,8 +228,10 @@ public class GlobalKTableIntegrationTest {
             "waiting for final values");
     }
 
-    @Test
-    public void shouldKStreamGlobalKTableJoin() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldKStreamGlobalKTableJoin(final boolean withHeaders) throws Exception {
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
@@ -309,8 +315,10 @@ public class GlobalKTableIntegrationTest {
             "waiting for final values");
     }
 
-    @Test
-    public void shouldRestoreGlobalInMemoryKTableOnRestart() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRestoreGlobalInMemoryKTableOnRestart(final boolean withHeaders) throws Exception {
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         builder = new StreamsBuilder();
         globalTable = builder.globalTable(
             globalTableTopic,
@@ -340,8 +348,10 @@ public class GlobalKTableIntegrationTest {
         assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
     }
 
-    @Test
-    public void shouldGetToRunningWithOnlyGlobalTopology() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldGetToRunningWithOnlyGlobalTopology(final boolean withHeaders) throws Exception {
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         builder = new StreamsBuilder();
         globalTable = builder.globalTable(
             globalTableTopic,
@@ -375,14 +385,17 @@ public class GlobalKTableIntegrationTest {
         );
     }
 
-    @Test
-    public void testProcessingExceptionHandlerContinueEnabledRestorationPhase() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testProcessingExceptionHandlerContinueEnabledRestorationPhase(final boolean withHeaders) throws Exception {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = true;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
             TestGlobalProcessingExceptionHandler.class);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         produceInitialGlobalTableValues();
         startStreams();
@@ -391,14 +404,17 @@ public class GlobalKTableIntegrationTest {
         assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
     }
 
-    @Test
-    public void testProcessingExceptionHandlerFailEnabledRestorationPhase() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testProcessingExceptionHandlerFailEnabledRestorationPhase(final boolean withHeaders) throws Exception {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = false;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         produceInitialGlobalTableValues();
         assertThrows(StreamsException.class, () -> {
@@ -408,14 +424,17 @@ public class GlobalKTableIntegrationTest {
 
     }
 
-    @Test
-    public void testProcessingExceptionHandlerDisabledRestorationPhase() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testProcessingExceptionHandlerDisabledRestorationPhase(final boolean withHeaders) throws Exception {
         createBuilderWithFailedProcessor();
         // disable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = false;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         produceInitialGlobalTableValues();
         assertThrows(StreamsException.class, () -> {
@@ -425,14 +444,17 @@ public class GlobalKTableIntegrationTest {
 
     }
 
-    @Test
-    public void testProcessingExceptionHandlerContinueEnabledRunTimePhase() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testProcessingExceptionHandlerContinueEnabledRunTimePhase(final boolean withHeaders) throws Exception {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = true;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
@@ -445,13 +467,16 @@ public class GlobalKTableIntegrationTest {
         );
     }
 
-    @Test
-    public void testProcessingExceptionHandlerFailEnabledRunTimePhase() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testProcessingExceptionHandlerFailEnabledRunTimePhase(final boolean withHeaders) throws Exception {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
@@ -460,13 +485,16 @@ public class GlobalKTableIntegrationTest {
         assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
     }
 
-    @Test
-    public void testProcessingExceptionHandlerDisabledRunTimePhase() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testProcessingExceptionHandlerDisabledRunTimePhase(final boolean withHeaders) throws Exception {
         createBuilderWithFailedProcessor();
         // disable processing exception handler invoked config
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));

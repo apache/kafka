@@ -22,13 +22,13 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{ConsumerGroupState, TopicPartition, Uuid}
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}
-import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{Assertions, GroupCoordinatorConfig}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
@@ -318,5 +318,128 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       assertFalse(member2.isEmpty)
       assertEquals(if (version == 0) -1.toByte else 1.toByte, member2.get.memberType)
     }
+  }
+
+  @ClusterTest
+  def testConsumerGroupDescribeIncludesPartitionsPendingRevocation(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    val clientId = "client-id"
+    val clientHost = "/127.0.0.1"
+    val authorizedOperationsInt = Utils.to32BitField(
+      AclEntry.supportedOperations(ResourceType.GROUP).asScala
+        .map(_.code.asInstanceOf[JByte]).asJava
+    )
+
+    // Member-1 joins using the range assignor and waits until it gets all 3 partitions.
+    var member1Response: ConsumerGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      member1Response = consumerGroupHeartbeat(
+        groupId = "grp",
+        memberId = "member-1",
+        serverAssignor = "range",
+        rebalanceTimeoutMs = 5 * 60 * 1000,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = List.empty
+      )
+      member1Response.assignment != null && !member1Response.assignment.topicPartitions.isEmpty
+    }, msg = s"Could not join the group successfully. Last response $member1Response.")
+
+    // Member-2 joins, triggering a rebalance. The target assignment changes:
+    // member-1 -> [0, 1], member-2 -> [2].
+    val member2Response = consumerGroupHeartbeat(
+      groupId = "grp",
+      memberId = "member-2",
+      serverAssignor = "range",
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty
+    )
+
+    // Member-1 heartbeats again, reporting it still owns all 3 partitions.
+    // This triggers reconciliation: assigned becomes [0, 1] and partition 2
+    // moves to partitions pending revocation.
+    consumerGroupHeartbeat(
+      groupId = "grp",
+      memberId = "member-1",
+      memberEpoch = member1Response.memberEpoch,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List(
+        new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0, 1, 2).asJava)
+      )
+    )
+
+    // Describe the group and verify that member-1's assignment includes
+    // both assigned partitions and partitions pending revocation.
+    val expected = List(
+      new DescribedGroup()
+        .setGroupId("grp")
+        .setGroupState(ConsumerGroupState.RECONCILING.toString)
+        .setGroupEpoch(member2Response.memberEpoch)
+        .setAssignmentEpoch(member2Response.memberEpoch)
+        .setAssignorName("range")
+        .setAuthorizedOperations(authorizedOperationsInt)
+        .setMembers(List(
+          new ConsumerGroupDescribeResponseData.Member()
+            .setMemberId("member-1")
+            .setMemberEpoch(member1Response.memberEpoch)
+            .setClientId(clientId)
+            .setClientHost(clientHost)
+            .setSubscribedTopicRegex("")
+            .setSubscribedTopicNames(List("foo").asJava)
+            .setAssignment(new Assignment()
+              .setTopicPartitions(List(
+                new TopicPartitions()
+                  .setTopicId(topicId)
+                  .setTopicName("foo")
+                  .setPartitions(List[Integer](0, 1, 2).asJava)
+              ).asJava))
+            .setTargetAssignment(new Assignment()
+              .setTopicPartitions(List(
+                new TopicPartitions()
+                  .setTopicId(topicId)
+                  .setTopicName("foo")
+                  .setPartitions(List[Integer](0, 1).asJava)
+              ).asJava))
+            .setMemberType(1.toByte),
+          new ConsumerGroupDescribeResponseData.Member()
+            .setMemberId("member-2")
+            .setMemberEpoch(member2Response.memberEpoch)
+            .setClientId(clientId)
+            .setClientHost(clientHost)
+            .setSubscribedTopicRegex("")
+            .setSubscribedTopicNames(List("foo").asJava)
+            .setAssignment(new Assignment())
+            .setTargetAssignment(new Assignment()
+              .setTopicPartitions(List(
+                new TopicPartitions()
+                  .setTopicId(topicId)
+                  .setTopicName("foo")
+                  .setPartitions(List[Integer](2).asJava)
+              ).asJava))
+            .setMemberType(1.toByte),
+        ).asJava)
+    )
+
+    val actual = consumerGroupDescribe(
+      groupIds = List("grp"),
+      includeAuthorizedOperations = true,
+      version = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled),
+    )
+
+    Assertions.assertResponseEquals(
+      new ConsumerGroupDescribeResponseData().setGroups(expected.asJava),
+      new ConsumerGroupDescribeResponseData().setGroups(actual.asJava)
+    )
   }
 }

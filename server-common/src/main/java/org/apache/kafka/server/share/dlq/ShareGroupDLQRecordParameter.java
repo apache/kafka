@@ -38,7 +38,7 @@ public record ShareGroupDLQRecordParameter(
     TopicIdPartition topicIdPartition,
     long firstOffset,
     long lastOffset,
-    Optional<Integer> deliveryCount,
+    Optional<Short> deliveryCount,
     Optional<Throwable> cause,
     boolean preserveRecordData
 ) {

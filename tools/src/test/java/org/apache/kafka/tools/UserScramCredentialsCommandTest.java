@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.admin.ConfigCommand;
-
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Exit;

@@ -184,7 +184,7 @@ public class DescribeTransactionsHandlerTest {
                 new DescribeTransactionsResponseData.TopicData()
                     .setTopic("bar")
                     .setPartitions(asList(1, 3, 5))
-            ).iterator()));
+            )));
     }
 
     private DescribeTransactionsResponseData.TransactionState sampleTransactionState2(

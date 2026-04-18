@@ -86,7 +86,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime();
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
@@ -352,7 +352,9 @@ public class ApplicationEventProcessorTest {
         FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(partitions, 12345);
 
         setupProcessor(true);
-        when(commitRequestManager.fetchOffsets(partitions, 12345)).thenReturn(CompletableFuture.completedFuture(topicPartitionOffsets));
+        CommitRequestManager.OffsetFetchResult fetchResult = new CommitRequestManager.OffsetFetchResult(
+            topicPartitionOffsets, Collections.emptyMap());
+        when(commitRequestManager.fetchOffsets(partitions, 12345)).thenReturn(CompletableFuture.completedFuture(fetchResult));
         processor.process(event);
 
         verify(commitRequestManager).fetchOffsets(partitions, 12345);

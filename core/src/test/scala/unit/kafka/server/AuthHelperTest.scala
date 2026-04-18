@@ -246,7 +246,7 @@ class AuthHelperTest {
       new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1)
     val nodes = new DescribeClusterBrokerCollection(
       java.util.Arrays.asList[DescribeClusterResponseData.DescribeClusterBroker](
-        new DescribeClusterResponseData.DescribeClusterBroker().setBrokerId(1)).iterator())
+        new DescribeClusterResponseData.DescribeClusterBroker().setBrokerId(1)))
     val responseData = authHelper.computeDescribeClusterResponse(request,
       EndpointType.CONTROLLER,
       "ltCWoi9wRhmHSQCIgAznEg",

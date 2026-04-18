@@ -17,10 +17,10 @@
 
 package kafka.server
 
-import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.purgatory.DelayedProduce
+import org.apache.kafka.server.util.ServerTestUtils
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -30,7 +30,7 @@ class DelayedProduceTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   @Test

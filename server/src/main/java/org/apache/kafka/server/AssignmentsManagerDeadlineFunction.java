@@ -17,7 +17,7 @@
 
 package org.apache.kafka.server;
 
-import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import java.util.OptionalLong;
 import java.util.function.UnaryOperator;

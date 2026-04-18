@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.utils.internals.BytesUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -113,7 +113,7 @@ public class Bytes implements Comparable<Bytes> {
 
     @Override
     public int compareTo(Bytes that) {
-        return BytesUtils.BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
+        return ByteUtils.BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
     }
 
     @Override
@@ -166,17 +166,17 @@ public class Bytes implements Comparable<Bytes> {
      * @return A new copy of the incremented byte array.
      * @throws IndexOutOfBoundsException if incrementing causes the underlying input byte array to overflow.
      * @deprecated This method is not part of the public API and will be removed in version 5.0.
-     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#increment(Bytes)} instead.
+     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.ByteUtils#increment(Bytes)} instead.
      */
     @Deprecated(since = "4.3", forRemoval = true)
     public static Bytes increment(Bytes input) throws IndexOutOfBoundsException {
-        return BytesUtils.increment(input);
+        return ByteUtils.increment(input);
     }
 
     /**
      * A byte array comparator based on lexicographic ordering.
      * @deprecated This field is not part of the public API and will be removed in version 5.0.
-     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#BYTES_LEXICO_COMPARATOR} instead.
+     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.ByteUtils#BYTES_LEXICO_COMPARATOR} instead.
      */
     @Deprecated(since = "4.3", forRemoval = true)
     public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
@@ -185,7 +185,7 @@ public class Bytes implements Comparable<Bytes> {
      * A byte array comparator interface.
      *
      * @deprecated This interface is not part of the public API and will be removed in version 5.0.
-     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils.ByteArrayComparator} instead.
+     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.ByteUtils.ByteArrayComparator} instead.
      */
     @Deprecated(since = "4.3", forRemoval = true)
     public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
@@ -194,6 +194,6 @@ public class Bytes implements Comparable<Bytes> {
                     final byte[] buffer2, int offset2, int length2);
     }
 
-    private static class LexicographicByteArrayComparator extends BytesUtils.LexicographicByteArrayComparator implements ByteArrayComparator {
+    private static class LexicographicByteArrayComparator extends ByteUtils.LexicographicByteArrayComparator implements ByteArrayComparator {
     }
 }
