@@ -464,23 +464,21 @@ public class LeaderElectionCommandTest {
 
         TestUtils.waitForCondition(
                 () -> {
-                    try {
-                        TopicDescription topicDescription = client.describeTopics(List.of(topic))
-                                .allTopicNames().get().get(topic);
-                        Optional<Integer> currentLeader = topicDescription.partitions().stream()
-                                .filter(p -> p.partition() == partitionId)
-                                .findFirst()
-                                .flatMap(p -> Optional.ofNullable(p.leader()))
-                                .map(Node::id);
-
-                        lastLeaderRef.set(currentLeader.map(String::valueOf).orElse("none"));
-                        return currentLeader.equals(expectedLeaderOpt);
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof UnknownTopicOrPartitionException) {
-                            return false;
-                        }
-                        throw new RuntimeException(e);
+                    Set<String> existingTopics = client.listTopics().names().get();
+                    if (!existingTopics.contains(topic)) {
+                        return false;
                     }
+
+                    TopicDescription topicDescription = client.describeTopics(List.of(topic))
+                            .allTopicNames().get().get(topic);
+                    Optional<Integer> currentLeader = topicDescription.partitions().stream()
+                            .filter(p -> p.partition() == partitionId)
+                            .findFirst()
+                            .flatMap(p -> Optional.ofNullable(p.leader()))
+                            .map(Node::id);
+
+                    lastLeaderRef.set(currentLeader.map(String::valueOf).orElse("none"));
+                    return currentLeader.equals(expectedLeaderOpt);
                 },
                 "Timed out waiting for leader to become " + expectedLeaderOpt.map(String::valueOf).orElse("none") +
                         ". Last metadata lookup returned leader = " + lastLeaderRef.get()
