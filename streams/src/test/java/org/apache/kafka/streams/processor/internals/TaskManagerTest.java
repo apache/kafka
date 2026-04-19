@@ -215,6 +215,13 @@ public class TaskManagerTest {
     private TaskManager setUpTaskManager(final ProcessingMode processingMode,
                                          final TasksRegistry tasks,
                                          final boolean processingThreadsEnabled) {
+        return setUpTaskManager(processingMode, tasks, processingThreadsEnabled, 300_000L);
+    }
+
+    private TaskManager setUpTaskManager(final ProcessingMode processingMode,
+                                         final TasksRegistry tasks,
+                                         final boolean processingThreadsEnabled,
+                                         final long waitForFutureTimeoutMs) {
         topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode));
         final TaskManager taskManager = new TaskManager(
             time,
@@ -229,7 +236,7 @@ public class TaskManagerTest {
             stateDirectory,
             stateUpdater,
             processingThreadsEnabled ? schedulingTaskManager : null,
-            300_000L
+            waitForFutureTimeoutMs
         );
         taskManager.setMainConsumer(consumer);
         return taskManager;
@@ -442,6 +449,105 @@ public class TaskManagerTest {
         verify(standbyTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldStashFutureOnWaitForFutureTimeout() {
+        final StreamTask activeTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        // Use a short timeout so the test doesn't block for 5 minutes
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, 100L);
+        when(stateUpdater.tasks()).thenReturn(Set.of(activeTask));
+        // Future that never completes — will cause TimeoutException
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(eq(activeTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
+
+        taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
+
+        // The timed-out future should be stashed in pendingRemoveFutures
+        assertTrue(taskManager.pendingRemoveFutures().containsKey(taskId03));
+        assertEquals(future, taskManager.pendingRemoveFutures().get(taskId03));
+    }
+
+    @Test
+    public void shouldNotThrowOnNullRemovedTaskResult() {
+        final StreamTask activeTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(stateUpdater.tasks()).thenReturn(Set.of(activeTask));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(eq(activeTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
+        // Complete with null — previously threw IllegalStateException
+        future.complete(null);
+
+        // Should not throw — the null result is stashed as a pending future
+        taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
+
+        assertTrue(taskManager.pendingRemoveFutures().containsKey(taskId03));
+    }
+
+    @Test
+    public void shouldProcessPendingRemoveFuturesAndCloseTaskDirty() {
+        final StreamTask activeTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        // Use a short timeout so the test doesn't block for 5 minutes
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, 100L);
+        when(stateUpdater.tasks()).thenReturn(Set.of(activeTask));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(eq(activeTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
+
+        // Trigger handleAssignment — future times out, gets stashed
+        taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
+        assertTrue(taskManager.pendingRemoveFutures().containsKey(taskId03));
+
+        // Now complete the future (StateUpdater processed the REMOVE)
+        future.complete(new StateUpdater.RemovedTaskResult(activeTask));
+
+        // Reset stateUpdater mock for checkStateUpdater
+        when(stateUpdater.tasks()).thenReturn(Collections.emptySet());
+        when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(false);
+        when(stateUpdater.restoresActiveTasks()).thenReturn(false);
+
+        // checkStateUpdater should process the pending future and close the task dirty
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verify(activeTask).prepareCommit(false);
+        verify(activeTask).suspend();
+        verify(activeTask).closeDirty();
+        assertTrue(taskManager.pendingRemoveFutures().isEmpty());
+    }
+
+    @Test
+    public void shouldSkipTaskInStateUpdaterWithPendingFuture() {
+        final StreamTask activeTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        // Use a short timeout so the test doesn't block for 5 minutes
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, 100L);
+        when(stateUpdater.tasks()).thenReturn(Set.of(activeTask));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(eq(activeTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
+
+        // First assignment — future times out, gets stashed
+        taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
+        assertTrue(taskManager.pendingRemoveFutures().containsKey(taskId03));
+
+        // Second assignment — same task still in stateUpdater but has a pending future.
+        // Should not enqueue another REMOVE.
+        taskManager.handleAssignment(
+            Collections.singletonMap(taskId03, taskId03Partitions),
+            Collections.emptyMap()
+        );
+
+        // remove() should have been called only once (from the first assignment)
+        verify(stateUpdater, times(1)).remove(eq(taskId03), any());
     }
 
     @Test

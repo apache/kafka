@@ -111,7 +111,10 @@ public class TaskManager {
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
     private final long waitForFutureTimeoutMs;
-    
+
+
+    private final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> pendingRemoveFutures = new LinkedHashMap<>();
+
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final ProcessId processId,
@@ -162,6 +165,11 @@ public class TaskManager {
     // visible for testing
     long waitForFutureTimeoutMs() {
         return waitForFutureTimeoutMs;
+    }
+
+    // visible for testing
+    Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> pendingRemoveFutures() {
+        return pendingRemoveFutures;
     }
 
     public double totalProducerBlockedTime() {
@@ -613,6 +621,14 @@ public class TaskManager {
         final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futuresForTasksToClose = new LinkedHashMap<>();
         for (final Task task : stateUpdater.tasks()) {
             final TaskId taskId = task.id();
+            if (pendingRemoveFutures.containsKey(taskId)) {
+                // A previous waitForFuture() timed out for this task — a REMOVE is already
+                // in flight. Skip it so we don't enqueue a duplicate REMOVE. The pending
+                // future will be cleaned up in processPendingRemoveFutures().
+                activeTasksToCreate.remove(taskId);
+                standbyTasksToCreate.remove(taskId);
+                continue;
+            }
             if (activeTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
                     if (!task.inputPartitions().equals(activeTasksToCreate.get(taskId))) {
@@ -716,8 +732,10 @@ public class TaskManager {
         try {
             removedTaskResult = future.get(waitForFutureTimeoutMs, TimeUnit.MILLISECONDS);
             if (removedTaskResult == null) {
-                throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
-                    + BUG_ERROR_MESSAGE);
+                log.warn("Task {} was not found in the state updater. "
+                    + "Deferring cleanup to next checkStateUpdater() call.", taskId);
+                pendingRemoveFutures.put(taskId, future);
+                return null;
             }
             return removedTaskResult;
         } catch (final ExecutionException executionException) {
@@ -730,9 +748,30 @@ public class TaskManager {
             log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
             throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
         } catch (final java.util.concurrent.TimeoutException timeoutException) {
-            log.warn("The state updater wasn't able to remove task {} in time. The state updater thread may be dead. "
-                    + BUG_ERROR_MESSAGE, taskId, timeoutException);
+            log.warn("The state updater wasn't able to remove task {} in time. "
+                    + "Deferring cleanup to next checkStateUpdater() call.", taskId, timeoutException);
+            pendingRemoveFutures.put(taskId, future);
             return null;
+        }
+    }
+
+    private void processPendingRemoveFutures() {
+        final Iterator<Map.Entry<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>>> it =
+            pendingRemoveFutures.entrySet().iterator();
+        while (it.hasNext()) {
+            final Map.Entry<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> entry = it.next();
+            if (entry.getValue().isDone()) {
+                try {
+                    final StateUpdater.RemovedTaskResult result = entry.getValue().get();
+                    if (result != null) {
+                        log.info("Processing deferred removal of task {}", entry.getKey());
+                        closeTaskDirty(result.task(), false);
+                    }
+                } catch (final Exception e) {
+                    log.warn("Exception processing deferred removal of task {}", entry.getKey(), e);
+                }
+                it.remove();
+            }
         }
     }
 
@@ -854,6 +893,7 @@ public class TaskManager {
 
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        processPendingRemoveFutures();
         addTasksToStateUpdater();
         if (stateUpdater.hasExceptionsAndFailedTasks()) {
             handleExceptionsFromStateUpdater();
