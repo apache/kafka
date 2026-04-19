@@ -20,8 +20,6 @@ package kafka.utils
 import java.util
 import java.util.Properties
 
-import scala.jdk.CollectionConverters._
-
 /**
   * In order to have these implicits in scope, add the following import:
   *
@@ -40,9 +38,5 @@ object Implicits {
 
     def ++=(props: Properties): Unit =
       (properties: util.Hashtable[AnyRef, AnyRef]).putAll(props)
-
-    def ++=(map: collection.Map[String, AnyRef]): Unit =
-      (properties: util.Hashtable[AnyRef, AnyRef]).putAll(map.asJava)
-
   }
 }

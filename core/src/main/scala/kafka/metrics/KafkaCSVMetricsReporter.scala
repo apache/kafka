@@ -20,15 +20,15 @@
 
 package kafka.metrics
 
-import java.io.File
-import java.nio.file.Files
-
 import com.yammer.metrics.reporting.CsvReporter
-import java.util.concurrent.TimeUnit
-
-import kafka.utils.{Logging, VerifiableProperties}
+import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.VerifiableProperties
+
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
 
@@ -53,7 +53,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         Utils.delete(csvDir)
         Files.createDirectories(csvDir.toPath)
         underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
-        if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
+        if (props.getBoolean("kafka.csv.metrics.reporter.enabled", false)) {
           initialized = true
           startReporter(metricsConfig.pollingIntervalSecs)
         }

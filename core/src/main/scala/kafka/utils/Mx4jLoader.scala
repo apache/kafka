@@ -18,6 +18,8 @@
 package kafka.utils
 
 
+import org.apache.kafka.server.util.VerifiableProperties
+
 import java.lang.management.ManagementFactory
 import javax.management.ObjectName
 
@@ -35,7 +37,7 @@ object Mx4jLoader extends Logging {
 
   def maybeLoad(): Boolean = {
     val props = new VerifiableProperties(System.getProperties)
-    if (!props.getBoolean("kafka_mx4jenable", default = false))
+    if (!props.getBoolean("kafka_mx4jenable", false))
       return false
     warn("MX4j is deprecated and will be removed in Kafka 5.0")
     val address = props.getString("mx4jaddress", "0.0.0.0")

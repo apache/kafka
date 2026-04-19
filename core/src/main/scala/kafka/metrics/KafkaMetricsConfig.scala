@@ -20,9 +20,8 @@
 
 package kafka.metrics
 
-import kafka.utils.VerifiableProperties
 import org.apache.kafka.server.metrics.MetricConfigs
-import org.apache.kafka.server.util.Csv
+import org.apache.kafka.server.util.{Csv, VerifiableProperties}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._

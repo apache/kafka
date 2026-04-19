@@ -20,8 +20,8 @@
 
 package kafka.metrics
 
-import kafka.utils.VerifiableProperties
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.VerifiableProperties
 
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.Seq

@@ -20,7 +20,7 @@ package kafka.server
 import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
-import kafka.utils.{Logging, VerifiableProperties}
+import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
@@ -30,7 +30,7 @@ import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
-import org.apache.kafka.metadata.{SupportedConfigChecker, ListenerInfo, MetadataRecordSerde}
+import org.apache.kafka.metadata.{ListenerInfo, MetadataRecordSerde, SupportedConfigChecker}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
@@ -38,6 +38,7 @@ import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
+import org.apache.kafka.server.util.VerifiableProperties
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -102,7 +103,7 @@ class SharedServer(
   val faultHandlerFactory: FaultHandlerFactory,
   val socketFactory: ServerSocketFactory
 ) extends Logging {
-  KafkaMetricsReporter.startReporters(VerifiableProperties(sharedServerConfig.originals))
+  KafkaMetricsReporter.startReporters(VerifiableProperties.fromMap(sharedServerConfig.originals))
   KafkaYammerMetrics.INSTANCE.configure(sharedServerConfig.originals)
 
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
