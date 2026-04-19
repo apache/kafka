@@ -19,7 +19,6 @@ package org.apache.kafka.connect.mirror.integration;
 import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 
 import java.util.Map;
 
