@@ -24,7 +24,7 @@ import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, Transaction
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
-import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, InitProducerIdResult, ProducerIdManager, TransactionLog, TransactionConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.server.util.MockScheduler
@@ -1877,6 +1877,80 @@ class TransactionCoordinatorTest {
     val expectedResult = new InitProducerIdResult(rotatedProducerId, rotatedEpoch, Errors.NONE) 
     assertEquals(expectedResult, result)
   }
+
+  @Test
+  def testRetryInitProducerIdAfterFailoverDuringProducerIdRotation(): Unit = {
+    // GIVEN
+    val exhaustedEpoch = (Short.MaxValue - 1).toShort
+    val originalMetadata = new TransactionMetadata(
+      transactionalId,
+      producerId,
+      RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID,
+      exhaustedEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs,
+      TransactionState.EMPTY,
+      util.Set.of[TopicPartition](),
+      time.milliseconds(),
+      time.milliseconds(),
+      TV_2
+    )
+
+    // First coordinator rotates the producer id and writes the updated state to the log.
+    val rotatedMetadata = originalMetadata.prepareProducerIdRotation(
+      producerId + 1,
+      txnTimeoutMs,
+      time.milliseconds(),
+      true
+    )
+
+    // WHEN1 - Simulate coordinator failover and recovery from the transaction log before the client
+    //         receives a response.
+    val recoveredMetadata = TransactionLog.read(
+      java.nio.ByteBuffer.wrap(TransactionLog.keyToBytes(transactionalId)),
+      java.nio.ByteBuffer.wrap(TransactionLog.valueToBytes(rotatedMetadata, TV_2))
+    ).asInstanceOf[TransactionLog.TxnRecord].metadata()
+
+    // THEN1
+    assertEquals(producerId + 1, recoveredMetadata.producerId)
+    assertEquals(producerId, recoveredMetadata.prevProducerId)
+    assertEquals(0.toShort, recoveredMetadata.producerEpoch)
+    assertEquals(exhaustedEpoch, recoveredMetadata.lastProducerEpoch)
+
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, recoveredMetadata))))
+
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      recoveredMetadata.completeTransitionTo(capturedTxnTransitMetadata.getValue)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
+
+    // WHEN2 : The client retries InitProducerId because it did not receive the response 
+    //         for the epoch exhaustion rotation.
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, exhaustedEpoch)),
+      initProducerIdMockCallback
+    )
+
+    // THEN2 :  The retry should succeed. Without persisting lastProducerEpoch, PRODUCER_FENCED would
+    //          be returned.
+    assertEquals(new InitProducerIdResult(producerId + 1, 0, Errors.NONE), result)
+  }
+
 
   @Test
   def testInitProducerIdWithNoLastProducerData(): Unit = {
