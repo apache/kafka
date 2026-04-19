@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.utils.internals.Exit;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
