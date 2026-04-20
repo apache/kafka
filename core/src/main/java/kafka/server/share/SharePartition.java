@@ -2589,7 +2589,8 @@ public class SharePartition {
                             persisterBatch.stateBatch.firstOffset(),
                             persisterBatch.stateBatch.lastOffset(),
                             persisterBatch.stateBatch.deliveryCount(),
-                            persisterBatch.dlqCause
+                            persisterBatch.dlqCause,
+                            false
                         );
                     });
                     // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
@@ -2994,7 +2995,8 @@ public class SharePartition {
                         dlqBatch.firstOffset(),
                         dlqBatch.lastOffset(),
                         dlqBatch.deliveryCount(),
-                        ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED
+                        ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED,
+                        true
                     ));
                 });
             }
@@ -3327,8 +3329,10 @@ public class SharePartition {
         return ACK_TYPE_TO_RECORD_STATE.get(ackType);
     }
 
-    private void processDlqPhase2(InFlightState updatedState, long firstOffset,
-                                  long lastOffset, short deliveryCount, Throwable dlqCause) {
+    // Visible for testing.
+    void processDlqPhase2(InFlightState updatedState, long firstOffset,
+                                  long lastOffset, short deliveryCount, Throwable dlqCause,
+                                  boolean isTimeout) {
         // Step 1: Enqueue to DLQ
         shareGroupDLQ.enqueue(new ShareGroupDLQRecordParameter(
             groupId, topicIdPartition, firstOffset, lastOffset,
@@ -3339,19 +3343,23 @@ public class SharePartition {
             }
 
             // Step 2: Transition ARCHIVING → ARCHIVED
-            PersisterBatch phase2Batch;
+            // For timeout path, use tryUpdateState (no rollback) to match non-DLQ behavior
+            // where ARCHIVED is never reverted on persist failure.
+            // For acknowledge/release path, use startStateTransition (with rollback) so the
+            // client can retry on persist failure.
+            PersisterStateBatch stateBatch;
             lock.writeLock().lock();
             try {
-                InFlightState updateResult = updatedState.startStateTransition(
-                    RecordState.ARCHIVED, DeliveryCountOps.NO_OP,
-                    maxDeliveryCount(), EMPTY_MEMBER_ID);
+                InFlightState updateResult = isTimeout
+                    ? updatedState.tryUpdateState(RecordState.ARCHIVED, DeliveryCountOps.NO_OP, maxDeliveryCount(), EMPTY_MEMBER_ID)
+                    : updatedState.startStateTransition(RecordState.ARCHIVED, DeliveryCountOps.NO_OP, maxDeliveryCount(), EMPTY_MEMBER_ID);
                 if (updateResult == null) {
                     log.error("Unable to transition ARCHIVING → ARCHIVED ...");
                     return;
                 }
-                phase2Batch = new PersisterBatch(updateResult, new PersisterStateBatch(
+                stateBatch = new PersisterStateBatch(
                     firstOffset, lastOffset,
-                    updateResult.state().id(), (short) updateResult.deliveryCount()), null);
+                    updateResult.state().id(), (short) updateResult.deliveryCount());
                 deliveryCompleteCount.addAndGet(
                     numInFlightRecordsInBatch(firstOffset, lastOffset));
             } finally {
@@ -3359,21 +3367,29 @@ public class SharePartition {
             }
 
             // Step 3: Persist ARCHIVED
-            writeShareGroupState(List.of(phase2Batch.stateBatch()))
+            writeShareGroupState(List.of(stateBatch))
                 .whenComplete((v2, phase2Exception) -> {
                     boolean cacheUpdated = false;
                     lock.writeLock().lock();
                     try {
                         if (phase2Exception != null) {
-                            phase2Batch.updatedState().completeStateTransition(false);
-                            if (isStateTerminal(RecordState.forId(phase2Batch.stateBatch().deliveryState()))
-                                && !isStateTerminal(phase2Batch.updatedState().state())) {
-                                deliveryCompleteCount.addAndGet(
-                                    -numInFlightRecordsInBatch(firstOffset, lastOffset));
+                            if (!isTimeout) {
+                                // For acknowledge/release path, rollback the state transition.
+                                updatedState.completeStateTransition(false);
+                                if (isStateTerminal(RecordState.forId(stateBatch.deliveryState()))
+                                    && !isStateTerminal(updatedState.state())) {
+                                    deliveryCompleteCount.addAndGet(
+                                        -numInFlightRecordsInBatch(firstOffset, lastOffset));
+                                }
+                                return;
                             }
-                            return;
+                            // For timeout path, no rollback — ARCHIVED stays in memory,
+                            // consistent with non-DLQ timeout behavior. Fall through to
+                            // update cached state so the batch can be evicted.
                         }
-                        phase2Batch.updatedState().completeStateTransition(true);
+                        if (!isTimeout) {
+                            updatedState.completeStateTransition(true);
+                        }
                         cacheUpdated = maybeUpdateCachedStateAndOffsets();
                     } finally {
                         lock.writeLock().unlock();
