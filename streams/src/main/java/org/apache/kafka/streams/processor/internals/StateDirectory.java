@@ -590,32 +590,32 @@ public class StateDirectory implements AutoCloseable {
                     return;
                 }
 
-                boolean hasProcessFiles = false;
-                boolean hasNonProcessFiles = false;
+                boolean hasProcessOrLockFiles = false;
+                boolean hasNonProcessOrLockFiles = false;
 
                 for (final File file : remainingFiles) {
                     final String name = file.getName();
-                    if (PROCESS_FILE_NAME.equals(name)) {
-                        hasProcessFiles = true;
+                    if (PROCESS_FILE_NAME.equals(name) || LOCK_FILE_NAME.equals(name)) {
+                        hasProcessOrLockFiles = true;
                     } else {
-                        hasNonProcessFiles = true;
+                        hasNonProcessOrLockFiles = true;
                         break;
                     }
                 }
                 
-                if (hasProcessFiles && !hasNonProcessFiles) {
+                if (hasProcessOrLockFiles && !hasNonProcessOrLockFiles) {
                     // KAFKA-10716: The processId file is persisted in the state directory to keep the
                     // processId stable across restarts. Removing it would cause a new processId to be
                     // generated and may lead to unnecessary task movements during rebalances.
                     log.debug(
-                            "{} State store directory {} was not deleted because it still contains the " +
-                            "process metadata file {} that is required for stable task assignment across restarts.",
-                            logPrefix(), stateDir.getAbsolutePath(), PROCESS_FILE_NAME
+                            "{} State store directory {} was not deleted because it still contains only expected metadata files ({} and/or {}).",
+                            logPrefix(), stateDir.getAbsolutePath(), PROCESS_FILE_NAME, LOCK_FILE_NAME
                     );
                 } else {
                     log.warn(
-                            String.format("%s Failed to delete state store directory of %s for it is not empty",
-                                    logPrefix(), stateDir.getAbsolutePath())
+                            "{} Failed to fully clean up state store directory {} because unexpected files remain.",
+                            logPrefix(),
+                            stateDir.getAbsolutePath()
                     );
                 }
             }
