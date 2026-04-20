@@ -285,7 +285,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                .define(CommonClientConfigs.CLIENT_METADATA_CONFIG,
+                                        Type.LIST,
+                                        List.of(),
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_METADATA_CONFIG_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),

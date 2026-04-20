@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.GetConfigProfileKeysResponse;
 import org.apache.kafka.common.requests.PushConfigResponse;
 
 import java.util.Optional;
+import java.util.SortedMap;
 
 /**
  * Interface for managing the client configuration push handshake with brokers.
@@ -106,4 +107,7 @@ public interface ClientConfigsSender extends AutoCloseable {
      * @return the client instance ID
      */
     Uuid clientInstanceId();
+
+    SortedMap<String, String> metadata();
+
 }

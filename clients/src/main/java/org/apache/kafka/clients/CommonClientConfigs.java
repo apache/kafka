@@ -250,6 +250,10 @@ public class CommonClientConfigs {
             "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = 300 * 1000;
 
+
+    public static final String CLIENT_METADATA_CONFIG = "client.metadata";
+    public static final String CLIENT_METADATA_CONFIG_DOC = "TBD";
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.
@@ -331,11 +335,11 @@ public class CommonClientConfigs {
         return Optional.of(telemetryReporter);
     }
 
-    public static Optional<ClientConfigsSender> configsSender(AbstractConfig config) {
+    public static Optional<ClientConfigsSender> configsSender(AbstractConfig config, String role) {
         if (!config.getBoolean(CommonClientConfigs.ENABLE_CONFIGS_PUSH_CONFIG)) {
             return Optional.empty();
         }
 
-        return Optional.of(new DefaultClientConfigsSender(config));
+        return Optional.of(new DefaultClientConfigsSender(config, role));
     }
 }

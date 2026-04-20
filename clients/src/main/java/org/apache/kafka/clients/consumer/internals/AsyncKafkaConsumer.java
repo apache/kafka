@@ -401,7 +401,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
-            this.clientConfigsSender = CommonClientConfigs.configsSender(config);
+            this.clientConfigsSender = CommonClientConfigs.configsSender(config, "consumer");
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_METRIC_GROUP);
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics);

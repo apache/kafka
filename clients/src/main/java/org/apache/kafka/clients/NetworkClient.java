@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
@@ -47,6 +45,7 @@ import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -658,8 +657,10 @@ public class NetworkClient implements KafkaClient {
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         long telemetryTimeout = telemetrySender != null ? telemetrySender.maybeUpdate(now) : Integer.MAX_VALUE;
+        long configsTimeout = configsSender != null ? configsSender.maybeUpdate(now) : Integer.MAX_VALUE;
+
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, telemetryTimeout, defaultRequestTimeoutMs));
+            this.selector.poll(Utils.min(timeout, metadataTimeout, telemetryTimeout, configsTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
@@ -1107,8 +1108,35 @@ public class NetworkClient implements KafkaClient {
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
             if (discoverBrokerVersions) {
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
-                log.debug("Completed connection to node {}. Fetching API versions.", node);
+                List<ApiVersionsRequestData.ClientMetadataEntry> metadata = new ArrayList<>();
+
+                if (configsSender != null) {
+                    for (Map.Entry<String, String> entry : configsSender.clientConfigsSender.metadata().entrySet()) {
+                        ApiVersionsRequestData.ClientMetadataEntry clientMetadataEntry = new ApiVersionsRequestData.ClientMetadataEntry();
+                        clientMetadataEntry.setKey(entry.getKey());
+                        clientMetadataEntry.setValue(entry.getValue());
+                        metadata.add(clientMetadataEntry);
+                    }
+                }
+
+                ApiVersionsRequestData defaultData = new ApiVersionsRequestData()
+                        .setClientSoftwareName("apacha-kafka-java")
+                        .setClientSoftwareVersion(AppInfoParser.getVersion())
+                        .setClientInstanceId(Uuid.randomUuid())
+                        .setClientMetadata(metadata);
+
+                log.debug("handleConnections - configsSender: {}, metadata: {}", configsSender, metadata);
+
+                nodesNeedingApiVersionsFetch.put(
+                    node,
+                    new ApiVersionsRequest.Builder(
+                        defaultData,
+                        ApiKeys.API_VERSIONS.oldestVersion(),
+                        ApiKeys.API_VERSIONS.latestVersion()
+                    )
+                );
+                if (configsSender != null)
+                    log.debug("Completed connection to node {}. Fetching API versions.", node);
             } else {
                 this.connectionStates.ready(node);
                 log.debug("Completed connection to node {}. Ready.", node);
@@ -1500,6 +1528,55 @@ public class NetworkClient implements KafkaClient {
 
         public ConfigsSender(ClientConfigsSender clientConfigsSender) {
             this.clientConfigsSender = clientConfigsSender;
+        }
+
+        public long maybeUpdate(long now) {
+            // Check if we should attempt the handshake
+            if (!clientConfigsSender.shouldAttemptHandshake())
+                return Long.MAX_VALUE;
+
+            Node stickyNode = leastLoadedNode(now).node();
+            if (stickyNode == null) {
+                if (configsSender != null)
+                    log.debug("Give up sending config push request since no node is available");
+                return reconnectBackoffMs;
+            }
+
+            return maybeUpdate(now, stickyNode);
+        }
+
+        private long maybeUpdate(long now, Node node) {
+            String nodeConnectionId = node.idString();
+
+            if (canSendRequest(nodeConnectionId, now)) {
+                Optional<AbstractRequest.Builder<?>> requestOpt = clientConfigsSender.createRequest();
+
+                if (requestOpt.isEmpty())
+                    return Long.MAX_VALUE;
+
+                AbstractRequest.Builder<?> request = requestOpt.get();
+                ClientRequest clientRequest = newClientRequest(nodeConnectionId, request, now, true);
+                doSend(clientRequest, true, now);
+                return defaultRequestTimeoutMs;
+            }
+
+            // If there's any connection establishment underway, wait until it completes. This prevents
+            // the client from unnecessarily connecting to additional nodes while a previous connection
+            // attempt has not been completed.
+            if (isAnyNodeConnecting())
+                return reconnectBackoffMs;
+
+            if (connectionStates.canConnect(nodeConnectionId, now)) {
+                // We don't have a connection to this node right now, make one
+                if (configsSender != null)
+                    log.debug("Initialize connection to node {} for sending config push request", node);
+                initiateConnect(node, now);
+                return reconnectBackoffMs;
+            }
+
+            // In either case, we just need to wait for a network event to let us know the selected
+            // connection might be usable again.
+            return Long.MAX_VALUE;
         }
 
         public void handleResponse(GetConfigProfileKeysResponse response) {

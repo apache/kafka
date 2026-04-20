@@ -712,6 +712,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         true,
                                         Importance.LOW,
                                         ENABLE_CONFIGS_PUSH_DOC)
+                                .define(CommonClientConfigs.CLIENT_METADATA_CONFIG,
+                                        Type.LIST,
+                                        List.of(),
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_METADATA_CONFIG_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),

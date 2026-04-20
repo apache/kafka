@@ -179,7 +179,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT, atLeast(0), MEDIUM, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
             .define(ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
-            .define(ServerLogConfigs.CLIENT_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CLIENT_CONFIG_POLICY_CLASS_NAME_DOC)
+            .define(ServerLogConfigs.CLIENT_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS,  org.apache.kafka.server.policy.PocClientConfigPolicy.class.getName(), LOW, ServerLogConfigs.CLIENT_CONFIG_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.CLIENT_CONFIG_MAX_BYTES_CONFIG, INT, ServerLogConfigs.CLIENT_CONFIG_MAX_BYTES_DEFAULT, atLeast(0), LOW, ServerLogConfigs.CLIENT_CONFIG_MAX_BYTES_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);

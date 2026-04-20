@@ -97,6 +97,9 @@ Configuration:
         - ref: KafkaAppender
     Logger:
       # Kafka logger
+      - name: org.apache.kafka.server.policy.PocClientConfigPolicy
+        level: DEBUG
+      # Kafka logger
       - name: kafka
         level: INFO
       # Kafka org.apache logger

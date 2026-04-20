@@ -17,12 +17,14 @@
 
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClientConfigPolicyException;
 import org.apache.kafka.common.errors.UnknownConfigProfileException;
@@ -32,14 +34,21 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.policy.ClientConfigPolicy;
 import org.apache.kafka.server.policy.ClientConfigProfileKeys;
 import org.apache.kafka.server.policy.ClientProfile;
 import org.apache.kafka.server.policy.ClientPushConfigData;
+import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -63,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 4. Broker validates and processes the config
  */
 @ClusterTestDefaults(
-    brokers = 1,
+    brokers = 3,
     serverProperties = {
         @ClusterConfigProperty(key = ServerLogConfigs.CLIENT_CONFIG_POLICY_CLASS_NAME_CONFIG,
             value = "org.apache.kafka.clients.ClientConfigPushIntegrationTest$TestClientConfigPolicy"),
@@ -72,8 +81,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 )
 public class ClientConfigPushIntegrationTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ClientConfigPushIntegrationTest.class);
+
+    private static final String TOPIC = "topic";
+    private static final int PARTITIONS = 1;
+    private static final int REPLICAS = 1;
+
     private final ClusterInstance clusterInstance;
-    private TestClientConfigPolicy clientConfigPolicy;
 
     public ClientConfigPushIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -82,11 +96,19 @@ public class ClientConfigPushIntegrationTest {
     @BeforeEach
     public void setup() throws InterruptedException {
         clusterInstance.waitForReadyBrokers();
-        clientConfigPolicy = new TestClientConfigPolicy();
+    }
+
+    @AfterEach
+    public void tearDown() throws InterruptedException {
+        TestClientConfigPolicy.clearSingleton();
     }
 
     @ClusterTest
     public void testProducerConfigPushHandshake() throws Exception {
+        try (var admin = clusterInstance.admin()) {
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
+        }
+
         Map<String, Object> producerConfig = new java.util.HashMap<>();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -95,21 +117,23 @@ public class ClientConfigPushIntegrationTest {
         producerConfig.put(CommonClientConfigs.ENABLE_CONFIGS_PUSH_CONFIG, true);
 
         try (Producer<String, String> producer = new KafkaProducer<>(producerConfig)) {
+            producer.send(new ProducerRecord<>("hiya", "buddy"));
             // Give time for handshake to complete
             Thread.sleep(2000);
 
             // Verify policy was called
-            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
-            assertTrue(clientConfigPolicy.processCallCount.get() > 0, "process() should have been called");
+            assertNotNull(TestClientConfigPolicy.singleton, "Creation of ClientConfigPolicy should have occurred");
+            assertTrue(TestClientConfigPolicy.singleton.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(TestClientConfigPolicy.singleton.processCallCount.get() > 0, "process() should have been called");
 
             // Verify we received a client profile
-            assertFalse(clientConfigPolicy.receivedProfiles.isEmpty(), "Should have received client profile");
+            assertFalse(TestClientConfigPolicy.singleton.receivedProfiles.isEmpty(), "Should have received client profile");
 
             // Verify we received configs
-            assertFalse(clientConfigPolicy.receivedConfigs.isEmpty(), "Should have received client configs");
+            assertFalse(TestClientConfigPolicy.singleton.receivedConfigs.isEmpty(), "Should have received client configs");
 
             // Verify configs were collected (should have client.id but not bootstrap.servers)
-            Map<String, String> configs = clientConfigPolicy.receivedConfigs.values().iterator().next();
+            Map<String, String> configs = TestClientConfigPolicy.singleton.receivedConfigs.values().iterator().next();
             assertTrue(configs.containsKey(ProducerConfig.CLIENT_ID_CONFIG),
                 "Should contain client.id config");
             assertFalse(configs.containsKey(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
@@ -119,6 +143,10 @@ public class ClientConfigPushIntegrationTest {
 
     @ClusterTest
     public void testConsumerConfigPushHandshake() throws Exception {
+        try (var admin = clusterInstance.admin()) {
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
+        }
+
         Map<String, Object> consumerConfig = new java.util.HashMap<>();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -128,17 +156,26 @@ public class ClientConfigPushIntegrationTest {
         consumerConfig.put(CommonClientConfigs.ENABLE_CONFIGS_PUSH_CONFIG, true);
 
         try (Consumer<String, String> consumer = new KafkaConsumer<>(consumerConfig)) {
+            consumer.subscribe(List.of(TOPIC));
+
             // Give time for handshake to complete
-            Thread.sleep(2000);
+            TestUtils.waitForCondition(
+                () -> {
+                    consumer.poll(Duration.ofSeconds(1));
+                    return TestClientConfigPolicy.singleton.profileKeysCallCount.get() > 0;
+                },
+                5000,
+                "rough"
+            );
 
             // Verify policy was called
-            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
-            assertTrue(clientConfigPolicy.processCallCount.get() > 0, "process() should have been called");
+            assertTrue(TestClientConfigPolicy.singleton.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(TestClientConfigPolicy.singleton.processCallCount.get() > 0, "process() should have been called");
 
             // Verify we received configs
-            assertFalse(clientConfigPolicy.receivedConfigs.isEmpty(), "Should have received client configs");
+            assertFalse(TestClientConfigPolicy.singleton.receivedConfigs.isEmpty(), "Should have received client configs");
 
-            Map<String, String> configs = clientConfigPolicy.receivedConfigs.values().iterator().next();
+            Map<String, String> configs = TestClientConfigPolicy.singleton.receivedConfigs.values().iterator().next();
             assertTrue(configs.containsKey(ConsumerConfig.GROUP_ID_CONFIG),
                 "Should contain group.id config");
             assertTrue(configs.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG),
@@ -149,7 +186,7 @@ public class ClientConfigPushIntegrationTest {
     @ClusterTest
     public void testConfigPushWithEmptyProfile() throws Exception {
         // Configure policy to return empty profile (no config keys requested)
-        clientConfigPolicy.returnEmptyProfile = true;
+        TestClientConfigPolicy.singleton.returnEmptyProfile = true;
 
         Map<String, Object> producerConfig = new java.util.HashMap<>();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
@@ -162,10 +199,10 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // profileKeys() should be called
-            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(TestClientConfigPolicy.singleton.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
 
             // But process() should NOT be called since no configs were requested
-            assertEquals(0, clientConfigPolicy.processCallCount.get(), "process() should NOT have been called with empty profile");
+            assertEquals(0, TestClientConfigPolicy.singleton.processCallCount.get(), "process() should NOT have been called with empty profile");
         }
     }
 
@@ -183,8 +220,8 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // Policy should NOT be called when disabled
-            assertEquals(0, clientConfigPolicy.profileKeysCallCount.get(), "profileKeys() should NOT be called when disabled");
-            assertEquals(0, clientConfigPolicy.processCallCount.get(), "process() should NOT be called when disabled");
+            assertEquals(0, TestClientConfigPolicy.singleton.profileKeysCallCount.get(), "profileKeys() should NOT be called when disabled");
+            assertEquals(0, TestClientConfigPolicy.singleton.processCallCount.get(), "process() should NOT be called when disabled");
         }
     }
 
@@ -200,8 +237,8 @@ public class ClientConfigPushIntegrationTest {
         try (Producer<String, String> producer = new KafkaProducer<>(producerConfig)) {
             Thread.sleep(2000);
 
-            assertFalse(clientConfigPolicy.receivedProfiles.isEmpty(), "Should have received client profile");
-            ClientProfile profile = clientConfigPolicy.receivedProfiles.values().iterator().next();
+            assertFalse(TestClientConfigPolicy.singleton.receivedProfiles.isEmpty(), "Should have received client profile");
+            ClientProfile profile = TestClientConfigPolicy.singleton.receivedProfiles.values().iterator().next();
 
             assertNotNull(profile.clientInstanceId(), "Client instance ID should not be null");
             assertNotNull(profile.clientSoftwareName(), "Client software name should not be null");
@@ -226,7 +263,7 @@ public class ClientConfigPushIntegrationTest {
             Thread.sleep(2000);
 
             // Verify CRC was computed and is non-zero
-            assertTrue(clientConfigPolicy.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
+            assertTrue(TestClientConfigPolicy.singleton.profileKeysCallCount.get() > 0, "profileKeys() should have been called");
 
             // The CRC should be deterministic based on the keys
             // (We can't easily verify the exact value here, but we verified it's used)
@@ -242,6 +279,8 @@ public class ClientConfigPushIntegrationTest {
      * - Supports test scenarios via static flags
      */
     public static class TestClientConfigPolicy implements ClientConfigPolicy {
+
+        public static TestClientConfigPolicy singleton;
 
         private final Map<Uuid, ClientProfile> receivedProfiles = new ConcurrentHashMap<>();
         private final Map<Uuid, Map<String, String>> receivedConfigs = new ConcurrentHashMap<>();
@@ -262,28 +301,54 @@ public class ClientConfigPushIntegrationTest {
             "reconnect.backoff.max.ms"
         ));
 
+        public TestClientConfigPolicy() {
+            synchronized (TestClientConfigPolicy.class) {
+                if (singleton != null) {
+                    LOG.error("Already had singleton: {}", singleton);
+                } else {
+                    singleton = this;
+                    LOG.error("Setting new singleton: {}", singleton);
+                }
+            }
+        }
+
+        public static void clearSingleton() {
+            synchronized (TestClientConfigPolicy.class) {
+                if (singleton != null) {
+                    LOG.error("Closing singleton: {}", singleton);
+                    Utils.maybeCloseQuietly(singleton, "singleton");
+                    LOG.error("Clearing singleton: {}", singleton);
+                    singleton = null;
+                } else {
+                    LOG.error("Could not clear singleton, as it is not set");
+                }
+            }
+        }
+
         @Override
         public void configure(Map<String, ?> configs) {
-            // No configuration needed for test policy
+            LOG.error("configure called on {}", singleton);
         }
 
         @Override
         public Set<String> reconfigurableConfigs() {
+            LOG.error("reconfigurableConfigs called on {}", singleton);
             return Collections.emptySet();
         }
 
         @Override
         public void validateReconfiguration(Map<String, ?> configs) {
-            // No reconfiguration validation needed
+            LOG.error("validateReconfiguration called on {}", singleton);
         }
 
         @Override
         public void reconfigure(Map<String, ?> configs) {
-            // No reconfiguration needed
+            LOG.error("reconfigure called on {}", singleton);
         }
 
         @Override
         public Optional<ClientConfigProfileKeys> profileKeys(ClientProfile clientProfile) {
+            LOG.error("profileKeys called on {} with clientProfile: {}", singleton, clientProfile);
             profileKeysCallCount.incrementAndGet();
 
             // Store the profile for verification
@@ -311,6 +376,10 @@ public class ClientConfigPushIntegrationTest {
                 pushConfigData.clientProfile().clientInstanceId(),
                 pushConfigData.configs()
             );
+
+            LOG.error("process() - SINGLETON: {}, pushConfigData: {}", pushConfigData);
+
+
 
             if (rejectNextPush) {
                 throw new ClientConfigPolicyException("Test: Config validation failed");

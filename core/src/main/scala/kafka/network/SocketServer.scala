@@ -42,7 +42,7 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
-import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServer => JSocketServer, SocketServerConfigs, TooManyConnectionsException}
+import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException, SocketServer => JSocketServer}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{ApiVersionManager, ServerSocketFactory}
 import org.apache.kafka.server.config.QuotaConfig
@@ -1029,10 +1029,16 @@ private[kafka] class Processor(
                 if (header.apiKey == ApiKeys.API_VERSIONS) {
                   val apiVersionsRequest = req.body[ApiVersionsRequest]
                   if (apiVersionsRequest.isValid) {
+                    val metadata: util.TreeMap[String, String] = new util.TreeMap[String, String]
+
+                    apiVersionsRequest.data().clientMetadata().forEach(clientMetadataEntry => {
+                      metadata.put(clientMetadataEntry.key, clientMetadataEntry.value)
+                    })
+
                     channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
                       apiVersionsRequest.data.clientSoftwareName,
                       apiVersionsRequest.data.clientSoftwareVersion,
-                      null))
+                      metadata))
                   }
                 }
                 requestChannel.sendRequest(req)

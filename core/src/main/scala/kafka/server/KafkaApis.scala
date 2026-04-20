@@ -2996,13 +2996,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // For now, using placeholder values - need to update RequestContext/ClientInformation
     // to store these fields from ApiVersionsRequest v5
     val clientInstanceId = org.apache.kafka.common.Uuid.ZERO_UUID  // TODO: Get from context
-    val clientMetadata = new java.util.TreeMap[String, String]()  // TODO: Get from context
 
     val clientProfile = new org.apache.kafka.server.policy.ClientProfile(
       clientInstanceId,
       clientInfo.softwareName,
       clientInfo.softwareVersion,
-      clientMetadata
+      clientInfo.metadata
     )
 
     val (errorCode, errorMessage, crc, configKeys) = clientConfigPolicy match {
@@ -3062,19 +3061,21 @@ class KafkaApis(val requestChannel: RequestChannel,
           try {
             // TODO: Extract clientInstanceId and clientMetadata from ApiVersionsRequest context
             val clientInstanceId = org.apache.kafka.common.Uuid.ZERO_UUID  // TODO: Get from context
-            val clientMetadata = new java.util.TreeMap[String, String]()  // TODO: Get from context
 
             val clientProfile = new org.apache.kafka.server.policy.ClientProfile(
               clientInstanceId,
               clientInfo.softwareName,
               clientInfo.softwareVersion,
-              clientMetadata
+              clientInfo.metadata
             )
+
+            val sortedConfigs = new util.TreeMap[String, String]()
+            sortedConfigs.putAll(configs asJava)
 
             val timestamp = time.milliseconds()
             val pushConfigData = new org.apache.kafka.server.policy.ClientPushConfigData(
               clientProfile,
-              configs.asJava,
+              sortedConfigs,
               timestamp
             )
 

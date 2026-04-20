@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
@@ -74,13 +75,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 
@@ -578,9 +573,15 @@ public class SaslServerAuthenticator implements Authenticator {
         else if (!apiVersionsRequest.isValid())
             sendKafkaResponse(context, apiVersionsRequest.getErrorResponse(0, Errors.INVALID_REQUEST.exception()));
         else {
+            SortedMap<String, String> metadata = new TreeMap<>();
+
+            for (ApiVersionsRequestData.ClientMetadataEntry clientMetadataEntry : apiVersionsRequest.data().clientMetadata()) {
+                metadata.put(clientMetadataEntry.key(), clientMetadataEntry.value());
+            }
+
             metadataRegistry.registerClientInformation(new ClientInformation(apiVersionsRequest.data().clientSoftwareName(),
                 apiVersionsRequest.data().clientSoftwareVersion(),
-                null));
+                metadata));
             sendKafkaResponse(context, apiVersionSupplier.apply(apiVersionsRequest.version()));
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }

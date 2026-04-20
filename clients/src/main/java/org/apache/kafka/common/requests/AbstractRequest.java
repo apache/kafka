@@ -312,8 +312,12 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ControllerRegistrationRequest.parse(readable, apiVersion);
             case GET_TELEMETRY_SUBSCRIPTIONS:
                 return GetTelemetrySubscriptionsRequest.parse(readable, apiVersion);
+            case GET_CONFIG_PROFILE_KEYS:
+                return GetConfigProfileKeysRequest.parse(readable, apiVersion);
             case PUSH_TELEMETRY:
                 return PushTelemetryRequest.parse(readable, apiVersion);
+            case PUSH_CONFIG:
+                return PushConfigRequest.parse(readable, apiVersion);
             case ASSIGN_REPLICAS_TO_DIRS:
                 return AssignReplicasToDirsRequest.parse(readable, apiVersion);
             case LIST_CONFIG_RESOURCES:

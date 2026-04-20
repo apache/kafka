@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.SortedMap;
 
 /**
  * Default implementation of ClientConfigsSender that manages the config push handshake.
@@ -62,14 +63,16 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
     }
 
     private final AbstractConfig clientConfig;
+    private final SortedMap<String, String> metadata;
     private volatile Uuid clientInstanceId = Uuid.ZERO_UUID;
     private volatile State state = State.NOT_STARTED;
     private volatile long configurationProfileCrc = -1L;
     private volatile int configMaxBytes = 0;
     private volatile List<String> requestedConfigKeys = new ArrayList<>();
 
-    public DefaultClientConfigsSender(AbstractConfig clientConfig) {
+    public DefaultClientConfigsSender(AbstractConfig clientConfig, String role) {
         this.clientConfig = clientConfig;
+        this.metadata = ClientUtils.clientMetadata(clientConfig, role);
     }
 
     @Override
@@ -205,6 +208,10 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
         return clientInstanceId;
     }
 
+    public SortedMap<String, String> metadata() {
+        return metadata;
+    }
+
     private GetConfigProfileKeysRequest.Builder createGetConfigProfileKeysRequest() {
         // No fields in GetConfigProfileKeysRequest - client profile comes from ApiVersionsRequest context
         GetConfigProfileKeysRequestData requestData = new GetConfigProfileKeysRequestData();
@@ -249,5 +256,18 @@ public class DefaultClientConfigsSender implements ClientConfigsSender {
         return state == State.PUSH_IN_PROGRESS &&
             configurationProfileCrc != -1L &&
             !requestedConfigKeys.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+        return "DefaultClientConfigsSender{" +
+                "clientConfig=" + clientConfig +
+                ", metadata=" + metadata +
+                ", clientInstanceId=" + clientInstanceId +
+                ", state=" + state +
+                ", configurationProfileCrc=" + configurationProfileCrc +
+                ", configMaxBytes=" + configMaxBytes +
+                ", requestedConfigKeys=" + requestedConfigKeys +
+                '}';
     }
 }

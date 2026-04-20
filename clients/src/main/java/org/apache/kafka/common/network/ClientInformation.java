@@ -18,19 +18,21 @@
 package org.apache.kafka.common.network;
 
 import java.util.Objects;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 public class ClientInformation {
     public static final String UNKNOWN_NAME_OR_VERSION = "unknown";
-    public static final ClientInformation EMPTY = new ClientInformation(UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION);
+    public static final ClientInformation EMPTY = new ClientInformation(UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION, new TreeMap<>());
 
     private final String softwareName;
     private final String softwareVersion;
-    private final String softwareRole;
+    private final SortedMap<String, String> metadata;
 
-    public ClientInformation(String softwareName, String softwareVersion, String softwareRole) {
+    public ClientInformation(String softwareName, String softwareVersion, SortedMap<String, String> metadata) {
         this.softwareName = softwareName.isEmpty() ? UNKNOWN_NAME_OR_VERSION : softwareName;
         this.softwareVersion = softwareVersion.isEmpty() ? UNKNOWN_NAME_OR_VERSION : softwareVersion;
-        this.softwareRole = (softwareRole == null || softwareRole.isEmpty()) ? UNKNOWN_NAME_OR_VERSION : softwareRole;
+        this.metadata = (metadata == null || metadata.isEmpty()) ? new TreeMap<>() : metadata;
     }
 
     public String softwareName() {
@@ -41,20 +43,20 @@ public class ClientInformation {
         return this.softwareVersion;
     }
 
-    public String softwareRole() {
-        return this.softwareRole;
+    public SortedMap<String, String> metadata() {
+        return this.metadata;
     }
 
     @Override
     public String toString() {
         return "ClientInformation(softwareName=" + softwareName +
             ", softwareVersion=" + softwareVersion +
-            ", softwareRole=" + softwareRole + ")";
+            ", metadata=" + metadata + ")";
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(softwareName, softwareVersion, softwareRole);
+        return Objects.hash(softwareName, softwareVersion, metadata);
     }
 
     @Override
@@ -68,6 +70,6 @@ public class ClientInformation {
         ClientInformation other = (ClientInformation) o;
         return other.softwareName.equals(softwareName) &&
             other.softwareVersion.equals(softwareVersion) &&
-            other.softwareRole.equals(softwareRole);
+            other.metadata.equals(metadata);
     }
 }

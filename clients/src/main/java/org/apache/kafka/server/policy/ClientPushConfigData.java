@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.server.policy;
 
-import java.util.Map;
 import java.util.Objects;
+import java.util.SortedMap;
 
 /**
  * Immutable class containing the PushConfig API data.
@@ -27,7 +27,7 @@ import java.util.Objects;
  */
 public final class ClientPushConfigData {
     private final ClientProfile clientProfile;
-    private final Map<String, String> configs;
+    private final SortedMap<String, String> configs;
     private final long timestamp;
 
     /**
@@ -39,7 +39,7 @@ public final class ClientPushConfigData {
      */
     public ClientPushConfigData(
         ClientProfile clientProfile,
-        Map<String, String> configs,
+        SortedMap<String, String> configs,
         long timestamp
     ) {
         this.clientProfile = clientProfile;
@@ -51,7 +51,7 @@ public final class ClientPushConfigData {
         return clientProfile;
     }
 
-    public Map<String, String> configs() {
+    public SortedMap<String, String> configs() {
         return configs;
     }
 

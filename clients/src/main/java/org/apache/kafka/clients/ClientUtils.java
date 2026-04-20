@@ -38,9 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -48,6 +46,7 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
 public final class ClientUtils {
+    public static final String CLIENT_METADATA_ROLE_KEY = "apache-kafka-java.role";
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
 
     private ClientUtils() {
@@ -148,6 +147,40 @@ public final class ClientUtils {
             }
         }
         return preferredAddresses;
+    }
+
+    static SortedMap<String, String> clientMetadata(AbstractConfig config, String role) {
+        SortedMap<String, String> clientMetadata = new TreeMap<>();
+        List<String> clientMetadataEntries = config.getList(CommonClientConfigs.CLIENT_METADATA_CONFIG);
+
+        for (String entry : clientMetadataEntries) {
+            int equals = entry.indexOf('=');
+
+            if (equals == -1) {
+                log.warn("Ignoring entry {} of {}", entry, CommonClientConfigs.CLIENT_METADATA_CONFIG);
+                continue;
+            }
+
+            String key = entry.substring(0, equals);
+            String value = entry.substring(equals + 1);
+            clientMetadata.put(key, value);
+        }
+
+        if (clientMetadata.containsKey(CLIENT_METADATA_ROLE_KEY)) {
+            throw new ConfigException(
+                String.format(
+                    "%s must not be part of the %s configuration value",
+                    CLIENT_METADATA_ROLE_KEY,
+                    CommonClientConfigs.CLIENT_METADATA_CONFIG
+                )
+            );
+        }
+
+        clientMetadata.put(CLIENT_METADATA_ROLE_KEY, role);
+
+        log.debug("clientMetadata - clientMetadata: {}", clientMetadata);
+
+        return clientMetadata;
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,

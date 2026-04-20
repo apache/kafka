@@ -177,7 +177,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
-            this.clientConfigsSender = CommonClientConfigs.configsSender(config);
+            this.clientConfigsSender = CommonClientConfigs.configsSender(config, "consumer");
             this.metrics = createMetrics(config, time, reporters);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -306,6 +306,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientTelemetryReporter = Optional.empty();
+        this.clientConfigsSender = CommonClientConfigs.configsSender(config, "consumer");
 
         int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
         int rebalanceTimeoutMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);

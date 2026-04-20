@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.*;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -284,6 +281,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final TransactionManager transactionManager;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
+    private Optional<ClientConfigsSender> clientConfigsSender = Optional.empty();
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -377,6 +375,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
+            this.clientConfigsSender = CommonClientConfigs.configsSender(config, "producer");
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
@@ -537,7 +536,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata,
                 throttleTimeSensor,
                 clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                null);
+                clientConfigsSender.orElse(null));
 
         short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,
