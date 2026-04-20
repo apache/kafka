@@ -860,6 +860,9 @@ public class PlaintextConsumerTest {
         try (var consumer = cluster.consumer(consumerConfig)) {
             // consumer some messages, and we can list the internal topic __consumer_offsets
             consumer.subscribe(List.of(topic1));
+            // Poll multiple times to ensure DNS resolution and metadata are fully loaded
+            // With deferred DNS resolution (KIP-909), initial polls may be needed to complete bootstrap
+            consumer.poll(Duration.ofMillis(100));
             consumer.poll(Duration.ofMillis(100));
             var topics = consumer.listTopics();
             assertNotNull(topics);
