@@ -40,8 +40,6 @@ import org.apache.kafka.common.message.AbortedTxn
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
-import java.nio.ByteBuffer
-import java.nio.charset.Charset
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -310,15 +308,4 @@ object LogTestUtils {
     }
   }
 
-  /**
-   * Translate the given buffer into a string
-   *
-   * @param buffer The buffer to translate
-   * @param encoding The encoding to use in translating bytes to characters
-   */
-  def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
-    val bytes = new Array[Byte](buffer.remaining)
-    buffer.get(bytes)
-    new String(bytes, encoding)
-  }
 }

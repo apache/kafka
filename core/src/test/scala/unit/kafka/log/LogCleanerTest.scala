@@ -1229,7 +1229,7 @@ class LogCleanerTest extends Logging {
 
     // the last (active) segment has just one message
 
-    def distinctValuesBySegment = log.logSegments.asScala.map(s => s.log.records.asScala.map(record => LogTestUtils.readString(record.value)).toSet.size).toSeq
+    def distinctValuesBySegment = log.logSegments.asScala.map(s => s.log.records.asScala.map(record => StandardCharsets.UTF_8.decode(record.value()).toString).toSet.size).toSeq
 
     val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
     assertTrue(distinctValuesBySegment.reverse.tail.forall(_ > N),
@@ -1927,7 +1927,7 @@ class LogCleanerTest extends Logging {
 
     for (segment <- log.logSegments.asScala; batch <- segment.log.batches.asScala; record <- batch.asScala) {
       assertTrue(record.hasMagic(batch.magic))
-      val value = LogTestUtils.readString(record.value).toLong
+      val value = StandardCharsets.UTF_8.decode(record.value()).toString.toLong
       assertEquals(record.offset, value)
     }
   }
@@ -1947,7 +1947,7 @@ class LogCleanerTest extends Logging {
 
     for (logEntry <- records.records.asScala) {
       val offset = logEntry.offset
-      val value = LogTestUtils.readString(logEntry.value).toLong
+      val value = StandardCharsets.UTF_8.decode(logEntry.value()).toString.toLong
       assertEquals(offset, value)
     }
   }
