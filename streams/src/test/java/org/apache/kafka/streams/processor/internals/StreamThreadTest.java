@@ -4207,14 +4207,14 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(properties);
         thread = createStreamThread(CLIENT_ID, config);
 
-        assertThat(thread.taskManager().waitForFutureTimeoutMs(), equalTo(10_000L));
+        assertThat(thread.taskManager().waitForFutureTimeoutMs(), equalTo(15_000L));
     }
 
     @Test
     public void shouldSetDefaultWaitForFutureTimeoutFromDefaultMaxPollIntervalMs() {
         thread = createStreamThread(CLIENT_ID, false);
 
-        assertThat(thread.taskManager().waitForFutureTimeoutMs(), equalTo(150_000L));
+        assertThat(thread.taskManager().waitForFutureTimeoutMs(), equalTo(225_000L));
     }
 
     private boolean runUntilTimeoutOrCondition(final Runnable action, final TestCondition testCondition) throws Exception {

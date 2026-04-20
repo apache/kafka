@@ -111,6 +111,7 @@ public class TaskManager {
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
     private final long waitForFutureTimeoutMs;
+    
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final ProcessId processId,

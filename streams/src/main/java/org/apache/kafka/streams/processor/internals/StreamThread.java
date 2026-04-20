@@ -500,7 +500,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             stateDirectory,
             stateUpdater,
             schedulingTaskManager,
-            maxPollIntervalMs / 2
+            maxPollIntervalMs * 3 / 4
         );
         referenceContainer.taskManager = taskManager;
 
