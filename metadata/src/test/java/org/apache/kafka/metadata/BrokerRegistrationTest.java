@@ -40,6 +40,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
@@ -259,5 +260,16 @@ public class BrokerRegistrationTest {
                 )).
                 build();
         assertFalse(registration.hasUncordonedDirs());
+
+        assertThrows(IllegalArgumentException.class, () ->
+                new BrokerRegistration.Builder().
+                        setDirectories(List.of(
+                                Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+                        )).
+                        setCordonedDirectories(List.of(
+                                Uuid.fromString("dir2G6EtuR1OTdAzFw1AFQ")
+                        )).
+                        build()
+        );
     }
 }

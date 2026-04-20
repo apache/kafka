@@ -198,6 +198,11 @@ public class BrokerRegistration {
         directories.sort(Uuid::compareTo);
         this.directories = Collections.unmodifiableList(directories);
         this.cordonedDirectories = Collections.unmodifiableList(cordonedDirectories);
+        List<Uuid> unknownDirectories = new ArrayList<>(cordonedDirectories);
+        unknownDirectories.removeAll(directories);
+        if (!unknownDirectories.isEmpty()) {
+            throw new IllegalArgumentException("All cordoned directories must be existing directories. Found unknown directories: " + unknownDirectories);
+        }
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {

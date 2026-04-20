@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -148,10 +149,10 @@ public class BrokerLifecycleManager {
     private final Map<Uuid, Boolean> offlineDirs = new HashMap<>();
 
     /**
-     * Map of cordoned log directories. The value is true if the directory is cordoned.
+     * Set of cordoned log directories.
      * This variable can only be read or written from the event queue thread.
      */
-    private final Map<Uuid, Boolean> cordonedLogDirs = new HashMap<>();
+    private final Set<Uuid> cordonedLogDirs = new HashSet<>();
 
     /**
      * True if we sent an event queue to the active controller requesting controlled
@@ -442,9 +443,7 @@ public class BrokerLifecycleManager {
 
         @Override
         public void run() {
-            for (Uuid dir : dirs) {
-                cordonedLogDirs.put(dir, true);
-            }
+            cordonedLogDirs.addAll(dirs);
             if (registered) {
                 scheduleNextCommunicationImmediately();
             }
@@ -461,9 +460,7 @@ public class BrokerLifecycleManager {
 
         @Override
         public void run() {
-            for (Uuid dir : dirs) {
-                cordonedLogDirs.put(dir, false);
-            }
+            cordonedLogDirs.removeAll(dirs);
             if (registered) {
                 scheduleNextCommunicationImmediately();
             }
@@ -527,7 +524,7 @@ public class BrokerLifecycleManager {
             .setRack(rack.orElse(null))
             .setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L))
             .setLogDirs(sortedLogDirs)
-            .setCordonedLogDirs(cordonedLogDirs.entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey).toList());
+            .setCordonedLogDirs(List.copyOf(cordonedLogDirs));
         if (logger.isDebugEnabled()) {
             logger.debug("Sending broker registration {}", data);
         }
@@ -606,7 +603,7 @@ public class BrokerLifecycleManager {
             .setWantFence(!readyToUnfence)
             .setWantShutDown(state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
             .setOfflineLogDirs(new ArrayList<>(offlineDirs.keySet()))
-            .setCordonedLogDirs(cordonedLogDirs.entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey).toList());
+            .setCordonedLogDirs(List.copyOf(cordonedLogDirs));
         if (logger.isTraceEnabled()) {
             logger.trace("Sending broker heartbeat {}", data);
         }

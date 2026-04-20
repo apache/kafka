@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -230,6 +231,15 @@ public class CordonedLogDirsIntegrationTest {
             // After uncordoning the log dir, we can move the replica on it
             setCordonedLogDirs(admin, List.of(), BROKER_0);
             admin.alterReplicaLogDirs(Map.of(replica, otherLogDir)).all().get();
+        }
+    }
+
+    @ClusterTest()
+    public void testCordonUnknownLogDirs() {
+        try (Admin admin = clusterInstance.admin()) {
+            Throwable t = assertThrows(ExecutionException.class,
+                    () -> admin.incrementalAlterConfigs(cordonedDirsConfig("/unknown/log/dir", BROKER_0)).all().get());
+            assertInstanceOf(InvalidRequestException.class, t.getCause());
         }
     }
 
