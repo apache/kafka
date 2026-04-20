@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -976,7 +975,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             this.clientInstanceId = clientInstanceId;
             this.subscriptionId = subscriptionId;
             this.pushIntervalMs = pushIntervalMs;
-            this.acceptedCompressionTypes = Collections.unmodifiableList(acceptedCompressionTypes);
+            this.acceptedCompressionTypes = List.copyOf(acceptedCompressionTypes);
             this.deltaTemporality = deltaTemporality;
             this.selector = selector;
         }
