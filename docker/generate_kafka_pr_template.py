@@ -50,7 +50,7 @@ def dir_commit(directory):
     return file_commit(*files_to_check)
 
 
-# Split the version string into parts and convert them to integers for version comparision
+# Split the version string into parts and convert them to integers for version comparison
 def get_version_parts(version):
     return tuple(int(part) for part in version.name.split('.'))
 
