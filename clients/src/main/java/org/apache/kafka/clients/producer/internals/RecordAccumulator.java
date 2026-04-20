@@ -89,6 +89,7 @@ public class RecordAccumulator {
     private final Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
+    private final SenderMetricsRegistry metricsRegistry;
 
     /**
      * Create a new record accumulator
@@ -145,6 +146,7 @@ public class RecordAccumulator {
         this.time = time;
         nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
+        this.metricsRegistry = new SenderMetricsRegistry(metrics);
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -210,6 +212,36 @@ public class RecordAccumulator {
             metrics.metricName("buffer-available-bytes", metricGrpName,
                 "The total amount of buffer memory that is not being used (either unallocated or in the free list)."),
             (config, now) -> free.availableMemory());
+
+        metrics.addMetric(
+            metricsRegistry.adaptivePartitionSwitchesTotal,
+            (config, now) -> {
+                long sum = 0;
+                for (TopicInfo topicInfo : topicInfoMap.values()) {
+                    sum += topicInfo.builtInPartitioner.adaptivePartitionSwitches();
+                }
+                return (double) sum;
+            });
+
+        metrics.addMetric(
+            metricsRegistry.partitionLoadSkew,
+            (config, now) -> {
+                double maxSkew = 0.0;
+                for (TopicInfo topicInfo : topicInfoMap.values()) {
+                    maxSkew = Math.max(maxSkew, topicInfo.builtInPartitioner.loadSkew());
+                }
+                return maxSkew;
+            });
+
+        metrics.addMetric(
+            metricsRegistry.adaptivePartitionUnavailableTotal,
+            (config, now) -> {
+                long sum = 0;
+                for (TopicInfo topicInfo : topicInfoMap.values()) {
+                    sum += topicInfo.builtInPartitioner.partitionsExcludedDueToLatency();
+                }
+                return (double) sum;
+            });
     }
 
     private void setPartition(AppendCallbacks callbacks, int partition) {
@@ -282,7 +314,17 @@ public class RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> {
+            BuiltInPartitioner partitioner = createBuiltInPartitioner(logContext, k, batchSize);
+            Map<String, String> topicTags = Collections.singletonMap("topic", k);
+            metricsRegistry.addMetric(metricsRegistry.topicAdaptivePartitionSwitchesTotal(topicTags),
+                (config, now) -> (double) partitioner.adaptivePartitionSwitches());
+            metricsRegistry.addMetric(metricsRegistry.topicPartitionLoadSkew(topicTags),
+                (config, now) -> partitioner.loadSkew());
+            metricsRegistry.addMetric(metricsRegistry.topicAdaptivePartitionUnavailableTotal(topicTags),
+                (config, now) -> (double) partitioner.partitionsExcludedDueToLatency());
+            return new TopicInfo(partitioner);
+        });
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -727,8 +769,10 @@ public class RecordAccumulator {
                         // so we read ready time first to avoid accidentally marking partition
                         // unavailable if we read while the metrics are being updated.
                         long readyTimeMs = nodeLatencyStats.readyTimeMs;
-                        if (readyTimeMs - nodeLatencyStats.drainTimeMs > partitionAvailabilityTimeoutMs)
+                        if (readyTimeMs - nodeLatencyStats.drainTimeMs > partitionAvailabilityTimeoutMs) {
                             --queueSizesIndex;
+                            topicInfo.builtInPartitioner.recordPartitionExclusion();
+                        }
                     }
                 }
 
