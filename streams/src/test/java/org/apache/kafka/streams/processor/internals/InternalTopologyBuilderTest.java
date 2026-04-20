@@ -619,22 +619,6 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldAllowAddingSameStoreBuilderMultipleTimes() {
-        builder.setApplicationId("X");
-        builder.addSource(null, "source-1", null, null, null, "topic-1");
-
-        builder.addStateStore(storeFactory);
-        builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-1", storeFactory.storeName());
-
-        builder.addStateStore(storeFactory);
-        builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-2", storeFactory.storeName());
-
-        assertEquals(1, builder.buildTopology().stateStores().size());
-    }
-
-    @Test
     public void testTopicGroups() {
         builder.setApplicationId("X");
         builder.addInternalTopic("topic-1x", InternalTopicProperties.empty());
@@ -709,6 +693,21 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
+    }
+
+    @Test
+    public void shouldUniteProcessorsWhenAddStateStoreCalledMultipleTimesWithSameBuilder() {
+        final StoreBuilder<?> sharedStore = new MockKeyValueStoreBuilder("shared-store", false);
+
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
+        builder.addStateStore(sharedStore, "processor-1");
+
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-2");
+        builder.addStateStore(sharedStore, "processor-2");
+
+        assertEquals(1, builder.describe().subtopologies().size());
     }
 
     @Test
