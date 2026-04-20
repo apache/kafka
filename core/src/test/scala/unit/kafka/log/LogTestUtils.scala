@@ -40,6 +40,7 @@ import org.apache.kafka.common.message.AbortedTxn
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
+import java.nio.charset.StandardCharsets
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -201,7 +202,7 @@ object LogTestUtils {
     for (logSegment <- log.logSegments.asScala;
          batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
-      yield readString(record.key).toLong
+      yield StandardCharsets.UTF_8.decode(record.key()).toString.toLong
   }
 
   def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long], brokerTopicStats: BrokerTopicStats, time: Time, scheduler: Scheduler): UnifiedLog = {
