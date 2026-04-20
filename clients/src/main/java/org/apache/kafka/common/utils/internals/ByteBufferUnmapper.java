@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.utils.internals;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;

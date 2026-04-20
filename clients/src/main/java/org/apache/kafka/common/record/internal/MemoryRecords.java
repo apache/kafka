@@ -27,10 +27,10 @@ import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter.BatchRetentionResult;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.IOException;

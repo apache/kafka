@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.admin.ConfigCommand;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
 import org.apache.kafka.clients.admin.AlterClientQuotasResult;
@@ -74,7 +72,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -137,76 +134,76 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldParseArgumentsForClientsEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForClientsEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "clients");
     }
 
     @Test
-    public void shouldParseArgumentsForClientsEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForClientsEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "clients");
     }
 
     @Test
-    public void shouldParseArgumentsForUsersEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForUsersEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "users");
     }
 
     @Test
-    public void shouldParseArgumentsForUsersEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForUsersEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "users");
     }
 
     @Test
-    public void shouldParseArgumentsForTopicsEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForTopicsEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "topics");
     }
 
     @Test
-    public void shouldParseArgumentsForTopicsEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForTopicsEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "topics");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "brokers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokersEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForBrokersEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "brokers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "broker-loggers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "broker-loggers");
     }
 
     @Test
-    public void shouldParseArgumentsForIpEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForIpEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "ips");
     }
 
     @Test
-    public void shouldParseArgumentsForIpEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForIpEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "ips");
     }
 
     @Test
-    public void shouldParseArgumentsForGroupEntityTypeWithBrokerBootstrap() {
+    public void shouldParseArgumentsForGroupEntityTypeWithBrokerBootstrap() throws IOException {
         testArgumentParse(BROKER_BOOTSTRAP, "groups");
     }
 
     @Test
-    public void shouldParseArgumentsForGroupEntityTypeWithControllerBootstrap() {
+    public void shouldParseArgumentsForGroupEntityTypeWithControllerBootstrap() throws IOException {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "groups");
     }
 
-    public void testArgumentParse(List<String> bootstrapArguments, String entityType) {
+    public void testArgumentParse(List<String> bootstrapArguments, String entityType) throws IOException {
         String shortFlag = "--" + entityType.substring(0, entityType.length() - 1);
         String connectOpts1 = bootstrapArguments.get(0);
         String connectOpts2 = bootstrapArguments.get(1);
@@ -285,9 +282,9 @@ public class ConfigCommandTest {
         assertEquals("b", addedProps.getProperty("a"));
         assertEquals("d", addedProps.getProperty("c"));
 
-        Seq<String> deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts);
+        List<String> deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts);
         assertEquals(1, deletedProps.size());
-        assertEquals("a", deletedProps.apply(0));
+        assertEquals("a", deletedProps.get(0));
 
         createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
@@ -429,8 +426,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String... args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of(connectOpts.get(0), connectOpts.get(1), "--describe"), List.of(args)));
         createOpts.checkArgs();
-        assertEquals(seq(expectedTypes), createOpts.entityTypes().toSeq());
-        assertEquals(seq(expectedNames), createOpts.entityNames().toSeq());
+        assertEquals(expectedTypes, createOpts.entityTypes());
+        assertEquals(expectedNames, createOpts.entityNames());
     }
 
     @Test
@@ -539,7 +536,7 @@ public class ConfigCommandTest {
         verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, List.of("--delete-config", "some_config=10")));
     }
 
-    private void verifyDescribeQuotas(List<String> describeArgs, ClientQuotaFilter expectedFilter) {
+    private void verifyDescribeQuotas(List<String> describeArgs, ClientQuotaFilter expectedFilter) throws Exception {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
             "--describe"), describeArgs));
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
@@ -563,7 +560,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testDescribeIpConfigs() {
+    public void testDescribeIpConfigs() throws Exception {
         String entityType = ClientQuotaEntity.IP;
         String knownHost = "1.2.3.4";
         ClientQuotaFilter defaultIpFilter = ClientQuotaFilter.containsOnly(List.of(ClientQuotaFilterComponent.ofDefaultEntity(entityType)));
@@ -577,7 +574,7 @@ public class ConfigCommandTest {
     }
 
     public void verifyAlterQuotas(List<String> alterOpts, ClientQuotaEntity expectedAlterEntity,
-                                  Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) {
+                                  Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) throws Exception {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
 
@@ -629,7 +626,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testAlterIpConfig() {
+    public void testAlterIpConfig() throws Exception {
         Entry<List<String>, Map<String, String>> singleIpArgsAndEntity = argsAndExpectedEntity(Optional.of("1.2.3.4"), ClientQuotaEntity.IP);
         Entry<List<String>, Map<String, String>> defaultIpArgsAndEntity = argsAndExpectedEntity(Optional.of(""), ClientQuotaEntity.IP);
 
@@ -663,7 +660,7 @@ public class ConfigCommandTest {
             addAlterationOps);
     }
 
-    private void verifyAlterUserClientQuotas(String user, String client) {
+    private void verifyAlterUserClientQuotas(String user, String client) throws Exception {
         List<String> alterArgs = List.of("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
             "--delete-config", "request_percentage");
         Map<String, Double> propsToDelete = Map.of("request_percentage", 50.0);
@@ -685,7 +682,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAddClientConfig() {
+    public void shouldAddClientConfig() throws Exception {
         verifyAlterUserClientQuotas("test-user-1", "test-client-1");
         verifyAlterUserClientQuotas("test-user-2", "");
         verifyAlterUserClientQuotas("test-user-3", null);
@@ -750,7 +747,7 @@ public class ConfigCommandTest {
         verifyAlterCommandFails(expectedErrorMessage, concat(secondUserEntityOpts, addQuotaOpts, userEntityOpts, deleteScramOpts));
     }
 
-    public void verifyUserScramCredentialsNotDescribed(List<String> requestOpts) {
+    public void verifyUserScramCredentialsNotDescribed(List<String> requestOpts) throws Exception {
         // User SCRAM credentials should not be described when specifying
         // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
@@ -774,7 +771,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer() {
+    public void shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer() throws Throwable {
         String expectedMsg = "The use of --entity-default or --user-defaults is not allowed with User SCRAM Credentials using --bootstrap-server.";
         List<String> defaultUserOpt = List.of("--user-defaults");
         List<String> verboseDefaultUserOpts = List.of("--entity-type", "users", "--entity-default");
@@ -788,7 +785,7 @@ public class ConfigCommandTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldAlterTopicConfig(boolean file) {
+    public void shouldAlterTopicConfig(boolean file) throws Exception {
         String filePath = "";
         Map<String, String> addedConfigs = new HashMap<>();
         addedConfigs.put("delete.retention.ms", "1000000");
@@ -869,7 +866,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldDescribeConfigSynonyms() {
+    public void shouldDescribeConfigSynonyms() throws Exception {
         String resourceName = "my-topic";
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", resourceName,
@@ -897,7 +894,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAddBrokerLoggerConfig() {
+    public void shouldAddBrokerLoggerConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
             new ConfigEntry("kafka.log.LogCleaner", "INFO"),
@@ -941,7 +938,7 @@ public class ConfigCommandTest {
     @Test
     public void testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
+            "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
             "--entity-default",
             "--describe"
         };
@@ -952,7 +949,7 @@ public class ConfigCommandTest {
     @Test
     public void testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
+            "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
             "--entity-default",
             "--alter",
             "--add-config", "kafka.log.LogCleaner=DEBUG"
@@ -972,18 +969,18 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAddDefaultBrokerDynamicConfig() {
+    public void shouldAddDefaultBrokerDynamicConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerConfig(node, "", List.of("--entity-default"));
     }
 
     @Test
-    public void shouldAddBrokerDynamicConfig() {
+    public void shouldAddBrokerDynamicConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerConfig(node, "1", List.of("--entity-name", "1"));
     }
 
-    public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) {
+    public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) throws Exception {
         String[] optsList = toArray(List.of("--bootstrap-server", "localhost:9092",
             "--entity-type", "brokers",
             "--alter",
@@ -1036,7 +1033,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldDescribeConfigBrokerWithoutEntityName() {
+    public void shouldDescribeConfigBrokerWithoutEntityName() throws Exception {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "brokers",
             "--describe"));
@@ -1071,9 +1068,9 @@ public class ConfigCommandTest {
     }
 
     private void verifyAlterBrokerLoggerConfig(Node node, String resourceName, String entityName,
-                                               List<ConfigEntry> describeConfigEntries) {
+                                               List<ConfigEntry> describeConfigEntries) throws Exception {
         String[] optsList = toArray("--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
+            "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
             "--alter",
             "--entity-name", entityName,
             "--add-config", "kafka.log.LogCleaner=DEBUG",
@@ -1193,7 +1190,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAlterClientMetricsConfig() {
+    public void shouldAlterClientMetricsConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterClientMetricsConfig(node, "1", List.of("--entity-type", "client-metrics", "--entity-name", "1"));
 
@@ -1202,7 +1199,7 @@ public class ConfigCommandTest {
         verifyAlterClientMetricsConfig(node, "1", List.of("--client-metrics", "1"));
     }
 
-    private void verifyAlterClientMetricsConfig(Node node, String resourceName, List<String> resourceOpts) {
+    private void verifyAlterClientMetricsConfig(Node node, String resourceName, List<String> resourceOpts) throws Exception {
         List<String> optsList = concat(List.of("--bootstrap-server", "localhost:9092",
             "--alter",
             "--delete-config", "interval.ms",
@@ -1263,7 +1260,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldDescribeClientMetricsConfigWithoutEntityName() {
+    public void shouldDescribeClientMetricsConfigWithoutEntityName() throws Exception {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "client-metrics",
             "--describe"));
@@ -1305,7 +1302,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAlterGroupConfig() {
+    public void shouldAlterGroupConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterGroupConfig(node, "group", List.of("--entity-type", "groups", "--entity-name", "group"));
 
@@ -1313,7 +1310,7 @@ public class ConfigCommandTest {
         verifyAlterGroupConfig(node, "groupUsingAlias", List.of("--group", "groupUsingAlias"));
     }
 
-    private void verifyAlterGroupConfig(Node node, String resourceName, List<String> resourceOpts) {
+    private void verifyAlterGroupConfig(Node node, String resourceName, List<String> resourceOpts) throws Exception {
         List<String> optsList = concat(List.of("--bootstrap-server", "localhost:9092",
             "--alter",
             "--delete-config", "consumer.session.timeout.ms",
@@ -1372,7 +1369,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldDescribeGroupConfigWithoutEntityName() {
+    public void shouldDescribeGroupConfigWithoutEntityName() throws Exception {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "groups",
             "--describe"));
@@ -1380,7 +1377,7 @@ public class ConfigCommandTest {
         verifyDescribeGroupConfig(describeOpts, "group");
     }
 
-    private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) {
+    private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) throws Exception {
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
         ConfigEntry configEntry = new ConfigEntry("consumer.heartbeat.interval.ms", "6000");
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
@@ -1418,7 +1415,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testDescribeGroupConfigOldBroker() {
+    public void testDescribeGroupConfigOldBroker() throws Exception {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "groups",
             "--describe"));
@@ -1445,7 +1442,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testDescribeGroupConfigOldBrokerNotAuthorized() {
+    public void testDescribeGroupConfigOldBrokerNotAuthorized() throws Exception {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "groups",
             "--describe"));
@@ -1552,9 +1549,5 @@ public class ConfigCommandTest {
         public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
             return mock(ListConfigResourcesResult.class);
         }
-    }
-
-    private <T> Seq<T> seq(Collection<T> seq) {
-        return CollectionConverters.asScala(seq).toSeq();
     }
 }

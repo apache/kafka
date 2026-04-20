@@ -18,10 +18,10 @@ package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.internal.CompressionType;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.ChunkedBytesStream;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
 
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
