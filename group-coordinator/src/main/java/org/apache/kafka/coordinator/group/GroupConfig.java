@@ -153,7 +153,7 @@ public final class GroupConfig extends AbstractConfig {
 
     private final Optional<Integer> streamsTaskOffsetIntervalMs;
 
-    public final Optional<Integer> streamsNumWarmupReplicas;
+    private final Optional<Integer> streamsNumWarmupReplicas;
 
     private final Optional<IsolationLevel> shareIsolationLevel;
 
