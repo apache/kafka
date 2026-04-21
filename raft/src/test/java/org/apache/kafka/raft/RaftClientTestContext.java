@@ -1944,6 +1944,35 @@ public final class RaftClientTestContext {
         );
     }
 
+    FetchResponseData fetchResponseWithLeaderEndpoints(
+        int epoch,
+        int leaderId,
+        Endpoints leaderEndpoints,
+        Records records,
+        long highWatermark,
+        Errors error
+    ) {
+        return RaftUtil.singletonFetchResponse(
+            channel.listenerName(),
+            fetchRpcVersion(),
+            metadataPartition,
+            metadataTopicId,
+            Errors.NONE,
+            leaderId,
+            leaderEndpoints,
+            partitionData -> {
+                partitionData
+                    .setRecords(records)
+                    .setErrorCode(error.code())
+                    .setHighWatermark(highWatermark);
+
+                partitionData.currentLeader()
+                    .setLeaderEpoch(epoch)
+                    .setLeaderId(leaderId);
+            }
+        );
+    }
+
     FetchResponseData divergingFetchResponse(
         int epoch,
         int leaderId,

@@ -36,16 +36,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class KafkaRaftClientFetchTest {
@@ -764,5 +768,89 @@ public final class KafkaRaftClientFetchTest {
             assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
             assertEquals(localLogEndOffset, partitionResponse.highWatermark());
         }
+    }
+
+    @Test
+    void testObserverEventuallyFetchesFromBootstrapServersWhenLeaderAdvertisesWrongEndpoints() throws Exception {
+        final var epoch = 2;
+        final var local = KafkaRaftClientTest.replicaKey(
+            KafkaRaftClientTest.randomReplicaId(),
+            true
+        );
+        final var leader = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
+        final var otherVoter = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
+
+        final var voters = VoterSet.fromMap(
+            Map.of(
+                leader.id(), VoterSetTest.voterNode(leader),
+                otherVoter.id(), VoterSetTest.voterNode(otherVoter)
+            )
+        );
+
+        final var context = new RaftClientTestContext.Builder(
+            local.id(),
+            local.directoryId().get()
+        )
+            .withStaticVoters(voters)
+            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .build();
+
+        // The observer initially fetches from the bootstrap servers, and the leader advertises non-routable endpoints.
+        final var bootstrapPorts = Set.of(
+            RaftClientTestContext.mockAddress(leader.id()).getPort(),
+            RaftClientTestContext.mockAddress(otherVoter.id()).getPort()
+        );
+        context.pollUntilRequest();
+        final var firstFetch = context.assertSentFetchRequest();
+        assertEquals(RaftClientTestContext.mockAddress(leader.id()).getHostName(), firstFetch.destination().host());
+        assertTrue(bootstrapPorts.contains(firstFetch.destination().port()));
+        final var nonRoutableLeaderEndpoints = Endpoints.fromInetSocketAddresses(
+            Map.of(
+                MockNetworkChannel.LISTENER_NAME,
+                InetSocketAddress.createUnresolved("non-routable", 0)
+            )
+        );
+
+        context.deliverResponse(
+            firstFetch.correlationId(),
+            firstFetch.destination(),
+            context.fetchResponseWithLeaderEndpoints(
+                epoch,
+                leader.id(),
+                nonRoutableLeaderEndpoints,
+                MemoryRecords.EMPTY,
+                0L,
+                Errors.NONE
+            )
+        );
+
+        // Subsequent fetch from the observer is sent to the non-routable endpoint
+        context.pollUntilRequest();
+        final var nonRoutableFetch = context.assertSentFetchRequest();
+        assertEquals(leader.id(), nonRoutableFetch.destination().id());
+        assertEquals("non-routable", nonRoutableFetch.destination().host());
+
+        // Return a BROKER_NOT_AVAILABLE error, and then advance time past the fetch timeout,
+        // which should cause the observer to fetch from the bootstrap servers on the next fetch.
+
+        // The fetch timeout is much greater than the request manager's configured backoff, so the
+        // current unreachable connection will no longer be backing off when the next fetch is sent.
+        context.deliverResponse(
+            nonRoutableFetch.correlationId(),
+            nonRoutableFetch.destination(),
+            RaftUtil.errorResponse(
+                ApiKeys.FETCH,
+                Errors.BROKER_NOT_AVAILABLE
+            )
+        );
+        context.client.poll();
+        context.time.sleep(context.fetchTimeoutMs + 1);
+
+        // Check that the next fetch does not go to the non-routable endpoint
+        context.pollUntilRequest();
+        final var nextFetch = context.assertSentFetchRequest();
+        assertNotEquals("non-routable", nextFetch.destination().host());
+        assertEquals(RaftClientTestContext.mockAddress(leader.id()).getHostName(), nextFetch.destination().host());
+        assertTrue(bootstrapPorts.contains(nextFetch.destination().port()));
     }
 }

@@ -3390,6 +3390,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
             return sendResult.timeToWaitMs();
+        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
+            return maybeSendFetchToAnyBootstrap(currentTimeMs);
         } else {
             return maybeSendFetchToBestNode(state, currentTimeMs);
         }
