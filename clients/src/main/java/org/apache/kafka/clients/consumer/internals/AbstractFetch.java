@@ -34,11 +34,11 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;

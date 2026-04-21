@@ -76,12 +76,12 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 

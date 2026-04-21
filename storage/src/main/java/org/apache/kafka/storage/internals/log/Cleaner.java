@@ -26,10 +26,10 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.storage.internals.utils.Throttler;
 
 import org.slf4j.Logger;

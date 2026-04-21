@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 

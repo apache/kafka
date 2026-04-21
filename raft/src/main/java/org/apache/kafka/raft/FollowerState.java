@@ -18,9 +18,9 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import org.slf4j.Logger;

@@ -29,7 +29,7 @@ import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
