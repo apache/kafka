@@ -2890,19 +2890,19 @@ public class ReplicationControlManagerTest {
                 Map.of(new ConfigResource(ConfigResource.Type.BROKER, ""),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true).records());
+                true, false).records());
         } else if (uncleanConfig.equals("dynamic_node")) {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(new ConfigResource(ConfigResource.Type.BROKER, "0"),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true).records());
+                true, false).records());
         } else if (uncleanConfig.equals("dynamic_topic")) {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(new ConfigResource(ConfigResource.Type.TOPIC, "foo"),
                     Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
-                true).records());
+                true, false).records());
         }
         ControllerResult<Boolean> balanceResult = replication.maybeElectUncleanLeaders();
         assertFalse(balanceResult.response());
@@ -3419,7 +3419,7 @@ public class ReplicationControlManagerTest {
         Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
         ctx.registerBrokersWithDirs(b1, List.of(dir1b1, dir2b1));
         ctx.unfenceBrokers(b1);
-        assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
+        assertEquals(null, ctx.clusterControl.registration(b1).cordonedDirectories());
 
         // Cordon dir1b1, this will emit a BrokerRegistrationChangeRecord
         List<ApiMessageAndVersion> records = new ArrayList<>();
@@ -3490,13 +3490,13 @@ public class ReplicationControlManagerTest {
             ctx.replay(ctx.configurationControl.legacyAlterConfigs(
                 Map.of(configResource,
                     Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")),
-                false).records());
+                false, false).records());
         } else {
             ctx.replay(ctx.configurationControl.incrementalAlterConfigs(
                 Map.of(configResource,
                     Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "1"))),
-                false).records());
+                false, false).records());
         }
         assertArrayEquals(new int[]{}, ctx.replicationControl.getPartition(fooId, 0).elr);
         if (clusterLevel) {

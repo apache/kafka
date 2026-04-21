@@ -4323,7 +4323,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
       util.Map.of(controllerNodeResource,
         util.Map.of(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
-          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
+          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false, false).get()
     ensureConsistentKRaftMetadata()
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(

@@ -209,11 +209,14 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.isUnfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
 
+        Uuid dir1 = Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ");
+        Uuid dir2 = Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg");
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerEpoch(100).
             setBrokerId(0).
             setRack(null).
-            setFenced(false);
+            setFenced(false).
+            setLogDirs(List.of(dir1, dir2));
         brokerRecord.endPoints().add(new BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
             setPort((short) 9092).
@@ -241,6 +244,37 @@ public class ClusterControlManagerTest {
 
         assertTrue(clusterControl.isUnfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
+
+        // By default cordonedLogDirs is null and means no changes
+        assertEquals(null, clusterControl.registration(0).cordonedDirectories());
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100);
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(null, clusterControl.registration(0).cordonedDirectories());
+
+        // Set a cordoned log dir
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100).
+            setCordonedLogDirs(List.of(dir1));
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(List.of(dir1), clusterControl.registration(0).cordonedDirectories());
+
+        // null cordonedLogDirs so not changes
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100);
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(List.of(dir1), clusterControl.registration(0).cordonedDirectories());
+
+        // Clears the cordoned dir
+        registrationChangeRecord = new BrokerRegistrationChangeRecord().
+            setBrokerId(0).
+            setBrokerEpoch(100).
+            setCordonedLogDirs(List.of());
+        clusterControl.replay(registrationChangeRecord);
+        assertEquals(List.of(), clusterControl.registration(0).cordonedDirectories());
     }
 
     @Test

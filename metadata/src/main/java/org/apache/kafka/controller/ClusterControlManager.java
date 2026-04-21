@@ -432,9 +432,6 @@ public class ClusterControlManager {
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             record.setLogDirs(request.logDirs());
         }
-        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
-            record.setCordonedLogDirs(request.cordonedLogDirs());
-        }
         if (!request.incarnationId().equals(prevIncarnationId)) {
             int prevNumRecords = records.size();
             boolean isCleanShutdown = cleanShutdownDetectionEnabled ?

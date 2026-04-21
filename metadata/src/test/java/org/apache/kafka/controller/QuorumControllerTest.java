@@ -200,14 +200,14 @@ public class QuorumControllerTest {
     private void testConfigurationOperations(QuorumController controller) throws Throwable {
         assertEquals(Map.of(BROKER0, ApiError.NONE),
             controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Map.of(
-                BROKER0, Map.of("baz", entry(SET, "123"))), true).get());
+                BROKER0, Map.of("baz", entry(SET, "123"))), true, false).get());
         assertEquals(Map.of(BROKER0,
             new ResultOrError<>(Map.of())),
             controller.describeConfigs(ANONYMOUS_CONTEXT, Map.of(
                 BROKER0, List.of())).get());
         assertEquals(Map.of(BROKER0, ApiError.NONE),
             controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Map.of(
-                BROKER0, Map.of("baz", entry(SET, "123"))), false).get());
+                BROKER0, Map.of("baz", entry(SET, "123"))), false, false).get());
         assertEquals(Map.of(BROKER0, new ResultOrError<>(Map.of("baz", "123"))),
             controller.describeConfigs(ANONYMOUS_CONTEXT, Map.of(
                 BROKER0, List.of())).get());
@@ -245,7 +245,7 @@ public class QuorumControllerTest {
         clientEnv.raftClients().forEach(m -> m.setMaxReadOffset(1L));
         CompletableFuture<Map<ConfigResource, ApiError>> future1 =
             controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Map.of(
-                BROKER0, Map.of("baz", entry(SET, "123"))), false);
+                BROKER0, Map.of("baz", entry(SET, "123"))), false, false);
         assertFalse(future1.isDone());
         assertEquals(Map.of(BROKER0,
             new ResultOrError<>(Map.of())),
@@ -708,7 +708,7 @@ public class QuorumControllerTest {
             // First, decrease the min ISR config to 1. This should clear the ELR fields.
             ControllerResult<Map<ConfigResource, ApiError>> result = active.configurationControl().incrementalAlterConfigs(toMap(
                     entry(new ConfigResource(TOPIC, "foo"), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
-                true);
+                true, false);
             assertEquals(2, result.records().size(), result.records().toString());
             RecordTestUtils.replayAll(active.configurationControl(), List.of(result.records().get(0)));
             RecordTestUtils.replayAll(active.replicationControl(), List.of(result.records().get(1)));
@@ -724,7 +724,7 @@ public class QuorumControllerTest {
 
             result = active.configurationControl().incrementalAlterConfigs(toMap(
                     entry(new ConfigResource(BROKER, ""), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
-                true);
+                true, false);
             assertEquals(2, result.records().size(), result.records().toString());
             RecordTestUtils.replayAll(active.configurationControl(), List.of(result.records().get(0)));
             RecordTestUtils.replayAll(active.replicationControl(), List.of(result.records().get(1)));

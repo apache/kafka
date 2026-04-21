@@ -355,7 +355,8 @@ public class MockController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> configChanges,
-        boolean validateOnly
+        boolean validateOnly,
+        boolean forwarded
     ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<AlterConfigOp.OpType, String>>> entry :
@@ -417,7 +418,8 @@ public class MockController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Map<String, String>> newConfigs,
-        boolean validateOnly
+        boolean validateOnly,
+        boolean forwarded
     ) {
         Map<ConfigResource, ApiError> results = new HashMap<>();
         if (!validateOnly) {

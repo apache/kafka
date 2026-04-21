@@ -534,7 +534,7 @@ class ControllerApis(
         iterator.remove()
       }
     }
-    controller.legacyAlterConfigs(context, configChanges, alterConfigsRequest.data.validateOnly)
+    controller.legacyAlterConfigs(context, configChanges, alterConfigsRequest.data.validateOnly, request.isForwarded)
       .handle[Unit] { (controllerResults, exception) =>
         if (exception != null) {
           requestHelper.handleError(request, exception)
@@ -773,7 +773,7 @@ class ControllerApis(
         iterator.remove()
       }
     }
-    controller.incrementalAlterConfigs(context, configChanges, alterConfigsRequest.data.validateOnly)
+    controller.incrementalAlterConfigs(context, configChanges, alterConfigsRequest.data.validateOnly, request.isForwarded)
       .handle[Unit] { (controllerResults, exception) =>
         if (exception != null) {
           requestHelper.handleError(request, exception)

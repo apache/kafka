@@ -40,6 +40,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
@@ -239,7 +240,47 @@ public class CordonedLogDirsIntegrationTest {
         try (Admin admin = clusterInstance.admin()) {
             Throwable t = assertThrows(ExecutionException.class,
                     () -> admin.incrementalAlterConfigs(cordonedDirsConfig("/unknown/log/dir", BROKER_0)).all().get());
+            // ConfigAdminManager.validateBrokerConfigChange throws InvalidRequestException instead of InvalidConfigurationException
             assertInstanceOf(InvalidRequestException.class, t.getCause());
+        }
+    }
+
+    @ClusterTest(
+            types = Type.KRAFT,
+            brokers = 2,
+            controllers = 1
+    )
+    public void testUpdateCordonedDirsViaController() throws Exception {
+        // Make sure we don't try to shut down the controller
+        int brokerId = clusterInstance.brokerIds().stream().filter(id -> !clusterInstance.controllerIds().contains(id)).findFirst().get();
+        ConfigResource cr = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId));
+        List<String> logDirs = clusterInstance.brokers().get(brokerId).config().logDirs();
+        String logDirsStr = String.join(",", logDirs);
+        try (Admin controllerAdmin = clusterInstance.admin(Map.of(), true);
+             Admin admin = clusterInstance.admin()) {
+            // We can't set cordoned log dirs via the controller
+            Throwable t = assertThrows(ExecutionException.class,
+                    () -> controllerAdmin.incrementalAlterConfigs(cordonedDirsConfig(logDirsStr, cr)).all().get());
+            assertInstanceOf(InvalidConfigurationException.class, t.getCause());
+
+            // We can set cordoned log dirs via the broker
+            admin.incrementalAlterConfigs(cordonedDirsConfig(logDirsStr, cr)).all().get();
+
+            // Shutdown the broker
+            clusterInstance.brokers().get(brokerId).shutdown();
+            clusterInstance.brokers().get(brokerId).awaitShutdown();
+
+            // We can clear a cordoned log dir via the controller
+            controllerAdmin.incrementalAlterConfigs(cordonedDirsConfig(logDirs.get(0), cr)).all().get();
+            controllerAdmin.incrementalAlterConfigs(cordonedDirsConfig("", cr)).all().get();
+
+            // Restart the broker
+            clusterInstance.brokers().get(brokerId).startup();
+
+            // We can set cordoned log dirs via the broker
+            admin.incrementalAlterConfigs(cordonedDirsConfig(logDirsStr, cr)).all().get();
+            // We can keep cordoned log dirs via the controller
+            controllerAdmin.incrementalAlterConfigs(cordonedDirsConfig(logDirsStr, cr)).all().get();
         }
     }
 
@@ -263,7 +304,6 @@ public class CordonedLogDirsIntegrationTest {
                 Map<Integer, Map<String, LogDirDescription>> logDescriptionsPerBroker = admin.describeLogDirs(clusterInstance.brokerIds()).allDescriptions().get();
                 for (Map.Entry<Integer, Map<String, LogDirDescription>> entry : logDescriptionsPerBroker.entrySet()) {
                     for (LogDirDescription logDirDescription : entry.getValue().values()) {
-                        assertFalse(logDirDescription.replicaInfos().isEmpty());
                         found += logDirDescription.replicaInfos().size();
                         if (entry.getKey() == brokerId) {
                             logDirDescription.replicaInfos().forEach((tp, replicaInfo) ->

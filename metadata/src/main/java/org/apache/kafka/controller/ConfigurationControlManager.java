@@ -45,6 +45,7 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -54,6 +55,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
@@ -67,6 +69,7 @@ import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_
 
 public class ConfigurationControlManager {
     public static final ConfigResource DEFAULT_NODE = new ConfigResource(Type.BROKER, "");
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
@@ -210,7 +213,8 @@ public class ConfigurationControlManager {
      */
     ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-        boolean newlyCreatedResource
+        boolean newlyCreatedResource,
+        boolean forwarded
     ) {
         List<ApiMessageAndVersion> outputRecords =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -220,7 +224,8 @@ public class ConfigurationControlManager {
             ApiError apiError = incrementalAlterConfigResource(resourceEntry.getKey(),
                 resourceEntry.getValue(),
                 newlyCreatedResource,
-                outputRecords);
+                outputRecords,
+                forwarded);
             outputResults.put(resourceEntry.getKey(), apiError);
         }
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
@@ -259,7 +264,8 @@ public class ConfigurationControlManager {
         ApiError apiError = incrementalAlterConfigResource(configResource,
             keyToOps,
             newlyCreatedResource,
-            outputRecords);
+            outputRecords,
+            false);
 
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, apiError);
@@ -269,7 +275,8 @@ public class ConfigurationControlManager {
         ConfigResource configResource,
         Map<String, Entry<OpType, String>> keysToOps,
         boolean newlyCreatedResource,
-        List<ApiMessageAndVersion> outputRecords
+        List<ApiMessageAndVersion> outputRecords,
+        boolean forwarded
     ) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
@@ -321,7 +328,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource);
+        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             return error;
         }
@@ -333,7 +340,8 @@ public class ConfigurationControlManager {
         ConfigResource configResource,
         List<ApiMessageAndVersion> recordsExplicitlyAltered,
         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
-        boolean newlyCreatedResource
+        boolean newlyCreatedResource,
+        boolean forwarded
     ) {
         Map<String, String> allConfigs = new HashMap<>();
         Map<String, String> existingConfigsMap = new HashMap<>();
@@ -349,7 +357,7 @@ public class ConfigurationControlManager {
                 return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
             } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
                 return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
-            } else if (isCordonedLogDirsDisallowed(configRecord)) {
+            } else if (isCordonedLogDirsDisallowed(configRecord, existingConfigsMap.get(CORDONED_LOG_DIRS_CONFIG), forwarded)) {
                 return DISALLOWED_CORDONED_LOG_DIRS_ERROR;
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
@@ -368,7 +376,7 @@ public class ConfigurationControlManager {
                 return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
             } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
                 return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
-            } else if (isCordonedLogDirsDisallowed(configRecord)) {
+            } else if (isCordonedLogDirsDisallowed(configRecord, existingConfigsMap.get(CORDONED_LOG_DIRS_CONFIG), forwarded)) {
                 return DISALLOWED_CORDONED_LOG_DIRS_ERROR;
             } else {
                 allConfigs.remove(configRecord.name());
@@ -422,12 +430,24 @@ public class ConfigurationControlManager {
         return false;
     }
 
-    boolean isCordonedLogDirsDisallowed(ConfigRecord configRecord) {
-        if (configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) &&
-                configRecord.resourceType() == BROKER.id()) {
-            return !featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported();
+    // Prevent updating cordoned.log.dirs
+    // if the feature is not supported or
+    // if the request is not forwarded and the new value adds directories not already cordoned
+    boolean isCordonedLogDirsDisallowed(ConfigRecord configRecord, String currentValue, boolean forwarded) {
+        if (!configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) || configRecord.resourceType() != BROKER.id()) {
+            return false;
         }
-        return false;
+        if (!featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
+            return true;
+        }
+        if (forwarded || configRecord.value() == null || configRecord.value().isEmpty()) {
+            return false;
+        }
+        List<String> currentDirs = currentValue == null
+            ? List.of()
+            : Arrays.asList(COMMA_WITH_WHITESPACE.split(currentValue.trim(), -1));
+        List<String> newDirs = Arrays.asList(COMMA_WITH_WHITESPACE.split(configRecord.value().trim(), -1));
+        return !currentDirs.containsAll(newDirs);
     }
 
     boolean isDisallowedClusterMinIsrTransition(ConfigRecord configRecord) {
@@ -453,7 +473,8 @@ public class ConfigurationControlManager {
      */
     ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         Map<ConfigResource, Map<String, String>> newConfigs,
-        boolean newlyCreatedResource
+        boolean newlyCreatedResource,
+        boolean forwarded
     ) {
         List<ApiMessageAndVersion> outputRecords =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -464,7 +485,7 @@ public class ConfigurationControlManager {
                 resourceEntry.getValue(),
                 newlyCreatedResource,
                 outputRecords,
-                outputResults);
+                outputResults, forwarded);
         }
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, outputResults);
@@ -474,7 +495,8 @@ public class ConfigurationControlManager {
                                            Map<String, String> newConfigs,
                                            boolean newlyCreatedResource,
                                            List<ApiMessageAndVersion> outputRecords,
-                                           Map<ConfigResource, ApiError> outputResults) {
+                                           Map<ConfigResource, ApiError> outputResults,
+                                           boolean forwarded) {
         List<ApiMessageAndVersion> recordsExplicitlyAltered = new ArrayList<>();
         Map<String, String> currentConfigs = configData.get(configResource);
         if (currentConfigs == null) {
@@ -503,7 +525,7 @@ public class ConfigurationControlManager {
                     setValue(null), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource);
+        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;

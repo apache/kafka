@@ -46,6 +46,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,6 +66,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.controller.ConfigurationControlManager.DISALLOWED_CORDONED_LOG_DIRS_ERROR;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
+import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -168,7 +170,7 @@ public class ConfigurationControlManagerTest {
                 entry("baz", entry(SUBTRACT, "abc")),
                 entry("quux", entry(SET, "abc")))),
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
-                true);
+                true, false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -185,7 +187,7 @@ public class ConfigurationControlManagerTest {
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("abc", entry(DELETE, "xyz"))))),
-                true));
+                true, false));
     }
 
     @Test
@@ -230,7 +232,7 @@ public class ConfigurationControlManagerTest {
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
-            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true);
+            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true, false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -241,7 +243,7 @@ public class ConfigurationControlManagerTest {
 
         // It's ok for the appended value to be already present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true, false);
         assertEquals(
             ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -249,7 +251,7 @@ public class ConfigurationControlManagerTest {
         RecordTestUtils.replayAll(manager, result.records());
 
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true, false);
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
@@ -259,7 +261,7 @@ public class ConfigurationControlManagerTest {
 
         // It's ok for the deleted value not to be present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true, false);
         assertEquals(
             ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -282,7 +284,7 @@ public class ConfigurationControlManagerTest {
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
                 entry("quux", entry(SET, "1")))),
                 entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
-                false);
+                false, false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
@@ -366,7 +368,7 @@ public class ConfigurationControlManagerTest {
                         entry("quux", entry(SET, "456")),
                         entry("broker.config.to.remove", entry(DELETE, null))
                 ))),
-                true));
+                true, false));
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
@@ -408,7 +410,7 @@ public class ConfigurationControlManagerTest {
                 expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
-                true));
+                true, false));
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
@@ -422,7 +424,7 @@ public class ConfigurationControlManagerTest {
                 CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
-                true));
+                true, false));
     }
 
     @ParameterizedTest
@@ -574,7 +576,7 @@ public class ConfigurationControlManagerTest {
                 build();
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
-                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
+                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, ""))),
                 true);
 
         assertEquals(enabled ? ApiError.NONE : DISALLOWED_CORDONED_LOG_DIRS_ERROR, result.response());
@@ -645,5 +647,44 @@ public class ConfigurationControlManagerTest {
         assertTrue(configs.containsKey("abc"));
         assertTrue(configs.containsKey("def"));
         assertFalse(configs.containsKey("invalid.config"), "Invalid config should not be in configData");
+    }
+
+    @Test
+    public void testIsCordonedLogDirsDisallowed() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+                setKafkaConfigSchema(SCHEMA).
+                setFeatureControl(createFeatureControlManager()).
+                build();
+
+        ConfigRecord cr = new ConfigRecord().
+                setResourceType(BROKER.id()).setResourceName("0").
+                setName(CORDONED_LOG_DIRS_CONFIG);
+
+        // If the new value is null or empty string, the update is always allowed
+        for (String value : Arrays.asList("", null)) {
+            cr.setValue(value);
+            assertFalse(manager.isCordonedLogDirsDisallowed(cr, null, false));
+            assertFalse(manager.isCordonedLogDirsDisallowed(cr, null, true));
+            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "some/value", false));
+            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "some/value", true));
+        }
+
+        // If the new value is equal or a subset of the current value, the update is always allowed
+        cr.setValue("dir1");
+        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1", false));
+        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1", true));
+        for (String value : Arrays.asList("dir1", "dir2", "dir1,dir2", "dir2,dir1")) {
+            cr.setValue(value);
+            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1,dir2", false));
+            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1,dir2", true));
+        }
+
+        // If the new value is different, the update is only allowed if the request is forwarded
+        assertTrue(manager.isCordonedLogDirsDisallowed(cr, "dir2", false));
+        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir2", true));
+        assertTrue(manager.isCordonedLogDirsDisallowed(cr, "", false));
+        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "", true));
+        assertTrue(manager.isCordonedLogDirsDisallowed(cr, null, false));
+        assertFalse(manager.isCordonedLogDirsDisallowed(cr, null, true));
     }
 }

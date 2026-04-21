@@ -1546,6 +1546,11 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> records
     ) {
         BrokerRegistration registration = clusterControl.registration(brokerId);
+        List<Uuid> unknownDirectories = new ArrayList<>(cordonedDirs);
+        unknownDirectories.removeAll(registration.directories());
+        if (!unknownDirectories.isEmpty()) {
+            throw new InvalidRequestException("All cordoned directories must be existing directories. Found unknown directories: " + unknownDirectories);
+        }
         boolean cordonedDirsChanged = registration.cordonedDirChanged(cordonedDirs);
         if (cordonedDirsChanged) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
@@ -1694,7 +1699,7 @@ public class ReplicationControlManager {
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
-        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
+        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported() && request.cordonedLogDirs() != null) {
             handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;

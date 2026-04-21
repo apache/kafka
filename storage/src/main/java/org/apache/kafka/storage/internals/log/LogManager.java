@@ -282,8 +282,8 @@ public class LogManager {
         return cleaner;
     }
 
-    public Set<Uuid> directoryIdsSet() {
-        return Set.copyOf(directoryIds.values());
+    public Map<String, Uuid> directoryIds() {
+        return Map.copyOf(directoryIds);
     }
 
     private Set<File> offlineLogDirs() {
