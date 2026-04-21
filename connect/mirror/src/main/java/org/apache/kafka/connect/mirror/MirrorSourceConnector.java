@@ -722,7 +722,6 @@ public class MirrorSourceConnector extends SourceConnector {
             return false;
         }
 
-        // Fix for https://issues.apache.org/jira/browse/KAFKA-9914
         final boolean condition;
         if (replicationPolicy instanceof IdentityReplicationPolicy) {
             condition = source.equals(sourceAndTarget.target());
