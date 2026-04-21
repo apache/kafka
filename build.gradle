@@ -29,17 +29,17 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.53.0'
+  id 'com.github.ben-manes.versions' version '0.54.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.8'
+  id 'org.owasp.dependencycheck' version '12.2.1'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.4.4' apply false
+  id "com.github.spotbugs" version '6.5.1' apply false
   id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '9.3.1' apply false
+  id 'com.gradleup.shadow' version '9.4.1' apply false
   id 'com.diffplug.spotless' version "8.4.0"
 }
 

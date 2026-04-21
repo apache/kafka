@@ -56,7 +56,7 @@ versions += [
   bcpkix: "1.83",
   caffeine: "3.2.0",
   bndlib: "7.1.0",
-  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.2.0",
+  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.3.1",
   commonsValidator: "1.10.1",
   classgraph: "4.8.179",
   gradle: "9.4.1",
@@ -70,7 +70,7 @@ versions += [
   // (e.g. Logger.atDebug()) in production code, as Kafka uses SLF4J 1.7.x.
   jetty: "12.0.34",
   jersey: "3.1.10",
-  jgit: "7.5.0.202512021534-r",
+  jgit: "7.6.0.202603022253-r",
   jline: "3.30.4",
   jmh: "1.37",
   hamcrest: "3.0",
@@ -82,7 +82,7 @@ versions += [
   jfreechart: "1.5.6",
   jopt: "5.0.4",
   jose4j: "0.9.6",
-  junit: "5.13.1",
+  junit: "5.14.3",
   jqwik: "1.9.2",
   kafka_0110: "0.11.0.3",
   kafka_10: "1.0.2",
@@ -125,19 +125,19 @@ versions += [
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
-  scalafmt: "3.10.2",
-  scoverage: "2.5.1",
+  scalafmt: "3.10.3",
+  scoverage: "2.5.2",
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
   testcontainers: "1.20.2",
   testcontainersKeycloak: "3.5.1",
-  mockOAuth2Server: "2.2.1",
-  zinc: "1.11.0",
+  mockOAuth2Server: "2.3.0",
+  zinc: "1.12.0",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.6-10",
-  junitPlatform: "1.13.1",
+  junitPlatform: "1.14.3",
   hdrHistogram: "2.2.2",
   hash4j: "0.22.0"
 ]
