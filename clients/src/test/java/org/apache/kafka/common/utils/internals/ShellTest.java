@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
-
-import org.apache.kafka.common.utils.internals.Shell;
+package org.apache.kafka.common.utils.internals;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
