@@ -1464,6 +1464,7 @@ public class StoreChangelogReaderTest {
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        adminClient.updateMaxTimestamps(Collections.singletonMap(tp, time.milliseconds()));
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
@@ -1504,6 +1505,7 @@ public class StoreChangelogReaderTest {
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        adminClient.updateMaxTimestamps(Collections.singletonMap(tp, time.milliseconds()));
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);

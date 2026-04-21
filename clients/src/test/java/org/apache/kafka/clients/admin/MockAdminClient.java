@@ -89,6 +89,7 @@ public class MockAdminClient extends AdminClient {
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
     private final Map<TopicPartition, Long> committedOffsets;
+    private final Map<TopicPartition, Long> maxTimestamps;
     private final boolean usingRaftController;
     private final Map<String, Short> featureLevels;
     private final Map<String, Short> minSupportedFeatureLevels;
@@ -269,6 +270,7 @@ public class MockAdminClient extends AdminClient {
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
         this.committedOffsets = new HashMap<>();
+        this.maxTimestamps = new HashMap<>();
         this.usingRaftController = usingRaftController;
         this.featureLevels = new HashMap<>(featureLevels);
         this.minSupportedFeatureLevels = new HashMap<>(minSupportedFeatureLevels);
@@ -1231,7 +1233,11 @@ public class MockAdminClient extends AdminClient {
                 throw new UnsupportedOperationException("Not implement yet");
             else if (spec instanceof OffsetSpec.EarliestSpec)
                 future.complete(new ListOffsetsResult.ListOffsetsResultInfo(beginningOffsets.get(tp), -1, Optional.empty()));
-            else
+            else if (spec instanceof OffsetSpec.MaxTimestampSpec) {
+                final long offset = endOffsets.getOrDefault(tp, 0L);
+                final long timestamp = maxTimestamps.getOrDefault(tp, -1L);
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(offset, timestamp, Optional.empty()));
+            } else
                 future.complete(new ListOffsetsResult.ListOffsetsResultInfo(endOffsets.get(tp), -1, Optional.empty()));
 
             futures.put(tp, future);
@@ -1489,6 +1495,10 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         endOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void updateMaxTimestamps(final Map<TopicPartition, Long> newTimestamps) {
+        maxTimestamps.putAll(newTimestamps);
     }
 
     public synchronized void updateConsumerGroupOffsets(final Map<TopicPartition, Long> newOffsets) {

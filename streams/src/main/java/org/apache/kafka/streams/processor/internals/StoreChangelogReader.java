@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -971,7 +972,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                    final Set<ChangelogMetadata> newPartitionsToRestore) {
         // separate those who do not have the current offset loaded from checkpoint
         final Set<TopicPartition> newPartitionsWithoutStartOffset = new HashSet<>();
-        final Map<TopicPartition, Long> newPartitionsWithTimestampSeek = new HashMap<>();
+        final Map<TopicPartition, Long> newPartitionsWithRetentionPeriod = new HashMap<>();
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -989,12 +990,8 @@ public class StoreChangelogReader implements ChangelogReader {
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
-                final long seekTimestamp = retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE
-                    ? time.milliseconds() - retentionPeriod : -1L;
-                if (seekTimestamp > 0) {
-                    newPartitionsWithTimestampSeek.put(partition, seekTimestamp);
-                    log.debug("Start restoring windowed changelog partition {} from timestamp {} to end offset {}.",
-                        partition, seekTimestamp, recordEndOffset(endOffset));
+                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
+                    newPartitionsWithRetentionPeriod.put(partition, retentionPeriod);
                 } else {
                     log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
                         "since we cannot find current offset.", partition, recordEndOffset(endOffset));
@@ -1002,6 +999,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
             }
         }
+
+        final Map<TopicPartition, Long> newPartitionsWithTimestampSeek =
+            computeTimestampSeekFromStreamTime(newPartitionsWithRetentionPeriod, newPartitionsWithoutStartOffset);
 
         seekToTimestampOrBeginning(newPartitionsWithTimestampSeek, newPartitionsWithoutStartOffset);
 
@@ -1043,6 +1043,56 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
             }
         }
+    }
+
+    private Map<TopicPartition, Long> computeTimestampSeekFromStreamTime(
+            final Map<TopicPartition, Long> partitionsWithRetentionPeriod,
+            final Set<TopicPartition> fallbackPartitions) {
+        if (partitionsWithRetentionPeriod.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        final Map<TopicPartition, Long> result = new HashMap<>();
+        try {
+            final ListOffsetsOptions options = new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED);
+            final Map<TopicPartition, OffsetSpec> offsetSpecs = partitionsWithRetentionPeriod.keySet().stream()
+                .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.maxTimestamp()));
+            final Map<TopicPartition, ListOffsetsResultInfo> maxTimestamps =
+                adminClient.listOffsets(offsetSpecs, options).all().get();
+
+            for (final Map.Entry<TopicPartition, Long> entry : partitionsWithRetentionPeriod.entrySet()) {
+                final TopicPartition partition = entry.getKey();
+                final long retentionPeriod = entry.getValue();
+                final ListOffsetsResultInfo info = maxTimestamps.get(partition);
+
+                if (info != null && info.timestamp() > 0) {
+                    final long seekTimestamp = info.timestamp() - retentionPeriod;
+                    if (seekTimestamp > 0) {
+                        result.put(partition, seekTimestamp);
+                        log.debug("Start restoring windowed changelog partition {} from stream-time-based timestamp {} " +
+                            "(maxStreamTime={}, retention={}).", partition, seekTimestamp, info.timestamp(), retentionPeriod);
+                    } else {
+                        log.debug("Start restoring changelog partition {} from the beginning (computed seek timestamp " +
+                            "is non-positive).", partition);
+                        fallbackPartitions.add(partition);
+                    }
+                } else {
+                    log.debug("Start restoring changelog partition {} from the beginning (no max timestamp available).",
+                        partition);
+                    fallbackPartitions.add(partition);
+                }
+            }
+        } catch (final TimeoutException | InterruptedException | ExecutionException e) {
+            log.debug("Could not fetch max timestamps for {}, falling back to seek-to-beginning",
+                partitionsWithRetentionPeriod.keySet(), e);
+            fallbackPartitions.addAll(partitionsWithRetentionPeriod.keySet());
+        } catch (final KafkaException e) {
+            log.warn("Failed to fetch max timestamps for {}, falling back to seek-to-beginning",
+                partitionsWithRetentionPeriod.keySet(), e);
+            fallbackPartitions.addAll(partitionsWithRetentionPeriod.keySet());
+        }
+
+        return result;
     }
 
     private void seekToTimestampOrBeginning(final Map<TopicPartition, Long> partitionsWithTimestampSeek,
