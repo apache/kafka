@@ -71,4 +71,36 @@ public class OffsetExpirationConditionImplTest {
         currentTimestamp = 999L;
         assertFalse(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
     }
+
+    @Test
+    public void testIsOffsetExpiredWithInfiniteRetention() {
+        long currentTimestamp = Long.MAX_VALUE;
+        long commitTimestamp = 0L;
+        long infiniteRetentionMs = -1L;
+
+        OffsetExpirationConditionImpl condition = new OffsetExpirationConditionImpl(__ -> commitTimestamp);
+
+        // With an explicit expire timestamp, infinite retention still prevents expiration.
+        OffsetAndMetadata offsetWithExpireTimestamp = new OffsetAndMetadata(
+            100,
+            OptionalInt.of(1),
+            "metadata",
+            commitTimestamp,
+            OptionalLong.of(0L),
+            Uuid.ZERO_UUID
+        );
+        assertFalse(condition.isOffsetExpired(offsetWithExpireTimestamp, currentTimestamp, infiniteRetentionMs));
+
+        // Without an explicit expire timestamp, infinite retention prevents expiration even when
+        // an arbitrarily large amount of time has elapsed since the commit.
+        OffsetAndMetadata offsetWithoutExpireTimestamp = new OffsetAndMetadata(
+            100,
+            OptionalInt.of(1),
+            "metadata",
+            commitTimestamp,
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
+        );
+        assertFalse(condition.isOffsetExpired(offsetWithoutExpireTimestamp, currentTimestamp, infiniteRetentionMs));
+    }
 }

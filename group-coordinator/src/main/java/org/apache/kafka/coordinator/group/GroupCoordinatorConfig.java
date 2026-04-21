@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
@@ -146,7 +147,8 @@ public class GroupCoordinatorConfig {
         "2) this retention period has elapsed since the last time an offset is committed for the partition and the group is no longer subscribed to the corresponding topic. " +
         "For standalone consumers (using manual assignment), offsets will be expired after this retention period has elapsed since the time of last commit. " +
         "Note that when a group is deleted via the delete-group request, its committed offsets will also be deleted without extra retention period; " +
-        "also when a topic is deleted via the delete-topic request, upon propagated metadata update any group's committed offsets for that topic will also be deleted without extra retention period.";
+        "also when a topic is deleted via the delete-topic request, upon propagated metadata update any group's committed offsets for that topic will also be deleted without extra retention period. " +
+        "Set to -1 for infinite retention, meaning committed offsets are never expired due to inactivity.";
 
     public static final String OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG = "offsets.retention.check.interval.ms";
     public static final long OFFSETS_RETENTION_CHECK_INTERVAL_MS_DEFAULT = 600000L;
@@ -381,6 +383,19 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT = 15000;
     public static final String STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
 
+    /**
+     * Validator for {@link #OFFSETS_RETENTION_MINUTES_CONFIG}: accepts -1 (infinite retention)
+     * or any positive integer. Zero is excluded because it would cause all offsets to expire
+     * on the very next cleanup cycle, which is never useful in practice.
+     */
+    public static final ConfigDef.Validator OFFSETS_RETENTION_MINUTES_VALIDATOR = (name, value) -> {
+        int intValue = (Integer) value;
+        if (intValue != -1 && intValue < 1) {
+            throw new ConfigException(name, value,
+                "Must be -1 (infinite retention) or a positive integer representing minutes.");
+        }
+    };
+
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
         CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
@@ -410,7 +425,7 @@ public class GroupCoordinatorConfig {
 
         // Offset configs
         .define(OFFSET_METADATA_MAX_SIZE_CONFIG, INT, OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, OFFSET_METADATA_MAX_SIZE_DOC)
-        .define(OFFSETS_RETENTION_MINUTES_CONFIG, INT, OFFSETS_RETENTION_MINUTES_DEFAULT, atLeast(1), HIGH, OFFSETS_RETENTION_MINUTES_DOC)
+        .define(OFFSETS_RETENTION_MINUTES_CONFIG, INT, OFFSETS_RETENTION_MINUTES_DEFAULT, OFFSETS_RETENTION_MINUTES_VALIDATOR, HIGH, OFFSETS_RETENTION_MINUTES_DOC)
         .define(OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, LONG, OFFSETS_RETENTION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), HIGH, OFFSETS_RETENTION_CHECK_INTERVAL_MS_DOC)
 
         // Classic group configs
@@ -549,7 +564,8 @@ public class GroupCoordinatorConfig {
         this.classicGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
         this.classicGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         this.offsetsRetentionCheckIntervalMs = config.getLong(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG);
-        this.offsetsRetentionMs = config.getInt(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG) * 60L * 1000L;
+        int offsetsRetentionMinutes = config.getInt(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG);
+        this.offsetsRetentionMs = offsetsRetentionMinutes < 0 ? -1L : offsetsRetentionMinutes * 60L * 1000L;
         this.offsetCommitTimeoutMs = config.getInt(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         this.consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.parse(
                 config.getString(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG));
