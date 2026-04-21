@@ -724,6 +724,40 @@ public class GroupCoordinatorConfigTest {
         assertEquals(20000, config.streamsGroupMinTaskOffsetIntervalMs());
     }
 
+    @Test
+    public void testDLQAutoCreateTopicsEnableDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(false, config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT,
+            config.errorsDLQAutoCreateTopicsEnable());
+    }
+
+    @Test
+    public void testDLQAutoCreateTopicsEnableCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(true, config.errorsDLQAutoCreateTopicsEnable());
+    }
+
+    @Test
+    public void testDLQTopicNamePrefixDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
+        assertEquals(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT,
+            config.errorsDLQTopicNamePrefix());
+    }
+
+    @Test
+    public void testDLQTopicNamePrefixCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
+    }
+
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
         return new GroupCoordinatorConfig(new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF,
