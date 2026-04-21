@@ -789,7 +789,7 @@ public class ConfigCommandTest {
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = tempPropertiesFile(addedConfigs);
+            File f = ToolsTestUtils.tempPropertiesFile(addedConfigs);
             filePath = f.getPath();
         }
 
@@ -1515,13 +1515,6 @@ public class ConfigCommandTest {
             .flatMap(Collection::stream)
             .forEach(e -> res.put(e.getKey(), e.getValue()));
         return res;
-    }
-
-    private File tempPropertiesFile(Map<String, String> prop) throws IOException {
-        String content = prop.entrySet().stream()
-                .map(entry -> entry.getKey() + "=" + entry.getValue())
-                .collect(Collectors.joining(System.lineSeparator()));
-        return TestUtils.tempFile(content);
     }
 
     static class DummyAdminClient extends MockAdminClient {
