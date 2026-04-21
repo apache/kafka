@@ -9,6 +9,10 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testAllFieldsAbsentWhenNotConfigured
 - testAllFieldsPresentWhenConfigured
 - testAllGroupConfigSynonyms
+- testDLQBlankTopicNameIsValid
+- testDLQConfigCustomValues
+- testDLQConfigDefaults
+- testDLQTopicNameCannotStartWithDoubleUnderscore
 - testEvaluateDoesNotModifyInput
 - testEvaluateEmptyPropsReturnsEmpty
 - testEvaluateMaxBoundedValueAboveMaxIsCapped
@@ -29,6 +33,10 @@ org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testConfigs
 - testConsumerGroupAssignorFullClassNames
 - testConsumerGroupAssignors
+- testDLQAutoCreateTopicsEnableCustomValue
+- testDLQAutoCreateTopicsEnableDefaultValue
+- testDLQTopicNamePrefixCustomValue
+- testDLQTopicNamePrefixDefaultValue
 - testInvalidConsumerConfigs
 - testInvalidStreamsConfigs
 - testShareGroupAssignorFullClassNames
