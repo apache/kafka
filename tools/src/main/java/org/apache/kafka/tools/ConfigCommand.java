@@ -266,7 +266,7 @@ public class ConfigCommand {
                 throw ee;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
-            List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, false).stream().map(ConfigEntry::name).toList();
+            List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, false, false).stream().map(ConfigEntry::name).toList();
             // fail the command if any of the configured broker loggers do not exist
             List<String> invalidBrokerLoggers = Stream.concat(
                     configsToBeDeleted.stream().filter(c -> !validLoggers.contains(c)),
@@ -571,7 +571,7 @@ public class ConfigCommand {
                 String entityTypeSingular = entityType.substring(0, entityType.length() - 1);
                 System.out.println(configSourceStr + " configs for " + entityTypeSingular + " " + entity + " are:");
             }
-            getResourceConfig(adminClient, entityType, entity, describeAll).forEach(entry -> {
+            getResourceConfig(adminClient, entityType, entity, true, describeAll).forEach(entry -> {
                 String synonyms = entry.synonyms().stream()
                         .map(synonym -> synonym.source() + ":" + synonym.name() + "=" + synonym.value())
                         .collect(Collectors.joining(", ", "{", "}"));
@@ -597,7 +597,7 @@ public class ConfigCommand {
         }
     }
 
-    private static List<ConfigEntry> getResourceConfig(Admin adminClient, String entityType, String entityName, boolean describeAll) throws ExecutionException, InterruptedException, TimeoutException {
+    private static List<ConfigEntry> getResourceConfig(Admin adminClient, String entityType, String entityName, boolean includeSynonyms, boolean describeAll) throws ExecutionException, InterruptedException, TimeoutException {
         ConfigResource.Type configResourceType;
         Optional<ConfigEntry.ConfigSource> dynamicConfigSource;
 
@@ -635,7 +635,7 @@ public class ConfigCommand {
         Optional<ConfigEntry.ConfigSource> configSourceFilter = describeAll ? Optional.empty() : dynamicConfigSource;
 
         ConfigResource configResource = new ConfigResource(configResourceType, entityName);
-        DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(true);
+        DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
         Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(configResource), describeOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
