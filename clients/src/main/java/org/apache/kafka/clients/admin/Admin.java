@@ -1689,7 +1689,6 @@ public interface Admin extends AutoCloseable {
      *
      * @return the {@link UnregisterControllerResult} containing the result
      */
-    @InterfaceStability.Unstable
     default UnregisterControllerResult unregisterController(int controllerId) {
         return unregisterController(controllerId, new UnregisterControllerOptions());
     }
@@ -1712,7 +1711,6 @@ public interface Admin extends AutoCloseable {
      *
      * @return the {@link UnregisterControllerResult} containing the result
      */
-    @InterfaceStability.Unstable
     UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options);
 
     /**
