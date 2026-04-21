@@ -93,7 +93,7 @@ object EnvelopeUtils {
         envelope.memoryPool,
         buffer,
         requestChannelMetrics,
-        Optional.ofNullable(envelope)
+        Optional.of(envelope)
       )
       // set the dequeue time of forwardedRequest as the value of envelope request
       forwardedRequest.requestDequeueTimeNanos(envelope.requestDequeueTimeNanos)
