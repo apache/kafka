@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
-
-import kafka.server.KafkaConfig;
+package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.Topic;
@@ -42,6 +40,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.IntegrationTestUtils;
+import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
 import java.util.ArrayList;
@@ -270,19 +269,18 @@ public class CreateTopicsRequestTest {
         assertFalse(response.errorCounts().keySet().stream().anyMatch(e -> e.code() > 0),
             "There should be no errors, found " + response.errorCounts().keySet());
 
-        KafkaConfig brokerConfig = cluster.brokers().values().iterator().next().config();
         for (CreatableTopic topic : request.data().topics()) {
             if (!request.data().validateOnly()) {
                 int partitions = !topic.assignments().isEmpty()
                     ? topic.assignments().size()
-                    : (topic.numPartitions() == -1 ? brokerConfig.numPartitions() : topic.numPartitions());
+                    : (topic.numPartitions() == -1 ? defaultNumPartitions(cluster) : topic.numPartitions());
                 cluster.waitTopicCreation(topic.name(), partitions);
             }
-            verifyMetadata(cluster, brokerConfig, topic, request.data().validateOnly());
+            verifyMetadata(cluster, topic, request.data().validateOnly());
         }
     }
 
-    private static void verifyMetadata(ClusterInstance cluster, KafkaConfig brokerConfig, CreatableTopic topic,
+    private static void verifyMetadata(ClusterInstance cluster, CreatableTopic topic,
                                        boolean validateOnly) throws Exception {
         MetadataResponse metadataResponse = sendMetadataRequest(cluster,
             new MetadataRequest.Builder(List.of(topic.name()), false).build());
@@ -300,7 +298,7 @@ public class CreateTopicsRequestTest {
             assertNotNull(metadataForTopic, "The topic should be created");
             assertEquals(Errors.NONE, metadataForTopic.error());
             if (partitions == -1) {
-                assertEquals(brokerConfig.numPartitions(), metadataForTopic.partitionMetadata().size(),
+                assertEquals(defaultNumPartitions(cluster), metadataForTopic.partitionMetadata().size(),
                     "The topic should have the default number of partitions");
             } else {
                 assertEquals(partitions, metadataForTopic.partitionMetadata().size(),
@@ -308,8 +306,7 @@ public class CreateTopicsRequestTest {
             }
 
             if (replication == -1) {
-                assertEquals(brokerConfig.defaultReplicationFactor(),
-                    metadataForTopic.partitionMetadata().get(0).replicaIds.size(),
+                assertEquals(defaultReplicationFactor(cluster), metadataForTopic.partitionMetadata().get(0).replicaIds.size(),
                     "The topic should have the default replication factor");
             } else {
                 assertEquals(replication, metadataForTopic.partitionMetadata().get(0).replicaIds.size(),
@@ -327,7 +324,6 @@ public class CreateTopicsRequestTest {
         CreateTopicsResponse response = sendCreateTopicRequest(cluster, request);
         assertEquals(expectedResponse.size(), response.data().topics().size(), "The response size should match");
 
-        KafkaConfig brokerConfig = cluster.brokers().values().iterator().next().config();
         for (var entry : expectedResponse.entrySet()) {
             String topicName = entry.getKey();
             ApiError expectedError = entry.getValue();
@@ -345,7 +341,7 @@ public class CreateTopicsRequestTest {
                 CreatableTopic topic = request.data().topics().find(topicName);
                 int partitions = !topic.assignments().isEmpty()
                     ? topic.assignments().size()
-                    : (topic.numPartitions() == -1 ? brokerConfig.numPartitions() : topic.numPartitions());
+                    : (topic.numPartitions() == -1 ? defaultNumPartitions(cluster) : topic.numPartitions());
                 validateTopicExists(cluster, topicName, partitions);
             }
         }
@@ -365,5 +361,15 @@ public class CreateTopicsRequestTest {
 
     private static MetadataResponse sendMetadataRequest(ClusterInstance cluster, MetadataRequest request) throws Exception {
         return IntegrationTestUtils.connectAndReceive(request, cluster.brokerBoundPorts().get(0));
+    }
+
+    private static int defaultNumPartitions(ClusterInstance cluster) {
+        return Integer.parseInt(cluster.config().serverProperties()
+            .getOrDefault(ServerLogConfigs.NUM_PARTITIONS_CONFIG, "1"));
+    }
+
+    private static int defaultReplicationFactor(ClusterInstance cluster) {
+        return Integer.parseInt(cluster.config().serverProperties()
+            .getOrDefault(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1"));
     }
 }
