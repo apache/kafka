@@ -659,7 +659,7 @@ public class NamedTopologyIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
 
         TestUtils.waitForCondition(
-                () -> streams.allLocalTasksRunningForTopology(TOPOLOGY_1),
+                () -> streams.areAllLocalTasksRunningForTopology(TOPOLOGY_1),
                 () -> "Not all local tasks for topology " + TOPOLOGY_1
                         + " are initialized and in RUNNING state before remove. "
                         + "streamsState=" + streams.state()

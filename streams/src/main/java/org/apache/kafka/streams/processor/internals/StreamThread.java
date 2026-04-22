@@ -2090,8 +2090,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
 
     // VisibleForTesting
-    public boolean allTasksRunningForTopology(final String topologyName) {
-        return taskManager.allTasksRunningForTopology(topologyName);
+    public boolean areAllTasksRunningForTopology(final String topologyName) {
+        return taskManager.areAllTasksRunningForTopology(topologyName);
     }
     
     int currentNumIterations() {

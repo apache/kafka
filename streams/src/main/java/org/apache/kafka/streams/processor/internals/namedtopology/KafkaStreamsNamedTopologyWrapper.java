@@ -452,9 +452,9 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
     
     // VisibleForTesting
-    public boolean allLocalTasksRunningForTopology(final String topologyName) {
+    public boolean areAllLocalTasksRunningForTopology(final String topologyName) {
         synchronized (threads) {
-            return threads.stream().allMatch(thread -> thread.allTasksRunningForTopology(topologyName));
+            return threads.stream().allMatch(thread -> thread.areAllTasksRunningForTopology(topologyName));
         }
     }
 }

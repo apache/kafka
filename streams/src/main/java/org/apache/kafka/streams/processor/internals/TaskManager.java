@@ -1647,7 +1647,7 @@ public class TaskManager {
      *         or if there are no matching tasks; {@code false} otherwise
      */
     // VisibleForTesting
-    boolean allTasksRunningForTopology(final String topologyName) {
+    boolean areAllTasksRunningForTopology(final String topologyName) {
         final Map<TaskId, Task> allTasks = allTasks();
         final Set<TaskId> initializedTaskIds = tasks.allInitializedTaskIds();
 
