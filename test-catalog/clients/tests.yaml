@@ -3001,8 +3001,10 @@ org.apache.kafka.clients.producer.internals.BufferPoolTest:
 - testStressfulSituation
 org.apache.kafka.clients.producer.internals.BuiltInPartitionerTest:
 - adaptivePartitionsTest
+- adaptivePartitionsTestWithRackAwareness
 - testStickyBatchSizeMoreThatZero
 - testStickyPartitioning
+- testStickyPartitioningWithRackAwareness
 - unavailablePartitionsTest
 org.apache.kafka.clients.producer.internals.FutureRecordMetadataTest:
 - testFutureGetWithMilliSeconds
