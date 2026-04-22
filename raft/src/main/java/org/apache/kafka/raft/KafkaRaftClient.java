@@ -1725,6 +1725,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             leaderEndpoints = Endpoints.empty();
         }
 
+        maybeSwitchObserverFetchToLeader(responseMetadata.source(), responseLeaderId, leaderEndpoints);
+
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error,
             responseLeaderId,
@@ -2609,6 +2611,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     /**
+     * If the local replica is an observer currently routing fetches to bootstrap servers,
+     * and a non-leader source's fetch response advertises the leader's endpoints, switch
+     * the observer back to fetching from the leader.
+     */
+    private void maybeSwitchObserverFetchToLeader(
+        Node source,
+        OptionalInt responseLeaderId,
+        Endpoints leaderEndpoints
+    ) {
+        if (!quorum.isVoter()
+            && quorum.isFollower()
+            && responseLeaderId.isPresent()
+            && source.id() != responseLeaderId.getAsInt()
+            && !leaderEndpoints.isEmpty()) {
+            quorum.followerStateOrThrow().usedBootstrapForFetch();
+        }
+    }
+
+    /**
      * Handle response errors that are common across request types.
      *
      * @param error Error from the received response
@@ -3390,10 +3411,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
             return sendResult.timeToWaitMs();
-        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
-            return maybeSendFetchToAnyBootstrap(currentTimeMs);
         } else {
-            return maybeSendFetchToBestNode(state, currentTimeMs);
+            final long backoffMs;
+            if (state.hasFetchTimeoutExpired(currentTimeMs) && !state.fetchedFromBootstrapServers()) {
+                backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
+            } else {
+                backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
+            }
+            return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));
         }
     }
 
