@@ -22,6 +22,12 @@ import java.io.ObjectInputStream;
 import java.io.ObjectStreamClass;
 import java.util.Set;
 
+
+/**
+ * Security note: While it seems it possible to build a deserialization gadget to obtain RCE via
+ * FileOffsetBackingStore, it requires having write permissions on the filesystem of the Connect worker.
+ * For that reason the Apache Kafka project does not consider this a security issue.
+ */
 public class SafeObjectInputStream extends ObjectInputStream {
 
     protected static final Set<String> DEFAULT_NO_DESERIALIZE_CLASS_NAMES = Set.of(

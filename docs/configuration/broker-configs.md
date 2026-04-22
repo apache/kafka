@@ -47,34 +47,40 @@ From Kafka version 1.1 onwards, some of the broker configs can be updated withou
   * `cluster-wide`: May be updated dynamically as a cluster-wide default. May also be updated as a per-broker value for testing.
 
 To alter the current broker configs for broker id 0 (for example, the number of log cleaner threads): 
-    
-    
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
+```
 
 To describe the current dynamic broker configs for broker id 0: 
-    
-    
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --describe
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --describe
+```
 
 To delete a config override and revert to the statically configured or default value for broker id 0 (for example, the number of log cleaner threads): 
-    
-    
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --delete-config log.cleaner.threads
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --delete-config log.cleaner.threads
+```
 
 To update the log level for a logger on broker id 0:
 
-
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --broker-logger 0 --add-config org.apache.kafka.server.quota.ClientQuotaManager\$ThrottledChannelReaper=DEBUG --alter
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --broker-logger 0 --add-config org.apache.kafka.server.quota.ClientQuotaManager\$ThrottledChannelReaper=DEBUG --alter
+```
 
 Some configs may be configured as a cluster-wide default to maintain consistent values across the whole cluster. All brokers in the cluster will process the cluster default update. For example, to update log cleaner threads on all brokers: 
-    
-    
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --alter --add-config log.cleaner.threads=2
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --alter --add-config log.cleaner.threads=2
+```
 
 To describe the currently configured dynamic cluster-wide default configs: 
-    
-    
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --describe
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --describe
+```
 
 All configs that are configurable at cluster level may also be configured at per-broker level (e.g. for testing). If a config value is defined at different levels, the following order of precedence is used: 
 

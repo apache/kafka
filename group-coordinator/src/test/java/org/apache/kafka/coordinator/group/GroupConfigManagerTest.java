@@ -138,8 +138,6 @@ public class GroupConfigManagerTest {
         GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfig.fromProps(overrides);
         ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
 
-        Map<String, Integer> defaultConfig = new HashMap<>(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
-
-        return new GroupConfigManager(defaultConfig, groupCoordinatorConfig, shareGroupConfig);
+        return new GroupConfigManager(groupCoordinatorConfig, shareGroupConfig);
     }
 }

@@ -17,8 +17,8 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;

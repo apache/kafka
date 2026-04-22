@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -28,9 +29,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT;
@@ -58,6 +61,7 @@ import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.S
 import static org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -123,7 +127,9 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
-            } else {
+            } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_boolean");
+            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
         });
@@ -392,18 +398,107 @@ public class GroupConfigTest {
     }
 
     @Test
-    public void testAssignmentIntervalMsAbsentWhenNotConfigured() {
-        // When the assignment interval config is absent, the group-level value is empty.
-        Properties props = new Properties();
-        GroupConfig config = GroupConfig.fromProps(Map.of(), props);
+    public void testAllFieldsAbsentWhenNotConfigured() {
+        // When no config is provided, all group-level values are empty.
+        GroupConfig config = new GroupConfig(Map.of());
+
+        // Consumer group configs
+        assertEquals(Optional.empty(), config.consumerSessionTimeoutMs());
+        assertEquals(Optional.empty(), config.consumerHeartbeatIntervalMs());
         assertEquals(Optional.empty(), config.consumerAssignmentIntervalMs());
+        assertEquals(Optional.empty(), config.consumerAssignorOffloadEnable());
+
+        // Share group configs
+        assertEquals(Optional.empty(), config.shareSessionTimeoutMs());
+        assertEquals(Optional.empty(), config.shareHeartbeatIntervalMs());
+        assertEquals(Optional.empty(), config.shareRecordLockDurationMs());
+        assertEquals(Optional.empty(), config.shareDeliveryCountLimit());
+        assertEquals(Optional.empty(), config.sharePartitionMaxRecordLocks());
+        assertEquals(Optional.empty(), config.shareAutoOffsetReset());
         assertEquals(Optional.empty(), config.shareAssignmentIntervalMs());
+        assertEquals(Optional.empty(), config.shareAssignorOffloadEnable());
+        assertEquals(Optional.empty(), config.shareIsolationLevel());
+        assertEquals(Optional.empty(), config.shareRenewAcknowledgeEnable());
+
+        // Streams group configs
+        assertEquals(Optional.empty(), config.streamsSessionTimeoutMs());
+        assertEquals(Optional.empty(), config.streamsHeartbeatIntervalMs());
+        assertEquals(Optional.empty(), config.streamsNumStandbyReplicas());
+        assertEquals(Optional.empty(), config.streamsInitialRebalanceDelayMs());
         assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
+        assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
+        assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
+
+        // DLQ configs - have defaults from CONFIG_DEF
+        assertEquals("", config.errorsDLQTopicName());
+        assertFalse(config.errorsDLQCopyRecordEnable());
     }
 
     @Test
-    public void testAssignmentIntervalMsNotValidatedWhenNotConfigured() {
-        // When the assignment interval config is absent, validation should not use the default assignment interval.
+    public void testAllFieldsPresentWhenConfigured() {
+        // When all configs are provided, all group-level values are present.
+        Map<String, String> props = new HashMap<>();
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000");
+        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
+        props.put(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "5000");
+        props.put(GroupConfig.CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "true");
+        props.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "50000");
+        props.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
+        props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "20000");
+        props.put(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "5");
+        props.put(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "1000");
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "2500");
+        props.put(GroupConfig.SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "true");
+        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_committed");
+        props.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "false");
+        props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "50000");
+        props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
+        props.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
+        props.put(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, "3000");
+        props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
+        props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+        props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
+        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        GroupConfig config = new GroupConfig(props);
+
+        // Consumer group configs
+        assertEquals(Optional.of(50000), config.consumerSessionTimeoutMs());
+        assertEquals(Optional.of(6000), config.consumerHeartbeatIntervalMs());
+        assertEquals(Optional.of(5000), config.consumerAssignmentIntervalMs());
+        assertEquals(Optional.of(true), config.consumerAssignorOffloadEnable());
+
+        // Share group configs
+        assertEquals(Optional.of(50000), config.shareSessionTimeoutMs());
+        assertEquals(Optional.of(6000), config.shareHeartbeatIntervalMs());
+        assertEquals(Optional.of(20000), config.shareRecordLockDurationMs());
+        assertEquals(Optional.of(5), config.shareDeliveryCountLimit());
+        assertEquals(Optional.of(1000), config.sharePartitionMaxRecordLocks());
+        assertEquals(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST), config.shareAutoOffsetReset());
+        assertEquals(Optional.of(2500), config.shareAssignmentIntervalMs());
+        assertEquals(Optional.of(true), config.shareAssignorOffloadEnable());
+        assertEquals(Optional.of(IsolationLevel.READ_COMMITTED), config.shareIsolationLevel());
+        assertEquals(Optional.of(false), config.shareRenewAcknowledgeEnable());
+
+        // Streams group configs
+        assertEquals(Optional.of(50000), config.streamsSessionTimeoutMs());
+        assertEquals(Optional.of(6000), config.streamsHeartbeatIntervalMs());
+        assertEquals(Optional.of(2), config.streamsNumStandbyReplicas());
+        assertEquals(Optional.of(3000), config.streamsInitialRebalanceDelayMs());
+        assertEquals(Optional.of(1250), config.streamsAssignmentIntervalMs());
+        assertEquals(Optional.of(false), config.streamsAssignorOffloadEnable());
+        assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
+
+        // DLQ configs
+        assertEquals("my-dlq-topic", config.errorsDLQTopicName());
+        assertTrue(config.errorsDLQCopyRecordEnable());
+    }
+
+    @Test
+    public void testNotValidatedWhenNotConfigured() {
+        // When configs are absent, validation should not use their default values.
         GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfig.fromProps(Map.of(
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000,
@@ -413,16 +508,6 @@ public class GroupConfigTest {
             GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 2000
         ));
         assertDoesNotThrow(() -> GroupConfig.validate(Map.of(), groupCoordinatorConfig, createShareGroupConfig()));
-    }
-
-    @Test
-    public void testAssignorOffloadEnableAbsentWhenNotConfigured() {
-        // When the offload enable config is absent, the group-level value is empty.
-        Properties props = new Properties();
-        GroupConfig config = GroupConfig.fromProps(Map.of(), props);
-        assertEquals(Optional.empty(), config.consumerAssignorOffloadEnable());
-        assertEquals(Optional.empty(), config.shareAssignorOffloadEnable());
-        assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
     }
 
     @Test
@@ -637,6 +722,34 @@ public class GroupConfigTest {
         assertEquals(expectedMin, result.get(key));
     }
 
+    @Test
+    public void testAllGroupConfigSynonyms() {
+        // Every GroupConfig entry should have an entry in ALL_GROUP_CONFIG_SYNONYMS.
+        for (String groupConfigName : GroupConfig.CONFIG_DEF.names()) {
+            assertTrue(GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.containsKey(groupConfigName),
+                "GroupConfig entry '" + groupConfigName + "' is not in ALL_GROUP_CONFIG_SYNONYMS. " +
+                    "Add it with Optional.of(brokerConfigName) or Optional.empty() if it has no broker synonym.");
+        }
+
+        // Every key in ALL_GROUP_CONFIG_SYNONYMS should be a valid GroupConfig entry.
+        for (String key : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.keySet()) {
+            assertTrue(GroupConfig.CONFIG_DEF.names().contains(key),
+                "ALL_GROUP_CONFIG_SYNONYMS contains '" + key + "' which is not a valid GroupConfig entry.");
+        }
+
+        // Every present synonym mapping should point to a valid broker config.
+        Set<String> brokerConfigNames = new HashSet<>();
+        brokerConfigNames.addAll(GroupCoordinatorConfig.CONFIG_DEF.names());
+        brokerConfigNames.addAll(ShareGroupConfig.CONFIG_DEF.names());
+
+        for (Map.Entry<String, Optional<String>> entry : GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.entrySet()) {
+            entry.getValue().ifPresent(brokerConfigName ->
+                assertTrue(brokerConfigNames.contains(brokerConfigName),
+                    "ALL_GROUP_CONFIG_SYNONYMS maps '" + entry.getKey() + "' to '" +
+                        brokerConfigName + "' but this broker config does not exist."));
+        }
+    }
+
     private Map<String, String> createValidGroupConfig() {
         Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000");
@@ -675,5 +788,50 @@ public class GroupConfigTest {
                 SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS, SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS,
                 SHARE_GROUP_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT,
                 SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
+    }
+
+    @Test
+    public void testDLQConfigDefaults() {
+        // Test default DLQ configuration values (KIP-1191)
+        Map<String, String> configs = new HashMap<>();
+        GroupConfig config = new GroupConfig(configs);
+
+        assertEquals("", config.errorsDLQTopicName());
+        assertFalse(config.errorsDLQCopyRecordEnable());
+    }
+
+    @Test
+    public void testDLQConfigCustomValues() {
+        // Test custom DLQ configuration values
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        GroupConfig config = new GroupConfig(configs);
+
+        assertEquals("my-dlq-topic", config.errorsDLQTopicName());
+        assertTrue(config.errorsDLQCopyRecordEnable());
+    }
+
+    @Test
+    public void testDLQTopicNameCannotStartWithDoubleUnderscore() {
+        // DLQ topic name must not start with "__" (reserved for internal topics)
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my-dlq");
+
+        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertTrue(exception.getMessage().contains("DLQ topic name must not start with '__'"));
+    }
+
+    @Test
+    public void testDLQBlankTopicNameIsValid() {
+        // Blank DLQ topic name is valid (means DLQ is disabled for that group)
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "");
+
+        GroupConfig config = new GroupConfig(configs);
+
+        assertEquals("", config.errorsDLQTopicName());
     }
 }

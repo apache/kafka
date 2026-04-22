@@ -53,8 +53,15 @@ public final class AssignorConfiguration {
         streamsConfig = new ClientUtils.QuietStreamsConfig(configs);
         internalConfigs = configs;
 
+        final String appServerPrefix;
+        final String applicationServerEndpoint = streamsConfig.getString(StreamsConfig.APPLICATION_SERVER_CONFIG);
+        if (applicationServerEndpoint != null && !applicationServerEndpoint.isEmpty()) {
+            appServerPrefix = String.format("app-server [%s] ", applicationServerEndpoint);
+        } else {
+            appServerPrefix = "";
+        }
         // Setting the logger with the passed in client thread name
-        logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
+        logPrefix = String.format("stream-thread [%s] %s", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG), appServerPrefix);
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 

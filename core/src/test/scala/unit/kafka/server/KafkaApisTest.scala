@@ -77,7 +77,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection
-import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG}
+import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
@@ -102,6 +102,7 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, RecordValidationStats, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -162,7 +163,7 @@ class KafkaApisTest extends Logging {
     Utils.swallow(this.logger.underlying, () => quotas.shutdown())
     if (kafkaApis != null)
       Utils.swallow(this.logger.underlying, () => kafkaApis.close())
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     metrics.close()
   }
 
@@ -378,6 +379,8 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
     cgConfigs.put(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
     cgConfigs.put(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT.toString)
+    cgConfigs.put(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "")
+    cgConfigs.put(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "false")
 
     when(configRepository.groupConfig(consumerGroupId)).thenReturn(cgConfigs)
 
@@ -2153,7 +2156,7 @@ class KafkaApisTest extends Logging {
             util.List.of(new AddPartitionsToTxnTopic()
               .setName(tp0.topic)
               .setPartitions(util.List.of(tp0.partition))
-            ).iterator())
+            ))
           ), new AddPartitionsToTxnTransaction()
           .setTransactionalId(transactionalId2)
           .setProducerId(producerId)
@@ -2163,9 +2166,9 @@ class KafkaApisTest extends Logging {
             util.List.of(new AddPartitionsToTxnTopic()
               .setName(tp1.topic)
               .setPartitions(util.List.of(tp1.partition))
-            ).iterator())
+            ))
           )
-        ).iterator()
+        )
       )
     ).build(4.toShort)
     val request = buildRequest(addPartitionsToTxnRequest)
@@ -2233,8 +2236,8 @@ class KafkaApisTest extends Logging {
                   util.List.of(new AddPartitionsToTxnTopic()
                     .setName(tp.topic)
                     .setPartitions(util.List.of(tp.partition))
-                  ).iterator()))
-              ).iterator())).build(version)
+                  )))
+              ))).build(version)
 
       val requestChannelRequest = buildRequest(addPartitionsToTxnRequest, requestMetrics = requestMetrics)
 
@@ -2294,8 +2297,8 @@ class KafkaApisTest extends Logging {
               util.List.of(new AddPartitionsToTxnTopic()
                 .setName(tp0.topic)
                 .setPartitions(util.List.of[Integer](tp0.partition, tp1.partition()))
-              ).iterator()))
-          ).iterator())).build(version)
+              )))
+          ))).build(version)
 
     val requestChannelRequest = buildRequest(addPartitionsToTxnRequest)
     kafkaApis = createKafkaApis()
@@ -3978,7 +3981,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setErrorCode(Errors.NONE.code)
           ).iterator))
-      ).iterator()))
+      )))
 
     future.complete(offsetDeleteResponseData)
 
@@ -4211,7 +4214,7 @@ class KafkaApisTest extends Logging {
           .setPartitions(util.List.of(new OffsetDeleteRequestPartition()
             .setPartitionIndex(0)
           ))
-        ).iterator()))
+        )))
     ).build()
     val request = buildRequest(offsetDeleteRequest)
 
@@ -10516,7 +10519,7 @@ class KafkaApisTest extends Logging {
       new DescribeProducersRequestData.TopicRequest()
         .setName(tp4.topic)
         .setPartitionIndexes(util.List.of(Int.box(tp4.partition)))
-    ).iterator()))
+    )))
 
     def buildExpectedActions(topic: String): util.List[Action] = {
       val pattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
@@ -10793,7 +10796,7 @@ class KafkaApisTest extends Logging {
           setResourceType(BROKER.id()).
           setConfigs(new LAlterableConfigCollection(util.List.of(new LAlterableConfig().
             setName("foo").
-            setValue(null)).iterator()))).iterator())), 1.toShort))
+            setValue(null))))))), 1.toShort))
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
@@ -10835,7 +10838,7 @@ class KafkaApisTest extends Logging {
         setResourceType(BROKER_LOGGER.id()).
         setConfigs(new IAlterableConfigCollection(util.List.of(new IAlterableConfig().
           setName(LoggingController.ROOT_LOGGER).
-          setValue("TRACE")).iterator()))).iterator())), 1.toShort)
+          setValue("TRACE"))))))), 1.toShort)
     assertEquals(
       "IncrementalAlterConfigsRequestData(resources=[" +
         "AlterConfigsResource(resourceType=" + BROKER_LOGGER.id() + ", " +
@@ -14072,7 +14075,7 @@ class KafkaApisTest extends Logging {
               .setPartitions(util.List.of(
                 new AlterShareGroupOffsetsRequestPartition().setPartitionIndex(0).setStartOffset(0))
               )
-          ).iterator()
+          )
         )
       )
 

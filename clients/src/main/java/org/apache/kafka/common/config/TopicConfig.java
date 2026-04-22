@@ -235,4 +235,10 @@ public class TopicConfig {
     @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
         "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
+
+    // Dead Letter Queue Configuration (KIP-1191)
+    public static final String ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG = "errors.deadletterqueue.group.enable";
+    public static final String ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC = "Enable this topic to be used as a dead-letter queue for share groups. " +
+        "When set to <code>true</code>, share groups can write undeliverable records to this topic. When set to <code>false</code> (the default), " +
+        "attempts to use this topic as a DLQ will be rejected.";
 }

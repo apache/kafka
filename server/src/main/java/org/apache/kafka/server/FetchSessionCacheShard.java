@@ -118,7 +118,7 @@ public class FetchSessionCacheShard {
      * Get a session by session ID.
      *
      * @param sessionId  The session ID.
-     * @return           The session, or None if no such session was found.
+     * @return           The session, or an empty Optional if no such session was found.
      */
     synchronized Optional<FetchSession> get(int sessionId) {
         return Optional.ofNullable(sessions.get(sessionId));
@@ -243,7 +243,7 @@ public class FetchSessionCacheShard {
      *
      * @param session  The session.
      *
-     * @return         The removed session, or None if there was no such session.
+     * @return         The removed session, or an empty Optional if there was no such session.
      */
     synchronized Optional<FetchSession> remove(FetchSession session) {
         EvictableKey evictableKey;

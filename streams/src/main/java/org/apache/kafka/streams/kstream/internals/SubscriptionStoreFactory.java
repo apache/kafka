@@ -47,7 +47,7 @@ public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactor
     @Override
     public StoreBuilder<?> builder() {
         StoreBuilder<?> builder;
-        builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+        builder = Stores.timestampedKeyValueStoreWithHeadersBuilder(
             dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name, dslStoreFormat())),
             new Serdes.BytesSerde(),
             subscriptionWrapperSerde
