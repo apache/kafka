@@ -616,6 +616,29 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
+    @ClusterTest
+    public void testDeleteNonExistentConfigIsIdempotent() throws Exception {
+        String topicName = "test-delete-nonexistent-topic";
+        try (Admin client = cluster.admin()) {
+            client.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "topics", "--entity-name", topicName,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "brokers", "--entity-name", defaultBrokerId,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "brokers", "--entity-default",
+                    "--alter", "--delete-config", "non.existent.config"))));
+        }
+    }
+
     @ClusterTest(
          // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
          serverProperties = {@ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154")},
