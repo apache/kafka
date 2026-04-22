@@ -164,7 +164,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString());
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString().substring(0, 8));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaConsumer<>(setClientSaslConfig(props));
     }
@@ -189,7 +189,7 @@ public interface ClusterInstance {
         if (valueDeserializer == null) {
             props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         }
-        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString());
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString().substring(0, 8));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaShareConsumer<>(setClientSaslConfig(props), keyDeserializer, valueDeserializer);
     }

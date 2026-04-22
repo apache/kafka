@@ -86,17 +86,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
                                         final long maxWaitMs,
                                         final String conditionDetails) throws InterruptedException {
+        Exception lastException = null;
         long endTime = System.currentTimeMillis() + maxWaitMs;
         while (System.currentTimeMillis() < endTime) {
             try {
                 if (testCondition.get()) return;
-            } catch (Exception ignored) { }
+            } catch (Exception e) {
+                lastException = e;
+            }
 
             if (System.currentTimeMillis() < endTime) {
                 TimeUnit.MILLISECONDS.sleep(100);
             }
         }
-        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails);
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails, lastException);
     }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
