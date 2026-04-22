@@ -32,9 +32,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;
@@ -270,7 +270,7 @@ public class ReplicationQuotasTestRig {
             for (KafkaBroker broker : cluster.brokers().values()) {
                 for (int partitionId = 0; partitionId < config.partitions; partitionId++) {
                     long offset = broker.logManager().getLog(new TopicPartition(TOPIC_NAME, partitionId), false)
-                            .map(UnifiedLog::logEndOffset).getOrElse(() -> -1L);
+                            .map(UnifiedLog::logEndOffset).orElse(-1L);
                     if (offset >= 0 && offset != config.msgsPerPartition) {
                         throw new RuntimeException(
                             "Run failed as offsets did not match for partition " + partitionId + " on broker " + broker.config().nodeId() + ". " +

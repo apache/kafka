@@ -17,8 +17,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.Gauge
-import kafka.utils.TestUtils
-import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
@@ -33,6 +31,8 @@ import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.ResultWithPartitions
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicationQuotaManager
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -48,7 +48,7 @@ class AbstractFetcherManagerTest {
 
   @BeforeEach
   def cleanMetricRegistry(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def getMetricValue(name: String): Any = {
@@ -323,7 +323,7 @@ class AbstractFetcherManagerTest {
   }
 
   private class MockResizeFetcherTierStateMachine extends TierStateMachine(null, null, false) {
-    override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: PartitionData): PartitionFetchState = {
+    override def start(topicPartition: TopicPartition, topicId: Optional[Uuid], currentLeaderEpoch: Int, fetchStartOffsetAndEpoch: OffsetAndEpoch, leaderLogStartOffset: Long): PartitionFetchState = {
       throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
     }
   }

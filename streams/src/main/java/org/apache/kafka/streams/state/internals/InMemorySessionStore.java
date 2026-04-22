@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -79,9 +80,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private StateStoreContext stateStoreContext;
     private final Position position;
 
-    InMemorySessionStore(final String name,
-                         final long retentionPeriod,
-                         final String metricScope) {
+    public InMemorySessionStore(
+        final String name,
+        final long retentionPeriod,
+        final String metricScope
+    ) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;
@@ -362,7 +365,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         // do-nothing since it is in-memory
     }
 
@@ -378,6 +381,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         endTimeMap.clear();
         openIterators.clear();
         open = false;
+    }
+
+    long numEntries() {
+        return endTimeMap.values().stream()
+            .flatMap(keyMap -> keyMap.values().stream())
+            .mapToLong(Map::size)
+            .sum();
     }
 
     private void removeExpiredSegments() {

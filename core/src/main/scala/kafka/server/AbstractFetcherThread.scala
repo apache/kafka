@@ -18,7 +18,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
@@ -26,19 +25,16 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
+import org.apache.kafka.common.record.internal.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
-
 import org.apache.kafka.common.{ClientIdAndBroker, InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
-import org.apache.kafka.server.LeaderEndPoint
-import org.apache.kafka.server.ResultWithPartitions
-import org.apache.kafka.server.ReplicaState
-import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState, ReplicaState, ResultWithPartitions}
 import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.util.{LockUtils, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
@@ -105,9 +101,7 @@ abstract class AbstractFetcherThread(name: String,
 
   override def shutdown(): Unit = {
     initiateShutdown()
-    inLock(partitionMapLock) {
-      partitionMapCond.signalAll()
-    }
+    LockUtils.inLock[Exception](partitionMapLock, () => partitionMapCond.signalAll())
     awaitShutdown()
 
     // we don't need the lock since the thread has finished shutdown and metric removal is safe
@@ -121,7 +115,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   private def maybeFetch(): Unit = {
-    val fetchRequestOpt = inLock(partitionMapLock) {
+    val fetchRequestOpt = LockUtils.inLock(partitionMapLock, () => {
       val result = leader.buildFetch(partitionStates.partitionStateMap)
       val fetchRequestOpt = result.result
       val partitionsWithError = result.partitionsWithError
@@ -134,7 +128,7 @@ abstract class AbstractFetcherThread(name: String,
       }
 
       fetchRequestOpt
-    }
+    })
 
     fetchRequestOpt.ifPresent(replicaFetch =>
       processFetchRequest(replicaFetch.partitionData, replicaFetch.fetchRequest)
@@ -153,7 +147,8 @@ abstract class AbstractFetcherThread(name: String,
    * Builds offset for leader epoch requests for partitions that are in the truncating phase based
    * on latest epochs of the future replicas (the one that is fetching)
    */
-  private def fetchTruncatingPartitions(): (Map[TopicPartition, EpochData], Set[TopicPartition]) = inLock(partitionMapLock) {
+  private def fetchTruncatingPartitions(): (Map[TopicPartition, EpochData], Set[TopicPartition]) =
+    LockUtils.inLock(partitionMapLock, () => {
     val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
     val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
 
@@ -172,7 +167,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     (partitionsWithEpochs, partitionsWithoutEpochs)
-  }
+  })
 
   private def maybeTruncate(): Unit = {
     val (partitionsWithEpochs, partitionsWithoutEpochs) = fetchTruncatingPartitions()
@@ -215,7 +210,7 @@ abstract class AbstractFetcherThread(name: String,
     val endOffsets = leader.fetchEpochEndOffsets(latestEpochsForPartitions.asJava)
     // Ensure we hold a lock during truncation
 
-    inLock(partitionMapLock) {
+    LockUtils.inLock[Exception](partitionMapLock, () => {
       //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
 
       val epochEndOffsets = endOffsets.asScala.filter { case (tp, _) =>
@@ -231,20 +226,21 @@ abstract class AbstractFetcherThread(name: String,
       val result = maybeTruncateToEpochEndOffsets(epochEndOffsets, latestEpochsForPartitions)
       handlePartitionsWithErrors(result.partitionsWithError.asScala, "truncateToEpochEndOffsets")
       updateFetchOffsetAndMaybeMarkTruncationComplete(result.result)
-    }
+    })
   }
 
   // Visibility for unit tests
   protected[server] def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
-    inLock(partitionMapLock) {
+    LockUtils.inLock[Exception](partitionMapLock, () => {
       val result = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
       handlePartitionsWithErrors(result.partitionsWithError.asScala, "truncateOnFetchResponse")
       updateFetchOffsetAndMaybeMarkTruncationComplete(result.result)
-    }
+    })
   }
 
   // Visible for testing
-  private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
+  private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit =
+    LockUtils.inLock[Exception](partitionMapLock, () => {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
 
     for (tp <- partitions) {
@@ -260,7 +256,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
-  }
+  })
 
   private def maybeTruncateToEpochEndOffsets(fetchedEpochs: Map[TopicPartition, EpochEndOffset],
                                              latestEpochsForPartitions: Map[TopicPartition, EpochData]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
@@ -302,7 +298,8 @@ abstract class AbstractFetcherThread(name: String,
    *
    * @return true if the epoch in this thread is updated. otherwise, false
    */
-  private def onPartitionFenced(tp: TopicPartition, requestEpoch: Optional[Integer]): Boolean = inLock(partitionMapLock) {
+  private def onPartitionFenced(tp: TopicPartition, requestEpoch: Optional[Integer]): Boolean =
+    LockUtils.inLock(partitionMapLock, () => {
     Option(partitionStates.stateValue(tp)).exists { currentFetchState =>
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       if (requestEpoch.isPresent && requestEpoch.get == currentLeaderEpoch) {
@@ -315,7 +312,7 @@ abstract class AbstractFetcherThread(name: String,
         true
       }
     }
-  }
+  })
 
   // visible for testing
   private[server] def processFetchRequest(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
@@ -331,16 +328,16 @@ abstract class AbstractFetcherThread(name: String,
       case t: Throwable =>
         if (isRunning) {
           warn(s"Error in response for fetch request $fetchRequest", t)
-          inLock(partitionMapLock) {
+          LockUtils.inLock(partitionMapLock, () => {
             partitionsWithError ++= partitionStates.partitionSet.asScala
-          }
+          })
         }
     }
     fetcherStats.requestRate.mark()
 
     if (responseData.nonEmpty) {
       // process fetched data
-      inLock(partitionMapLock) {
+      LockUtils.inLock[Exception](partitionMapLock, () => {
         responseData.foreachEntry { (topicPartition, partitionData) =>
           Option(partitionStates.stateValue(topicPartition)).foreach { currentFetchState =>
             // It's possible that a partition is removed and re-added or truncated when there is a pending fetch request.
@@ -467,7 +464,7 @@ abstract class AbstractFetcherThread(name: String,
             }
           }
         }
-      }
+      })
     }
 
     if (divergingEndOffsets.nonEmpty)
@@ -604,8 +601,8 @@ abstract class AbstractFetcherThread(name: String,
    * @param tp                Topic partition
    * @param leaderEpochOffset Epoch end offset received from the leader for this topic partition
    */
-  private def getOffsetTruncationState(tp: TopicPartition,
-                                       leaderEpochOffset: EpochEndOffset): OffsetTruncationState = inLock(partitionMapLock) {
+  private def getOffsetTruncationState(tp: TopicPartition, leaderEpochOffset: EpochEndOffset): OffsetTruncationState =
+    LockUtils.inLock(partitionMapLock , () => {
     if (leaderEpochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
       // truncate to initial offset which is the high watermark for follower replica. For
       // future replica, it is either high watermark of the future replica or current
@@ -655,7 +652,7 @@ abstract class AbstractFetcherThread(name: String,
         OffsetTruncationState(min(leaderEpochOffset.endOffset, replicaEndOffset), truncationCompleted = true)
       }
     }
-  }
+  })
 
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset.
@@ -675,7 +672,13 @@ abstract class AbstractFetcherThread(name: String,
      */
     val offsetAndEpoch = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
     val leaderEndOffset = offsetAndEpoch.offset
-    if (leaderEndOffset < replicaEndOffset) {
+    val fetchFromLastTieredOffset = shouldFetchFromLastTieredOffset(topicPartition, leaderEndOffset, replicaEndOffset)
+
+    if (fetchFromLastTieredOffset) {
+      val leaderStartOffsetAndEpoch = leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
+      val earliestPendingUploadOffsetAndEpoch = fetchEarliestPendingUploadOffset(topicPartition, currentLeaderEpoch, leaderStartOffsetAndEpoch)
+      fetchTierStateMachine.start(topicPartition, topicId.toJava, currentLeaderEpoch, earliestPendingUploadOffsetAndEpoch, leaderStartOffsetAndEpoch.offset())
+    } else if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
       truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
@@ -785,7 +788,15 @@ abstract class AbstractFetcherThread(name: String,
                                                 leaderEpochInRequest: Optional[Integer],
                                                 fetchPartitionData: PartitionData): Boolean = {
     try {
-      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData)
+      val isLastTieredOffsetFetchEnabled = shouldFetchFromLastTieredOffset(topicPartition, fetchState)
+      val leaderLogStartOffsetAndEpoch = leader.fetchEarliestOffset(topicPartition, fetchState.currentLeaderEpoch())
+      val fetchOffsetAndEpoch = if (isLastTieredOffsetFetchEnabled) {
+        fetchEarliestPendingUploadOffset(topicPartition, fetchState.currentLeaderEpoch(), leaderLogStartOffsetAndEpoch)
+      } else {
+        leader.fetchEarliestLocalOffset(topicPartition, fetchState.currentLeaderEpoch())
+      }
+      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState.topicId(), fetchState.currentLeaderEpoch(),
+        fetchOffsetAndEpoch, leaderLogStartOffsetAndEpoch.offset())
 
       // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
@@ -807,6 +818,29 @@ abstract class AbstractFetcherThread(name: String,
         error(s"Error building remote log auxiliary state for $topicPartition", e)
         false
     }
+  }
+
+  /**
+   * Determines the earliest offset for pending uploads, taking into account
+   * both local and remote storage conditions.
+   */
+  private def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, leaderLogStartOffsetAndEpoch: OffsetAndEpoch): OffsetAndEpoch = {
+    val earliestPendingUploadOffset = leader.fetchEarliestPendingUploadOffset(topicPartition, currentLeaderEpoch)
+    if (earliestPendingUploadOffset.offset == -1L) {
+      val leaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch)
+      if (leaderLocalStartOffset.offset == leaderLogStartOffsetAndEpoch.offset) {
+        return leaderLocalStartOffset
+      }
+      throw new OffsetNotAvailableException("Segments are uploaded to remote storage, but the leader does not know the earliest pending upload offset.")
+    }
+    earliestPendingUploadOffset
+  }
+
+  private def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, fetchState: PartitionFetchState): Boolean = {
+    val leaderEndOffset = leader.fetchLatestOffset(topicPartition, fetchState.currentLeaderEpoch())
+    val replicaEndOffset = logEndOffset(topicPartition)
+
+    shouldFetchFromLastTieredOffset(topicPartition, leaderEndOffset.offset(), replicaEndOffset)
   }
 
   private def delayPartitions(partitions: Iterable[TopicPartition], delay: Long): Unit = {
@@ -868,9 +902,10 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   // Visible for testing
-  private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] = inLock(partitionMapLock) {
+  private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] =
+    LockUtils.inLock(partitionMapLock, () => {
     Option(partitionStates.stateValue(topicPartition))
-  }
+  })
 
   protected def toMemoryRecords(records: Records): MemoryRecords = {
     (records: @unchecked) match {
@@ -896,10 +931,7 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private[this] val lagVal = new AtomicLong(-1L)
-  private[this] val tags = Map(
-    "clientId" -> metricId.clientId,
-    "topic" -> metricId.topicPartition.topic,
-    "partition" -> metricId.topicPartition.partition.toString).asJava
+  private[this] val tags = MetricsUtils.getTags("clientId", metricId.clientId, "topic", metricId.topicPartition.topic, "partition", metricId.topicPartition.partition.toString)
 
   metricsGroup.newGauge(FetcherMetrics.ConsumerLag, () => lagVal.get, tags)
 
@@ -937,9 +969,7 @@ class FetcherStats(metricId: ClientIdAndBroker) {
   private val metricsClassName = "FetcherStats"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
-  val tags: util.Map[String, String] = Map("clientId" -> metricId.clientId,
-    "brokerHost" -> metricId.brokerHost,
-    "brokerPort" -> metricId.brokerPort.toString).asJava
+  val tags: util.Map[String, String] = MetricsUtils.getTags("clientId", metricId.clientId, "brokerHost", metricId.brokerHost, "brokerPort", metricId.brokerPort.toString)
 
   val requestRate: Meter = metricsGroup.newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
 

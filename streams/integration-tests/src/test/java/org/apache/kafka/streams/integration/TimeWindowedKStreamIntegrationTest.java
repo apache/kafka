@@ -46,6 +46,7 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -138,8 +139,13 @@ public class TimeWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithNoGrace(final StrategyType type, final boolean withCache) throws Exception {
+    @CsvSource({
+        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
+        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
+        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
+        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+    })
+    public void shouldAggregateWindowedWithNoGrace(final StrategyType type, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),
@@ -163,6 +169,8 @@ public class TimeWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -208,8 +216,13 @@ public class TimeWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithGrace(final StrategyType type, final boolean withCache) throws Exception {
+    @CsvSource({
+        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
+        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
+        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
+        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+    })
+    public void shouldAggregateWindowedWithGrace(final StrategyType type, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),
@@ -233,6 +246,8 @@ public class TimeWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -278,8 +293,13 @@ public class TimeWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldRestoreAfterJoinRestart(final StrategyType type, final boolean withCache) throws Exception {
+    @CsvSource({
+        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
+        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
+        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
+        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+    })
+    public void shouldRestoreAfterJoinRestart(final StrategyType type, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "L1", 0),
@@ -319,6 +339,8 @@ public class TimeWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 

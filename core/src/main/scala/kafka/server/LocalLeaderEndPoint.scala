@@ -29,6 +29,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.{PartitionFetchState, ReplicaFetch, ResultWithPartitions}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 
@@ -144,10 +145,10 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     } else {
       val highestRemoteOffset = log.highestOffsetInRemoteStorage()
       val logStartOffset = fetchEarliestOffset(topicPartition, currentLeaderEpoch)
+      val localLogStartOffset = fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch)
 
       highestRemoteOffset match {
         case -1L =>
-          val localLogStartOffset = fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch)
           if (localLogStartOffset.offset() == logStartOffset.offset()) {
             // No segments have been uploaded yet
             logStartOffset
@@ -156,7 +157,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
             new OffsetAndEpoch(-1L, -1)
           }
         case _ =>
-          val earliestPendingUploadOffset = Math.max(highestRemoteOffset + 1, logStartOffset.offset())
+          val earliestPendingUploadOffset = Math.max(highestRemoteOffset + 1, Math.max(logStartOffset.offset(), localLogStartOffset.offset()))
           val epoch = log.leaderEpochCache.epochForOffset(earliestPendingUploadOffset)
           new OffsetAndEpoch(earliestPendingUploadOffset, epoch.orElse(0))
       }

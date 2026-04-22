@@ -53,11 +53,11 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -121,6 +121,7 @@ public final class RaftClientTestContext {
     final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
+    final int fetchMaxBytes;
 
     private int electionTimeoutMs;
     private int requestTimeoutMs;
@@ -185,6 +186,8 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
+        private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
+        private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
         public Builder(int localId, Set<Integer> staticVoters) {
             this(OptionalInt.of(localId), staticVoters);
@@ -350,6 +353,10 @@ public final class RaftClientTestContext {
         }
 
         Builder withBootstrapSnapshot(Optional<VoterSet> voters) {
+            return withBootstrapSnapshotRecords(voters, List.of());
+        }
+
+        Builder withBootstrapSnapshotRecords(Optional<VoterSet> voters, List<String> records) {
             startingVoters = voters.orElse(VoterSet.empty());
             isStartingVotersStatic = false;
 
@@ -364,6 +371,9 @@ public final class RaftClientTestContext {
                     .setVoterSet(voters);
 
                 try (RecordsSnapshotWriter<String> writer = builder.build(SERDE)) {
+                    if (!records.isEmpty()) {
+                        writer.append(records);
+                    }
                     writer.freeze();
                 }
             } else {
@@ -382,6 +392,16 @@ public final class RaftClientTestContext {
 
         Builder withAutoJoin(boolean autoJoin) {
             this.autoJoin = autoJoin;
+            return this;
+        }
+
+        Builder withFetchSnapshotMaxBytes(int fetchSnapshotMaxSizeBytes) {
+            this.fetchSnapshotMaxBytes = fetchSnapshotMaxSizeBytes;
+            return this;
+        }
+
+        Builder withFetchMaxBytes(int fetchMaxBytes) {
+            this.fetchMaxBytes = fetchMaxBytes;
             return this;
         }
 
@@ -421,6 +441,8 @@ public final class RaftClientTestContext {
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
             configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, autoJoin);
+            configMap.put(QuorumConfig.QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG, fetchSnapshotMaxBytes);
+            configMap.put(QuorumConfig.QUORUM_FETCH_MAX_BYTES_CONFIG, fetchMaxBytes);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
@@ -487,7 +509,8 @@ public final class RaftClientTestContext {
                 canBecomeVoter,
                 metrics,
                 externalKRaftMetrics,
-                listener
+                listener,
+                fetchMaxBytes
             );
 
             context.electionTimeoutMs = electionTimeoutMs;
@@ -516,7 +539,8 @@ public final class RaftClientTestContext {
         boolean canBecomeVoter,
         Metrics metrics,
         ExternalKRaftMetrics externalKRaftMetrics,
-        MockListener listener
+        MockListener listener,
+        int fetchMaxBytes
     ) {
         this.clusterId = clusterId;
         this.localId = localId;
@@ -535,6 +559,7 @@ public final class RaftClientTestContext {
         this.metrics = metrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
+        this.fetchMaxBytes = fetchMaxBytes;
     }
 
     int electionTimeoutMs() {
@@ -1329,7 +1354,7 @@ public final class RaftClientTestContext {
         assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
         assertEquals(replicaKey.directoryId().get(), addRaftVoterRequestData.voterDirectoryId());
         assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
-        assertEquals(false, addRaftVoterRequestData.ackWhenCommitted());
+        assertFalse(addRaftVoterRequestData.ackWhenCommitted());
 
         return request;
     }
@@ -1791,7 +1816,6 @@ public final class RaftClientTestContext {
             message.data(),
             "unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
-        assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
 
         assertEquals(1, request.topics().size());
@@ -1886,6 +1910,7 @@ public final class RaftClientTestContext {
         return request
             .setMaxWaitMs(maxWaitTimeMs)
             .setClusterId(clusterId)
+            .setMaxBytes(fetchMaxBytes)
             .setReplicaState(
                 new FetchRequestData.ReplicaState().setReplicaId(replicaKey.id())
             );
@@ -2146,6 +2171,7 @@ public final class RaftClientTestContext {
         private LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
+        private Optional<SnapshotReader<String>> bootstrapSnapshot = Optional.empty();
         private boolean readCommit = true;
 
         MockListener(OptionalInt localId) {
@@ -2233,7 +2259,7 @@ public final class RaftClientTestContext {
         }
 
         void readBatch(BatchReader<String> reader) {
-            try {
+            try (reader) {
                 while (reader.hasNext()) {
                     long nextOffset = lastCommitOffset().isPresent() ?
                         lastCommitOffset().getAsLong() + 1 : 0L;
@@ -2245,8 +2271,6 @@ public final class RaftClientTestContext {
                             ". We expected an offset at least as large as " + nextOffset);
                     commits.add(batch);
                 }
-            } finally {
-                reader.close();
             }
         }
 
@@ -2280,10 +2304,28 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleLoadSnapshot(SnapshotReader<String> reader) {
-            snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
+            snapshot = handleLoadSnapshotOrBootstrap(snapshot, reader);
+        }
+
+        @Override
+        public void handleLoadBootstrap(SnapshotReader<String> reader) {
+            bootstrapSnapshot = handleLoadSnapshotOrBootstrap(bootstrapSnapshot, reader);
+        }
+
+        private Optional<SnapshotReader<String>> handleLoadSnapshotOrBootstrap(
+            Optional<SnapshotReader<String>> previousSnapshot,
+            SnapshotReader<String> reader
+        ) {
+            previousSnapshot.ifPresent(s -> assertDoesNotThrow(s::close));
             commits.clear();
             savedBatches.clear();
-            snapshot = Optional.of(reader);
+            return Optional.of(reader);
+        }
+
+        Optional<SnapshotReader<String>> drainHandledBootstrapSnapshot() {
+            Optional<SnapshotReader<String>> temp = bootstrapSnapshot;
+            bootstrapSnapshot = Optional.empty();
+            return temp;
         }
     }
 

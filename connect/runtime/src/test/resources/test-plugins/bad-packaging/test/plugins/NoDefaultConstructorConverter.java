@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
@@ -72,5 +73,10 @@ public class NoDefaultConstructorConverter implements Converter, HeaderConverter
     @Override
     public ConfigDef config() {
         return new ConfigDef();
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 }

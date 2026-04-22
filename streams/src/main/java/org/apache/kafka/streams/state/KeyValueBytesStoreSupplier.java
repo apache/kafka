@@ -28,6 +28,4 @@ import org.apache.kafka.common.utils.Bytes;
  *   <li>If the key does not exist, get operations should return null value bytes.</li>
  * </ol>
  */
-public interface KeyValueBytesStoreSupplier extends StoreSupplier<KeyValueStore<Bytes, byte[]>> {
-
-}
+public interface KeyValueBytesStoreSupplier extends StoreSupplier<KeyValueStore<Bytes, byte[]>> { }

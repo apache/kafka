@@ -19,7 +19,6 @@ ARG kafka_url
 
 WORKDIR /app
 
-ENV KAFKA_URL=$kafka_url
 ENV NATIVE_IMAGE_PATH="native-image"
 ENV KAFKA_DIR="/app/kafka"
 ENV NATIVE_CONFIGS_DIR="/app/native-image-configs"
@@ -31,10 +30,10 @@ COPY native_command.sh native_command.sh
 
 COPY *kafka.tgz /app
 
-RUN if [ -n "$KAFKA_URL" ]; then \
+RUN if [ -n "$kafka_url" ]; then \
         microdnf install wget; \
-        wget -nv -O kafka.tgz "$KAFKA_URL"; \
-        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+        wget -nv -O kafka.tgz "$kafka_url"; \
+        wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
         gpg --import KEYS; \
         gpg --batch --verify kafka.tgz.asc kafka.tgz; \
@@ -58,6 +57,8 @@ LABEL org.label-schema.name="kafka" \
       org.opencontainers.image.authors="Apache Kafka"
 
 RUN apk update ; \
+    # Fix CVE-2026-28390 and CVE-2026-22184. Remove this if alpine:latest is updated to a version that has these CVEs fixed.
+    apk upgrade --no-cache libcrypto3 libssl3 zlib; \
     apk add --no-cache gcompat ; \
     apk add --no-cache bash ; \
     mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets ; \

@@ -119,7 +119,7 @@ class WriteTxnMarkersRequestTest(cluster:ClusterInstance) extends GroupCoordinat
       commitTxnOffset(
         groupId = groupId,
         memberId = if (version >= 3) memberId else JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        generationId = if (version >= 3) 1 else JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        generationId = if (version >= 3) memberEpoch else JoinGroupRequest.UNKNOWN_GENERATION_ID,
         producerId = producerIdAndEpoch.producerId,
         producerEpoch = if (useTV2) (producerIdAndEpoch.epoch + 1).toShort else producerIdAndEpoch.epoch,
         transactionalId = transactionalId,

@@ -21,7 +21,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.record.internal.FileRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog}
@@ -195,7 +195,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3)
 
     val logManager = broker.logManager
-    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
+    val log = logManager.getOrCreateLog(topicPartition, Optional.empty)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), 0)
     log.flush(false)
@@ -239,7 +239,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic)
 
     val logManager = broker.logManager
-    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
+    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isPresent,
       "Log for partition [topic,0] should be created")
     logManager.getLog(topicPartition).get
   }

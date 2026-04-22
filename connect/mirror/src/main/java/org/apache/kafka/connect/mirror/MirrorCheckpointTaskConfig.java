@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.PluginMetrics;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -34,10 +35,14 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
         return new HashSet<>(getList(TASK_CONSUMER_GROUPS));
     }
 
-    MirrorCheckpointMetrics metrics() {
-        MirrorCheckpointMetrics metrics = new MirrorCheckpointMetrics(this);
+    MirrorCheckpointLegacyMetrics legacyMetrics() {
+        MirrorCheckpointLegacyMetrics metrics = new MirrorCheckpointLegacyMetrics(this);
         metricsReporters().forEach(metrics::addReporter);
         return metrics;
+    }
+
+    MirrorCheckpointMetrics metrics(PluginMetrics pluginMetrics) {
+        return new MirrorCheckpointMetrics(pluginMetrics, this);
     }
 
     @Override

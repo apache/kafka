@@ -36,11 +36,15 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
     private long lastRebalanceStartMs = -1L;
 
     public ShareRebalanceMetricsManager(Metrics metrics) {
-        super(CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+        this(new MetricsLedger(metrics));
+    }
 
-        rebalanceTotal = createMetric(metrics, "rebalance-total",
+    private ShareRebalanceMetricsManager(MetricsLedger metrics) {
+        super(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+
+        rebalanceTotal = createMetric("rebalance-total",
                 "The total number of rebalance events");
-        rebalanceRatePerHour = createMetric(metrics, "rebalance-rate-per-hour",
+        rebalanceRatePerHour = createMetric("rebalance-rate-per-hour",
                 "The number of rebalance events per hour");
 
         rebalanceSensor = metrics.sensor("rebalance-latency");
