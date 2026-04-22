@@ -1472,7 +1472,7 @@ public class StoreChangelogReaderTest {
         // Temporarily assign, add a record near the end with an explicit stream-time
         // timestamp, then clear the assignment (the reader will re-assign during restore)
         timestampConsumer.assign(Collections.singletonList(tp));
-        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 95, time.milliseconds(),
+        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 99, time.milliseconds(),
             TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0],
             new RecordHeaders(), Optional.empty()));
         timestampConsumer.assign(Collections.emptyList());
@@ -1520,7 +1520,7 @@ public class StoreChangelogReaderTest {
         // Temporarily assign, add a record near the end with an explicit timestamp,
         // then clear the assignment
         timestampConsumer.assign(Collections.singletonList(tp));
-        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 95, time.milliseconds(),
+        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 99, time.milliseconds(),
             TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0],
             new RecordHeaders(), Optional.empty()));
         timestampConsumer.assign(Collections.emptyList());
