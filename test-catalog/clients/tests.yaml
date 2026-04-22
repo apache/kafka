@@ -5389,8 +5389,6 @@ org.apache.kafka.common.utils.ByteBufferOutputStreamTest:
 - testExpandDirectByteBufferOnWrite
 - testWriteByteBuffer
 - testWriteDirectByteBuffer
-org.apache.kafka.common.utils.ByteBufferUnmapperTest:
-- testUnmap
 org.apache.kafka.common.utils.BytesTest:
 - compareToReflectsLexicographicUnsignedOrdering
 - constructorThrowsForNullInput
@@ -5400,31 +5398,10 @@ org.apache.kafka.common.utils.BytesTest:
 - wrapEmptyArrayProducesEmptyBytes
 - wrapReturnsBytesBackedBySameArray
 - wrapReturnsNullForNullInput
-org.apache.kafka.common.utils.ChunkedBytesStreamTest:
-- testCorrectnessForMethodRead
-- testCorrectnessForMethodReadByte
-- testCorrectnessForMethodReadFully
-- testCorrectnessForMethodSkip
-- testEdgeCaseInputForMethodSkip
-- testEndOfFileForMethodRead
-- testEndOfSourceForMethodSkip
-- testEofErrorForMethodReadFully
-- testInvalidInputsForMethodRead
 org.apache.kafka.common.utils.ConfigUtilsTest:
 - testConfigMapToRedactedStringForEmptyMap
 - testConfigMapToRedactedStringWithSecrets
 - testGetBoolean
-org.apache.kafka.common.utils.ExitTest:
-- shouldAddShutdownHookImmediately
-- shouldExitImmediately
-- shouldHaltImmediately
-- shouldNotInvokeShutdownHookImmediately
-org.apache.kafka.common.utils.JavaTest:
-- testIsIBMJdk
-- testIsIBMJdkSemeru
-- testLoadKerberosLoginModule
-org.apache.kafka.common.utils.LoggingSignalHandlerTest:
-- testRegister
 org.apache.kafka.common.utils.MockTimeTest:
 - testAdvanceClock
 - testAutoTickMs
@@ -5434,11 +5411,6 @@ org.apache.kafka.common.utils.SecurityUtilsTest:
 - testAddCustomSecurityProvider
 - testParseKafkaPrincipalWithNonUserPrincipalType
 - testPrincipalNameCanContainSeparator
-org.apache.kafka.common.utils.ShellTest:
-- testAttemptToRunNonExistentProgram
-- testEchoHello
-- testHeadDevZero
-- testRunProgramWithErrorReturn
 org.apache.kafka.common.utils.SystemTimeTest:
 - testWaitObjectConditionSatisfied
 - testWaitObjectTimeout
@@ -5526,6 +5498,8 @@ org.apache.kafka.common.utils.annotation.ApiKeyVersionsProviderTest:
 org.apache.kafka.common.utils.internals.AbstractIteratorTest:
 - testEmptyIterator
 - testIterator
+org.apache.kafka.common.utils.internals.ByteBufferUnmapperTest:
+- testUnmap
 org.apache.kafka.common.utils.internals.ByteUtilsTest:
 - testBytesLexicographicCases
 - testCorrectnessReadUnsignedVarint
@@ -5552,12 +5526,27 @@ org.apache.kafka.common.utils.internals.ChecksumsTest:
 - testUpdateByteBufferWithOffsetPosition
 - testUpdateInt
 - testUpdateLong
+org.apache.kafka.common.utils.internals.ChunkedBytesStreamTest:
+- testCorrectnessForMethodRead
+- testCorrectnessForMethodReadByte
+- testCorrectnessForMethodReadFully
+- testCorrectnessForMethodSkip
+- testEdgeCaseInputForMethodSkip
+- testEndOfFileForMethodRead
+- testEndOfSourceForMethodSkip
+- testEofErrorForMethodReadFully
+- testInvalidInputsForMethodRead
 org.apache.kafka.common.utils.internals.CircularIteratorTest:
 - testCycleCollection
 - testEmptyCollection
 - testNullCollection
 org.apache.kafka.common.utils.internals.Crc32CTest:
 - testValue
+org.apache.kafka.common.utils.internals.ExitTest:
+- shouldAddShutdownHookImmediately
+- shouldExitImmediately
+- shouldHaltImmediately
+- shouldNotInvokeShutdownHookImmediately
 org.apache.kafka.common.utils.internals.ExponentialBackoffManagerTest:
 - testBackOffWithJitter
 - testBackOffWithoutJitter
@@ -5602,12 +5591,23 @@ org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollectionTest:
 - testManyInsertsAndDeletes
 - testNullForbidden
 - testTraversal
+org.apache.kafka.common.utils.internals.JavaTest:
+- testIsIBMJdk
+- testIsIBMJdkSemeru
+- testLoadKerberosLoginModule
+org.apache.kafka.common.utils.internals.LoggingSignalHandlerTest:
+- testRegister
 org.apache.kafka.common.utils.internals.PrimitiveRefTest:
 - testIntRef
 - testLongRef
 org.apache.kafka.common.utils.internals.SanitizerTest:
 - testJmxSanitize
 - testSanitize
+org.apache.kafka.common.utils.internals.ShellTest:
+- testAttemptToRunNonExistentProgram
+- testEchoHello
+- testHeadDevZero
+- testRunProgramWithErrorReturn
 org.apache.kafka.common.utils.internals.ThreadUtilsTest:
 - testThreadNameWithNumberDemon
 - testThreadNameWithNumberNoDemon
