@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -1054,40 +1053,78 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Map<TopicPartition, Long> result = new HashMap<>();
         try {
-            final ListOffsetsOptions options = new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED);
-            final Map<TopicPartition, OffsetSpec> offsetSpecs = partitionsWithRetentionPeriod.keySet().stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.maxTimestamp()));
-            final Map<TopicPartition, ListOffsetsResultInfo> maxTimestamps =
-                adminClient.listOffsets(offsetSpecs, options).all().get();
+            // Save pause state so we can restore it after reading the last records
+            final Set<TopicPartition> allAssigned = restoreConsumer.assignment();
+            final Set<TopicPartition> previouslyPaused = new HashSet<>(restoreConsumer.paused());
 
+            // Pause all partitions, then resume only the target partitions
+            restoreConsumer.pause(allAssigned);
+            final Set<TopicPartition> targetPartitions = partitionsWithRetentionPeriod.keySet();
+            restoreConsumer.resume(targetPartitions);
+
+            // Seek each target partition to near the end to read the last records
+            for (final TopicPartition partition : targetPartitions) {
+                final ChangelogMetadata changelogMeta = changelogs.get(partition);
+                final long endOffset = changelogMeta.restoreEndOffset;
+                if (endOffset > 0) {
+                    restoreConsumer.seek(partition, Math.max(0, endOffset - 10));
+                } else {
+                    fallbackPartitions.add(partition);
+                }
+            }
+
+            // Poll to get the last records — these are actual data records (consumer filters out
+            // transaction markers), so their timestamps reflect stream time, not wall-clock time
+            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(pollTime);
+
+            // Find the max timestamp per partition from actual data records
+            final Map<TopicPartition, Long> maxTimestamps = new HashMap<>();
+            for (final TopicPartition partition : targetPartitions) {
+                final ChangelogMetadata changelogMeta = changelogs.get(partition);
+                for (final ConsumerRecord<byte[], byte[]> record : records.records(partition)) {
+                    if (record.offset() < changelogMeta.restoreEndOffset) {
+                        maxTimestamps.merge(partition, record.timestamp(), Math::max);
+                    }
+                }
+            }
+
+            // Compute seek timestamps based on actual stream-time timestamps
             for (final Map.Entry<TopicPartition, Long> entry : partitionsWithRetentionPeriod.entrySet()) {
                 final TopicPartition partition = entry.getKey();
                 final long retentionPeriod = entry.getValue();
-                final ListOffsetsResultInfo info = maxTimestamps.get(partition);
+                final Long maxTimestamp = maxTimestamps.get(partition);
 
-                if (info != null && info.timestamp() > 0) {
-                    final long seekTimestamp = info.timestamp() - retentionPeriod;
+                if (maxTimestamp != null && maxTimestamp > 0) {
+                    final long seekTimestamp = maxTimestamp - retentionPeriod;
                     if (seekTimestamp > 0) {
                         result.put(partition, seekTimestamp);
                         log.debug("Start restoring windowed changelog partition {} from stream-time-based timestamp {} " +
-                            "(maxStreamTime={}, retention={}).", partition, seekTimestamp, info.timestamp(), retentionPeriod);
+                            "(maxStreamTime={}, retention={}).", partition, seekTimestamp, maxTimestamp, retentionPeriod);
                     } else {
                         log.debug("Start restoring changelog partition {} from the beginning (computed seek timestamp " +
                             "is non-positive).", partition);
                         fallbackPartitions.add(partition);
                     }
                 } else {
-                    log.debug("Start restoring changelog partition {} from the beginning (no max timestamp available).",
+                    log.debug("Start restoring changelog partition {} from the beginning (no records found near end).",
                         partition);
                     fallbackPartitions.add(partition);
                 }
             }
-        } catch (final TimeoutException | InterruptedException | ExecutionException e) {
-            log.debug("Could not fetch max timestamps for {}, falling back to seek-to-beginning",
+
+            // Restore the original pause state
+            restoreConsumer.pause(allAssigned);
+            final Set<TopicPartition> toResume = new HashSet<>(allAssigned);
+            toResume.removeAll(previouslyPaused);
+            if (!toResume.isEmpty()) {
+                restoreConsumer.resume(toResume);
+            }
+        } catch (final TimeoutException e) {
+            log.debug("Could not read last records from changelog for {}, falling back to seek-to-beginning",
                 partitionsWithRetentionPeriod.keySet(), e);
             fallbackPartitions.addAll(partitionsWithRetentionPeriod.keySet());
         } catch (final KafkaException e) {
-            log.warn("Failed to fetch max timestamps for {}, falling back to seek-to-beginning",
+            log.warn("Failed to read last records from changelog for {}, falling back to seek-to-beginning",
                 partitionsWithRetentionPeriod.keySet(), e);
             fallbackPartitions.addAll(partitionsWithRetentionPeriod.keySet());
         }

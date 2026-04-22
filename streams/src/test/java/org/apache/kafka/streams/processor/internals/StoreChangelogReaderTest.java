@@ -62,9 +62,13 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -1464,7 +1468,14 @@ public class StoreChangelogReaderTest {
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
-        adminClient.updateMaxTimestamps(Collections.singletonMap(tp, time.milliseconds()));
+
+        // Temporarily assign, add a record near the end with an explicit stream-time
+        // timestamp, then clear the assignment (the reader will re-assign during restore)
+        timestampConsumer.assign(Collections.singletonList(tp));
+        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 95, time.milliseconds(),
+            TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0],
+            new RecordHeaders(), Optional.empty()));
+        timestampConsumer.assign(Collections.emptyList());
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
@@ -1505,7 +1516,14 @@ public class StoreChangelogReaderTest {
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
-        adminClient.updateMaxTimestamps(Collections.singletonMap(tp, time.milliseconds()));
+
+        // Temporarily assign, add a record near the end with an explicit timestamp,
+        // then clear the assignment
+        timestampConsumer.assign(Collections.singletonList(tp));
+        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 95, time.milliseconds(),
+            TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0],
+            new RecordHeaders(), Optional.empty()));
+        timestampConsumer.assign(Collections.emptyList());
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
