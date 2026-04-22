@@ -68,6 +68,7 @@ public class BrokerRegistration {
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
             this.directories = List.of();
+            // This defaults to null indicating the broker has not yet sent its cordoned log dirs.
             this.cordonedDirectories = null;
         }
 

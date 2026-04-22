@@ -357,8 +357,10 @@ public class ConfigurationControlManager {
                 return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
             } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
                 return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
-            } else if (isCordonedLogDirsDisallowed(configRecord, existingConfigsMap.get(CORDONED_LOG_DIRS_CONFIG), forwarded)) {
-                return DISALLOWED_CORDONED_LOG_DIRS_ERROR;
+            } else if (isCordonedLogDirsDisabled(configRecord)) {
+                return DISABLED_CORDONED_LOG_DIRS_ERROR;
+            } else if (isCordonedLogDirsInvalid(configRecord, existingConfigsMap.get(CORDONED_LOG_DIRS_CONFIG), forwarded)) {
+                return INVALID_CORDONED_LOG_DIRS_ERROR;
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
             } else if (configRecord.value().length() > Short.MAX_VALUE) {
@@ -376,8 +378,10 @@ public class ConfigurationControlManager {
                 return DISALLOWED_BROKER_MIN_ISR_TRANSITION_ERROR;
             } else if (isDisallowedClusterMinIsrTransition(configRecord)) {
                 return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
-            } else if (isCordonedLogDirsDisallowed(configRecord, existingConfigsMap.get(CORDONED_LOG_DIRS_CONFIG), forwarded)) {
-                return DISALLOWED_CORDONED_LOG_DIRS_ERROR;
+            } else if (isCordonedLogDirsDisabled(configRecord)) {
+                return DISABLED_CORDONED_LOG_DIRS_ERROR;
+            } else if (isCordonedLogDirsInvalid(configRecord, existingConfigsMap.get(CORDONED_LOG_DIRS_CONFIG), forwarded)) {
+                return INVALID_CORDONED_LOG_DIRS_ERROR;
             } else {
                 allConfigs.remove(configRecord.name());
             }
@@ -415,9 +419,13 @@ public class ConfigurationControlManager {
         new ApiError(INVALID_CONFIG, "The configuration value cannot be added because " +
             "it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.");
 
-    static final ApiError DISALLOWED_CORDONED_LOG_DIRS_ERROR =
+    static final ApiError DISABLED_CORDONED_LOG_DIRS_ERROR =
             new ApiError(INVALID_CONFIG, "The " + CORDONED_LOG_DIRS_CONFIG + " configuration value cannot be " +
                     "set because it requires metadata.version >= " + MetadataVersion.IBP_4_3_IV0);
+
+    static final ApiError INVALID_CORDONED_LOG_DIRS_ERROR =
+            new ApiError(INVALID_CONFIG, "When updating " + CORDONED_LOG_DIRS_CONFIG + " via controllers, " +
+                    " the new value must be a subset of the current configuration value.");
 
     boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
@@ -430,17 +438,11 @@ public class ConfigurationControlManager {
         return false;
     }
 
-    // Prevent updating cordoned.log.dirs
-    // if the feature is not supported or
-    // if the request is not forwarded and the new value adds directories not already cordoned
-    boolean isCordonedLogDirsDisallowed(ConfigRecord configRecord, String currentValue, boolean forwarded) {
-        if (!configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) || configRecord.resourceType() != BROKER.id()) {
-            return false;
-        }
-        if (!featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
-            return true;
-        }
-        if (forwarded || configRecord.value() == null || configRecord.value().isEmpty()) {
+    // Prevent updating cordoned.log.dirs if the request is not forwarded and the new value adds directories not
+    // already cordoned
+    boolean isCordonedLogDirsInvalid(ConfigRecord configRecord, String currentValue, boolean forwarded) {
+        if (!configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) || configRecord.resourceType() != BROKER.id() ||
+                forwarded || configRecord.value() == null || configRecord.value().isEmpty()) {
             return false;
         }
         List<String> currentDirs = currentValue == null
@@ -448,6 +450,14 @@ public class ConfigurationControlManager {
             : Arrays.asList(COMMA_WITH_WHITESPACE.split(currentValue.trim(), -1));
         List<String> newDirs = Arrays.asList(COMMA_WITH_WHITESPACE.split(configRecord.value().trim(), -1));
         return !currentDirs.containsAll(newDirs);
+    }
+
+    boolean isCordonedLogDirsDisabled(ConfigRecord configRecord) {
+        if (configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) &&
+                configRecord.resourceType() == BROKER.id()) {
+            return !featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported();
+        }
+        return false;
     }
 
     boolean isDisallowedClusterMinIsrTransition(ConfigRecord configRecord) {

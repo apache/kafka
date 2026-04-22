@@ -56,16 +56,17 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 /**
  * The broker lifecycle manager owns the broker state.
  *
- * Its inputs are messages passed in from other parts of the broker and from the
+ * <p>Its inputs are messages passed in from other parts of the broker and from the
  * controller: requests to start up, or shut down, for example. Its output are the broker
  * state and various futures that can be used to wait for broker state transitions to
  * occur.
  *
- * The lifecycle manager handles registering the broker with the controller, as described
+ * <p>The lifecycle manager handles registering the broker with the controller, as described
  * in KIP-631. After registration is complete, it handles sending periodic broker
- * heartbeats and processing the responses.
+ * heartbeats and processing the responses. Once the broker has caught up with the cluster metadata, it starts
+ * sending the Uuid of its cordoned log directories in its heartbeats.
  *
- * This code uses an event queue paradigm. Modifications get translated into events, which
+ * <p>This code uses an event queue paradigm. Modifications get translated into events, which
  * are placed on the queue to be processed sequentially. As described in the JavaDoc for
  * each variable, most mutable state can be accessed only from that event queue thread.
  * In some cases we expose a volatile variable which can be read from any thread, but only

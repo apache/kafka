@@ -42,6 +42,8 @@ import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -56,6 +58,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
@@ -64,9 +67,11 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SUBTRACT;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
-import static org.apache.kafka.controller.ConfigurationControlManager.DISALLOWED_CORDONED_LOG_DIRS_ERROR;
+import static org.apache.kafka.controller.ConfigurationControlManager.DISABLED_CORDONED_LOG_DIRS_ERROR;
+import static org.apache.kafka.controller.ConfigurationControlManager.INVALID_CORDONED_LOG_DIRS_ERROR;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -578,16 +583,24 @@ public class ConfigurationControlManagerTest {
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
                 toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, ""))),
                 true);
+        assertEquals(enabled ? ApiError.NONE : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
 
-        assertEquals(enabled ? ApiError.NONE : DISALLOWED_CORDONED_LOG_DIRS_ERROR, result.response());
+        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
+                true);
+        assertEquals(enabled ? INVALID_CORDONED_LOG_DIRS_ERROR : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
+    }
+
+    private FeatureControlManager createFeatureControlManager(short level) {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        featureControlManager.replay(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(level));
+        return featureControlManager;
     }
 
     private FeatureControlManager createFeatureControlManager() {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
-        featureControlManager.replay(new FeatureLevelRecord().
-            setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
-        return featureControlManager;
+        return createFeatureControlManager(MetadataVersion.LATEST_PRODUCTION.featureLevel());
     }
 
     @Test
@@ -649,8 +662,34 @@ public class ConfigurationControlManagerTest {
         assertFalse(configs.containsKey("invalid.config"), "Invalid config should not be in configData");
     }
 
+    @ParameterizedTest
+    @MethodSource("arguments")
+    public void testIsCordonedLogDirsDisabled(boolean expected, short level) {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+                setKafkaConfigSchema(SCHEMA).
+                setFeatureControl(createFeatureControlManager(level)).
+                build();
+
+        ConfigRecord cordonedConfig = new ConfigRecord().
+                setResourceType(BROKER.id()).setResourceName("0").
+                setName(CORDONED_LOG_DIRS_CONFIG);
+        ConfigRecord otherConfigConfig = new ConfigRecord().
+                setResourceType(BROKER.id()).setResourceName("0").
+                setName(LOG_DIRS_CONFIG);
+
+        assertEquals(expected, manager.isCordonedLogDirsDisabled(cordonedConfig));
+        assertFalse(manager.isCordonedLogDirsDisabled(otherConfigConfig));
+    }
+
+    public static Stream<Arguments> arguments() {
+        return Stream.of(
+                Arguments.of(false, MetadataVersion.latestProduction().featureLevel()),
+                Arguments.of(true, MetadataVersion.IBP_4_2_IV1.featureLevel())
+        );
+    }
+
     @Test
-    public void testIsCordonedLogDirsDisallowed() {
+    public void testIsCordonedLogDirsInvalid() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
                 setKafkaConfigSchema(SCHEMA).
                 setFeatureControl(createFeatureControlManager()).
@@ -663,28 +702,28 @@ public class ConfigurationControlManagerTest {
         // If the new value is null or empty string, the update is always allowed
         for (String value : Arrays.asList("", null)) {
             cr.setValue(value);
-            assertFalse(manager.isCordonedLogDirsDisallowed(cr, null, false));
-            assertFalse(manager.isCordonedLogDirsDisallowed(cr, null, true));
-            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "some/value", false));
-            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "some/value", true));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, null, false));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, null, true));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "some/value", false));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "some/value", true));
         }
 
         // If the new value is equal or a subset of the current value, the update is always allowed
         cr.setValue("dir1");
-        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1", false));
-        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1", true));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1", false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1", true));
         for (String value : Arrays.asList("dir1", "dir2", "dir1,dir2", "dir2,dir1")) {
             cr.setValue(value);
-            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1,dir2", false));
-            assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir1,dir2", true));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1,dir2", false));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1,dir2", true));
         }
 
         // If the new value is different, the update is only allowed if the request is forwarded
-        assertTrue(manager.isCordonedLogDirsDisallowed(cr, "dir2", false));
-        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "dir2", true));
-        assertTrue(manager.isCordonedLogDirsDisallowed(cr, "", false));
-        assertFalse(manager.isCordonedLogDirsDisallowed(cr, "", true));
-        assertTrue(manager.isCordonedLogDirsDisallowed(cr, null, false));
-        assertFalse(manager.isCordonedLogDirsDisallowed(cr, null, true));
+        assertTrue(manager.isCordonedLogDirsInvalid(cr, "dir2", false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir2", true));
+        assertTrue(manager.isCordonedLogDirsInvalid(cr, "", false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "", true));
+        assertTrue(manager.isCordonedLogDirsInvalid(cr, null, false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, null, true));
     }
 }
