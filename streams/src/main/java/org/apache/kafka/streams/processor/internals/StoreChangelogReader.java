@@ -1071,21 +1071,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 for (final Map.Entry<TopicPartition, Long> entry : partitionsWithRetentionPeriod.entrySet()) {
                     final TopicPartition partition = entry.getKey();
                     final long retentionPeriod = entry.getValue();
-                    final long endOffset = changelogs.get(partition).restoreEndOffset;
 
-                    long maxTimestamp = -1;
-                    for (final ConsumerRecord<byte[], byte[]> record : polledRecords.records(partition)) {
-                        if (record.offset() < endOffset && record.timestamp() > maxTimestamp) {
-                            maxTimestamp = record.timestamp();
-                        }
-                    }
-
-                    if (maxTimestamp > 0) {
-                        final long seekTimestamp = maxTimestamp - retentionPeriod;
+                    final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
+                    if (!records.isEmpty()) {
+                        final long latestTimestamp = records.get(records.size() - 1).timestamp();
+                        final long seekTimestamp = latestTimestamp - retentionPeriod;
                         if (seekTimestamp > 0) {
                             seekTimestamps.put(partition, seekTimestamp);
                             log.debug("Start restoring windowed changelog partition {} from stream-time-based timestamp {} " +
-                                "(maxStreamTime={}, retention={}).", partition, seekTimestamp, maxTimestamp, retentionPeriod);
+                                "(maxStreamTime={}, retention={}).", partition, seekTimestamp, latestTimestamp, retentionPeriod);
                             continue;
                         }
                     }
