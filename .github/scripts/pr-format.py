@@ -18,6 +18,7 @@ from io import BytesIO
 import json
 import logging
 import os
+import re
 import subprocess
 import shlex
 import sys
@@ -106,11 +107,12 @@ def split_paragraphs(text: str):
 def resolve_reviewer(login: str) -> tuple:
     """Map a GitHub login to (name, email).
 
-    Tries the repo commit history first, then falls back to the GitHub user profile.
-    Noreply emails (@users.noreply.github.com) are treated as missing since they
-    are GitHub privacy placeholders that do not identify the reviewer.
-    Returns (name, None) when no usable email is found; the caller falls back
-    to the '(@login)' form in the Reviewers trailer.
+    Tries three tiers in order: repo commit history, GitHub user profile,
+    and past `Reviewers:` trailers in git log (matched by name).
+    Noreply emails (@users.noreply.github.com) are treated as missing since
+    they are GitHub privacy placeholders that do not identify the reviewer.
+    Returns (name, None) when no usable email is found; the caller falls
+    back to the '(@login)' form in the Reviewers trailer.
     """
     def _usable_email(e):
         if not e or e.endswith("@users.noreply.github.com"):
@@ -149,6 +151,30 @@ def resolve_reviewer(login: str) -> tuple:
                     email = _usable_email(user.get("email"))
         except Exception as e:
             logger.debug(f"Failed to resolve {login} from GitHub profile: {e}")
+
+    # Tier 3: past Reviewers: trailers in git log, matched by name. Catches
+    # pure reviewers (no commits in apache/kafka, no public profile email)
+    # who have been credited with a real email in an earlier merged PR.
+    # git log is newest-first, so the first usable match is the most recent.
+    if name and not email:
+        try:
+            p = subprocess.run(
+                ["git", "log",
+                 "--pretty=format:%(trailers:key=Reviewers,valueonly=true,unfold=true)"],
+                capture_output=True, text=True,
+            )
+            if p.returncode == 0:
+                pattern = re.compile(rf"{re.escape(name)}\s*<([^>]+)>")
+                for line in p.stdout.splitlines():
+                    for m in pattern.finditer(line):
+                        candidate = _usable_email(m.group(1))
+                        if candidate:
+                            email = candidate
+                            break
+                    if email:
+                        break
+        except Exception as e:
+            logger.debug(f"Failed to resolve {login} from past Reviewers trailers: {e}")
 
     if not name:
         name = login
