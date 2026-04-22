@@ -83,6 +83,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @Test
   def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
+    val localhostAddr = InetAddress.getByName("localhost")
+    val quotas = brokers.head.socketServer.connectionQuotas
 
     def connectAndVerify(): Unit = {
       val socket = connect()
@@ -97,6 +99,11 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, maxConnectionsPerIP.toString)
     reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, maxConnectionsPerIP.toString))
 
+    TestUtils.waitUntilTrue(
+      () => quotas.maxConnectionsPerIpForIp(localhostAddr) == maxConnectionsPerIP,
+      s"maxConnectionsPerIp not applied yet for ip=localhost (expected=$maxConnectionsPerIP, current=${quotas.maxConnectionsPerIpForIp(localhostAddr)})"
+    )
+    
     verifyMaxConnections(maxConnectionsPerIP, connectAndVerify)
 
     // Increase MaxConnectionsPerIpOverrides for localhost to 7
@@ -104,8 +111,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride")
     reconfigureServers(props, perBrokerConfig = false, (SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$maxConnectionsPerIPOverride"))
     
-    val localhostAddr = InetAddress.getByName("localhost")
-    val quotas = brokers.head.socketServer.connectionQuotas
     TestUtils.waitUntilTrue(
       () => quotas.maxConnectionsPerIpOverrideForIp(localhostAddr).contains(maxConnectionsPerIPOverride),
       s"maxConnectionsPerIpOverrides not applied yet for ip=localhost (expected=$maxConnectionsPerIPOverride, " +
