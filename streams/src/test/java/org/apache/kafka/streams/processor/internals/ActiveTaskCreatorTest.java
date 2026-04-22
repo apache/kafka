@@ -257,9 +257,7 @@ public class ActiveTaskCreatorTest {
         when(builder.buildSubtopology(0)).thenReturn(topology);
         when(topology.sinkTopics()).thenReturn(emptySet());
         when(stateDirectory.getOrCreateDirectoryForTask(task00)).thenReturn(mock(File.class));
-        when(stateDirectory.checkpointFileFor(task00)).thenReturn(mock(File.class));
         when(stateDirectory.getOrCreateDirectoryForTask(task01)).thenReturn(mock(File.class));
-        when(stateDirectory.checkpointFileFor(task01)).thenReturn(mock(File.class));
         when(topology.source("topic")).thenReturn(sourceNode);
         when(sourceNode.timestampExtractor()).thenReturn(mock(TimestampExtractor.class));
         when(topology.sources()).thenReturn(Collections.singleton(sourceNode));

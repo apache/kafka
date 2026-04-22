@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
-import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -43,34 +33,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class KeyValueSegmentsTest {
+public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments> {
 
     private static final int NUM_SEGMENTS = 5;
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
     private static final String METRICS_SCOPE = "test-state-id";
-    private InternalMockProcessorContext context;
-    private KeyValueSegments segments;
-    private File stateDirectory;
     private final String storeName = "test";
 
-    @BeforeEach
-    public void createContext() {
-        stateDirectory = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext<>(
-            stateDirectory,
-            Serdes.String(),
-            Serdes.Long(),
-            new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-        );
-        segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
-        segments.openExisting(context, -1L);
-    }
 
-    @AfterEach
-    public void close() {
-        segments.close();
+    @Override
+    KeyValueSegments getSegments() {
+        return new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }
 
     @Test
@@ -191,9 +165,9 @@ public class KeyValueSegmentsTest {
 
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
-        assertEquals(0, segments.get(0).id);
-        assertEquals(1, segments.get(1).id);
-        assertEquals(2, segments.get(2).id);
+        assertEquals(0, segments.get(0).id());
+        assertEquals(1, segments.get(1).id());
+        assertEquals(2, segments.get(2).id());
     }
 
     @Test
@@ -211,9 +185,9 @@ public class KeyValueSegmentsTest {
 
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
         assertEquals(3, segments.size());
-        assertEquals(0, segments.get(2).id);
-        assertEquals(1, segments.get(1).id);
-        assertEquals(2, segments.get(0).id);
+        assertEquals(0, segments.get(2).id());
+        assertEquals(1, segments.get(1).id());
+        assertEquals(2, segments.get(0).id());
     }
 
     @Test
@@ -226,9 +200,9 @@ public class KeyValueSegmentsTest {
 
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
-        assertEquals(0, segments.get(0).id);
-        assertEquals(1, segments.get(1).id);
-        assertEquals(2, segments.get(2).id);
+        assertEquals(0, segments.get(0).id());
+        assertEquals(1, segments.get(1).id());
+        assertEquals(2, segments.get(2).id());
     }
 
     @Test
@@ -241,9 +215,9 @@ public class KeyValueSegmentsTest {
 
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
         assertEquals(3, segments.size());
-        assertEquals(2, segments.get(0).id);
-        assertEquals(1, segments.get(1).id);
-        assertEquals(0, segments.get(2).id);
+        assertEquals(2, segments.get(0).id());
+        assertEquals(1, segments.get(1).id());
+        assertEquals(0, segments.get(2).id());
     }
 
     @Test
@@ -294,7 +268,7 @@ public class KeyValueSegmentsTest {
 
         segments = new KeyValueSegments(storeName,  METRICS_SCOPE, NUM_SEGMENTS * segmentInterval, segmentInterval);
 
-        final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
+        final String storeDirectoryPath = context.stateDir().getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);
         //noinspection ResultOfMethodCallIgnored
         storeDirectory.mkdirs();
@@ -305,7 +279,7 @@ public class KeyValueSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + "-" + formatter.format(new Date(segmentId * segmentInterval)));
             //noinspection ResultOfMethodCallIgnored
-            Files.createFile(oldSegment.toPath());
+            Files.createDirectory(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
@@ -319,7 +293,7 @@ public class KeyValueSegmentsTest {
 
     @Test
     public void shouldUpdateSegmentFileNameFromOldColonFormatToNewFormat() throws Exception {
-        final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
+        final String storeDirectoryPath = context.stateDir().getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);
         //noinspection ResultOfMethodCallIgnored
         storeDirectory.mkdirs();
@@ -327,7 +301,7 @@ public class KeyValueSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + ":" + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
             //noinspection ResultOfMethodCallIgnored
-            Files.createFile(oldSegment.toPath());
+            Files.createDirectory(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
@@ -349,7 +323,7 @@ public class KeyValueSegmentsTest {
         final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE, true);
         assertEquals(numSegments, result.size());
         for (int i = 0; i < numSegments; i++) {
-            assertEquals(i + first, result.get(i).id);
+            assertEquals(i + first, result.get(i).id());
         }
     }
 }

@@ -37,12 +37,13 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
@@ -1272,7 +1273,41 @@ public class GroupCoordinatorShardTest {
             any(), eq(image)
         );
 
+        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
+            any(), eq(image)
+        );
+
         verify(groupMetadataManager, times(1)).onLoaded();
+    }
+
+    @Test
+    public void testOnMetadataUpdate() {
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
+        CoordinatorMetadataDelta delta = CoordinatorMetadataDelta.EMPTY;
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        coordinator.onMetadataUpdate(delta, image);
+
+        verify(groupMetadataManager, times(1)).onMetadataUpdate(
+            eq(delta), eq(image)
+        );
+
+        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
+            eq(delta), eq(image)
+        );
     }
 
     @Test
@@ -1334,7 +1369,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         Time mockTime = new MockTime();
-        MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
@@ -1353,7 +1388,7 @@ public class GroupCoordinatorShardTest {
 
         // Confirm that it is rescheduled after completion.
         mockTime.sleep(1000L);
-        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> tasks = timer.poll();
+        List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> tasks = timer.poll();
         assertEquals(1, tasks.size());
         assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
 
@@ -1366,7 +1401,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         Time mockTime = new MockTime();
-        MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
@@ -1426,7 +1461,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         Time mockTime = new MockTime();
-        MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
@@ -1465,7 +1500,7 @@ public class GroupCoordinatorShardTest {
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
         CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         MockTime time = new MockTime();
-        MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
         when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
 
@@ -1568,7 +1603,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         Time mockTime = new MockTime();
-        MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,

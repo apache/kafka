@@ -58,9 +58,12 @@
     </subpackage>
 
     <subpackage name="metadata">
+        <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.message" />
-        <allow pkg="org.apache.kafka.server.common" />
         <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.metadata.properties" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.test" />
     </subpackage>
 
     <subpackage name="security">
@@ -126,6 +129,9 @@
 
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
             <allow class="org.apache.kafka.test.TestUtils" />
+            <!-- ServerTestUtils uses yammer metrics for test cleanup -->
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="com.yammer.metrics.core" />
             <subpackage name="timer">
                 <allow class="org.apache.kafka.server.util.MockTime" />
                 <allow class="org.apache.kafka.server.util.ShutdownableThread" />

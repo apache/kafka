@@ -159,7 +159,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private Time time;
-        private CoordinatorTimer<Void, CoordinatorRecord> timer;
+        private CoordinatorTimer<CoordinatorRecord> timer;
         private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
@@ -191,7 +191,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withTimer(
-            CoordinatorTimer<Void, CoordinatorRecord> timer
+            CoordinatorTimer<CoordinatorRecord> timer
         ) {
             this.timer = timer;
             return this;
@@ -410,7 +410,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * The coordinator timer.
      */
-    private final CoordinatorTimer<Void, CoordinatorRecord> timer;
+    private final CoordinatorTimer<CoordinatorRecord> timer;
 
     /**
      * The group coordinator config.
@@ -441,7 +441,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager,
         Time time,
-        CoordinatorTimer<Void, CoordinatorRecord> timer,
+        CoordinatorTimer<CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
         CoordinatorMetricsShard metricsShard
@@ -1081,6 +1081,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public void onLoaded(CoordinatorMetadataImage newImage) {
         CoordinatorMetadataDelta emptyDelta = newImage.emptyDelta();
         groupMetadataManager.onMetadataUpdate(emptyDelta, newImage);
+        offsetMetadataManager.onMetadataUpdate(emptyDelta, newImage);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
@@ -1105,6 +1106,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
         groupMetadataManager.onMetadataUpdate(delta, newImage);
+        offsetMetadataManager.onMetadataUpdate(delta, newImage);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(

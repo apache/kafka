@@ -23,10 +23,14 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -34,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -54,6 +59,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.rocksdb.ColumnFamilyDescriptor;
+import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
+import org.rocksdb.Options;
+import org.rocksdb.RocksDB;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -70,6 +81,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SimpleTimeZone;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -82,6 +94,7 @@ import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -97,6 +110,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     final long retention = 1000;
     final long segmentInterval = 60_000L;
     final String storeName = "bytes-store";
+    private final Serializer<String> stringSerializer = new StringSerializer();
+    private final Deserializer<String> stringDeserializer = new StringDeserializer();
+    private final Serializer<Long> longSerializer = new LongSerializer();
 
     public SegmentedBytesStore.KeySchema schema;
 
@@ -133,19 +149,35 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext<>(
-            stateDir,
-            Serdes.String(),
-            Serdes.Long(),
-            new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-        );
+        context = getProcessorContext();
         bytesStore.init(context, bytesStore);
     }
 
     @AfterEach
     public void close() {
         bytesStore.close();
+    }
+
+    private InternalMockProcessorContext<?, ?> getProcessorContext() {
+        return new InternalMockProcessorContext<>(
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new MockRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+    }
+
+    private InternalMockProcessorContext<?, ?> getEOSProcessorContext() {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        return new InternalMockProcessorContext<>(
+                stateDir,
+                Serdes.String(),
+                Serdes.Long(),
+                new MockRecordCollector(),
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new StreamsConfig(streamsProps));
     }
 
     abstract AbstractRocksDBSegmentedBytesStore<S> getBytesStore();
@@ -514,6 +546,57 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         shouldRestoreToByteStore();
     }
 
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState(final SegmentedBytesStore.KeySchema schema) throws Exception {
+        before(schema);
+        final InternalMockProcessorContext<?, ?> eosContext = getEOSProcessorContext();
+        bytesStore = getBytesStore();
+        bytesStore.init(eosContext, bytesStore);
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(30));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
+        bytesStore.close();
+        bytesStore = getBytesStore();
+        overwritePersistedStoreStatusToOpen();
+        final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class, () -> bytesStore.init(eosContext, bytesStore));
+        assertEquals("Tasks [0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
+    }
+
+    private void overwritePersistedStoreStatusToOpen() throws Exception {
+        final DBOptions dbOptions = new DBOptions();
+        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+        final Long openState = 1L;
+
+
+        final String dbPath = new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath();
+        final List<ColumnFamilyDescriptor> existingColumnFamilies = RocksDB.listColumnFamilies(new Options(), dbPath).stream()
+                .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
+                .collect(Collectors.toList());
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(existingColumnFamilies.size());
+        RocksDB db = null;
+        ColumnFamilyHandle offsetsColumnFamily = null;
+        try {
+            db = RocksDB.open(
+                    dbOptions,
+                    new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath(),
+                    existingColumnFamilies,
+                    columnFamilies);
+            final byte[] statusKey = stringSerializer.serialize(null, "status");
+
+            offsetsColumnFamily = columnFamilies.get(columnFamilies.size() - 1);
+            db.put(offsetsColumnFamily, statusKey, longSerializer.serialize(null, openState));
+        } finally {
+            if (db != null) {
+                db.close();
+            }
+            for (final ColumnFamilyHandle columnFamily : columnFamilies) {
+                columnFamily.close();
+            }
+            dbOptions.close();
+            columnFamilyOptions.close();
+        }
+    }
+
     private void shouldRestoreToByteStore() {
         bytesStore.init(context, bytesStore);
         // 0 segments initially.
@@ -710,6 +793,62 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
     }
 
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldMigrateExistingPositionFromFile(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+    }
+
+    @ParameterizedTest
+    @MethodSource("getKeySchemas")
+    public void shouldRestoreMergedPositionFromMultipleSegmentsAfterRestart(final SegmentedBytesStore.KeySchema schema) {
+        before(schema);
+        bytesStore = getBytesStore();
+        // 0 segments initially.
+        bytesStore.init(context, bytesStore);
+
+        // Writes record to different partitions
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[2])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[3])), serializeValue(10));
+        final Position expected = Position.fromMap(mkMap(mkEntry("t1", mkMap(mkEntry(0, 2L), mkEntry(1, 3L)))));
+
+        // Each open segment should share the same position.
+        for (final S segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+
+        // Persist the merged position and simulate a full store restart.
+        bytesStore.commit(Map.of());
+        for (final S segment : bytesStore.getSegments()) {
+            segment.writePosition();
+        }
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+
+        // The store-level position should be restored from the merged position.
+        assertEquals(expected, bytesStore.getPosition());
+
+        // Restored segments should all have the same merged position.
+        for (final S segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+    }
+
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         final Headers headers = new RecordHeaders();
@@ -870,9 +1009,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     private Bytes serializeKey(final Windowed<String> key) {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (schema instanceof SessionKeySchema) {
-            return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+            return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else if (schema instanceof WindowKeySchema) {
-            return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+            return WindowKeySchema.toStoreKeyBinary(key, 0, new RecordHeaders(), stateSerdes);
         } else {
             throw new IllegalStateException("Unrecognized serde schema");
         }
@@ -896,15 +1035,16 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                        stateSerdes.valueDeserializer().deserialize("dummy", new RecordHeaders(), next.value)
                     );
                     results.add(deserialized);
                 } else if (schema instanceof SessionKeySchema) {
                     final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                        SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                        SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), new RecordHeaders(), "dummy"),
+                        stateSerdes.valueDeserializer().deserialize("dummy", new RecordHeaders(), next.value)
                     );
                     results.add(deserialized);
                 } else {

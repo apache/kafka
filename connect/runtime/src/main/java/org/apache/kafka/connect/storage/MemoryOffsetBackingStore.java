@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
 

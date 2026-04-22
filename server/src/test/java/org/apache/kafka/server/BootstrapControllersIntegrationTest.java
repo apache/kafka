@@ -32,7 +32,6 @@ import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -62,6 +61,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Timeout;
@@ -73,6 +73,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -82,6 +83,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -173,8 +175,7 @@ public class BootstrapControllersIntegrationTest {
     private void testUpdateFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             UpdateFeaturesResult result = admin.updateFeatures(Map.of("foo.bar.feature",
-                            new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
-                    new UpdateFeaturesOptions());
+                            new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)));
             ExecutionException exception =
                     assertThrows(ExecutionException.class,
                             () -> result.all().get(1, TimeUnit.MINUTES));
@@ -430,5 +431,29 @@ public class BootstrapControllersIntegrationTest {
     @ClusterTest(controllers = 3, standalone = true)
     public void testIncrementalAlterConfigsByAllControllersWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
         testIncrementalAlterConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testQuotaConfigsIsReadOnlyShouldBeFalse(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
+            int nodeId = clusterInstance.controllers().values().iterator().next().config().nodeId();
+            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                nodeResource, List.of(
+                    new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "16800"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "16800"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "16800"), AlterConfigOp.OpType.SET)
+                ));
+            admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                Config config = admin.describeConfigs(List.of(nodeResource)).
+                    all().get(1, TimeUnit.MINUTES).get(nodeResource);
+                Map<String, ConfigEntry> configEntries = config.entries().stream()
+                    .collect(Collectors.toMap(ConfigEntry::name, e -> e));
+                assertFalse(configEntries.get(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).isReadOnly());
+                assertFalse(configEntries.get(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).isReadOnly());
+                assertFalse(configEntries.get(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).isReadOnly());
+            });
+        }
     }
 }

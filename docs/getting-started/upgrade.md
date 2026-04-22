@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.4.0
+
+### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
+
+### Notable changes in 4.4.0
+
+  * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
+
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
@@ -36,16 +44,26 @@ type: docs
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
   * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
   * The new config prefix `remote.log.metadata.admin.` has been introduced. It allows independent configuration of the admin client used by `TopicBasedRemoteLogMetadataManager`. For further details, please refer to [KIP-1208](https://cwiki.apache.org/confluence/x/vYqhFg).
+  * The `kafka-streams-scala` library is deprecated as of Kafka 4.3 and will be removed in Kafka 5.0. For further details, please refer to the [migration guide](/{version}/streams/developer-guide/scala-migration).
+  * Support for cordoning log directories: For further details, please refer to [KIP-1066](https://cwiki.apache.org/confluence/x/Lg_TEg).
+  * The `group.coordinator.rebalance.protocols` configuration is deprecated and will be removed in Kafka 5.0. In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions (`group.version`, `streams.version`, `share.version`) via `kafka-features.sh`. For further details, please refer to [KIP-1237](https://cwiki.apache.org/confluence/x/jIqmFw).
+  * New group configs have been introduced: `share.delivery.count.limit`, `share.partition.max.record.locks` and `share.renew.acknowledge.enable`, along with equivalent broker configs for specifying minimum and maximum values. In addition, the validation of group configs has been improved. For further details, please refer to [KIP-1240](https://cwiki.apache.org/confluence/x/tIHMFw).
+  * A new `group.coordinator.background.threads` config has been added to control the size of the group coordinator's thread pool used to updating regular expression subscriptions. Previously, the thread pool only had a single thread. Now the thread pool has two threads by default and its size is configurable. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
+  * New `group.consumer.assignment.interval.ms`, `group.share.assignment.interval.ms` and `group.streams.assignment.interval.ms` configs have been added to set the interval between assignment updates for consumer, share and streams groups, along with broker configs for specifying minimum and maximum values and group configs. These default to an interval of 1 second and previously had an effective value of 0. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
+  * A new dynamic broker configuration `follower.fetch.last.tiered.offset.enable` (default: `false`) has been added. When enabled on a cluster with tiered storage, a newly added follower replica that has no local data will skip directly to the earliest pending upload offset on the leader, avoiding re-fetching data that is already stored in remote storage. This reduces bootstrap time significantly for large tiered-storage topics. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
+  * The `ListOffsets` API has been extended to version 11, adding support for the `EARLIEST_PENDING_UPLOAD_TIMESTAMP` (-6) timestamp type. This allows clients to query the earliest offset on the leader that has not yet been uploaded to tiered storage. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
 
 ## Upgrading to 4.2.0
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
 
+  * If you wish to use share groups in a cluster with fewer than 3 brokers, you must set the broker configurations `share.coordinator.state.topic.replication.factor` and `share.coordinator.state.topic.min.isr` to 1 before you start using share groups. This is because share groups make use of a new internal topic called `__share_group_state` which is automatically created when you first use share groups. In common with the other internal topics, the default configuration uses 3 replicas and requires at least 3 brokers.
+
 ### Notable changes in 4.2.0
 
   * The `--max-partition-memory-bytes` option in `kafka-console-producer` is deprecated and will be removed in Kafka 5.0. Please use `--batch-size` instead. 
   * Queues for Kafka ([KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw)) is production-ready in Apache Kafka 4.2. This feature introduces a new kind of group called share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer. Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part of an ordered stream. 
-  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/documentation/streams/developer-guide/streams-rebalance-protocol.html).
+  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol). Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix will be targeted for a future release.
   * The `org.apache.kafka.common.header.internals.RecordHeader` class has been updated to be read thread-safe. See [KIP-1205](https://cwiki.apache.org/confluence/x/nYmhFg) for details. In other words, each individual `Header` object within a `ConsumerRecord`'s `headers` can now be safely read from multiple threads concurrently. 
   * The `org.apache.kafka.disallowed.login.modules` config was deprecated. Please use the `org.apache.kafka.allowed.login.modules` instead. 
   * The `remote.log.manager.thread.pool.size` config was deprecated. Please use the `remote.log.manager.follower.thread.pool.size` instead. 

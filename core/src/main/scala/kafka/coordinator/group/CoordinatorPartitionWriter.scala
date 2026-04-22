@@ -19,7 +19,7 @@ package kafka.coordinator.group
 import kafka.server.ReplicaManager
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.internal.{MemoryRecords, RecordBatch}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
@@ -159,11 +159,11 @@ class CoordinatorPartitionWriter(
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {
-      throw partitionResult.error.exception()
+      throw partitionResult.error.exception(partitionResult.errorMessage)
     }
 
     // Required offset.
-    partitionResult.info.lastOffset + 1
+    partitionResult.logAppendSummary.lastOffset + 1
   }
 
   override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {

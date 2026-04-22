@@ -43,6 +43,7 @@
     <allow pkg="org.apache.kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage"/>
+    <allow pkg="org.apache.kafka.streams"/>
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.coordinator.common.runtime"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
@@ -54,6 +55,9 @@
     <allow pkg="org.apache.kafka.connect" />
     <allow pkg="org.apache.kafka.network" />
     <allow class="org.apache.kafka.raft.QuorumConfig"/>
+    <allow class="org.apache.kafka.raft.KRaftConfigs"/>
+    <allow class="org.apache.kafka.test.TestUtils"/>
+    <allow class="org.apache.kafka.jmh.util.BenchmarkConfigUtils"/>
     <allow pkg="joptsimple"/>
 
     <subpackage name="cache">

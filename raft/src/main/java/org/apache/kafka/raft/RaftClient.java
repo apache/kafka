@@ -51,7 +51,7 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * Callback which is invoked when the Listener needs to load a snapshot.
+         * Callback which is invoked when the Listener needs to load a committed snapshot.
          * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
          * after consuming the reader.
          *
@@ -63,12 +63,24 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleLoadSnapshot(SnapshotReader<T> reader);
 
         /**
+         * Callback which is invoked when the Listener needs to load bootstrap snapshot.
+         * Bootstrap snapshots are uncommitted and are used to store and load the initial application state.
+         *
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * after consuming the reader.
+         *
+         * @param reader snapshot reader instance which must be iterated and closed
+         */
+        void handleLoadBootstrap(SnapshotReader<T> reader);
+
+        /**
          * Called on any change to leadership. This includes both when a leader is elected and
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
          * the implementation of this interface has caught up to the high-watermark through calls to
-         * {@link #handleLoadSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         * {@link #handleLoadSnapshot(SnapshotReader)}, {@link #handleLoadBootstrap(SnapshotReader)},
+         * and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.

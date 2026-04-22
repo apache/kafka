@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.Records;
 
 /**
  * The class is not converted to a Java record since records are typically intended to be immutable, but this one contains a mutable field records
