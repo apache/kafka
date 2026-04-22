@@ -1491,7 +1491,6 @@ public class MockAdminClient extends AdminClient {
         endOffsets.putAll(newOffsets);
     }
 
-
     public synchronized void updateConsumerGroupOffsets(final Map<TopicPartition, Long> newOffsets) {
         committedOffsets.putAll(newOffsets);
     }
