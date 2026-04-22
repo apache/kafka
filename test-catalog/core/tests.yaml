@@ -1609,12 +1609,6 @@ kafka.server.ControllerRegistrationManagerTest:
 - testRetransmitRegistration
 - testRetransmitRegistrationAfterTimeout
 - testWrongIncarnationId
-kafka.server.CreateTopicsRequestTest:
-- testCreateClusterMetadataTopic
-- testCreateTopicsRequestVersions
-- testErrorCreateTopicsRequests
-- testInvalidCreateTopicsRequests
-- testValidCreateTopicsRequests
 kafka.server.DefaultApiVersionManagerTest:
 - testApiScope
 - testControllerApiIntersection
