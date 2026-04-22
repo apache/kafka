@@ -53,7 +53,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForActiveRestoringTask;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
@@ -88,7 +87,7 @@ public class OuterJoinListValueStoreRestorationTest {
     }
 
     @BeforeEach
-    public void before(final TestInfo testInfo) throws InterruptedException {
+    public void before(final TestInfo testInfo) throws Exception {
         applicationId = "outer-join-restoration-test-" + safeUniqueTestName(testInfo);
         leftTopic = applicationId + "-left";
         rightTopic = applicationId + "-right";
@@ -193,9 +192,6 @@ public class OuterJoinListValueStoreRestorationTest {
         streams = createOuterJoinTopology();
         startApplicationAndWaitUntilRunning(streams);
 
-        // Wait until restoring tasks have been started
-        waitForActiveRestoringTask(streams, 0, 30000);
-
         // Step 5: Trigger Window Advancement
 
         // NOW advance window to trigger emitNonJoinedOuterRecords()
@@ -209,17 +205,27 @@ public class OuterJoinListValueStoreRestorationTest {
             30000
         );
 
+        final Set<String> expectedKeys = IntStream.range(0, 10)
+            .mapToObj(i -> "key" + i)
+            .collect(Collectors.toSet());
+
         final Set<String> unmatchedKeys = results.stream()
             .filter(kv -> kv.value != null && kv.value.endsWith("right=null"))
             .map(kv -> kv.key)
             .collect(Collectors.toSet());
 
-        final Set<String> expectedKeys = IntStream.range(0, 10)
-            .mapToObj(i -> "key" + i)
+        // assert based on record shape
+        assertEquals(expectedKeys, unmatchedKeys,
+            "All 10 unmatched left records should be emitted after restoration with right=null shape");
+
+        final Set<String> nonProbeKeys = results.stream()
+            .filter(kv -> !"probe".equals(kv.key))
+            .map(kv -> kv.key)
             .collect(Collectors.toSet());
 
-        assertEquals(expectedKeys, unmatchedKeys,
-            "All 10 unmatched left records should be emitted after restoration");
+        // assert based on keys
+        assertEquals(expectedKeys, nonProbeKeys,
+            "No unexpected keys should appear on the output topic after restoration");
     }
 
     private void produceRecord(final String topic, final String key, final String value, final long timestamp) {
