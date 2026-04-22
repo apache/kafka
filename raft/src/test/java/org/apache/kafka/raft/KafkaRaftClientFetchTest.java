@@ -793,71 +793,48 @@ public final class KafkaRaftClientFetchTest {
             .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
-        // The observer initially fetches from the bootstrap servers, where it will discover the leader's endpoints.
-        context.pollUntilRequest();
-        final var bootstrapFetch = context.assertSentFetchRequest();
-        assertEquals(-2, bootstrapFetch.destination().id());
-        assertEquals(RaftClientTestContext.mockAddress(otherVoter.id()).getHostName(), bootstrapFetch.destination().host());
-        assertEquals(RaftClientTestContext.mockAddress(otherVoter.id()).getPort(), bootstrapFetch.destination().port());
+        for (int i = 0; i < 10; ++i) {
+            // The observer initially fetches from the bootstrap servers, where it will discover the leader's endpoints.
+            context.pollUntilRequest();
+            final var bootstrapFetch = context.assertSentFetchRequest();
+            assertEquals(-2, bootstrapFetch.destination().id());
+            assertEquals(RaftClientTestContext.mockAddress(otherVoter.id()).getHostName(), bootstrapFetch.destination().host());
+            assertEquals(RaftClientTestContext.mockAddress(otherVoter.id()).getPort(), bootstrapFetch.destination().port());
 
-        context.deliverResponse(
-            bootstrapFetch.correlationId(),
-            bootstrapFetch.destination(),
-            context.fetchResponse(
-                epoch,
-                leader.id(),
-                MemoryRecords.EMPTY,
-                0L,
-                Errors.NOT_LEADER_OR_FOLLOWER
-            )
-        );
+            context.deliverResponse(
+                bootstrapFetch.correlationId(),
+                bootstrapFetch.destination(),
+                context.fetchResponse(
+                    epoch,
+                    leader.id(),
+                    MemoryRecords.EMPTY,
+                    0L,
+                    Errors.NOT_LEADER_OR_FOLLOWER
+                )
+            );
 
-        // Subsequent fetch from the observer is sent to the leader
-        context.pollUntilRequest();
-        final var leaderFetch = context.assertSentFetchRequest();
-        assertEquals(leader.id(), leaderFetch.destination().id());
-        assertEquals(RaftClientTestContext.mockAddress(leader.id()).getHostName(), leaderFetch.destination().host());
-        assertEquals(RaftClientTestContext.mockAddress(leader.id()).getPort(), leaderFetch.destination().port());
+            // Subsequent fetch from the observer is sent to the leader
+            context.pollUntilRequest();
+            final var leaderFetch = context.assertSentFetchRequest();
+            assertEquals(leader.id(), leaderFetch.destination().id());
+            assertEquals(RaftClientTestContext.mockAddress(leader.id()).getHostName(), leaderFetch.destination().host());
+            assertEquals(RaftClientTestContext.mockAddress(leader.id()).getPort(), leaderFetch.destination().port());
 
-        // Return a BROKER_NOT_AVAILABLE error, and then advance time past the fetch timeout,
-        // which should cause the observer to fetch from the bootstrap servers on the next fetch.
+            // Return a BROKER_NOT_AVAILABLE error, and then advance time past the fetch timeout,
+            // which should cause the observer to fetch from the bootstrap servers on the next fetch.
 
-        // The fetch timeout is much greater than the request manager's configured backoff, so the
-        // current unreachable connection will no longer be backing off when the next fetch is sent.
-        context.deliverResponse(
-            leaderFetch.correlationId(),
-            leaderFetch.destination(),
-            RaftUtil.errorResponse(
-                ApiKeys.FETCH,
-                Errors.BROKER_NOT_AVAILABLE
-            )
-        );
-        context.client.poll();
-        context.time.sleep(context.fetchTimeoutMs + 1);
-
-        // Check that the next fetch goes to the bootstrap servers
-        context.pollUntilRequest();
-        final var nextBootstrapFetch = context.assertSentFetchRequest();
-        assertEquals(-2, nextBootstrapFetch.destination().id());
-        assertEquals(RaftClientTestContext.mockAddress(otherVoter.id()).getHostName(), nextBootstrapFetch.destination().host());
-        assertEquals(RaftClientTestContext.mockAddress(otherVoter.id()).getPort(), nextBootstrapFetch.destination().port());
-
-        // Deliver a response from the bootstrap server with the leader endpoints, and check that the observer sends subsequent fetches to the leader's endpoints.
-        context.deliverResponse(
-            nextBootstrapFetch.correlationId(),
-            nextBootstrapFetch.destination(),
-            context.fetchResponse(
-                epoch,
-                leader.id(),
-                MemoryRecords.EMPTY,
-                0L,
-                Errors.NOT_LEADER_OR_FOLLOWER
-            )
-        );
-        context.pollUntilRequest();
-        final var nextLeaderFetch = context.assertSentFetchRequest();
-        assertEquals(leader.id(), nextLeaderFetch.destination().id());
-        assertEquals(RaftClientTestContext.mockAddress(leader.id()).getHostName(), nextLeaderFetch.destination().host());
-        assertEquals(RaftClientTestContext.mockAddress(leader.id()).getPort(), nextLeaderFetch.destination().port());
+            // The fetch timeout is much greater than the request manager's configured backoff, so the
+            // current unreachable connection will no longer be backing off when the next fetch is sent.
+            context.deliverResponse(
+                leaderFetch.correlationId(),
+                leaderFetch.destination(),
+                RaftUtil.errorResponse(
+                    ApiKeys.FETCH,
+                    Errors.BROKER_NOT_AVAILABLE
+                )
+            );
+            context.client.poll();
+            context.time.sleep(context.fetchTimeoutMs + 1);
+        }
     }
 }

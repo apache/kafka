@@ -57,11 +57,6 @@ public class FollowerState implements EpochState {
      * are paused
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
-    /* Observer-only: The initial value is false because followers start in a state fetching from the leader.
-     * Set to true when the last fetch was from the bootstrap servers.
-     * Set to false when the last fetch was from the leader.
-     */
-    private boolean fetchedFromBootstrapServers = false;
 
     public FollowerState(
         Time time,
@@ -142,15 +137,14 @@ public class FollowerState implements EpochState {
     public void resetFetchTimeoutForSuccessfulFetch(long currentTimeMs) {
         overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
         hasFetchedFromLeader = true;
-        fetchedFromBootstrapServers = false;
     }
 
-    public boolean fetchedFromBootstrapServers() {
-        return fetchedFromBootstrapServers;
-    }
-
-    public void usedBootstrapForFetch() {
-        fetchedFromBootstrapServers = true;
+    /**
+     * Reset the fetch timeout after successful fetch from the bootstrap servers.
+     * This should only be called by observers who fetched from a non-leader bootstrap server.
+     */
+    public void resetFetchTimeoutForBootstrapServers(long currentTimeMs) {
+        overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
     }
 
     /**

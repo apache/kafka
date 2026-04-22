@@ -1725,7 +1725,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             leaderEndpoints = Endpoints.empty();
         }
 
-        maybeSwitchObserverFetchToLeader(responseMetadata.source(), responseLeaderId, leaderEndpoints);
+        maybeSwitchObserverFetchToLeader(responseMetadata.source(), responseLeaderId, leaderEndpoints, currentTimeMs);
 
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error,
@@ -2618,14 +2618,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void maybeSwitchObserverFetchToLeader(
         Node source,
         OptionalInt responseLeaderId,
-        Endpoints leaderEndpoints
+        Endpoints leaderEndpoints,
+        long currentTimeMs
     ) {
         if (!quorum.isVoter()
             && quorum.isFollower()
             && responseLeaderId.isPresent()
             && source.id() != responseLeaderId.getAsInt()
             && !leaderEndpoints.isEmpty()) {
-            quorum.followerStateOrThrow().usedBootstrapForFetch();
+            quorum.followerStateOrThrow().resetFetchTimeoutForBootstrapServers(currentTimeMs);
         }
     }
 
@@ -3413,7 +3414,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return sendResult.timeToWaitMs();
         } else {
             final long backoffMs;
-            if (state.hasFetchTimeoutExpired(currentTimeMs) && !state.fetchedFromBootstrapServers()) {
+            if (state.hasFetchTimeoutExpired(currentTimeMs)) {
                 backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
             } else {
                 backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
