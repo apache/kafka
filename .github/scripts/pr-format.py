@@ -120,7 +120,9 @@ def resolve_reviewer(login: str) -> tuple:
     name = None
     email = None
 
-    # Tier 1: find from repo commit history
+    # Tier 1: find from repo commit history. Misses when the reviewer has no
+    # merged commit in apache/kafka, or had "Keep my email private" enabled
+    # at commit time (GitHub rewrites the author to the noreply form).
     try:
         cmd = f"gh api repos/apache/kafka/commits?author={login}&per_page=1"
         p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
@@ -133,7 +135,8 @@ def resolve_reviewer(login: str) -> tuple:
     except Exception as e:
         logger.debug(f"Failed to resolve {login} from commit history: {e}")
 
-    # Tier 2: GitHub user profile
+    # Tier 2: GitHub user profile. Only exposes an email when the reviewer
+    # has set a Public email in their profile settings.
     if not name or not email:
         try:
             cmd = f"gh api users/{login}"
