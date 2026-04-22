@@ -80,7 +80,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -875,10 +874,10 @@ public class ConfigCommandTest {
             "--all"));
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(List.of())));
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of()));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(resource, future));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
@@ -890,7 +889,7 @@ public class ConfigCommandTest {
             }
         };
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult).all();
+        verify(describeResult).values();
     }
 
     @Test
@@ -1041,30 +1040,29 @@ public class ConfigCommandTest {
         String brokerDefaultEntityName = "";
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1");
         ConfigResource resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, brokerDefaultEntityName);
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
         Config emptyConfig = new Config(List.of());
-        Map<ConfigResource, Config> resultMap = new HashMap<>();
-        resultMap.put(resourceCustom, emptyConfig);
-        resultMap.put(resourceDefault, emptyConfig);
-        future.complete(resultMap);
+        KafkaFutureImpl<Config> customFuture = new KafkaFutureImpl<>();
+        customFuture.complete(emptyConfig);
+        KafkaFutureImpl<Config> defaultFuture = new KafkaFutureImpl<>();
+        defaultFuture.complete(emptyConfig);
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         // make sure it will be called 2 times: (1) for broker "1" (2) for default broker ""
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(
+            resourceCustom, customFuture,
+            resourceDefault, defaultFuture
+        ));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertTrue(options.includeSynonyms(), "Synonyms not requested");
-                ConfigResource resource = resources.iterator().next();
-                assertEquals(ConfigResource.Type.BROKER, resource.type());
-                assertTrue(Objects.equals(resourceCustom.name(), resource.name()) || Objects.equals(resourceDefault.name(), resource.name()));
-                assertEquals(1, resources.size());
+                assertEquals(Set.of(resourceCustom, resourceDefault), new HashSet<>(resources));
                 return describeResult;
             }
         };
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult, times(2)).all();
+        verify(describeResult).values();
     }
 
     private void verifyAlterBrokerLoggerConfig(Node node, String resourceName, String entityName,
@@ -1267,9 +1265,10 @@ public class ConfigCommandTest {
 
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "1");
         ConfigEntry configEntry = new ConfigEntry("metrics", "*");
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of(configEntry)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(resourceCustom, future));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
@@ -1280,14 +1279,13 @@ public class ConfigCommandTest {
                 ConfigResource resource = resources.iterator().next();
                 assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.type());
                 assertEquals(resourceCustom.name(), resource.name());
-                future.complete(Map.of(resourceCustom, new Config(List.of(configEntry))));
                 return describeResult;
             }
         };
         mockAdminClient.incrementalAlterConfigs(Map.of(resourceCustom,
             List.of(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult).all();
+        verify(describeResult).values();
     }
 
     @Test
@@ -1380,9 +1378,10 @@ public class ConfigCommandTest {
     private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) throws Exception {
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
         ConfigEntry configEntry = new ConfigEntry("consumer.heartbeat.interval.ms", "6000");
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of(configEntry)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(resourceCustom, future));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
@@ -1393,14 +1392,13 @@ public class ConfigCommandTest {
                 ConfigResource resource = resources.iterator().next();
                 assertEquals(ConfigResource.Type.GROUP, resource.type());
                 assertEquals(resourceCustom.name(), resource.name());
-                future.complete(Map.of(resourceCustom, new Config(List.of(configEntry))));
                 return describeResult;
             }
         };
         mockAdminClient.incrementalAlterConfigs(Map.of(resourceCustom,
             List.of(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult).all();
+        verify(describeResult).values();
     }
 
     @Test
