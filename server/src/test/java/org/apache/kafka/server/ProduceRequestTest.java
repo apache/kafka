@@ -61,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ClusterTestDefaults(brokers = 3)
 public class ProduceRequestTest {
 
+    private static final String TOPIC = "topic";
+
     private final ClusterInstance cluster;
 
     ProduceRequestTest(ClusterInstance cluster) {
@@ -69,7 +71,7 @@ public class ProduceRequestTest {
 
     @ClusterTest
     public void testSimpleProduceRequest() throws Exception {
-        cluster.createTopic("topic", 3, (short) 2);
+        cluster.createTopic(TOPIC, 3, (short) 2);
         List<Integer> partitionAndLeader = findPartitionWithLeader();
         int partition = partitionAndLeader.get(0);
         int leaderId = partitionAndLeader.get(1);
@@ -107,8 +109,8 @@ public class ProduceRequestTest {
 
     @ClusterTest
     public void testProduceToNonReplica() throws Exception {
-        cluster.createTopic("topic", 1, (short) 1);
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition("topic", 0));
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
         Uuid topicId = getTopicId();
 
         int nonReplicaId = cluster.brokers().keySet().stream()
@@ -141,7 +143,7 @@ public class ProduceRequestTest {
 
     @ClusterTest
     public void testCorruptLz4ProduceRequest() throws Exception {
-        cluster.createTopic("topic", 3, (short) 2);
+        cluster.createTopic(TOPIC, 3, (short) 2);
         List<Integer> partitionAndLeader = findPartitionWithLeader();
         int partition = partitionAndLeader.get(0);
         int leaderId = partitionAndLeader.get(1);
@@ -191,9 +193,9 @@ public class ProduceRequestTest {
 
     @ClusterTest
     public void testZSTDProduceRequest() throws Exception {
-        cluster.createTopic("topic", 1, (short) 1,
+        cluster.createTopic(TOPIC, 1, (short) 1,
             Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, "zstd"));
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition("topic", 0));
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
 
         MemoryRecords memoryRecords = MemoryRecords.withRecords(Compression.zstd().build(),
             new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), "value".getBytes()));
@@ -202,7 +204,7 @@ public class ProduceRequestTest {
         ProduceRequestData data = new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setName("topic")
+                    .setName(TOPIC)
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
@@ -215,7 +217,7 @@ public class ProduceRequestTest {
         ProduceResponse response = sendProduceRequest(leaderId, new ProduceRequest.Builder((short) 7, (short) 7, data).build());
         var topicResponse = response.data().responses().iterator().next();
         var partitionResponse = topicResponse.partitionResponses().get(0);
-        assertEquals("topic", topicResponse.name());
+        assertEquals(TOPIC, topicResponse.name());
         assertEquals(0, partitionResponse.index());
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(0L, partitionResponse.baseOffset());
@@ -260,8 +262,8 @@ public class ProduceRequestTest {
     }
 
     private void doTestProduceWithInvalidTimestamp(String timestampConfig, long recordTimestamp) throws Exception {
-        cluster.createTopic("topic", 1, (short) 1, Map.of(timestampConfig, "1000"));
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition("topic", 0));
+        cluster.createTopic(TOPIC, 1, (short) 1, Map.of(timestampConfig, "1000"));
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
         Uuid topicId = getTopicId();
 
         ByteBuffer buf = ByteBuffer.allocate(512);
@@ -289,8 +291,8 @@ public class ProduceRequestTest {
         var topicResponse = response.data().responses().iterator().next();
         assertEquals(1, topicResponse.partitionResponses().size());
         var partitionResponse = topicResponse.partitionResponses().get(0);
-        assertEquals(new TopicIdPartition(topicId, 0, "topic"),
-            new TopicIdPartition(topicResponse.topicId(), partitionResponse.index(), "topic"));
+        assertEquals(new TopicIdPartition(topicId, 0, TOPIC),
+            new TopicIdPartition(topicResponse.topicId(), partitionResponse.index(), TOPIC));
         assertEquals(Errors.INVALID_TIMESTAMP, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(3, partitionResponse.recordErrors().size());
         for (int i = 0; i < partitionResponse.recordErrors().size(); i++) {
@@ -303,20 +305,20 @@ public class ProduceRequestTest {
 
     private Uuid getTopicId() throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {
-            return admin.describeTopics(List.of("topic"))
-                .topicNameValues().get("topic").get().topicId();
+            return admin.describeTopics(List.of(TOPIC))
+                .topicNameValues().get(TOPIC).get().topicId();
         }
     }
 
     private List<Integer> findPartitionWithLeader() throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {
-            TopicDescription desc = admin.describeTopics(List.of("topic"))
-                .topicNameValues().get("topic").get();
+            TopicDescription desc = admin.describeTopics(List.of(TOPIC))
+                .topicNameValues().get(TOPIC).get();
             return desc.partitions().stream()
                 .filter(p -> p.leader() != null && p.leader().id() != -1)
                 .map(p -> List.of(p.partition(), p.leader().id()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("No partition with leader found for topic topic"));
+                .orElseThrow(() -> new AssertionError("No partition with leader found for topic " + TOPIC));
         }
     }
 }
