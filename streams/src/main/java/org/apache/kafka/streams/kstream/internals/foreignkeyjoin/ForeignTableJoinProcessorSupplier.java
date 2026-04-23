@@ -120,7 +120,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
                 return;
             }
 
-            final Bytes prefixBytes = keySchema.prefixBytes(record.key());
+            final Bytes prefixBytes = keySchema.prefixBytes(record.key(), record.headers());
 
             //Perform the prefixScan and propagate the results
             try (final KeyValueIterator<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> prefixScanResults =
@@ -130,7 +130,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
                     final KeyValue<Bytes, ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> next = prefixScanResults.next();
                     // have to check the prefix because the range end is inclusive :(
                     if (prefixEquals(next.key.get(), prefixBytes.get())) {
-                        final CombinedKey<KRight, KLeft> combinedKey = keySchema.fromBytes(next.key);
+                        final CombinedKey<KRight, KLeft> combinedKey = keySchema.fromBytes(next.key, record.headers());
                         context().forward(
                             record.withKey(combinedKey.primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(

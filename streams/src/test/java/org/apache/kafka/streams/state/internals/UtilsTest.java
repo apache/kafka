@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -55,7 +56,7 @@ public class UtilsTest {
     // Header size's varint encoding cannot exceed 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
     private static final int MAX_VARINT_SIZE = 5;
     private static final int OVERFLOW_HEADERS_SIZE = (1 + MAX_VARINT_SIZE) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
-    // 1 byte header size, 0 byte empty headers, and timetsamp
+    // 1 byte header size, 0 byte empty headers, and timestamp
     private static final int MIN_SIZE = 1 + 0 + StateSerdes.TIMESTAMP_SIZE;
 
     @Test
@@ -132,7 +133,7 @@ public class UtilsTest {
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes(StandardCharsets.UTF_8));
         final ValueTimestampHeaders<String> input = ValueTimestampHeaders.make(VALUE_STR, TIMESTAMP, headers);
         try (
-            final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+            final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(new StringSerializer());
             final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String())
         ) {
             final byte[] inputBytes = serializer.serialize(TOPIC, input);
@@ -157,9 +158,9 @@ public class UtilsTest {
 
     @ParameterizedTest
     @ValueSource(bytes = { 0x10, 0x11 })
-    public void testEmptyHeadersAndTimestampWithInvalidHeaderSizes(final int invalidSize) {
+    public void testEmptyHeadersAndTimestampWithInvalidHeaderSizes(final byte invalidSize) {
         final byte[] invalid = new byte[MIN_SIZE];
-        invalid[0] = (byte) invalidSize; // header size
+        invalid[0] = invalidSize; // header size
         assertFalse(hasEmptyHeaders(invalid));
     }
 
@@ -186,12 +187,12 @@ public class UtilsTest {
     }
 
     private static byte[] timestampedValueWithEmptyHeaders(final byte[] value) {
-        // header size: 1 byte, emtpy headers: 0 byte, timestamp: 8 bytes, plain value length
+        // header size: 1 byte, empty headers: 0 byte, timestamp: 8 bytes, plain value length
         final byte[] res = new byte[1 + 0 + StateSerdes.TIMESTAMP_SIZE + value.length];
         final ByteBuffer buf = ByteBuffer.wrap(res);
         buf.put((byte) 0x00); // header size
         buf.putLong(TIMESTAMP);
-        buf.put(VALUE);
+        buf.put(value);
         return res;
     }
 

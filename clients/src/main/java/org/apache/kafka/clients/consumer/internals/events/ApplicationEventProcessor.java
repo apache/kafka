@@ -293,8 +293,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
-        future.whenComplete(complete(event.future()));
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
+        future.whenComplete((result, error) -> {
+            if (error != null) {
+                event.future().completeExceptionally(error);
+            } else {
+                Map<TopicPartition, OffsetAndMetadata> offsetMap = result.toOffsetMapWithNulls();
+                event.future().complete(offsetMap);
+            }
+        });
     }
 
     /**
@@ -752,6 +759,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         // as we're processing before any new fetching starts
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
+
+        // We completed checking pending reconciliations (commits triggered, revoked partitions marked to prevent fetching)
+        // so the application thread poll loop can safely continue progress now (fetching)
+        event.markReconciliationCheckComplete();
 
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();

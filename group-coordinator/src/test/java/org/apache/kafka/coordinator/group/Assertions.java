@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -51,6 +52,7 @@ public class Assertions {
     private static final BiConsumer<ApiMessage, ApiMessage> API_MESSAGE_DEFAULT_COMPARATOR = org.junit.jupiter.api.Assertions::assertEquals;
     private static final Map<Class<?>, BiConsumer<ApiMessage, ApiMessage>> API_MESSAGE_COMPARATORS = Map.of(
         // Register request/response comparators.
+        ConsumerGroupDescribeResponseData.class, Assertions::assertConsumerGroupDescribeResponse,
         ConsumerGroupHeartbeatResponseData.class, Assertions::assertConsumerGroupHeartbeatResponse,
         ShareGroupHeartbeatResponseData.class, Assertions::assertShareGroupHeartbeatResponse,
         SyncGroupResponseData.class, Assertions::assertSyncGroupResponse,
@@ -147,6 +149,41 @@ public class Assertions {
                 .actual(actual)
                 .buildAndThrow();
         }
+    }
+
+    public static void normalizeAssignment(
+        ConsumerGroupDescribeResponseData.Assignment assignment
+    ) {
+        if (assignment != null) {
+            assignment.topicPartitions().sort(Comparator.comparing(
+                ConsumerGroupDescribeResponseData.TopicPartitions::topicId
+            ));
+            assignment.topicPartitions().forEach(topic -> topic.partitions().sort(Integer::compareTo));
+        }
+    }
+
+    private static void assertConsumerGroupDescribeResponse(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        var expected = (ConsumerGroupDescribeResponseData) exp.duplicate();
+        var actual = (ConsumerGroupDescribeResponseData) act.duplicate();
+
+        Consumer<ConsumerGroupDescribeResponseData> normalize = message ->
+            message.groups().forEach(group -> {
+                group.members().sort(Comparator.comparing(
+                    ConsumerGroupDescribeResponseData.Member::memberId
+                ));
+                group.members().forEach(member -> {
+                    normalizeAssignment(member.assignment());
+                    normalizeAssignment(member.targetAssignment());
+                });
+            });
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
     }
 
     private static void assertConsumerGroupHeartbeatResponse(

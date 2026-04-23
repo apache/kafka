@@ -105,70 +105,72 @@ public abstract class AbstractSessionBytesStoreTest {
         switch (storeType()) {
             case RocksDBSessionStore: {
                 return Stores.sessionStoreBuilder(
-                        Stores.persistentSessionStore(
-                                ROCK_DB_STORE_NAME,
-                                ofMillis(retentionPeriod)),
-                        keySerde,
-                        valueSerde).build();
+                    Stores.persistentSessionStore(
+                        ROCK_DB_STORE_NAME,
+                        ofMillis(retentionPeriod)),
+                    keySerde,
+                    valueSerde).build();
             }
             case RocksDBTimeOrderedSessionStoreWithIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                ROCK_DB_STORE_NAME,
-                                retentionPeriod,
-                                true
-                        ),
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                        ROCK_DB_STORE_NAME,
+                        retentionPeriod,
+                        true
+                    ),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithoutIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                ROCK_DB_STORE_NAME,
-                                retentionPeriod,
-                                false
-                        ),
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                        ROCK_DB_STORE_NAME,
+                        retentionPeriod,
+                        false
+                    ),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBSessionStoreWithHeaders: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod) {
-                            @Override
-                            public SessionStore<Bytes, byte[]> get() {
-                                return new RocksDBSessionStoreWithHeaders(
-                                    new RocksDBSegmentedBytesStore(
-                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(),
-                                        new SessionKeySchema()));
-                            }
-                        },
-                        keySerde,
-                        valueSerde
+                    new RocksDbSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod) {
+                        @Override
+                        public SessionStore<Bytes, byte[]> get() {
+                            return new RocksDBSessionStoreWithHeaders(
+                                new RocksDBSegmentedBytesStore(
+                                    name(), metricsScope(), retentionPeriod(), segmentIntervalMs(),
+                                    new SessionKeySchema()));
+                        }
+                    },
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithHeadersWithIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true, true),
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithHeadersWithoutIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false, true),
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case InMemoryStore: {
                 return Stores.sessionStoreBuilder(
-                        Stores.inMemorySessionStore(
-                                IN_MEMORY_STORE_NAME,
-                                ofMillis(retentionPeriod)),
-                        keySerde,
-                        valueSerde).build();
+                    Stores.inMemorySessionStore(
+                        IN_MEMORY_STORE_NAME,
+                        ofMillis(retentionPeriod)
+                    ),
+                    keySerde,
+                    valueSerde
+                ).build();
             }
             default:
                 throw new IllegalStateException("Unknown StoreType: " + storeType());

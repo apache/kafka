@@ -44,6 +44,8 @@ import java.util.List;
  *   <li>New format (HEADERS CF): {@code [headersSize(varint)][headersBytes][value]}</li>
  * </ul>
  * <p>
+ * TODO: Current format is {@code [headersSize(varint)][headersBytes][timestamp(8)][value]}.
+ *       The new format will be introduced in KAFKA-20334.
  * This is similar to {@link RocksDBMigratingSessionStoreWithHeaders} but for window stores.
  * Unlike timestamped stores, window stores don't include timestamp in the value (it's in the key).
  */
@@ -66,7 +68,7 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
             new ColumnFamilyDescriptor(WINDOW_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions),
-            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
         );
         final ColumnFamilyHandle noHeadersColumnFamily = columnFamilies.get(0);
         final ColumnFamilyHandle withHeadersColumnFamily = columnFamilies.get(1);

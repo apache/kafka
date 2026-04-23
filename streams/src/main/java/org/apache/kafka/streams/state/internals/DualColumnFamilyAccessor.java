@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -240,11 +241,6 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     @Override
-    public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
-        accessor.flush(oldColumnFamily, newColumnFamily, offsetColumnFamilyHandle);
-    }
-
-    @Override
     public void addToBatch(final byte[] key,
                            final byte[] value,
                            final WriteBatchInterface batch) throws RocksDBException {
@@ -265,7 +261,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     private static class RocksDBDualCFIterator
-        extends org.apache.kafka.common.utils.AbstractIterator<KeyValue<Bytes, byte[]>>
+        extends AbstractIterator<KeyValue<Bytes, byte[]>>
         implements ManagedKeyValueIterator<Bytes, byte[]> {
 
         // RocksDB's JNI interface does not expose getters/setters that allow the
