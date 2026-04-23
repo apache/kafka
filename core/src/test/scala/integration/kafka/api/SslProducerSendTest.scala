@@ -45,6 +45,9 @@ import scala.collection.mutable
 import scala.concurrent.ExecutionException
 import scala.jdk.javaapi.OptionConverters
 
+// PlaintextProducerSendTest was reconstructed using Java.
+// However, ClusterTest doesn't support broker security protocol for now,
+// so TODO: SslProducerSendTest is left here and should be migrated after the feature is supported.
 class SslProducerSendTest extends KafkaServerTestHarness {
 
   override protected def securityProtocol = SecurityProtocol.SSL
