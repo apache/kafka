@@ -70,9 +70,9 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testSimpleProduceRequest() throws Exception {
         cluster.createTopic("topic", 3, (short) 2);
-        int[] partitionAndLeader = findPartitionWithLeader();
-        int partition = partitionAndLeader[0];
-        int leaderId = partitionAndLeader[1];
+        List<Integer> partitionAndLeader = findPartitionWithLeader();
+        int partition = partitionAndLeader.get(0);
+        int leaderId = partitionAndLeader.get(1);
         Uuid topicId = getTopicId();
 
         sendAndCheckProduceResponse(leaderId, topicId, partition,
@@ -142,9 +142,9 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testCorruptLz4ProduceRequest() throws Exception {
         cluster.createTopic("topic", 3, (short) 2);
-        int[] partitionAndLeader = findPartitionWithLeader();
-        int partition = partitionAndLeader[0];
-        int leaderId = partitionAndLeader[1];
+        List<Integer> partitionAndLeader = findPartitionWithLeader();
+        int partition = partitionAndLeader.get(0);
+        int leaderId = partitionAndLeader.get(1);
         Uuid topicId = getTopicId();
 
         MemoryRecords memoryRecords = MemoryRecords.withRecords(Compression.lz4().build(),
@@ -308,15 +308,15 @@ public class ProduceRequestTest {
         }
     }
 
-    private int[] findPartitionWithLeader() throws ExecutionException, InterruptedException {
+    private List<Integer> findPartitionWithLeader() throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {
             TopicDescription desc = admin.describeTopics(List.of("topic"))
                 .topicNameValues().get("topic").get();
             return desc.partitions().stream()
                 .filter(p -> p.leader() != null && p.leader().id() != -1)
-                .map(p -> new int[]{p.partition(), p.leader().id()})
+                .map(p -> List.of(p.partition(), p.leader().id()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("No partition with leader found for topic " + "topic"));
+                .orElseThrow(() -> new AssertionError("No partition with leader found for topic topic"));
         }
     }
 }
