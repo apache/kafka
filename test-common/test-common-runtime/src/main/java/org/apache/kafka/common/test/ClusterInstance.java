@@ -51,7 +51,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.junit.RaftClusterInvocationContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
@@ -72,6 +71,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -268,7 +268,7 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
-        RaftClusterInvocationContext.waitForCondition(
+        waitForCondition(
             () -> brokers.stream().allMatch(
                 broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
                 60000L, topic + " metadata not propagated after 60000 ms");
@@ -278,17 +278,17 @@ public interface ClusterInstance {
         TopicPartition topicPartition = new TopicPartition(topic, 0);
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
-        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.replicaManager().onlinePartition(topicPartition).isEmpty()
         ), "Replica manager's should have deleted all of this topic's partitions");
 
         // Ensure that logs from all replicas are deleted
-        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.logManager().getLog(topicPartition, false).isEmpty()
         ), "Replica logs not deleted after delete topic is complete");
 
         // Ensure that the topic is removed from all cleaner offsets
-        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker -> {
+        waitForCondition(() -> brokers.stream().allMatch(broker -> {
             Collection<File> liveLogDirs = broker.logManager().liveLogDirs();
             return liveLogDirs.stream().allMatch(logDir -> {
                 OffsetCheckpointFile checkpointFile;
@@ -302,13 +302,13 @@ public interface ClusterInstance {
         }), "Cleaner offset for deleted partition should have been removed");
 
         // Ensure that the topic directories are soft-deleted
-        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.config().logDirs().stream().allMatch(logDir ->
                     !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
         ), "Failed to soft-delete the data to a delete directory");
 
         // Ensure that the topic directories are hard-deleted
-        RaftClusterInvocationContext.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.config().logDirs().stream().allMatch(logDir ->
                     Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                         partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
@@ -357,7 +357,7 @@ public interface ClusterInstance {
 
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
-        RaftClusterInvocationContext.waitForCondition(
+        waitForCondition(
             () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
@@ -371,7 +371,7 @@ public interface ClusterInstance {
     default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
         for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
-            RaftClusterInvocationContext.waitForCondition(
+            waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
@@ -391,7 +391,7 @@ public interface ClusterInstance {
     default void waitAcls(AclBindingFilter filter, Collection<AccessControlEntry> entries) throws InterruptedException {
         for (Authorizer authorizer : authorizers()) {
             AtomicReference<Set<AccessControlEntry>> actualEntries = new AtomicReference<>(new HashSet<>());
-            RaftClusterInvocationContext.waitForCondition(() -> {
+            waitForCondition(() -> {
                 Set<AccessControlEntry> accessControlEntrySet = new HashSet<>();
                 authorizer.acls(filter).forEach(aclBinding -> accessControlEntrySet.add(aclBinding.entry()));
                 actualEntries.set(accessControlEntrySet);
@@ -457,5 +457,26 @@ public interface ClusterInstance {
 
         throw new AssertionError("Timing out after " + timeoutMs +
                 " ms since a leader was not elected for partition " + topicPartition);
+    }
+
+    private void waitForCondition(Supplier<Boolean> condition, String details) throws InterruptedException {
+        waitForCondition(condition, 15_000L, details);
+    }
+
+    private void waitForCondition(Supplier<Boolean> condition, long maxWaitMs, String details) throws InterruptedException {
+        Exception lastException = null;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (Boolean.TRUE.equals(condition.get())) return;
+            } catch (Exception e) {
+                lastException = e;
+            }
+
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + details, lastException);
     }
 }
