@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -532,6 +533,15 @@ public class StreamsConfig extends AbstractConfig {
     public static final String IN_MEMORY = "in_memory";
     @Deprecated
     public static final String DEFAULT_DSL_STORE = ROCKS_DB;
+
+    /** {@code default.interactive.query.isolation.level} */
+    public static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG = "default.interactive.query.isolation.level";
+    private static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DOC = "The default <code>IsolationLevel</code> used by interactive queries. " +
+        "Only meaningful when <code>" + "enable.transactional.statestores" + "</code> is <code>true</code>: " +
+        "<code>READ_UNCOMMITTED</code> reads include writes staged in the transaction buffer since the last commit; " +
+        "<code>READ_COMMITTED</code> reads skip the transaction buffer and return only committed data. " +
+        "IQv1 queries always use this value. IQv2 queries use this value as a default, but can override it per-query.";
+    public static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DEFAULT = IsolationLevel.READ_UNCOMMITTED.name();
 
     /** {@code dsl.store.suppliers.class } */
     public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
@@ -1157,6 +1167,14 @@ public class StreamsConfig extends AbstractConfig {
                     ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
                     Importance.LOW,
                     DSL_STORE_FORMAT_DOC)
+            .define(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG,
+                    Type.STRING,
+                    DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(
+                        IsolationLevel.READ_UNCOMMITTED.name(),
+                        IsolationLevel.READ_COMMITTED.name()),
+                    Importance.LOW,
+                    DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
@@ -2035,6 +2053,14 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return Map of the client tags.
      */
+    /**
+     * Return the configured default {@link IsolationLevel} used by interactive queries.
+     */
+    public IsolationLevel defaultInteractiveQueryIsolationLevel() {
+        return IsolationLevel.valueOf(
+            getString(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
+    }
+
     @SuppressWarnings("WeakerAccess")
     public Map<String, String> getClientTags() {
         return originalsWithPrefix(CLIENT_TAG_PREFIX).entrySet().stream().collect(

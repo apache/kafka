@@ -53,7 +53,8 @@ public class QueryableStoreProviderTest {
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                new GlobalStateStoreProvider(globalStateStores)
+                new GlobalStateStoreProvider(globalStateStores),
+                () -> org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED
             );
         storeProvider.addStoreProviderForThread("thread1", theStoreProvider);
     }
