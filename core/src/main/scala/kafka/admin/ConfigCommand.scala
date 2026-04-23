@@ -206,8 +206,8 @@ object ConfigCommand extends Logging {
 
       case BrokerLoggerConfigType =>
         val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false).map(_.name)
-        // fail the command if any of the broker loggers to be added do not exist
-        val invalidBrokerLoggers = configsToBeAdded.keys.filterNot(validLoggers.contains)
+        // fail the command if any of the configured broker loggers do not exist
+        val invalidBrokerLoggers = configsToBeDeleted.filterNot(validLoggers.contains) ++ configsToBeAdded.keys.filterNot(validLoggers.contains)
         if (invalidBrokerLoggers.nonEmpty)
           throw new InvalidConfigurationException(s"Invalid broker logger(s): ${invalidBrokerLoggers.mkString(",")}")
 
