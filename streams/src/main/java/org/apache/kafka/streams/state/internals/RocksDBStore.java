@@ -310,12 +310,28 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    /**
+     * Creates lightweight {@link ColumnFamilyOptions} for the offsets column family. The offsets CF
+     * stores only a small number of key-value pairs (one per changelog partition), so it does not
+     * need the heavyweight options used for the data CF (large write buffers, bloom filters,
+     * aggressive compaction). Sharing the data CF's options causes unnecessary write amplification
+     * and compaction pressure that can contribute to RocksDB write stalls under heavy restore I/O.
+     */
+    protected static ColumnFamilyOptions createOffsetsCFOptions() {
+        final ColumnFamilyOptions offsetsCFOptions = new ColumnFamilyOptions();
+        offsetsCFOptions.setCompressionType(CompressionType.NO_COMPRESSION);
+        offsetsCFOptions.setCompactionStyle(CompactionStyle.LEVEL);
+        offsetsCFOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
+        offsetsCFOptions.setMaxWriteBufferNumber(2);
+        return offsetsCFOptions;
+    }
+
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
         );
 
         cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1), columnFamilies.get(0));
