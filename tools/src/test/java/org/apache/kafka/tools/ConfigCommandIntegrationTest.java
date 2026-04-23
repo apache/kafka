@@ -644,6 +644,49 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
+    @ClusterTest
+    public void testDeleteNonExistentConfigIsIdempotentWithBootstrapController() throws Exception {
+        String topicName = "test-delete-nonexistent-topic";
+        try (Admin bootstrapControllerClient = cluster.admin(Map.of(), true);
+             Admin bootstrapServerClient = cluster.admin(Map.of())) {
+            bootstrapServerClient.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "topics", "--entity-name", topicName,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-name", defaultBrokerId,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-default",
+                    "--alter", "--delete-config", "non.existent.config"))));
+        }
+    }
+
+    @ClusterTest(brokers = 2)
+    public void testAlterBrokerConfigWithOfflineBroker() throws Exception {
+        int offlineBrokerId = cluster.brokerIds().stream()
+            .filter(id -> !cluster.controllerIds().contains(id))
+            .findFirst()
+            .orElseThrow();
+        cluster.shutdownBroker(offlineBrokerId);
+        TestUtils.waitForCondition(
+            () -> !cluster.aliveBrokers().containsKey(offlineBrokerId),
+            "Broker " + offlineBrokerId + " did not shut down in time"
+        );
+
+        try (Admin client = cluster.admin(Map.of(), true)) {
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-name", String.valueOf(offlineBrokerId),
+                    "--alter", "--delete-config", "log.retention.ms"))));
+        }
+    }
+
     // Test case from KAFKA-13788
     @ClusterTest(serverProperties = {
         // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
