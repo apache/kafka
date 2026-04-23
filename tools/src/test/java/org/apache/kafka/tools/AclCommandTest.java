@@ -446,10 +446,8 @@ public class AclCommandTest {
 
     private Map.Entry<String, String> callMain(List<String> args) {
         Exit.setExitProcedure((status, message) -> {
-            if (status == 1)
-                throw new RuntimeException("Exiting command");
-            else
-                throw new AssertionError("Unexpected exit with status " + status);
+            if (status != 0)
+                throw new RuntimeException("Exiting command with status " + status);
         });
         try {
             return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));

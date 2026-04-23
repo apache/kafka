@@ -129,11 +129,16 @@ public class ReassignPartitionsCommand {
         "is removed.";
 
     public static void main(String[] args) {
-        ReassignPartitionsCommandOptions opts = validateAndParseArgs(args);
-        boolean failed = true;
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
+        int exitCode = 1;
         Admin adminClient = null;
 
         try {
+            ReassignPartitionsCommandOptions opts = validateAndParseArgs(args);
             Properties props = opts.options.has(opts.commandConfigOpt)
                 ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
                 : new Properties();
@@ -145,7 +150,7 @@ public class ReassignPartitionsCommand {
             props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool");
             adminClient = Admin.create(props);
             handleAction(adminClient, opts);
-            failed = false;
+            exitCode = 0;
         } catch (TerseException e) {
             System.out.println(e.getMessage());
         } catch (Throwable e) {
@@ -157,10 +162,7 @@ public class ReassignPartitionsCommand {
                 adminClient.close();
             }
         }
-        // If the command failed, exit with a non-zero exit code.
-        if (failed) {
-            Exit.exit(1);
-        }
+        return exitCode;
     }
 
     private static void handleAction(Admin adminClient, ReassignPartitionsCommandOptions opts) throws IOException, ExecutionException, InterruptedException, TerseException {

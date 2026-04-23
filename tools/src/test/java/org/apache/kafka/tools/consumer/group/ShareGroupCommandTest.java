@@ -82,8 +82,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
-
 import static org.apache.kafka.common.KafkaFuture.completedFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -648,7 +646,15 @@ public class ShareGroupCommandTest {
     public void testListWithUnrecognizedOption() {
         String bootstrapServer = "localhost:9092";
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--list", "--verbose"};
-        assertThrows(OptionException.class, () -> getShareGroupService(cgcArgs, new MockAdminClient()));
+        Exit.setExitProcedure((exitCode, message) -> {
+            assertEquals(1, exitCode);
+            throw new RuntimeException();
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> getShareGroupService(cgcArgs, new MockAdminClient()));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test

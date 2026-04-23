@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 import static org.apache.kafka.tools.ToolsUtils.minus;
@@ -150,7 +151,11 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         allResetOffsetScenarioOpts = Set.of(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt);
         allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
-        options = parser.parse(args);
+        try {
+            options = parser.parse(args);
+        } catch (OptionException e) {
+            CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+        }
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})

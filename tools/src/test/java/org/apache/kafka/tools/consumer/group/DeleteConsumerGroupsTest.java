@@ -30,6 +30,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -44,8 +45,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import joptsimple.OptionException;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -79,7 +78,15 @@ public class DeleteConsumerGroupsTest {
     @Test
     public void testDeleteWithTopicOption() {
         String[] cgcArgs = new String[]{"--bootstrap-server", "localhost:62241", "--delete", "--group", getDummyGroupId(), "--topic"};
-        assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        Exit.setExitProcedure((exitCode, message) -> {
+            assertEquals(1, exitCode);
+            throw new RuntimeException();
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
 
@@ -284,7 +291,15 @@ public class DeleteConsumerGroupsTest {
     @Test
     public void testDeleteWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", "localhost:62241", "--delete", "--group", getDummyGroupId()};
-        assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        Exit.setExitProcedure((exitCode, message) -> {
+            assertEquals(1, exitCode);
+            throw new RuntimeException();
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private String getDummyGroupId() {

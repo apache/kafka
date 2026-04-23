@@ -42,6 +42,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.OffsetsUtils;
@@ -74,7 +75,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
@@ -82,6 +82,11 @@ public class ConsumerGroupCommand {
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String[] args) {
+        int exitCode = 0;
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         try {
             List<OptionSpec<?>> actions = List.of(
@@ -95,8 +100,7 @@ public class ConsumerGroupCommand {
 
             // Should have exactly one action.
             if (actions.stream().filter(opts.options::has).count() != 1) {
-                CommandLineUtils.printUsageAndExit(
-                    opts.parser,
+                throw new IllegalArgumentException(
                     String.format(
                         "Command must include exactly one action: %s",
                         actions.stream().map(opt ->
@@ -107,12 +111,22 @@ public class ConsumerGroupCommand {
             }
 
             run(opts);
-        } catch (OptionException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            try {
+                opts.parser.printHelpOn(System.err);
+            } catch (IOException ex) {
+                printError(ex.getMessage(), Optional.of(ex));
+            }
+            System.err.println(e.getMessage());
+            exitCode = 1;
+        } catch (Throwable e) {
+            printError("Executing consumer group command failed due to " + e.getMessage(), Optional.of(e));
+            exitCode = 1;
         }
+        return exitCode;
     }
 
-    static void run(ConsumerGroupCommandOptions opts) {
+    static void run(ConsumerGroupCommandOptions opts) throws Exception {
         if (opts.options.has(opts.validateRegexOpt)) {
             validateRegex(opts.options.valueOf(opts.validateRegexOpt));
             return;
@@ -135,10 +149,6 @@ public class ConsumerGroupCommand {
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
-        } catch (IllegalArgumentException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-        } catch (Throwable e) {
-            printError("Executing consumer group command failed due to " + e.getMessage(), Optional.of(e));
         }
     }
 

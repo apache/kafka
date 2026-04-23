@@ -28,7 +28,7 @@ public class ConsumerGroupCommandTest {
     @Test
     public void testValidateRegexCommandWithValidRegex() {
         String output = ToolsTestUtils.grabConsoleOutput(
-            () -> ConsumerGroupCommand.main(List.of(
+            () -> ConsumerGroupCommand.mainNoExit(List.of(
                 "--validate-regex",
                 "foo.*"
             ).toArray(new String[0]))
@@ -43,7 +43,7 @@ public class ConsumerGroupCommandTest {
     @Test
     public void testValidateRegexCommandWithInvalidRegex() {
         String output = ToolsTestUtils.grabConsoleOutput(
-            () -> ConsumerGroupCommand.main(List.of(
+            () -> ConsumerGroupCommand.mainNoExit(List.of(
                 "--validate-regex",
                 "[foo.*"
             ).toArray(new String[0]))

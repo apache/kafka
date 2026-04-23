@@ -1115,7 +1115,15 @@ public class DescribeConsumerGroupTest {
     public void testDescribeWithUnrecognizedNewConsumerOption() {
         String group = GROUP_PREFIX +  "unrecognized";
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", "localhost:9092", "--describe", "--group", group};
-        assertThrows(joptsimple.OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        Exit.setExitProcedure((exitCode, message) -> {
+            assertEquals(1, exitCode);
+            throw new RuntimeException();
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test

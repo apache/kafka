@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
-    private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+    private int lastExitCode;
     private static JMXConnectorServer jmxAgent;
     private static String jmxUrl;
 
@@ -78,19 +77,29 @@ public class JmxToolTest {
 
     @BeforeEach
     public void beforeEach() {
-        Exit.setExitProcedure(exitProcedure);
-    }
-
-    @AfterEach
-    public void afterEach() {
-        Exit.resetExitProcedure();
+        lastExitCode = -1;
     }
 
     @Test
     public void kafkaVersion() {
-        String out = executeAndGetOut("--version");
-        assertNormalExit();
-        assertTrue(out.contains(AppInfoParser.getVersion()));
+        Exit.setExitProcedure((statusCode, message) -> {
+            lastExitCode = statusCode;
+            throw new RuntimeException();
+        });
+        try {
+            String out = ToolsTestUtils.captureStandardOut(() -> {
+                try {
+                    JmxTool.execute(new String[]{"--version"});
+                } catch (RuntimeException ignored) {
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            assertNormalExit();
+            assertTrue(out.contains(AppInfoParser.getVersion()));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test
@@ -118,15 +127,30 @@ public class JmxToolTest {
 
     @Test
     public void helpOptions() {
-        String[] expectedOptions = new String[]{
-            "--attributes", "--date-format", "--help", "--jmx-auth-prop",
-            "--jmx-ssl-enable", "--jmx-url", "--object-name", "--one-time",
-            "--report-format", "--reporting-interval", "--version", "--wait"
-        };
-        String err = executeAndGetErr("--help");
-        assertCommandFailure();
-        for (String option : expectedOptions) {
-            assertTrue(err.contains(option), option);
+        Exit.setExitProcedure((statusCode, message) -> {
+            lastExitCode = statusCode;
+            throw new RuntimeException();
+        });
+        try {
+            String[] expectedOptions = new String[]{
+                "--attributes", "--date-format", "--help", "--jmx-auth-prop",
+                "--jmx-ssl-enable", "--jmx-url", "--object-name", "--one-time",
+                "--report-format", "--reporting-interval", "--version", "--wait"
+            };
+            String err = ToolsTestUtils.captureStandardErr(() -> {
+                try {
+                    JmxTool.execute(new String[]{"--help"});
+                } catch (RuntimeException ignored) {
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            assertCommandFailure();
+            for (String option : expectedOptions) {
+                assertTrue(err.contains(option), option);
+            }
+        } finally {
+            Exit.resetExitProcedure();
         }
     }
 
@@ -139,6 +163,7 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
+        assertNormalExit();
         Arrays.stream(out.split("\\r?\\n")).forEach(line ->
             assertTrue(line.matches("([a-zA-Z0-9=:,.]+),\"([ -~]+)\""), line)
         );
@@ -153,6 +178,7 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
+        assertNormalExit();
         Arrays.stream(out.split("\\r?\\n")).forEach(line ->
             assertTrue(line.matches("([a-zA-Z0-9=:,.]+)\\t([ -~]+)"), line)
         );
@@ -367,25 +393,17 @@ public class JmxToolTest {
     }
 
     private String execute(String[] args, boolean err) {
-        Runnable runnable = () -> {
-            try {
-                JmxTool.main(args);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        };
+        Runnable runnable = () -> lastExitCode = JmxTool.mainNoExit(args);
         return err ? ToolsTestUtils.captureStandardErr(runnable)
                     : ToolsTestUtils.captureStandardOut(runnable);
     }
 
     private void assertNormalExit() {
-        assertTrue(exitProcedure.hasExited());
-        assertEquals(0, exitProcedure.statusCode());
+        assertEquals(0, lastExitCode);
     }
 
     private void assertCommandFailure() {
-        assertTrue(exitProcedure.hasExited());
-        assertEquals(1, exitProcedure.statusCode());
+        assertEquals(1, lastExitCode);
     }
 
     private Map<String, String> parseCsv(String value) {

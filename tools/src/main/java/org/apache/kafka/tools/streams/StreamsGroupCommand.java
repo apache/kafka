@@ -116,7 +116,7 @@ public class StreamsGroupCommand {
                 try {
                     opts.parser.printHelpOn(System.err);
                 } catch (IOException ex) {
-                    printError(e.getMessage(), Optional.of(ex));
+                    printError(ex.getMessage(), Optional.of(ex));
                 }
             }
             exitCode = 1;

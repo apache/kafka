@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 import static org.apache.kafka.tools.ToolsUtils.minus;
@@ -203,7 +204,12 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
         allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
-        options = parser.parse(args);
+        try {
+            options = parser.parse(args);
+        } catch (OptionException e) {
+            CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+        }
+
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})

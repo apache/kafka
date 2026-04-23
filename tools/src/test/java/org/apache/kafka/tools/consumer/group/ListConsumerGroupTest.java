@@ -34,6 +34,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -52,8 +53,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-
-import joptsimple.OptionException;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -124,7 +123,15 @@ public class ListConsumerGroupTest {
     @ClusterTest
     public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", clusterInstance.bootstrapServers(), "--list"};
-        Assertions.assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
+        Exit.setExitProcedure((exitCode, message) -> {
+            Assertions.assertEquals(1, exitCode);
+            throw new RuntimeException();
+        });
+        try {
+            Assertions.assertThrows(RuntimeException.class, () -> getConsumerGroupService(cgcArgs));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @ClusterTest
@@ -591,7 +598,7 @@ public class ListConsumerGroupTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(args.toArray(new String[0])));
+            String output = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.mainNoExit(args.toArray(new String[0])));
             out.set(output);
 
             int index = 0;

@@ -42,6 +42,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.OffsetsUtils;
@@ -66,13 +67,17 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
 
 public class ShareGroupCommand {
 
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String[] args) {
+        int exitCode = 0;
         ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
         try {
             opts.checkArgs();
@@ -81,15 +86,25 @@ public class ShareGroupCommand {
             // should have exactly one action
             long actions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).filter(opts.options::has).count();
             if (actions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets.");
+                throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets.");
 
             run(opts);
-        } catch (OptionException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            try {
+                opts.parser.printHelpOn(System.err);
+            } catch (IOException ex) {
+                printError(ex.getMessage(), Optional.of(ex));
+            }
+            System.err.println(e.getMessage());
+            exitCode = 1;
+        } catch (Throwable e) {
+            printError("Executing share group command failed due to " + e.getMessage(), Optional.of(e));
+            exitCode = 1;
         }
+        return exitCode;
     }
 
-    public static void run(ShareGroupCommandOptions opts) {
+    static void run(ShareGroupCommandOptions opts) throws Exception {
         try (ShareGroupService shareGroupService = new ShareGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 shareGroupService.listGroups();
@@ -102,10 +117,6 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 shareGroupService.deleteOffsets();
             }
-        } catch (IllegalArgumentException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-        } catch (Throwable e) {
-            printError("Executing share group command failed due to " + e.getMessage(), Optional.of(e));
         }
     }
 

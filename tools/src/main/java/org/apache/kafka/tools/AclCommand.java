@@ -72,19 +72,27 @@ public class AclCommand {
     private static final String NL = System.lineSeparator();
 
     public static void main(String[] args) {
-        AclCommandOptions opts = new AclCommandOptions(args);
-        try (Admin admin = Admin.create(adminConfigs(opts))) {
-            if (opts.options.has(opts.addOpt)) {
-                addAcls(admin, opts);
-            } else if (opts.options.has(opts.removeOpt)) {
-                removeAcls(admin, opts);
-            } else if (opts.options.has(opts.listOpt)) {
-                listAcls(admin, opts);
+        Exit.exit(mainNoExit(args));
+    }
+
+    // Visible for testing
+    static int mainNoExit(String[] args) {
+        try {
+            AclCommandOptions opts = new AclCommandOptions(args);
+            try (Admin admin = Admin.create(adminConfigs(opts))) {
+                if (opts.options.has(opts.addOpt)) {
+                    addAcls(admin, opts);
+                } else if (opts.options.has(opts.removeOpt)) {
+                    removeAcls(admin, opts);
+                } else if (opts.options.has(opts.listOpt)) {
+                    listAcls(admin, opts);
+                }
             }
+            return 0;
         } catch (Throwable e) {
             System.out.println("Error while executing ACL command: " + e.getMessage());
             System.out.println(Utils.stackTrace(e));
-            Exit.exit(1);
+            return 1;
         }
     }
 
