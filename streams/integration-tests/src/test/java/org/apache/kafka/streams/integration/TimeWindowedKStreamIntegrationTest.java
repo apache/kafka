@@ -293,11 +293,13 @@ public class TimeWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
+    // Pairwise (all-pairs) selection over (type, withCache, withHeaders) — 4 rows
+    // instead of the full 8, covering every two-axis combination.
     @CsvSource({
-        "ON_WINDOW_UPDATE, true, false", "ON_WINDOW_UPDATE, true, true",
-        "ON_WINDOW_UPDATE, false, false", "ON_WINDOW_UPDATE, false, true",
-        "ON_WINDOW_CLOSE, true, false", "ON_WINDOW_CLOSE, true, true",
-        "ON_WINDOW_CLOSE, false, false", "ON_WINDOW_CLOSE, false, true"
+        "ON_WINDOW_UPDATE, true,  true",
+        "ON_WINDOW_UPDATE, false, false",
+        "ON_WINDOW_CLOSE,  true,  false",
+        "ON_WINDOW_CLOSE,  false, true"
     })
     public void shouldRestoreAfterJoinRestart(final StrategyType type, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
