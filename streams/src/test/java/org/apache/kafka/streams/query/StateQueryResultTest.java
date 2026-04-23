@@ -58,7 +58,7 @@ class StateQueryResultTest {
     void getOnlyPartitionResultWithSingleFailureResultTest() {
         stringStateQueryResult.addResult(0, invalidResult);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
-        assertThat("Single partition failure result should be returned as failure", result.isFailure(), is(true));
+        assertThat("Invalid query result should be a failure", result.isFailure(), is(true));
     }
 
     @Test
