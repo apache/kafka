@@ -108,11 +108,12 @@ def resolve_reviewer(login: str) -> tuple:
     """Map a GitHub login to (name, email).
 
     Tries three tiers in order: repo commit history, GitHub user profile,
-    and past `Reviewers:` trailers in git log (matched by name).
-    Noreply emails (@users.noreply.github.com) are treated as missing since
-    they are GitHub privacy placeholders that do not identify the reviewer.
-    Returns (name, None) when no usable email is found; the caller falls
-    back to the '(@login)' form in the Reviewers trailer.
+    and past `Reviewers:` trailers searched via GitHub commit search API
+    (matched by name). Noreply emails (@users.noreply.github.com) are
+    treated as missing since they are GitHub privacy placeholders that do
+    not identify the reviewer. Returns (name, None) when no usable email
+    is found; the caller falls back to the '(@login)' form in the
+    Reviewers trailer.
     """
     def _usable_email(e):
         if not e or e.endswith("@users.noreply.github.com"):
@@ -152,29 +153,35 @@ def resolve_reviewer(login: str) -> tuple:
         except Exception as e:
             logger.debug(f"Failed to resolve {login} from GitHub profile: {e}")
 
-    # Tier 3: past Reviewers: trailers in git log, matched by name. Catches
-    # pure reviewers (no commits in apache/kafka, no public profile email)
-    # who have been credited with a real email in an earlier merged PR.
-    # git log is newest-first, so the first usable match is the most recent.
+    # Tier 3: past Reviewers: trailers in commit history, matched by name,
+    # via the GitHub commit search API. Catches pure reviewers (no commits
+    # in apache/kafka, no public profile email) who have been credited
+    # with a real email in an earlier merged PR. Sort by committer-date
+    # desc so the most recent email wins if a reviewer has changed it.
+    # Full-text search is tokenized (not strict substring), so we
+    # re-verify with a regex client-side.
     if name and not email:
         try:
-            p = subprocess.run(
-                ["git", "log",
-                 "--pretty=format:%(trailers:key=Reviewers,valueonly=true,unfold=true)"],
-                capture_output=True, text=True,
-            )
+            cmd = ["gh", "search", "commits",
+                   "--repo", "apache/kafka",
+                   f'"{name} <"',
+                   "--limit", "3",
+                   "--sort", "committer-date",
+                   "--order", "desc",
+                   "--json", "commit",
+                   "--jq", "[.[].commit.message]"]
+            p = subprocess.run(cmd, capture_output=True, text=True)
             if p.returncode == 0:
+                messages = json.loads(p.stdout)
                 pattern = re.compile(rf"{re.escape(name)}\s*<([^>]+)>")
-                for line in p.stdout.splitlines():
-                    for m in pattern.finditer(line):
-                        candidate = _usable_email(m.group(1))
-                        if candidate:
-                            email = candidate
-                            break
-                    if email:
-                        break
+                email = next(
+                    (usable for msg in messages
+                     for m in pattern.finditer(msg)
+                     if (usable := _usable_email(m.group(1)))),
+                    None,
+                )
         except Exception as e:
-            logger.debug(f"Failed to resolve {login} from past Reviewers trailers: {e}")
+            logger.debug(f"Failed to resolve {login} from commit search: {e}")
 
     if not name:
         name = login
