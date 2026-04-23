@@ -955,6 +955,16 @@ public class ConfigCommandTest {
     }
 
     @Test
+    public void shouldAllowDeletingNonExistentBrokerLoggerConfig() {
+        Node node = new Node(1, "localhost", 9092);
+        // DescribeConfigs returns only kafka.log.LogCleaner, so kafka.server.ReplicaManager and kafka.server.KafkaApi
+        // are non-existent loggers. Deletion should still succeed (idempotent), but adding kafka.log.LogCleaner is valid.
+        verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
+            new ConfigEntry("kafka.log.LogCleaner", "INFO")
+        ));
+    }
+
+    @Test
     public void shouldAddDefaultBrokerDynamicConfig() {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerConfig(node, List.of("--entity-default"));
