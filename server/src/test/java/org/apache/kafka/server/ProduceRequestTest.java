@@ -44,6 +44,7 @@ import com.yammer.metrics.core.Meter;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProduceRequestTest {
 
     private static final String TOPIC = "topic";
+    private static final long FIVE_HOURS_IN_MS = Duration.ofHours(5).toMillis();
 
     private final ClusterInstance cluster;
 
@@ -91,19 +93,17 @@ public class ProduceRequestTest {
 
     @ClusterTest
     public void testProduceWithTimestampTooOld() throws Exception {
-        long fiveHoursInMs = 5L * 60 * 60 * 1000;
         doTestProduceWithInvalidTimestamp(
             TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG,
-            System.currentTimeMillis() - fiveHoursInMs
+            System.currentTimeMillis() - FIVE_HOURS_IN_MS
         );
     }
 
     @ClusterTest
     public void testProduceWithTimestampTooNew() throws Exception {
-        long fiveHoursInMs = 5L * 60 * 60 * 1000;
         doTestProduceWithInvalidTimestamp(
             TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG,
-            System.currentTimeMillis() + fiveHoursInMs
+            System.currentTimeMillis() + FIVE_HOURS_IN_MS
         );
     }
 
