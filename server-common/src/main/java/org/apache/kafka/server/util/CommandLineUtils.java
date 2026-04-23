@@ -19,7 +19,7 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import java.io.IOException;
 import java.util.ArrayList;

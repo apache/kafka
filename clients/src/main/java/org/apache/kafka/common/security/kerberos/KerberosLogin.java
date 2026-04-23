@@ -21,9 +21,9 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
-import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.KafkaThread;
+import org.apache.kafka.common.utils.internals.Shell;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
