@@ -77,14 +77,12 @@ public class ProduceRequestTest {
         List<Integer> partitionAndLeader = findPartitionWithLeader();
         int partition = partitionAndLeader.get(0);
         int leaderId = partitionAndLeader.get(1);
-        Uuid topicId = getTopicId();
-
-        sendAndCheckProduceResponse(leaderId, topicId, partition,
+        sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), "value".getBytes())),
             0L);
 
-        sendAndCheckProduceResponse(leaderId, topicId, partition,
+        sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.gzip().build(),
                 new SimpleRecord(System.currentTimeMillis(), "key1".getBytes(), "value1".getBytes()),
                 new SimpleRecord(System.currentTimeMillis(), "key2".getBytes(), "value2".getBytes())),
@@ -232,8 +230,9 @@ public class ProduceRequestTest {
         return IntegrationTestUtils.connectAndReceive(request, port);
     }
 
-    private void sendAndCheckProduceResponse(int leaderId, Uuid topicId, int partition,
-                                             MemoryRecords records, long expectedOffset) throws IOException {
+    private void sendAndCheckProduceResponse(int leaderId, int partition,
+                                             MemoryRecords records, long expectedOffset) throws IOException, ExecutionException, InterruptedException {
+        Uuid topicId = getTopicId();
         ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
