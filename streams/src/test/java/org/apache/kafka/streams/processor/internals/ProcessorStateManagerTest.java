@@ -203,6 +203,7 @@ public class ProcessorStateManagerTest {
             taskId,
             Task.TaskType.STANDBY,
             false,
+            false,
             logContext,
             stateDirectory,
             mkMap(
@@ -222,6 +223,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             false,
             logContext,
             stateDirectory,
@@ -397,6 +399,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
+            false,
             false,
             logContext,
             stateDirectory,
@@ -682,6 +685,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             false,
             logContext,
             stateDirectory,
@@ -1266,6 +1270,7 @@ public class ProcessorStateManagerTest {
             taskId,
             taskType,
             eosEnabled,
+            false,
             logContext,
             stateDirectory,
             mkMap(

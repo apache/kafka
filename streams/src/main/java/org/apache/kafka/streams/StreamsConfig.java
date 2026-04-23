@@ -575,6 +575,14 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code enable.metrics.push} */
     @SuppressWarnings("WeakerAccess")
     public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+
+    /** {@code enable.transactional.statestores} */
+    public static final String TRANSACTIONAL_STATE_STORES_CONFIG = "enable.transactional.statestores";
+    private static final String TRANSACTIONAL_STATE_STORES_DOC = "Whether to enable transactional state stores. " +
+            "When enabled, state stores will buffer writes in a transaction buffer (if supported by the state store implementation), " +
+            "before committing them when the corresponding Kafka changelog transaction has committed. \n" +
+            "Under EOS, state stores will no longer be wiped on-error and rebuilt from scratch. " +
+            "In the event of an error (under either EOS or ALOS), only the writes since the last successful commit will be lost and replayed through the topology.";
     @Deprecated
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers, producers, and admin clients." +
         " The cluster must have a client metrics subscription which corresponds to a client.";
@@ -1117,6 +1125,11 @@ public class StreamsConfig extends AbstractConfig {
                     true,
                     Importance.LOW,
                     ENABLE_METRICS_PUSH_DOC)
+            .define(TRANSACTIONAL_STATE_STORES_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    TRANSACTIONAL_STATE_STORES_DOC)
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
                     Type.INT,
                     null,
