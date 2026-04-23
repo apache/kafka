@@ -37,8 +37,8 @@ import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

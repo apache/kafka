@@ -32,7 +32,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
@@ -618,6 +618,29 @@ public class ConfigCommandIntegrationTest {
                                                     List.of("--add-config", "invalid=2", "--entity-type", "topics", "--entity-name", "test-config-topic"))))
                     ).getCause()
             );
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteNonExistentConfigIsIdempotent() throws Exception {
+        String topicName = "test-delete-nonexistent-topic";
+        try (Admin client = cluster.admin()) {
+            client.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "topics", "--entity-name", topicName,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "brokers", "--entity-name", defaultBrokerId,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "brokers", "--entity-default",
+                    "--alter", "--delete-config", "non.existent.config"))));
         }
     }
 

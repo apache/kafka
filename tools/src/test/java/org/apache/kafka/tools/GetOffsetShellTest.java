@@ -35,7 +35,7 @@ import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;

@@ -14,15 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+
+package org.apache.kafka.common.utils.internals;
+
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
-public class LoggingSignalHandlerTest {
+import java.io.File;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 
+public class ByteBufferUnmapperTest {
+
+    /**
+     * Checks that unmap doesn't throw exceptions.
+     */
     @Test
-    public void testRegister() throws ReflectiveOperationException {
-        new LoggingSignalHandler().register();
+    public void testUnmap() throws Exception {
+        File file = TestUtils.tempFile();
+        try (FileChannel channel = FileChannel.open(file.toPath())) {
+            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
+            ByteBufferUnmapper.unmap(file.getAbsolutePath(), map);
+        }
     }
 
 }
