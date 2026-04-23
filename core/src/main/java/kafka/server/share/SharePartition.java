@@ -2450,9 +2450,9 @@ public class SharePartition {
         Throwable throwable,
         List<PersisterBatch> persisterBatches
     ) {
-        lock.writeLock().lock();
-        try {
-            if (throwable != null) {
+        if (throwable != null) {
+            lock.writeLock().lock();
+            try {
                 // Log in DEBUG to avoid flooding of logs for a faulty client.
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
@@ -2469,16 +2469,16 @@ public class SharePartition {
                         deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                     }
                 });
-                future.completeExceptionally(throwable);
-                return;
+            } finally {
+                lock.writeLock().unlock();
             }
+            future.completeExceptionally(throwable);
+            return;
+        }
 
-            if (persisterBatches.isEmpty()) {
-                future.complete(null);
-                return;
-            }
-        } finally {
-            lock.writeLock().unlock();
+        if (persisterBatches.isEmpty()) {
+            future.complete(null);
+            return;
         }
 
         writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList())
@@ -2507,7 +2507,6 @@ public class SharePartition {
                                 deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                             }
                         });
-                        future.completeExceptionally(exception);
                         return;
                     }
 
@@ -2521,9 +2520,13 @@ public class SharePartition {
                     });
                     // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
                     cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
-                    future.complete(null);
                 } finally {
                     lock.writeLock().unlock();
+                    if (exception != null) {
+                        future.completeExceptionally(exception);
+                    } else {
+                        future.complete(null);
+                    }
                     // Maybe complete the delayed share fetch request if the state has been changed in cache
                     // which might have moved start offset ahead. Hence, the pending delayed share fetch
                     // request can be completed. The call should be made outside the lock to avoid deadlock.
