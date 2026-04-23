@@ -609,7 +609,7 @@ ducker_test() {
         fi
     done
 
-    if [[ -n "${skip_build}" ]]; then
+    if [[ "${skip_build}" == "true" ]]; then
         echo "ducker_test: skipping gradle build (--skip-build or SKIP_BUILD is set)."
     else
         must_pushd "${kafka_dir}"
