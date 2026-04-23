@@ -226,7 +226,7 @@ if __name__ == "__main__":
     """
 
     pr_number = get_env("PR_NUMBER")
-    cmd = f"gh pr view {pr_number} --json 'title,body,reviews,author'"
+    cmd = f"gh pr view {pr_number} --json 'title,body,reviews,author,state'"
     p = subprocess.run(shlex.split(cmd), capture_output=True)
     if p.returncode != 0:
         logger.error(f"GitHub CLI failed with exit code {p.returncode}.\nSTDOUT: {p.stdout.decode()}\nSTDERR:{p.stderr.decode()}")
@@ -236,17 +236,19 @@ if __name__ == "__main__":
     title = gh_json["title"]
     body = gh_json["body"]
     reviews = gh_json["reviews"]
+    pr_state = gh_json.get("state", "")
 
     # Auto-fill reviewer from the current review event.
     # Approvals are also review events, so approvers are automatically added.
+    # Skip if the PR is already merged to avoid adding reviewers post-merge.
     reviewer_login = get_env("REVIEWER_LOGIN")
     pr_author = (gh_json.get("author") or {}).get("login")
-    if reviewer_login and reviewer_login != pr_author:
+    if reviewer_login and reviewer_login != pr_author and pr_state != "MERGED":
         name, email = resolve_reviewer(reviewer_login)
         if email:
             identity = f"<{email}>"
         else:
-            identity = f"(@{reviewer_login})"
+            identity = f"(github:{reviewer_login})"
         resolved = f"{name} {identity}"
         existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
         if not already_exists(identity, existing_reviewers):
