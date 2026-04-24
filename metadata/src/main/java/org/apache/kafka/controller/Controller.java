@@ -136,13 +136,15 @@ public interface Controller extends AclMutator, AutoCloseable {
      * @param context       The controller request context.
      * @param request       The CreateTopicsRequest data.
      * @param describable   The topics which we have DESCRIBE permission on.
+     * @param forwarded     True if the request was forwarded.
      *
      * @return              A future yielding the response.
      */
     CompletableFuture<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
         CreateTopicsRequestData request,
-        Set<String> describable
+        Set<String> describable,
+        boolean forwarded
     );
 
     /**

@@ -627,7 +627,8 @@ public class ReplicationControlManager {
     ControllerResult<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
         CreateTopicsRequestData request,
-        Set<String> describable
+        Set<String> describable,
+        boolean forwarded
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -657,7 +658,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> configRecords;
             if (keyToOps != null) {
                 ControllerResult<ApiError> configResult =
-                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true);
+                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true, forwarded);
                 if (configResult.response().isFailure()) {
                     topicErrors.put(topic.name(), configResult.response());
                     continue;
@@ -1546,11 +1547,6 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> records
     ) {
         BrokerRegistration registration = clusterControl.registration(brokerId);
-        List<Uuid> unknownDirectories = new ArrayList<>(cordonedDirs);
-        unknownDirectories.removeAll(registration.directories());
-        if (!unknownDirectories.isEmpty()) {
-            throw new InvalidRequestException("All cordoned directories must be existing directories. Found unknown directories: " + unknownDirectories);
-        }
         boolean cordonedDirsChanged = registration.cordonedDirChanged(cordonedDirs);
         if (cordonedDirsChanged) {
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().

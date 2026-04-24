@@ -18,15 +18,14 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.DataPlaneAcceptor
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.Logging
-import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.Endpoint
+import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SslConfigs}
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
@@ -619,10 +618,16 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
     val newUncordoned = new util.HashSet[String](oldConfig.cordonedLogDirs)
     newUncordoned.removeAll(newConfig.cordonedLogDirs)
     if (!newCordoned.isEmpty) {
-      directoryEventHandler.handleCordoned(newCordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
+      directoryEventHandler.handleCordoned(newCordoned.stream
+        .map[Uuid](dir => logManager.directoryId(dir).orElse(null))
+        .filter(Objects.nonNull)
+        .collect(Collectors.toSet[Uuid]))
     }
     if (!newUncordoned.isEmpty) {
-      directoryEventHandler.handleUncordoned(newUncordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
+      directoryEventHandler.handleUncordoned(newUncordoned.stream
+        .map[Uuid](dir => logManager.directoryId(dir).orElse(null))
+        .filter(Objects.nonNull)
+        .collect(Collectors.toSet[Uuid]))
     }
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))

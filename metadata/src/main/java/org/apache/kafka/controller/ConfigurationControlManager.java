@@ -257,7 +257,8 @@ public class ConfigurationControlManager {
     ControllerResult<ApiError> incrementalAlterConfig(
         ConfigResource configResource,
         Map<String, Entry<OpType, String>> keyToOps,
-        boolean newlyCreatedResource
+        boolean newlyCreatedResource,
+        boolean forwarded
     ) {
         List<ApiMessageAndVersion> outputRecords =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -265,7 +266,7 @@ public class ConfigurationControlManager {
             keyToOps,
             newlyCreatedResource,
             outputRecords,
-            false);
+            forwarded);
 
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, apiError);

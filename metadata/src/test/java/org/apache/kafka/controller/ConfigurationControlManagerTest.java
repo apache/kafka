@@ -175,7 +175,8 @@ public class ConfigurationControlManagerTest {
                 entry("baz", entry(SUBTRACT, "abc")),
                 entry("quux", entry(SET, "abc")))),
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
-                true, false);
+                true,
+                false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -204,7 +205,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
 
         ControllerResult<ApiError> result = manager.
-            incrementalAlterConfig(MYTOPIC, keyToOps, true);
+            incrementalAlterConfig(MYTOPIC, keyToOps, true, false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -217,13 +218,13 @@ public class ConfigurationControlManagerTest {
                     new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
-            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true));
+            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true, false));
 
         // The configuration value exceeding the maximum size is not allowed to be added.
         String largeValue = new String(new char[Short.MAX_VALUE - APPEND.id() - 1]);
         Map<String, Entry<AlterConfigOp.OpType, String>> largeValueOfOps = toMap(entry("abc", entry(APPEND, largeValue)));
 
-        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true);
+        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true, false);
         assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
         assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
                 invalidConfigValueResult.response().message());
@@ -289,7 +290,8 @@ public class ConfigurationControlManagerTest {
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
                 entry("quux", entry(SET, "1")))),
                 entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
-                false, false);
+                false,
+                false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
@@ -373,7 +375,8 @@ public class ConfigurationControlManagerTest {
                         entry("quux", entry(SET, "456")),
                         entry("broker.config.to.remove", entry(DELETE, null))
                 ))),
-                true, false));
+                true,
+                false));
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
@@ -445,7 +448,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps =
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
         ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
-        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true);
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true, false);
         assertEquals(Set.of(), manager.brokersWithConfigs());
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
@@ -510,7 +513,7 @@ public class ConfigurationControlManagerTest {
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
-            true);
+            true, false);
         assertEquals(Errors.INVALID_CONFIG, result.response().error());
         assertEquals("Broker-level min.insync.replicas cannot be altered while ELR is enabled.",
             result.response().message());
@@ -519,7 +522,7 @@ public class ConfigurationControlManagerTest {
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
-            true);
+            true, false);
         if (removal) {
             assertEquals(Errors.INVALID_CONFIG, result.response().error());
             assertEquals("Cluster-level min.insync.replicas cannot be removed while ELR is enabled.",
@@ -582,12 +585,12 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
                 toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, ""))),
-                true);
+                true, false);
         assertEquals(enabled ? ApiError.NONE : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
 
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
                 toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
-                true);
+                true, false);
         assertEquals(enabled ? INVALID_CORDONED_LOG_DIRS_ERROR : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
     }
 
@@ -628,6 +631,7 @@ public class ConfigurationControlManagerTest {
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(
             MYTOPIC,
             toMap(entry("def", entry(SET, "newValue"))),
+            false,
             false);
 
         assertEquals(ApiError.NONE, result.response());

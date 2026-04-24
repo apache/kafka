@@ -675,7 +675,11 @@ public class BrokerLifecycleManager {
                                 state = BrokerState.RECOVERY;
                                 initialCatchUpFuture.complete(null);
                                 // Update the known cordoned log dirs so the next heartbeat includes them
-                                config.cordonedLogDirs().forEach(logDir -> cordonedLogDirs.add(logDirs.get(logDir)));
+                                config.cordonedLogDirs().forEach(logDir -> {
+                                    if (logDirs.containsKey(logDir)) {
+                                        cordonedLogDirs.add(logDirs.get(logDir));
+                                    }
+                                });
                             } else {
                                 logger.debug("The broker is STARTING. Still waiting to catch up with cluster metadata.");
                             }

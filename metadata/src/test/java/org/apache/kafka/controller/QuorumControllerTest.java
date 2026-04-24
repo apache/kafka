@@ -302,7 +302,7 @@ public class QuorumControllerTest {
                         setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                Set.of("foo")).get();
+                Set.of("foo"), false).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -423,7 +423,7 @@ public class QuorumControllerTest {
                         setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                Set.of("foo")).get();
+                Set.of("foo"), false).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
             ConfigRecord configRecord = new ConfigRecord()
@@ -562,7 +562,7 @@ public class QuorumControllerTest {
                         setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                Set.of("foo")).get();
+                Set.of("foo"), false).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -659,7 +659,7 @@ public class QuorumControllerTest {
                 )));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                Set.of("foo", "bar")).get();
+                Set.of("foo", "bar"), false).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
@@ -783,7 +783,7 @@ public class QuorumControllerTest {
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
                         setReplicationFactor(replicationFactor))));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
-                ANONYMOUS_CONTEXT, createTopicsRequestData, Set.of("foo")).get();
+                ANONYMOUS_CONTEXT, createTopicsRequestData, Set.of("foo"), false).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
 
@@ -1009,18 +1009,18 @@ public class QuorumControllerTest {
                             setReplicationFactor((short) 1))));
             assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
                 ANONYMOUS_CONTEXT,
-                createTopicsRequestData, Set.of("foo")).get().
+                createTopicsRequestData, Set.of("foo"), false).get().
                     topics().find("foo").errorCode());
             assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
                 "are currently fenced, or have all their log directories cordoned.", active.createTopics(ANONYMOUS_CONTEXT,
-                    createTopicsRequestData, Set.of("foo")).
+                    createTopicsRequestData, Set.of("foo"), false).
                         get().topics().find("foo").errorMessage());
             assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                 active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
                         setWantFence(false).setBrokerEpoch(6L).setBrokerId(0).
                         setCurrentMetadataOffset(100000L)).get());
             assertEquals(Errors.NONE.code(), active.createTopics(ANONYMOUS_CONTEXT,
-                createTopicsRequestData, Set.of("foo")).
+                createTopicsRequestData, Set.of("foo"), false).
                     get().topics().find("foo").errorCode());
             CompletableFuture<TopicIdPartition> topicPartitionFuture = active.appendReadEvent(
                 "debugGetPartition", OptionalLong.empty(), () -> {
@@ -1124,7 +1124,7 @@ public class QuorumControllerTest {
                                     new CreatableReplicaAssignment().
                                         setPartitionIndex(1).
                                         setBrokerIds(List.of(1, 2, 0)))))))),
-                Set.of("foo")).get();
+                Set.of("foo"), false).get();
             fooId = fooData.topics().find("foo").topicId();
             active.allocateProducerIds(ANONYMOUS_CONTEXT,
                 new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
@@ -1280,7 +1280,7 @@ public class QuorumControllerTest {
                 controller.createTopics(context0, new CreateTopicsRequestData().setTimeoutMs(0).
                     setTopics(new CreatableTopicCollection(Set.of(
                         new CreatableTopic().setName("foo")))),
-                    Set.of());
+                    Set.of(), false);
             CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
                 controller.deleteTopics(context0, List.of(Uuid.ZERO_UUID));
             CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIdsFuture =
@@ -1337,7 +1337,7 @@ public class QuorumControllerTest {
             CountDownLatch countDownLatch = pause(controller);
             CompletableFuture<CreateTopicsResponseData> createFuture =
                 controller.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().
-                    setTimeoutMs(120000), Set.of());
+                    setTimeoutMs(120000), Set.of(), false);
             CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
                 controller.deleteTopics(ANONYMOUS_CONTEXT, List.of());
             CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIdsFuture =
@@ -1379,7 +1379,7 @@ public class QuorumControllerTest {
                     new CreatableTopic().setName("foo").
                         setReplicationFactor((short) 3).
                         setNumPartitions(1)))),
-                Set.of("foo")).get();
+                Set.of("foo"), false).get();
             ConfigResourceExistenceChecker checker =
                 active.new ConfigResourceExistenceChecker();
             // A ConfigResource with type=BROKER and name=(empty string) represents

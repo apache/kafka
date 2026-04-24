@@ -43,6 +43,9 @@
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
 
+    <!-- server -->
+    <suppress checks="CyclomaticComplexity" files="BrokerLifecycleManager.java"/>
+
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPathComplexity" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
     <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
