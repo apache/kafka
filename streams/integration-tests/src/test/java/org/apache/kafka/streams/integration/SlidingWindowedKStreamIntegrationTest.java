@@ -56,7 +56,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -293,14 +292,7 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    // Pairwise (all-pairs) selection over (type, withCache, withHeaders) — 4 rows
-    // instead of the full 8, covering every two-axis combination.
-    @CsvSource({
-        "ON_WINDOW_UPDATE, true,  true",
-        "ON_WINDOW_UPDATE, false, false",
-        "ON_WINDOW_CLOSE,  true,  false",
-        "ON_WINDOW_CLOSE,  false, true"
-    })
+    @MethodSource("data")
     public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache, final boolean withHeaders) throws Exception {
         produceMessages(
             streamOneInput,
