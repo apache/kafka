@@ -112,7 +112,7 @@ def resolve_reviewer(login: str) -> tuple:
     Noreply emails (@users.noreply.github.com) are treated as missing since
     they are GitHub privacy placeholders that do not identify the reviewer.
     Returns (name, None) when no usable email is found; the caller falls
-    back to the '(@login)' form in the Reviewers trailer.
+    back to the '(github:login)' form in the Reviewers trailer.
     """
     def _usable_email(e):
         if not e or e.endswith("@users.noreply.github.com"):
@@ -186,7 +186,7 @@ def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
     """Check if a reviewer identity is already in the existing reviewers list.
 
     identity is the delimited token that uniquely identifies a reviewer, either
-    '<email>' (for the email form) or '(@login)' (for the login fallback).
+    '<email>' (for the email form) or '(github:login)' (for the login fallback).
     """
     return identity.lower() in ", ".join(existing_reviewers).lower()
 
