@@ -30,9 +30,6 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -51,33 +48,23 @@ import java.util.stream.Stream;
 
 @SuppressWarnings("NPathComplexity")
 public class TestKitNodes {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TestKitNodes.class);
-
-    /**
-     * Create a temporary directory with the prefix {@code kafka-}. The directory is
-     * scheduled for deletion on JVM shutdown.
-     */
-    static File tempDirectory() {
-        final File file;
-        String prefix = "kafka-";
-        try {
-            file = Files.createTempDirectory(prefix).toFile();
-        } catch (final IOException ex) {
-            throw new RuntimeException("Failed to create a temp dir", ex);
-        }
-
-        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
-            try {
-                Utils.delete(file);
-            } catch (IOException e) {
-                LOGGER.error("Error deleting {}", file.getAbsolutePath(), e);
-            }
-        });
-
-        return file;
-    }
 
     public static class Builder {
+        private static Path createTempDirectory() {
+            try {
+                Path tempPath = Files.createTempDirectory("kafka-");
+                Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+                    try {
+                        Utils.delete(tempPath.toFile());
+                    } catch (IOException ignored) {
+                    }
+                });
+                return tempPath;
+            } catch (IOException ex) {
+                throw new RuntimeException("Failed to create a temp dir", ex);
+            }
+        }
+
         private boolean combined;
         private String clusterId;
         private Path baseDirectory;
@@ -193,7 +180,7 @@ public class TestKitNodes {
                 throw new IllegalArgumentException("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol");
             }
             if (baseDirectory == null) {
-                this.baseDirectory = TestKitNodes.tempDirectory().toPath();
+                this.baseDirectory = createTempDirectory();
             }
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid().toString();

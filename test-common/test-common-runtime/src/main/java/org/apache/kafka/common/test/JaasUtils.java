@@ -47,18 +47,9 @@ public class JaasUtils {
     public static final String KAFKA_PLAIN_ADMIN = "plain-admin";
     public static final String KAFKA_PLAIN_ADMIN_PASSWORD = "plain-admin-secret";
 
-    /**
-     * Create an empty file in the default temporary-file directory, using {@code kafka} as the prefix and
-     * {@code .tmp} as the suffix to generate its name.
-     */
-    private static File tempFile() throws IOException {
-        final File file = Files.createTempFile("kafka", ".tmp").toFile();
-        file.deleteOnExit();
-        return file;
-    }
-
     public static File writeJaasContextsToFile(Set<JaasSection> jaasSections) throws IOException {
-        File jaasFile = tempFile();
+        File jaasFile = Files.createTempFile("kafka", ".tmp").toFile();
+        jaasFile.deleteOnExit();
         try (FileOutputStream fileStream = new FileOutputStream(jaasFile);
              OutputStreamWriter writer = new OutputStreamWriter(fileStream, StandardCharsets.UTF_8)) {
             writer.write(String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new)));

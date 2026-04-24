@@ -27,7 +27,6 @@ import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.storage.FormatterException;
 import org.apache.kafka.server.common.Feature;
@@ -204,10 +203,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 format();
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
-                    waitForCondition(
-                            () -> this.clusterTestKit.brokers().values().stream().allMatch(
-                                    brokers -> brokers.brokerState() == BrokerState.RUNNING
-                            ), "Broker never made it to RUNNING state.");
+                    clusterTestKit.waitForReadyBrokers();
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start Raft server", e);

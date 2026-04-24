@@ -76,7 +76,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
@@ -655,16 +654,16 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public Controller waitForActiveController() throws InterruptedException {
-        AtomicReference<Controller> active = new AtomicReference<>(null);
-        RaftClusterInvocationContext.waitForCondition(() -> {
+        long endTime = System.currentTimeMillis() + 60_000L;
+        while (System.currentTimeMillis() < endTime) {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
-                    active.set(controllerServer.controller());
+                    return controllerServer.controller();
                 }
             }
-            return active.get() != null;
-        }, 60_000, "Controller not active");
-        return active.get();
+            TimeUnit.MILLISECONDS.sleep(100);
+        }
+        throw new RuntimeException("Controller not active after 60000 ms");
     }
 
     public Map<Integer, BrokerServer> brokers() {
