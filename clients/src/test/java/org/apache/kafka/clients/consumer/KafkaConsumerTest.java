@@ -3794,7 +3794,6 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
     }
 
-    // NOTE: this test configures partition.assignment.strategy, which only applies to the CLASSIC group protocol.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testAssignorNameConflict(GroupProtocol groupProtocol) {
