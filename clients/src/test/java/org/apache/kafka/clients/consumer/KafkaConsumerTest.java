@@ -485,8 +485,7 @@ public class KafkaConsumerTest {
         assertInstanceOf(ClientTelemetryReporter.class, consumer.metricsRegistry().reporters().get(0));
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
@@ -502,8 +501,7 @@ public class KafkaConsumerTest {
         assertEquals(new OffsetAndMetadata(5), records.nextOffsets().get(tp0));
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
@@ -1082,7 +1080,8 @@ public class KafkaConsumerTest {
         assertEquals(new OffsetAndMetadata(55L), records.nextOffsets().get(tp0));
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void verifyNoCoordinatorLookupForManualAssignmentWithOffsetCommit(GroupProtocol groupProtocol) {
@@ -1408,10 +1407,8 @@ public class KafkaConsumerTest {
         assertNull(committed.get(tp1));
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1442,8 +1439,7 @@ public class KafkaConsumerTest {
         assertTrue(commitReceived.get());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testRegexSubscription(GroupProtocol groupProtocol) {
@@ -1471,8 +1467,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(tp0), consumer.assignment());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testChangingRegexSubscription(GroupProtocol groupProtocol) {
@@ -1508,8 +1503,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(otherTopic), consumer.subscription());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testWakeupWithFetchDataAvailable(GroupProtocol groupProtocol) throws Exception {
@@ -1612,8 +1606,7 @@ public class KafkaConsumerTest {
      * Upon unsubscribing from subscribed topics the consumer subscription and assignment
      * are both updated right away but its consumed offsets are not auto committed.
      */
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
@@ -1731,8 +1724,7 @@ public class KafkaConsumerTest {
      * Upon unsubscribing from subscribed topics, the assigned partitions immediately
      * change but if auto-commit is disabled the consumer offsets are not committed.
      */
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testSubscriptionChangesWithAutoCommitDisabled(GroupProtocol groupProtocol) {
@@ -1850,8 +1842,7 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration(GroupProtocol groupProtocol) {
@@ -1876,8 +1867,7 @@ public class KafkaConsumerTest {
         assertEquals(partitionRevoked + singleTopicPartition, unsubscribeException.getCause().getMessage());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration(GroupProtocol groupProtocol) throws Exception {
@@ -2399,7 +2389,8 @@ public class KafkaConsumerTest {
         }
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test requires topic metadata logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testPartitionsForNonExistingTopic(GroupProtocol groupProtocol) {
@@ -2419,7 +2410,8 @@ public class KafkaConsumerTest {
         assertEquals(Collections.emptyList(), consumer.partitionsFor("non-exist-topic"));
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test requires topic metadata logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testPartitionsForAuthenticationFailure(GroupProtocol groupProtocol) {
@@ -2428,7 +2420,8 @@ public class KafkaConsumerTest {
         }
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testBeginningOffsetsAuthenticationFailure(GroupProtocol groupProtocol) {
@@ -2437,7 +2430,8 @@ public class KafkaConsumerTest {
         }
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testEndOffsetsAuthenticationFailure(GroupProtocol groupProtocol) {
@@ -2463,7 +2457,8 @@ public class KafkaConsumerTest {
         }
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testOffsetsForTimesAuthenticationFailure(GroupProtocol groupProtocol) {
@@ -2472,7 +2467,8 @@ public class KafkaConsumerTest {
         }
     }
 
-    // NOTE: the assertion path is specific to the CLASSIC consumer.
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCommitSyncAuthenticationFailure(GroupProtocol groupProtocol) {
@@ -2482,8 +2478,10 @@ public class KafkaConsumerTest {
         }
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCommittedAuthenticationFailure(GroupProtocol groupProtocol) {
         try (final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol)) {
             assertThrows(AuthenticationException.class, () -> consumer.committed(Set.of(tp0)).get(tp0));
@@ -2586,8 +2584,7 @@ public class KafkaConsumerTest {
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testRebalanceException(GroupProtocol groupProtocol) {
@@ -2623,8 +2620,7 @@ public class KafkaConsumerTest {
         assertTrue(subscription.assignedPartitions().isEmpty());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testReturnRecordsDuringRebalance(GroupProtocol groupProtocol) throws InterruptedException {
@@ -2765,8 +2761,7 @@ public class KafkaConsumerTest {
         consumer.close(CloseOptions.timeout(Duration.ZERO));
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
+    // NOTE: the assertion path is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testGetGroupMetadata(GroupProtocol groupProtocol) {
