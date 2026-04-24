@@ -12,26 +12,20 @@
   */
 package kafka.api
 
-import java.util
-import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.consumer._
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.errors.InterruptException
-import org.apache.kafka.common.test.api.Flaky
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.concurrent.ExecutionException
 
 @Timeout(60)
 class PlaintextConsumerTest extends AbstractConsumerTest {
 
-  @Flaky("KAFKA-18031")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testCloseLeavesGroupOnInterrupt(groupProtocol: String): Unit = {
-    val adminClient = createAdminClient()
+  def testCloseRunsRevocationCallbackOnInterrupt(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(java.util.List.of(topic), listener)
@@ -50,26 +44,5 @@ class PlaintextConsumerTest extends AbstractConsumerTest {
 
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
-
-    val config = new ConsumerConfig(consumerConfig)
-
-    // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
-    // consumer explicitly left the group as opposed to being kicked out by the broker.
-    val leaveGroupTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) / 2
-
-    TestUtils.waitUntilTrue(
-      () => {
-        try {
-          val groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG)
-          val groupDescription = adminClient.describeConsumerGroups(util.List.of(groupId)).describedGroups.get(groupId).get
-          groupDescription.members.isEmpty
-        } catch {
-          case _: ExecutionException | _: InterruptedException =>
-            false
-        }
-      },
-      msg=s"Consumer did not leave the consumer group within $leaveGroupTimeoutMs ms of close",
-      waitTimeMs=leaveGroupTimeoutMs
-    )
   }
 }

@@ -2179,6 +2179,33 @@ public class KafkaConsumerTest {
         consumerCloseTest(groupProtocol, Long.MAX_VALUE, Collections.emptyList(), 0, true);
     }
 
+    @Test
+    public void testClassicConsumerCloseAttemptsLeaveGroupWhenInterrupted() {
+        // GIVEN
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Map.of(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        final KafkaConsumer<String, String> consumer = newConsumer(GroupProtocol.CLASSIC, time, client, subscription, metadata, assignor, false, Optional.empty());
+
+        consumer.subscribe(Set.of(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, List.of(tp0), null);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+
+        try {
+            // WHEN
+            Thread.currentThread().interrupt();
+            assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(Duration.ofMillis(Long.MAX_VALUE))));
+        } finally {
+            Thread.interrupted();
+        }
+
+        //THEN
+        assertTrue(requestGenerated(client, ApiKeys.LEAVE_GROUP));
+    }
+
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testCloseShouldBeIdempotent(GroupProtocol groupProtocol) {

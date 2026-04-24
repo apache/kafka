@@ -46,7 +46,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.test.MockConsumerInterceptor;
@@ -63,7 +62,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -1616,10 +1614,9 @@ public class PlaintextConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18031")
     @ClusterTest
-    public void testClassicConsumerCloseLeavesGroupOnInterrupt() throws Exception {
-        testCloseLeavesGroupOnInterrupt(Map.of(
+    public void testClassicConsumerCloseRunsRevocationCallbackOnInterrupt() throws Exception {
+        testCloseRunsRevocationCallbackOnInterrupt(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
             KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
             VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
@@ -1629,10 +1626,9 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @Flaky("KAFKA-18031")
     @ClusterTest
-    public void testAsyncConsumerCloseLeavesGroupOnInterrupt() throws Exception {
-        testCloseLeavesGroupOnInterrupt(Map.of(
+    public void testAsyncConsumerCloseRunsRevocationCallbackOnInterrupt() throws Exception {
+        testCloseRunsRevocationCallbackOnInterrupt(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
             KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
             VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
@@ -1642,7 +1638,7 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    private void testCloseLeavesGroupOnInterrupt(Map<String, Object> consumerConfig) throws Exception {
+    private void testCloseRunsRevocationCallbackOnInterrupt(Map<String, Object> consumerConfig) throws Exception {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
             var listener = new TestConsumerReassignmentListener();
             consumer.subscribe(List.of(TOPIC), listener);
@@ -1661,30 +1657,6 @@ public class PlaintextConsumerTest {
 
             assertEquals(1, listener.callsToAssigned);
             assertEquals(1, listener.callsToRevoked);
-
-            Map<String, Object> consumerConfigMap = new HashMap<>(consumerConfig);
-            var config = new ConsumerConfig(consumerConfigMap);
-
-            // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
-            // consumer explicitly left the group as opposed to being kicked out by the broker.
-            var leaveGroupTimeoutMs = config.getInt(SESSION_TIMEOUT_MS_CONFIG) / 2;
-
-            TestUtils.waitForCondition(
-                () -> checkGroupMemberEmpty(config), 
-                leaveGroupTimeoutMs, 
-                "Consumer did not leave the consumer group within " + leaveGroupTimeoutMs + " ms of close"
-            );
-        }
-    }
-
-    private boolean checkGroupMemberEmpty(ConsumerConfig config) {
-        try (var admin = cluster.admin()) {
-            var groupId = config.getString(GROUP_ID_CONFIG);
-            var result = admin.describeConsumerGroups(List.of(groupId));
-            var groupDescription = result.describedGroups().get(groupId).get();
-            return groupDescription.members().isEmpty();
-        } catch (ExecutionException | InterruptedException e) {
-            return false;
         }
     }
 
