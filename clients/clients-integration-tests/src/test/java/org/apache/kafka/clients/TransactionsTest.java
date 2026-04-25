@@ -19,7 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TransactionsTestHelper;
+import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -119,26 +119,22 @@ public class TransactionsTest {
         TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
-    @SuppressWarnings("removal")
     @ClusterTest
     public void testClassicFencingOnSendOffsets() throws Exception {
         TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
-    @SuppressWarnings("removal")
     @ClusterTest
     public void testAsyncFencingOnSendOffsets() throws Exception {
         TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
-    @SuppressWarnings("removal")
     @ClusterTest
     public void testClassicOffsetMetadataInSendOffsetsToTransaction() throws Exception {
         TransactionsTestHelper.testOffsetMetadataInSendOffsetsToTransaction(
                 clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
-    @SuppressWarnings("removal")
     @ClusterTest
     public void testAsyncOffsetMetadataInSendOffsetsToTransaction() throws Exception {
         TransactionsTestHelper.testOffsetMetadataInSendOffsetsToTransaction(
@@ -150,7 +146,6 @@ public class TransactionsTest {
         TransactionsTestHelper.testInitTransactionsTimeout(clusterInstance, TOPIC_CONFIG);
     }
 
-    @SuppressWarnings("removal")
     @ClusterTest
     public void testSendOffsetsToTransactionTimeout() throws Exception {
         TransactionsTestHelper.testSendOffsetsToTransactionTimeout(clusterInstance, TOPIC_CONFIG);
@@ -207,7 +202,7 @@ public class TransactionsTest {
     }
 
     @ClusterTest
-    public void testConsecutivelyRunInitTransactions() throws Exception {
+    public void testConsecutivelyRunInitTransactions() {
         TransactionsTestHelper.testConsecutivelyRunInitTransactions(clusterInstance);
     }
 

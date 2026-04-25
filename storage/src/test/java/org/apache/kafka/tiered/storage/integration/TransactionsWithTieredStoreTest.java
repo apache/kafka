@@ -22,8 +22,7 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TransactionsTestHelper;
-import org.apache.kafka.common.test.TransactionsTestHelper.TransactionHooks;
+import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TransactionHooks;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.TestKitDefaults;
@@ -56,11 +55,7 @@ public class TransactionsWithTieredStoreTest {
 
     private static final String TEST_CLASS_NAME = "transactionswithtiredstoretest";
     private static final int BROKER_COUNT = 3;
-
-    // ---------------------------------------------------------------
-    // Cluster config generators
-    // ---------------------------------------------------------------
-
+    
     private static Map<String, String> baseServerProperties() {
         String storageDirPath = TestUtils.tempDirectory(
                 "kafka-remote-tier-" + TEST_CLASS_NAME).getAbsolutePath();
@@ -120,10 +115,6 @@ public class TransactionsWithTieredStoreTest {
         return config;
     }
 
-    // ---------------------------------------------------------------
-    // Hooked tests (use tiered storage hooks)
-    // ---------------------------------------------------------------
-
     @ClusterTemplate("tieredStorageClusterConfig")
     public void testClassicBasicTransactions(ClusterInstance clusterInstance) throws Exception {
         TransactionsTestHelper.testBasicTransactions(
@@ -159,10 +150,6 @@ public class TransactionsWithTieredStoreTest {
         TransactionsTestHelper.testSendOffsetsWithGroupMetadata(
                 clusterInstance, GroupProtocol.CONSUMER, createTieredHooks(clusterInstance), topicConfig());
     }
-
-    // ---------------------------------------------------------------
-    // Non-hooked tests (default cluster config)
-    // ---------------------------------------------------------------
 
     @ClusterTemplate("tieredStorageClusterConfig")
     public void testClassicReadCommittedConsumerShouldNotSeeUndecidedData(ClusterInstance clusterInstance) throws Exception {
@@ -278,10 +265,6 @@ public class TransactionsWithTieredStoreTest {
         TransactionsTestHelper.testRecoveryFromEpochOverflow(clusterInstance, topicConfig());
     }
 
-    // ---------------------------------------------------------------
-    // Tests with specific Transaction Version features
-    // ---------------------------------------------------------------
-
     @ClusterTemplate("tieredStorageClusterConfigTV1")
     public void testClassicBumpTransactionalEpochWithTV2Disabled(ClusterInstance clusterInstance) throws Exception {
         TransactionsTestHelper.testBumpTransactionalEpochWithTV2Disabled(
@@ -320,10 +303,6 @@ public class TransactionsWithTieredStoreTest {
     public void testEmptyAbortAfterCommit(ClusterInstance clusterInstance) throws Exception {
         TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
     }
-
-    // ---------------------------------------------------------------
-    // Tiered storage hook implementations
-    // ---------------------------------------------------------------
 
     private TransactionHooks createTieredHooks(ClusterInstance clusterInstance) {
         return new TransactionHooks() {
@@ -372,9 +351,11 @@ public class TransactionsWithTieredStoreTest {
         };
     }
 
-    private static boolean isAssignedReplica(ClusterInstance clusterInstance,
-                                             TopicPartition topicPartition,
-                                             int replicaId) {
+    private static boolean isAssignedReplica(
+            ClusterInstance clusterInstance,
+            TopicPartition topicPartition,
+            int replicaId
+    ) {
         KafkaBroker broker = clusterInstance.brokers().get(replicaId);
         if (broker != null) {
             return broker.replicaManager().getPartition(topicPartition) instanceof HostedPartition.Online;

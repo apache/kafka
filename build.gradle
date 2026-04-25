@@ -1629,7 +1629,6 @@ project(':test-common:test-common-runtime') {
     implementation project(':server')
     implementation project(':server-common')
     implementation project(':group-coordinator')
-    implementation project(':transaction-coordinator')
     implementation project(':test-common:test-common-internal-api')
     implementation project(':metadata')
     implementation project(':raft')
@@ -2072,6 +2071,7 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
+    testImplementation project(':storage').sourceSets.test.output
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')

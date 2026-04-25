@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TransactionsTestHelper;
+import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -36,9 +36,9 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.test.TransactionsTestHelper.TOPIC1;
-import static org.apache.kafka.common.test.TransactionsTestHelper.TOPIC2;
-import static org.apache.kafka.common.test.TransactionsTestHelper.producerRecordWithExpectedTransactionStatus;
+import static org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TOPIC1;
+import static org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TOPIC2;
+import static org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.producerRecordWithExpectedTransactionStatus;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ClusterTestDefaults(
