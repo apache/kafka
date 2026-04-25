@@ -147,20 +147,15 @@ def resolve_reviewer(login: str) -> tuple:
 
     commits = _run_json(["gh", "api", f"repos/apache/kafka/commits?author={login}&per_page=1"],
                         "commit history") or []
-    commit = commits[0] if commits else {}
-    github_author = commit.get("author") or {}
-    author = commit.get("commit", {}).get("author", {})
+    author = commits[0].get("commit", {}).get("author", {}) if commits else {}
 
-    name = author.get("name") or login
-    email = None
-
-    # Tier 1: find the latest repo commit authored by this GitHub login.
-    # Verify GitHub's associated author login before using the raw commit
-    # author email, so same-name authors cannot be mixed up.
-    if github_author.get("login", "").lower() == login.lower():
-        email = _usable_email(author.get("email"))
-        if email:
-            return (name, email)
+    # Tier 1: latest repo commit authored by this GitHub login. Misses
+    # when the reviewer has no merged commit in apache/kafka, or had
+    # "Keep my email private" enabled at commit time (GitHub rewrites
+    # the author to the noreply form).
+    email = _usable_email(author.get("email"))
+    if email:
+        return (author.get("name") or login, email)
 
     user = _run_json(["gh", "api", f"users/{login}"], "GitHub profile") or {}
 
@@ -200,12 +195,7 @@ def resolve_reviewer(login: str) -> tuple:
 
     # Tier 3: GitHub user profile. Only exposes an email when the reviewer
     # has set a Public email in their profile settings.
-    if not email:
-        email = _usable_email(user.get("email"))
-        if user.get("name"):
-            name = user.get("name")
-
-    return (name, email)
+    return (name, _usable_email(user.get("email")))
 
 
 def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
