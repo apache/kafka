@@ -1,0 +1,27 @@
+# This Dockerfile builds the enhanced MirrorMaker 2 image.
+# It expects the modified Kafka source to be built first.
+#
+# To build:
+#   1. Fork https://github.com/apache/kafka (v4.0.0)
+#   2. Apply the patches from mirrormaker2-enhancements/ (see PATCH-GUIDE.md)
+#   3. Build Kafka: ./gradlew clean releaseTarGz -x test
+#   4. Copy the release tarball to this directory
+#   5. docker build -f Dockerfile.mm2 -t <your-dockerhub>/enhanced-mm2:latest .
+#
+# Alternatively, use the pre-built apache/kafka image and overlay the modified JARs.
+
+FROM apache/kafka:4.0.0
+
+USER root
+
+# Copy the enhanced MirrorMaker 2 JAR (built from the Kafka fork)
+# Replace this with the actual path to your built connect-mirror JAR
+# COPY kafka-connect-mirror-4.0.0.jar /opt/kafka/libs/
+
+# Copy the MirrorMaker 2 configuration
+COPY mm2.properties /opt/kafka/config/mm2.properties
+
+USER appuser
+
+# MirrorMaker 2 entrypoint
+ENTRYPOINT ["/opt/kafka/bin/connect-mirror-maker.sh", "/opt/kafka/config/mm2.properties"]

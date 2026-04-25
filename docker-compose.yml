@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # PRIMARY KAFKA CLUSTER (Single-node KRaft mode)
+  # ============================================================
+  primary-kafka:
+    image: apache/kafka:4.0.0
+    container_name: primary-kafka
+    hostname: primary-kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://primary-kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@primary-kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: 'primary-cluster-id-00001'
+      # Short retention for truncation testing (60 seconds)
+      KAFKA_LOG_RETENTION_MS: 60000
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 10000
+    healthcheck:
+      test: /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server localhost:9092 || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - kafka-network
+
+  # ============================================================
+  # STANDBY (DR) KAFKA CLUSTER (Single-node KRaft mode)
+  # ============================================================
+  standby-kafka:
+    image: apache/kafka:4.0.0
+    container_name: standby-kafka
+    hostname: standby-kafka
+    ports:
+      - "9094:9092"
+      - "9095:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://standby-kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@standby-kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: 'standby-cluster-id-00002'
+    healthcheck:
+      test: /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server localhost:9092 || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - kafka-network
+
+  # ============================================================
+  # TOPIC INITIALIZATION
+  # ============================================================
+  init-topics:
+    image: apache/kafka:4.0.0
+    container_name: init-topics
+    depends_on:
+      primary-kafka:
+        condition: service_healthy
+      standby-kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Creating commit-log topic on primary cluster..."
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server primary-kafka:9092 \
+          --create --if-not-exists \
+          --topic commit-log \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config retention.ms=60000
+
+        echo "Verifying topics on primary..."
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server primary-kafka:9092 --list
+
+        echo "Topic initialization complete."
+    networks:
+      - kafka-network
+
+  # ============================================================
+  # ENHANCED MIRRORMAKER 2
+  # ============================================================
+  mirrormaker2:
+    image: pradeep23mishra/enhanced-mm2:latest
+    container_name: mirrormaker2
+    hostname: mirrormaker2
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+    volumes:
+      - ./docker/mm2.properties:/opt/kafka/config/mm2.properties:ro
+    command: ["/opt/kafka/bin/connect-mirror-maker.sh", "/opt/kafka/config/mm2.properties"]
+    networks:
+      - kafka-network
+    restart: on-failure
+
+  # ============================================================
+  # COMMIT LOG PRODUCER
+  # ============================================================
+  commit-log-producer:
+    image: pradeep23mishra/commit-log-producer:latest
+    container_name: commit-log-producer
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+    command: ["--count", "1000", "--bootstrap-servers", "primary-kafka:9092", "--topic", "commit-log"]
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    driver: bridge
