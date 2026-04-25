@@ -69,6 +69,7 @@ org.apache.kafka.tools.ConfigCommandIntegrationTest:
 - testAlterStreamsGroupTaskOffsetInterval
 - testBrokerLoggerConfigUpdate
 - testClientMetricsConfigUpdate
+- testDeleteNonExistentConfigIsIdempotent
 - testDescribeGroupWithoutDynamicConfigs
 - testDescribeNonExistentConfigResource
 - testDescribeStreamsGroupConfigs
@@ -91,6 +92,7 @@ org.apache.kafka.tools.ConfigCommandTest:
 - shouldAddBrokerLoggerConfig
 - shouldAddClientConfig
 - shouldAddDefaultBrokerDynamicConfig
+- shouldAllowDeletingNonExistingConfig
 - shouldAlterClientMetricsConfig
 - shouldAlterGroupConfig
 - shouldAlterTopicConfig
@@ -120,7 +122,6 @@ org.apache.kafka.tools.ConfigCommandTest:
 - shouldNotUpdateBrokerConfigIfMalformedBracketConfig
 - shouldNotUpdateBrokerConfigIfMalformedConfig
 - shouldNotUpdateBrokerConfigIfMalformedEntityName
-- shouldNotUpdateConfigIfNonExistingConfigIsDeleted
 - shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap
 - shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap
 - shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap
