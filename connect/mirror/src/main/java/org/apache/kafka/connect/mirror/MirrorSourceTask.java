@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,6 +57,8 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    private final TruncationDetector truncationDetector = new TruncationDetector();
+    private final TopicResetHandler topicResetHandler = new TopicResetHandler();
 
     public MirrorSourceTask() {}
 
@@ -133,6 +137,39 @@ public class MirrorSourceTask extends SourceTask {
         }
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+
+            // --- Enhanced: Truncation detection after successful poll ---
+            for (TopicPartition tp : records.partitions()) {
+                List<ConsumerRecord<byte[], byte[]>> partitionRecords = records.records(tp);
+                if (!partitionRecords.isEmpty()) {
+                    ConsumerRecord<byte[], byte[]> firstRecord = partitionRecords.get(0);
+                    long expectedOffset = truncationDetector.getExpectedOffset(tp);
+
+                    // Check for offset gap indicating truncation or topic reset
+                    if (expectedOffset >= 0 && firstRecord.offset() > expectedOffset) {
+                        Map<TopicPartition, Long> beginningOffsets =
+                                consumer.beginningOffsets(Collections.singleton(tp));
+                        long earliestOffset = beginningOffsets.getOrDefault(tp, 0L);
+
+                        if (topicResetHandler.isTopicReset(tp, earliestOffset, expectedOffset)) {
+                            log.warn("Topic reset detected for {} during offset gap check. "
+                                    + "Expected offset: {}, actual offset: {}, earliest: {}",
+                                    tp, expectedOffset, firstRecord.offset(), earliestOffset);
+                            truncationDetector.resetPartition(tp);
+                        } else {
+                            // Genuine truncation — fail fast
+                            truncationDetector.checkForTruncation(tp, earliestOffset);
+                        }
+                    }
+
+                    // Update expected offset to last record's offset + 1
+                    ConsumerRecord<byte[], byte[]> lastRecord =
+                            partitionRecords.get(partitionRecords.size() - 1);
+                    truncationDetector.updateExpectedOffset(tp, lastRecord.offset());
+                }
+            }
+            // --- End enhanced truncation detection ---
+
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
@@ -148,6 +185,17 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
+        } catch (OffsetOutOfRangeException e) {
+            // --- Enhanced: Graceful topic reset handling ---
+            log.warn("OffsetOutOfRangeException caught during poll. Attempting topic reset recovery.", e);
+            boolean recovered = topicResetHandler.handleOffsetOutOfRange(consumer, e, truncationDetector);
+            if (recovered) {
+                log.info("Topic reset recovery successful. Resuming replication from beginning.");
+                return null;
+            }
+            log.error("Topic reset recovery failed. Re-throwing exception.");
+            throw e;
+            // --- End enhanced topic reset handling ---
         } catch (WakeupException e) {
             return null;
         } catch (KafkaException e) {
