@@ -45,6 +45,8 @@ type: docs
 
 ## Upgrading to 4.1.0
 
+**Note:** Kafka Streams 4.1.0 contains a critical memory leak bug ([KAFKA-19748](https://issues.apache.org/jira/browse/KAFKA-19748)) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.
+
 ### Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x
 
 ### Notable changes in 4.1.0

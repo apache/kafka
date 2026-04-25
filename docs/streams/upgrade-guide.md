@@ -71,6 +71,8 @@ In deprecated `KStreamBuilder` class, when a `KTable` is created from a source t
 
 ## Streams API changes in 4.1.0
 
+**Note:** Kafka Streams 4.1.0 contains a critical memory leak bug ([KAFKA-19748](https://issues.apache.org/jira/browse/KAFKA-19748)) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.
+
 ### Early Access of the Streams Rebalance Protocol
 
 The Streams Rebalance Protocol is a broker-driven rebalancing system designed specifically for Kafka Streams applications. Following the pattern of KIP-848, which moved rebalance coordination of plain consumers from clients to brokers, KIP-1071 extends this model to Kafka Streams workloads. Instead of clients computing new assignments on the client during rebalance events involving all members of the group, assignments are computed continuously on the broker. Instead of using a consumer group, the streams application registers as a streams group with the broker, which manages and exposes all metadata required for coordination of the streams application instances. 
