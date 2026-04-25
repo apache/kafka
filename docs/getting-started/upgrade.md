@@ -124,6 +124,13 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
 
 ### Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x
 
+Note: Apache Kafka 4.0 and higher only support KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.1.0 require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.1.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/41/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.1.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running ` bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1 `
+
 ### Notable changes in 4.1.0
 
   * Apache Kafka 4.1 ships with a preview of Queues for Kafka ([KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw)). This feature introduces a new kind of group called share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer. Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part of an ordered stream. To enable share groups, use the `kafka-features.sh` tool to upgrade to `share.version=1`. For more information, please read the [ release notes](https://cwiki.apache.org/confluence/x/CIq3FQ). 
