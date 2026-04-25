@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
@@ -528,7 +529,11 @@ public class OffsetMetadataManager {
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
+            } else if (TxnOffsetCommitRequest.supportsGroupIdNotFoundError((short) context.requestVersion())) {
+                // From v6 onwards, GROUP_ID_NOT_FOUND is propagated directly (KIP-1319).
+                throw ex;
             } else {
+                // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         }
@@ -542,6 +547,11 @@ public class OffsetMetadataManager {
                 context.requestVersion()
             );
         } catch (StaleMemberEpochException ex) {
+            if (TxnOffsetCommitRequest.supportsStaleMemberEpochError((short) context.requestVersion())) {
+                // From v6 onwards, STALE_MEMBER_EPOCH is propagated directly (KIP-1319).
+                throw ex;
+            }
+            // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
             throw Errors.ILLEGAL_GENERATION.exception();
         }
     }
@@ -725,6 +735,11 @@ public class OffsetMetadataManager {
                             partition.partitionIndex()
                         );
                     } catch (StaleMemberEpochException ex) {
+                        if (TxnOffsetCommitRequest.supportsStaleMemberEpochError((short) context.requestVersion())) {
+                            // From v6 onwards, STALE_MEMBER_EPOCH is propagated directly (KIP-1319).
+                            throw ex;
+                        }
+                        // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
                         throw Errors.ILLEGAL_GENERATION.exception();
                     }
 
