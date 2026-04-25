@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
-
-import org.apache.kafka.common.utils.internals.KafkaThread;
+package org.apache.kafka.common.utils.internals;
 
 /**
  * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can

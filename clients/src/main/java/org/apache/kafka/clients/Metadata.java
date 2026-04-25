@@ -220,13 +220,13 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
+     * Request an update for the partition metadata if and only if we have seen a newer leader epoch. This is called by the client
      * any time it handles a response from the broker that includes leader epoch, except for update via Metadata RPC which
      * follows a different code path ({@link #update}).
      *
-     * @param topicPartition
-     * @param leaderEpoch
-     * @return true if we updated the last seen epoch, false otherwise
+     * @param topicPartition The partition for which to update the last seen leader epoch.
+     * @param leaderEpoch    The leader epoch received from the broker.
+     * @return {@code true} if we updated the last seen epoch, {@code false} otherwise.
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");

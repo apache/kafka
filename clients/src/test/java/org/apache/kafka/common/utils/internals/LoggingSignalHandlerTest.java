@@ -14,17 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.utils.internals;
 
-public final class Java {
+import org.junit.jupiter.api.Test;
 
-    private Java() { }
+public class LoggingSignalHandlerTest {
 
-    public static boolean isIbmJdk() {
-        return System.getProperty("java.vendor").contains("IBM");
+    @Test
+    public void testRegister() throws ReflectiveOperationException {
+        new LoggingSignalHandler().register();
     }
 
-    public static boolean isIbmJdkSemeru() {
-        return isIbmJdk() && System.getProperty("java.runtime.name", "").contains("Semeru");
-    }
 }

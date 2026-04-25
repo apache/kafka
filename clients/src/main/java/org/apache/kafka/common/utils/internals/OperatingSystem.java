@@ -14,29 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.utils.internals;
 
-package org.apache.kafka.common.utils;
+import java.util.Locale;
 
-import org.apache.kafka.test.TestUtils;
+public final class OperatingSystem {
 
-import org.junit.jupiter.api.Test;
-
-import java.io.File;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-
-public class ByteBufferUnmapperTest {
-
-    /**
-     * Checks that unmap doesn't throw exceptions.
-     */
-    @Test
-    public void testUnmap() throws Exception {
-        File file = TestUtils.tempFile();
-        try (FileChannel channel = FileChannel.open(file.toPath())) {
-            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
-            ByteBufferUnmapper.unmap(file.getAbsolutePath(), map);
-        }
+    private OperatingSystem() {
     }
+    
+    public static final String NAME;
 
+    public static final boolean IS_WINDOWS;
+
+    public static final boolean IS_ZOS;
+
+    static {
+        NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        IS_WINDOWS = NAME.startsWith("windows");
+        IS_ZOS = NAME.startsWith("z/os");
+    }
 }
