@@ -34,12 +34,11 @@ You can run Java applications that use the Kafka Streams library without any add
 # Starting a Kafka Streams application
 
 You can package your Java application as a fat JAR file and then start the application like this:
-
-```bash
-# Start the application in class `com.example.MyStreamsApp`
-# from the fat JAR named `path-to-app-fatjar.jar`.
-$ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
-```
+    
+    
+    # Start the application in class `com.example.MyStreamsApp`
+    # from the fat JAR named `path-to-app-fatjar.jar`.
+    $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
 
 When you start your application you are launching a Kafka Streams instance of your application. You can run multiple instances of your application. A common scenario is that there are multiple instances of your application running in parallel. For more information, see [Parallelism Model](../architecture.html#streams_architecture_tasks).
 

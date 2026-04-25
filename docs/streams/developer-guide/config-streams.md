@@ -31,18 +31,16 @@ Kafka and Kafka Streams configuration options must be configured before using St
   1. Create a `java.util.Properties` instance.
 
   2. Set the parameters. For example:
-
-     ```java
-     import java.util.Properties;
-     import org.apache.kafka.streams.StreamsConfig;
-
-     Properties settings = new Properties();
-     // Set a few key parameters
-     settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-first-streams-application");
-     settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-     // Any further settings
-     settings.put(... , ...);
-     ```
+         
+         import java.util.Properties;
+         import org.apache.kafka.streams.StreamsConfig;
+         
+         Properties settings = new Properties();
+         // Set a few key parameters
+         settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-first-streams-application");
+         settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+         // Any further settings
+         settings.put(... , ...);
 
 
 
@@ -291,16 +289,15 @@ The minimum number of in-sync replicas available for replication if the producer
 ### num.standby.replicas
 
 > See the description here.
-
-```java
-Properties streamsSettings = new Properties();
-// for broker version 2.3 or older
-//streamsSettings.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
-// for version 2.8 or older
-//streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");
-streamsSettings.put(StreamsConfig.topicPrefix(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG), 2);
-streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-```
+    
+    
+    Properties streamsSettings = new Properties();
+    // for broker version 2.3 or older
+    //streamsSettings.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+    // for version 2.8 or older
+    //streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");
+    streamsSettings.put(StreamsConfig.topicPrefix(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG), 2);
+    streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
 
 ## Optional configuration parameters
 
@@ -1216,69 +1213,67 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > 
 > You can also provide your own customized exception handler besides the library provided ones to meet your needs. For example, you can choose to forward corrupt records into a quarantine topic (think: a "dead letter queue") for further processing. To do this, use the Producer API to write a corrupted record directly to the quarantine topic. To be more concrete, you can create a separate `KafkaProducer` object outside the Streams client, and pass in this object as well as the dead letter queue topic name into the `Properties` map, which then can be retrieved from the `configure` function call. The drawback of this approach is that "manual" writes are side effects that are invisible to the Kafka Streams runtime library, so they do not benefit from the end-to-end processing guarantees of the Streams API:
-> 
-> ```java
-> public class SendToDeadLetterQueueExceptionHandler implements DeserializationExceptionHandler {
->     KafkaProducer<byte[], byte[]> dlqProducer;
->     String dlqTopic;
-> 
->     @Override
->     public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
->                                                  final ConsumerRecord<byte[], byte[]> record,
->                                                  final Exception exception) {
-> 
->         log.warn("Exception caught during Deserialization, sending to the dead queue topic; " +
->             "taskId: {}, topic: {}, partition: {}, offset: {}",
->             context.taskId(), record.topic(), record.partition(), record.offset(),
->             exception);
-> 
->         dlqProducer.send(new ProducerRecord<>(dlqTopic, record.timestamp(), record.key(), record.value(), record.headers())).get();
-> 
->         return DeserializationHandlerResponse.CONTINUE;
+>     
+>     
+>     public class SendToDeadLetterQueueExceptionHandler implements DeserializationExceptionHandler {
+>         KafkaProducer<byte[], byte[]> dlqProducer;
+>         String dlqTopic;
+>     
+>         @Override
+>         public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
+>                                                      final ConsumerRecord<byte[], byte[]> record,
+>                                                      final Exception exception) {
+>     
+>             log.warn("Exception caught during Deserialization, sending to the dead queue topic; " +
+>                 "taskId: {}, topic: {}, partition: {}, offset: {}",
+>                 context.taskId(), record.topic(), record.partition(), record.offset(),
+>                 exception);
+>     
+>             dlqProducer.send(new ProducerRecord<>(dlqTopic, record.timestamp(), record.key(), record.value(), record.headers())).get();
+>     
+>             return DeserializationHandlerResponse.CONTINUE;
+>         }
+>     
+>         @Override
+>         public void configure(final Map<String, ?> configs) {
+>             dlqProducer = .. // get a producer from the configs map
+>             dlqTopic = .. // get the topic name from the configs map
+>         }
 >     }
-> 
->     @Override
->     public void configure(final Map<String, ?> configs) {
->         dlqProducer = .. // get a producer from the configs map
->         dlqTopic = .. // get the topic name from the configs map
->     }
-> }
-> ```
 
 ### production.exception.handler (deprecated: default.production.exception.handler)
 
 > The production exception handler allows you to manage exceptions triggered when trying to interact with a broker such as attempting to produce a record that is too large. By default, Kafka provides and uses the [DefaultProductionExceptionHandler](/{version}/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html) that always fails when these exceptions occur.
 > 
 > An exception handler can return `FAIL`, `CONTINUE`, or `RETRY` depending on the record and the exception thrown. Returning `FAIL` will signal that Streams should shut down. `CONTINUE` will signal that Streams should ignore the issue and continue processing. For `RetriableException` the handler may return `RETRY` to tell the runtime to retry sending the failed record (**Note:** If `RETRY` is returned for a non-`RetriableException` it will be treated as `FAIL`.) If you want to provide an exception handler that always ignores records that are too large, you could implement something like the following:
-> 
-> ```java
-> import java.util.Properties;
-> import org.apache.kafka.streams.StreamsConfig;
-> import org.apache.kafka.common.errors.RecordTooLargeException;
-> import org.apache.kafka.streams.errors.ProductionExceptionHandler;
-> import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
-> 
-> public class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
->     public void configure(Map<String, Object> config) {}
-> 
->     public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
->                                                      final ProducerRecord<byte[], byte[]> record,
->                                                      final Exception exception) {
->         if (exception instanceof RecordTooLargeException) {
->             return ProductionExceptionHandlerResponse.CONTINUE;
->         } else {
->             return ProductionExceptionHandlerResponse.FAIL;
+>     
+>     
+>     import java.util.Properties;
+>     import org.apache.kafka.streams.StreamsConfig;
+>     import org.apache.kafka.common.errors.RecordTooLargeException;
+>     import org.apache.kafka.streams.errors.ProductionExceptionHandler;
+>     import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
+>     
+>     public class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
+>         public void configure(Map<String, Object> config) {}
+>     
+>         public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
+>                                                          final ProducerRecord<byte[], byte[]> record,
+>                                                          final Exception exception) {
+>             if (exception instanceof RecordTooLargeException) {
+>                 return ProductionExceptionHandlerResponse.CONTINUE;
+>             } else {
+>                 return ProductionExceptionHandlerResponse.FAIL;
+>             }
 >         }
 >     }
-> }
-> 
-> Properties settings = new Properties();
-> 
-> // other various kafka streams settings, e.g. bootstrap servers, application id, etc
-> 
-> settings.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
->              IgnoreRecordTooLargeHandler.class);
-> ```
+>     
+>     Properties settings = new Properties();
+>     
+>     // other various kafka streams settings, e.g. bootstrap servers, application id, etc
+>     
+>     settings.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+>                  IgnoreRecordTooLargeHandler.class);
 
 ### default.timestamp.extractor
 
@@ -1303,46 +1298,44 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > Another built-in extractor is [WallclockTimestampExtractor](/{version}/javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html). This extractor does not actually "extract" a timestamp from the consumed record but rather returns the current time in milliseconds from the system clock (think: `System.currentTimeMillis()`), which effectively means Streams will operate on the basis of the so-called **processing-time** of events.
 > 
 > You can also provide your own timestamp extractors, for instance to retrieve timestamps embedded in the payload of messages. If you cannot extract a valid timestamp, you can either throw an exception, return a negative timestamp, or estimate a timestamp. Returning a negative timestamp will result in data loss - the corresponding record will not be processed but silently dropped. If you want to estimate a new timestamp, you can use the value provided via `previousTimestamp` (i.e., a Kafka Streams timestamp estimation). Here is an example of a custom `TimestampExtractor` implementation:
-> 
-> ```java
-> import org.apache.kafka.clients.consumer.ConsumerRecord;
-> import org.apache.kafka.streams.processor.TimestampExtractor;
-> 
-> // Extracts the embedded timestamp of a record (giving you "event-time" semantics).
-> public class MyEventTimeExtractor implements TimestampExtractor {
-> 
->   @Override
->   public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
->     // `Foo` is your own custom class, which we assume has a method that returns
->     // the embedded timestamp (milliseconds since midnight, January 1, 1970 UTC).
->     long timestamp = -1;
->     final Foo myPojo = (Foo) record.value();
->     if (myPojo != null) {
->       timestamp = myPojo.getTimestampInMillis();
->     }
->     if (timestamp < 0) {
->       // Invalid timestamp!  Attempt to estimate a new timestamp,
->       // otherwise fall back to wall-clock time (processing-time).
->       if (previousTimestamp >= 0) {
->         return previousTimestamp;
->       } else {
->         return System.currentTimeMillis();
+>     
+>     
+>     import org.apache.kafka.clients.consumer.ConsumerRecord;
+>     import org.apache.kafka.streams.processor.TimestampExtractor;
+>     
+>     // Extracts the embedded timestamp of a record (giving you "event-time" semantics).
+>     public class MyEventTimeExtractor implements TimestampExtractor {
+>     
+>       @Override
+>       public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+>         // `Foo` is your own custom class, which we assume has a method that returns
+>         // the embedded timestamp (milliseconds since midnight, January 1, 1970 UTC).
+>         long timestamp = -1;
+>         final Foo myPojo = (Foo) record.value();
+>         if (myPojo != null) {
+>           timestamp = myPojo.getTimestampInMillis();
+>         }
+>         if (timestamp < 0) {
+>           // Invalid timestamp!  Attempt to estimate a new timestamp,
+>           // otherwise fall back to wall-clock time (processing-time).
+>           if (previousTimestamp >= 0) {
+>             return previousTimestamp;
+>           } else {
+>             return System.currentTimeMillis();
+>           }
+>         }
 >       }
+>     
 >     }
->   }
-> 
-> }
-> ```
 > 
 > You would then define the custom timestamp extractor in your Streams configuration as follows:
-> 
-> ```java
-> import java.util.Properties;
-> import org.apache.kafka.streams.StreamsConfig;
-> 
-> Properties streamsConfiguration = new Properties();
-> streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MyEventTimeExtractor.class);
-> ```
+>     
+>     
+>     import java.util.Properties;
+>     import org.apache.kafka.streams.StreamsConfig;
+>     
+>     Properties streamsConfiguration = new Properties();
+>     streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MyEventTimeExtractor.class);
 
 ### default.key.serde
 
@@ -1397,21 +1390,20 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > This configuration sets a list of tag keys used to distribute standby replicas across Kafka Streams clients. When configured, Kafka Streams will make a best-effort to distribute the standby tasks over clients with different tag values. 
 > 
 > Tags for the Kafka Streams clients can be set via `client.tag.` prefix. Example: 
-> 
-> ```text
-> Client-1                                   | Client-2
-> _______________________________________________________________________
-> client.tag.zone: eu-central-1a             | client.tag.zone: eu-central-1b
-> client.tag.cluster: k8s-cluster1           | client.tag.cluster: k8s-cluster1
-> rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cluster
-> 
-> 
-> Client-3                                   | Client-4
-> _______________________________________________________________________
-> client.tag.zone: eu-central-1a             | client.tag.zone: eu-central-1b
-> client.tag.cluster: k8s-cluster2           | client.tag.cluster: k8s-cluster2
-> rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cluster
-> ```
+>     
+>     
+>     Client-1                                   | Client-2
+>     _______________________________________________________________________
+>     client.tag.zone: eu-central-1a             | client.tag.zone: eu-central-1b
+>     client.tag.cluster: k8s-cluster1           | client.tag.cluster: k8s-cluster1
+>     rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cluster
+>     
+>     
+>     Client-3                                   | Client-4
+>     _______________________________________________________________________
+>     client.tag.zone: eu-central-1a             | client.tag.zone: eu-central-1b
+>     client.tag.cluster: k8s-cluster2           | client.tag.cluster: k8s-cluster2
+>     rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cluster
 > 
 > In the above example, we have four Kafka Streams clients across two zones (`eu-central-1a`, `eu-central-1b`) and across two clusters (`k8s-cluster1`, `k8s-cluster2`). For an active task located on `Client-1`, Kafka Streams will allocate a standby task on `Client-4`, since `Client-4` has a different `zone` and a different `cluster` than `Client-1`. 
 
@@ -1481,34 +1473,33 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > 
 > You can also provide your own customized exception handler besides the library provided ones to meet your needs. For example, you can choose to forward corrupt records into a quarantine topic (think: a "dead letter queue") for further processing. To do this, use the Producer API to write a corrupted record directly to the quarantine topic. To be more concrete, you can create a separate `KafkaProducer` object outside the Streams client, and pass in this object as well as the dead letter queue topic name into the `Properties` map, which then can be retrieved from the `configure` function call. The drawback of this approach is that "manual" writes are side effects that are invisible to the Kafka Streams runtime library, so they do not benefit from the end-to-end processing guarantees of the Streams API:
-> 
-> ```java
-> public class SendToDeadLetterQueueExceptionHandler implements ProcessingExceptionHandler {
->     KafkaProducer<byte[], byte[]> dlqProducer;
->     String dlqTopic;
-> 
->     @Override
->     public ProcessingHandlerResponse handle(final ErrorHandlerContext context,
->                                             final Record record,
->                                             final Exception exception) {
-> 
->         log.warn("Exception caught during message processing, sending to the dead queue topic; " +
->             "processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
->             context.processorNodeId(), context.taskId(), context.topic(), context.partition(), context.offset(),
->             exception);
-> 
->         dlqProducer.send(new ProducerRecord<>(dlqTopic, null, record.timestamp(), (byte[]) record.key(), (byte[]) record.value(), record.headers()));
-> 
->         return ProcessingHandlerResponse.CONTINUE;
+>     
+>     
+>     public class SendToDeadLetterQueueExceptionHandler implements ProcessingExceptionHandler {
+>         KafkaProducer<byte[], byte[]> dlqProducer;
+>         String dlqTopic;
+>     
+>         @Override
+>         public ProcessingHandlerResponse handle(final ErrorHandlerContext context,
+>                                                 final Record record,
+>                                                 final Exception exception) {
+>     
+>             log.warn("Exception caught during message processing, sending to the dead queue topic; " +
+>                 "processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
+>                 context.processorNodeId(), context.taskId(), context.topic(), context.partition(), context.offset(),
+>                 exception);
+>     
+>             dlqProducer.send(new ProducerRecord<>(dlqTopic, null, record.timestamp(), (byte[]) record.key(), (byte[]) record.value(), record.headers()));
+>     
+>             return ProcessingHandlerResponse.CONTINUE;
+>         }
+>     
+>         @Override
+>         public void configure(final Map<String, ?> configs) {
+>             dlqProducer = .. // get a producer from the configs map
+>             dlqTopic = .. // get the topic name from the configs map
+>         }
 >     }
-> 
->     @Override
->     public void configure(final Map<String, ?> configs) {
->         dlqProducer = .. // get a producer from the configs map
->         dlqTopic = .. // get the topic name from the configs map
->     }
-> }
-> ```
 
 >**Note: The example above demonstrates manual production to a DLQ topic. The following example shows the recommended approach using the built-in DLQ support.**
 > A custom processing exception handler can decide whether to continue or fail processing when user logic throws an exception. If DLQ behavior is required, return DLQ records from the handler response.
@@ -1580,17 +1571,16 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >   * For more details, see [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread).
 > 
 > **Example Configuration:**
-> 
-> ```java
-> Properties streamsSettings = new Properties();
-> 
-> // Configure the processing exception handler
-> streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
->                     LogAndContinueProcessingExceptionHandler.class);
-> 
-> // Enable exception handling for Global KTables
-> streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
-> ```
+>     
+>     
+>     Properties streamsSettings = new Properties();
+>     
+>     // Configure the processing exception handler
+>     streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, 
+>                         LogAndContinueProcessingExceptionHandler.class);
+>     
+>     // Enable exception handling for Global KTables
+>     streamsSettings.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
 
 ### processing.guarantee
 
@@ -1617,38 +1607,38 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > The RocksDB configuration. Kafka Streams uses RocksDB as the default storage engine for persistent stores. To change the default configuration for RocksDB, you can implement `RocksDBConfigSetter` and provide your custom class via [rocksdb.config.setter](/{version}/javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html).
 > 
 > Here is an example that adjusts the memory size consumed by RocksDB.
-> 
-> ```java
-> public static class CustomRocksDBConfig implements RocksDBConfigSetter {
->     // This object should be a member variable so it can be closed in RocksDBConfigSetter#close.
->     private org.rocksdb.Cache cache = new org.rocksdb.LRUCache(16 * 1024L * 1024L);
-> 
->     @Override
->     public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
->         // See #1 below.
->         BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();
->         tableConfig.setBlockCache(cache);
->         // See #2 below.
->         tableConfig.setBlockSize(16 * 1024L);
->         // See #3 below.
->         tableConfig.setCacheIndexAndFilterBlocks(true);
->         options.setTableFormatConfig(tableConfig);
->         // See #4 below.
->         options.setMaxWriteBufferNumber(2);
+>     
+>     
+>     public static class CustomRocksDBConfig implements RocksDBConfigSetter {
+>         // This object should be a member variable so it can be closed in RocksDBConfigSetter#close.
+>         private org.rocksdb.Cache cache = new org.rocksdb.LRUCache(16 * 1024L * 1024L);
+>     
+>         @Override
+>         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+>             // See #1 below.
+>             BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();
+>             tableConfig.setBlockCache(cache);
+>             // See #2 below.
+>             tableConfig.setBlockSize(16 * 1024L);
+>             // See #3 below.
+>             tableConfig.setCacheIndexAndFilterBlocks(true);
+>             options.setTableFormatConfig(tableConfig);
+>             // See #4 below.
+>             options.setMaxWriteBufferNumber(2);
+>         }
+>     
+>         @Override
+>         public void close(final String storeName, final Options options) {
+>             // See #5 below.
+>             cache.close();
+>         }
 >     }
-> 
->     @Override
->     public void close(final String storeName, final Options options) {
->         // See #5 below.
->         cache.close();
->     }
-> }
-> 
-> Properties streamsSettings = new Properties();
-> streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);
-> ```
+>     
+>     Properties streamsSettings = new Properties();
+>     streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);
 > 
 > Notes for example:
+>     
 > 
 >   1. `BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();` Get a reference to the existing table config rather than create a new one, so you don't accidentally overwrite defaults such as the `BloomFilter`, which is an important optimization. 
 >   2. `tableConfig.setBlockSize(16 * 1024L);` Modify the default [block size](https://github.com/apache/kafka/blob/2.3/streams/src/main/java/org/apache/kafka/streams/state/internals/RocksDBStore.java#L79) per these instructions from the [RocksDB GitHub](https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB#indexes-and-filter-blocks).
@@ -1702,32 +1692,30 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
  You can specify parameters for the Kafka [consumers](/{version}/javadoc/org/apache/kafka/clients/consumer/package-summary.html), [producers](/{version}/javadoc/org/apache/kafka/clients/producer/package-summary.html), and [admin client](/{version}/javadoc/org/apache/kafka/kafka/clients/admin/package-summary.html) that are used internally. The consumer, producer and admin client settings are defined by specifying parameters in a `StreamsConfig` instance.
  
  In this example, the Kafka [consumer session timeout](/{version}/javadoc/org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG) is configured to be 60000 milliseconds in the Streams settings:
-
-```java
-Properties streamsSettings = new Properties();
-// Example of a "normal" setting for Kafka Streams
-streamsSettings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
-// Customize the Kafka consumer settings of your Streams application
-streamsSettings.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 60000);
-```
+     
+     
+     Properties streamsSettings = new Properties();
+     // Example of a "normal" setting for Kafka Streams
+     streamsSettings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
+     // Customize the Kafka consumer settings of your Streams application
+     streamsSettings.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 60000);
  
  #### Naming
  
  Some consumer, producer and admin client configuration parameters use the same parameter name, and Kafka Streams library itself also uses some parameters that share the same name with its embedded client. For example, `send.buffer.bytes` and `receive.buffer.bytes` are used to configure TCP buffers; `request.timeout.ms` and `retry.backoff.ms` control retries for client request. You can avoid duplicate names by prefix parameter names with `consumer.`, `producer.`, or `admin.` (e.g., `consumer.send.buffer.bytes` and `producer.send.buffer.bytes`).
-
-```java
-Properties streamsSettings = new Properties();
-// same value for consumer, producer, and admin client
-streamsSettings.put("PARAMETER_NAME", "value");
-// different values for consumer and producer
-streamsSettings.put("consumer.PARAMETER_NAME", "consumer-value");
-streamsSettings.put("producer.PARAMETER_NAME", "producer-value");
-streamsSettings.put("admin.PARAMETER_NAME", "admin-value");
-// alternatively, you can use
-streamsSettings.put(StreamsConfig.consumerPrefix("PARAMETER_NAME"), "consumer-value");
-streamsSettings.put(StreamsConfig.producerPrefix("PARAMETER_NAME"), "producer-value");
-streamsSettings.put(StreamsConfig.adminClientPrefix("PARAMETER_NAME"), "admin-value");
-```
+     
+     
+     Properties streamsSettings = new Properties();
+     // same value for consumer, producer, and admin client
+     streamsSettings.put("PARAMETER_NAME", "value");
+     // different values for consumer and producer
+     streamsSettings.put("consumer.PARAMETER_NAME", "consumer-value");
+     streamsSettings.put("producer.PARAMETER_NAME", "producer-value");
+     streamsSettings.put("admin.PARAMETER_NAME", "admin-value");
+     // alternatively, you can use
+     streamsSettings.put(StreamsConfig.consumerPrefix("PARAMETER_NAME"), "consumer-value");
+     streamsSettings.put(StreamsConfig.producerPrefix("PARAMETER_NAME"), "producer-value");
+     streamsSettings.put(StreamsConfig.adminClientPrefix("PARAMETER_NAME"), "admin-value");
  
  You could further separate consumer configuration by adding different prefixes:
  
@@ -1738,29 +1726,27 @@ streamsSettings.put(StreamsConfig.adminClientPrefix("PARAMETER_NAME"), "admin-va
 
  
  For example, if you only want to set restore consumer config without touching other consumers' settings, you could simply use `restore.consumer.` to set the config.
-
-```java
-Properties streamsSettings = new Properties();
-// same config value for all consumer types
-streamsSettings.put("consumer.PARAMETER_NAME", "general-consumer-value");
-// set a different restore consumer config. This would make restore consumer take restore-consumer-value,
-// while main consumer and global consumer stay with general-consumer-value
-streamsSettings.put("restore.consumer.PARAMETER_NAME", "restore-consumer-value");
-// alternatively, you can use
-streamsSettings.put(StreamsConfig.restoreConsumerPrefix("PARAMETER_NAME"), "restore-consumer-value");
-```
+     
+     
+     Properties streamsSettings = new Properties();
+     // same config value for all consumer types
+     streamsSettings.put("consumer.PARAMETER_NAME", "general-consumer-value");
+     // set a different restore consumer config. This would make restore consumer take restore-consumer-value,
+     // while main consumer and global consumer stay with general-consumer-value
+     streamsSettings.put("restore.consumer.PARAMETER_NAME", "restore-consumer-value");
+     // alternatively, you can use
+     streamsSettings.put(StreamsConfig.restoreConsumerPrefix("PARAMETER_NAME"), "restore-consumer-value");
  
  Same applied to `main.consumer.` and `main.consumer.`, if you only want to specify one consumer type config.
  
  Additionally, to configure the internal repartition/changelog topics, you could use the `topic.` prefix, followed by any of the standard topic configs.
-
-```java
-Properties streamsSettings = new Properties();
-// Override default for both changelog and repartition topics
-streamsSettings.put("topic.PARAMETER_NAME", "topic-value");
-// alternatively, you can use
-streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
-```
+     
+     
+     Properties streamsSettings = new Properties();
+     // Override default for both changelog and repartition topics
+     streamsSettings.put("topic.PARAMETER_NAME", "topic-value");
+     // alternatively, you can use
+     streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
  
  #### Default Values
  

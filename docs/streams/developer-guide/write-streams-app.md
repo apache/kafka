@@ -119,24 +119,23 @@ Description
 See the section [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes) for more information about Serializers/Deserializers.
 
 Example `pom.xml` snippet when using Maven:
-
-```xml
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-streams</artifactId>
-    <version>4.3.0</version>
-</dependency>
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-clients</artifactId>
-    <version>4.3.0</version>
-</dependency>
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-streams-scala_2.13</artifactId>
-    <version>4.3.0</version>
-</dependency>
-```
+    
+    
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams</artifactId>
+        <version>4.3.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>4.3.0</version>
+    </dependency>
+        <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams-scala_2.13</artifactId>
+        <version>4.3.0</version>
+    </dependency>
 
 # Using Kafka Streams within your application code
 
@@ -150,65 +149,61 @@ First, you must create an instance of `KafkaStreams`.
 
 
 Code example:
-
-```java
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.kstream.StreamsBuilder;
-import org.apache.kafka.streams.processor.Topology;
-
-// Use the builders to define the actual processing topology, e.g. to specify
-// from which input topics to read, which stream operations (filter, map, etc.)
-// should be called, and so on.  We will cover this in detail in the subsequent
-// sections of this Developer Guide.
-
-StreamsBuilder builder = ...;  // when using the DSL
-Topology topology = builder.build();
-//
-// OR
-//
-Topology topology = ...; // when using the Processor API
-
-// Use the configuration to tell your application where the Kafka cluster is,
-// which Serializers/Deserializers to use by default, to specify security settings,
-// and so on.
-Properties props = ...;
-
-KafkaStreams streams = new KafkaStreams(topology, props);
-```
+    
+    
+    import org.apache.kafka.streams.KafkaStreams;
+    import org.apache.kafka.streams.kstream.StreamsBuilder;
+    import org.apache.kafka.streams.processor.Topology;
+    
+    // Use the builders to define the actual processing topology, e.g. to specify
+    // from which input topics to read, which stream operations (filter, map, etc.)
+    // should be called, and so on.  We will cover this in detail in the subsequent
+    // sections of this Developer Guide.
+    
+    StreamsBuilder builder = ...;  // when using the DSL
+    Topology topology = builder.build();
+    //
+    // OR
+    //
+    Topology topology = ...; // when using the Processor API
+    
+    // Use the configuration to tell your application where the Kafka cluster is,
+    // which Serializers/Deserializers to use by default, to specify security settings,
+    // and so on.
+    Properties props = ...;
+    
+    KafkaStreams streams = new KafkaStreams(topology, props);
 
 At this point, internal structures are initialized, but the processing is not started yet. You have to explicitly start the Kafka Streams thread by calling the `KafkaStreams#start()` method:
-
-```java
-// Start the Kafka Streams threads
-streams.start();
-```
+    
+    
+    // Start the Kafka Streams threads
+    streams.start();
 
 If there are other instances of this stream processing application running elsewhere (e.g., on another machine), Kafka Streams transparently re-assigns tasks from the existing instances to the new instance that you just started. For more information, see [Stream Partitions and Tasks](../architecture.html#streams_architecture_tasks) and [Threading Model](../architecture.html#streams_architecture_threads).
 
 To catch any unexpected exceptions, you can set an `java.lang.Thread.UncaughtExceptionHandler` before you start the application. This handler is called whenever a stream thread is terminated by an unexpected exception:
-
-```java
-streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -> {
-  // here you should examine the throwable/exception and perform an appropriate action!
-});
-```
+    
+    
+    streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -> {
+      // here you should examine the throwable/exception and perform an appropriate action!
+    });
+    
 
 To stop the application instance, call the `KafkaStreams#close()` method:
-
-```java
-// Stop the Kafka Streams threads
-streams.close();
-```
+    
+    
+    // Stop the Kafka Streams threads
+    streams.close();
 
 To allow your application to gracefully shutdown in response to SIGTERM, it is recommended that you add a shutdown hook and call `KafkaStreams#close`.
 
 Here is a shutdown hook example in Java:
-
-```java
-// Add shutdown hook to stop the Kafka Streams threads.
-// You can optionally provide a timeout to `close`.
-Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
-```
+    
+    
+    // Add shutdown hook to stop the Kafka Streams threads.
+    // You can optionally provide a timeout to `close`.
+    Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
 After an application is stopped, Kafka Streams will migrate any tasks that had been running in this instance to available remaining instances.
 

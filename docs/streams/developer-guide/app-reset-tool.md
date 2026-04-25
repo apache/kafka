@@ -63,55 +63,53 @@ If you are using **classic rebalance protocol** , run the classic application re
 Invoke the application reset tool from the command line
 
 Warning! This tool makes irreversible changes to your application. It is strongly recommended that you run this once with `--dry-run` to preview your changes before making them.
-
-```bash
-$ bin/kafka-streams-application-reset.sh
-```
+    
+    
+    $ bin/kafka-streams-application-reset.sh
 
 The tool accepts the following parameters:
-
-```text
-Option (* = required)                 Description
----------------------                 -----------
-* --application-id <String: id>       REQUIRED: The Kafka Streams application ID
-                                        (application.id).
---bootstrap-server <String: server to  The server(s) to connect to.
-                           connect to>  The broker list string in the form HOST1:PORT1,HOST2:PORT2.
-                                        (default: localhost:9092)
---by-duration <String: urls>          Reset offsets to offset by duration from
-                                        current timestamp. Format: 'PnDTnHnMnS'
---config-file <String: file name>     (Deprecated) Property file containing configs to be
-                                        passed to admin clients and embedded consumer.
-                                        This option will be removed in a future version.
-                                        Use --command-config instead.
---command-config <String: file name>  Config properties file to be passed to admin clients
-                                        and embedded consumer.
---dry-run                             Display the actions that would be
-                                        performed without executing the reset
-                                        commands.
---from-file <String: urls>            Reset offsets to values defined in CSV
-                                        file.
---input-topics <String: list>         Comma-separated list of user input
-                                        topics. For these topics, the tool will
-                                        reset the offset to the earliest
-                                        available offset.
---internal-topics <String: list>      Comma-separated list of internal topics
-                                        to delete. Must be a subset of the
-                                        internal topics marked for deletion by
-                                        the default behaviour (do a dry-run without
-                                        this option to view these topics).
---shift-by <Long: number-of-offsets>  Reset offsets shifting current offset by
-                                        'n', where 'n' can be positive or
-                                        negative
---to-datetime <String>                Reset offsets to offset from datetime.
-                                        Format: 'YYYY-MM-DDThh:mm:ss.sss'
---to-earliest                         Reset offsets to earliest offset.
---to-latest                           Reset offsets to latest offset.
---to-offset <Long>                    Reset offsets to a specific offset.
---force                               Force removing members of the consumer group
-                                      (intended to remove left-over members if
-                                      long session timeout was configured).
-```
+    
+    
+    Option (* = required)                 Description
+    ---------------------                 -----------
+    * --application-id <String: id>       REQUIRED: The Kafka Streams application ID
+                                            (application.id).
+    --bootstrap-server <String: server to  The server(s) to connect to.
+                               connect to>  The broker list string in the form HOST1:PORT1,HOST2:PORT2.
+                                            (default: localhost:9092)
+    --by-duration <String: urls>          Reset offsets to offset by duration from
+                                            current timestamp. Format: 'PnDTnHnMnS'
+    --config-file <String: file name>     (Deprecated) Property file containing configs to be
+                                            passed to admin clients and embedded consumer.
+                                            This option will be removed in a future version.
+                                            Use --command-config instead.
+    --command-config <String: file name>  Config properties file to be passed to admin clients
+                                            and embedded consumer.
+    --dry-run                             Display the actions that would be
+                                            performed without executing the reset
+                                            commands.
+    --from-file <String: urls>            Reset offsets to values defined in CSV
+                                            file.
+    --input-topics <String: list>         Comma-separated list of user input
+                                            topics. For these topics, the tool will
+                                            reset the offset to the earliest
+                                            available offset.
+    --internal-topics <String: list>      Comma-separated list of internal topics
+                                            to delete. Must be a subset of the
+                                            internal topics marked for deletion by
+                                            the default behaviour (do a dry-run without
+                                            this option to view these topics).
+    --shift-by <Long: number-of-offsets>  Reset offsets shifting current offset by
+                                            'n', where 'n' can be positive or
+                                            negative
+    --to-datetime <String>                Reset offsets to offset from datetime.
+                                            Format: 'YYYY-MM-DDThh:mm:ss.sss'
+    --to-earliest                         Reset offsets to earliest offset.
+    --to-latest                           Reset offsets to latest offset.
+    --to-offset <Long>                    Reset offsets to a specific offset.
+    --force                               Force removing members of the consumer group
+                                          (intended to remove left-over members if
+                                          long session timeout was configured).
 
 Consider the following as reset-offset scenarios for `input-topics`:
 

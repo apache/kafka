@@ -84,19 +84,19 @@ The Streams Rebalance Protocol is enabled by default on new clusters starting wi
 The protocol is enabled by default on new Apache Kafka 4.2 clusters. To enable the feature on existing clusters (after upgrading to 4.2) or to explicitly control it:
 
 Enable the feature:
-```bash
+```
 bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1
 ```
 
 Disable the feature:
-```bash
+```
 bin/kafka-features.sh --bootstrap-server localhost:9092 downgrade --feature streams.version=0
 ```
 
 ## Client Configuration
 
 In your Kafka Streams application configuration, set:
-```properties
+```
 group.protocol=streams
 ```
 
@@ -132,7 +132,7 @@ The following group-level configurations are available for streams groups:
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
 
 ### Example: Setting Group-Level Configuration
-```bash
+```
 bin/kafka-configs.sh --bootstrap-server localhost:9092 \
   --alter --entity-type groups --entity-name wordcount \
   --add-config streams.num.standby.replicas=1
@@ -219,21 +219,21 @@ The existing group metrics are extended to differentiate between streams groups 
 ## Group Count by Protocol
 
 Number of groups based on type of protocol, where the list of protocols is extended by the `protocol=streams` variation:
-```text
+```
 kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|classic|streams}
 ```
 
 ## Streams Group Count by State
 
 Number of streams groups based on state:
-```text
+```
 kafka.server:type=group-coordinator-metrics,name=streams-group-count,state={empty|not_ready|assigning|reconciling|stable|dead}
 ```
 
 ## Streams Group Rebalances
 
 Streams group rebalances sensor:
-```text
+```
 kafka.server:type=group-coordinator-metrics,name=streams-group-rebalance-rate
 
 kafka.server:type=group-coordinator-metrics,name=streams-group-rebalance-count

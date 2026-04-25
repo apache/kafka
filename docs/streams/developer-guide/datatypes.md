@@ -41,47 +41,44 @@ You can provide Serdes by using either of these methods, but you must use at lea
 # Configuring Serdes
 
 Serdes specified in the Streams configuration are used as the default in your Kafka Streams application. Because this config's default is null, you must either set a default Serde by using this configuration or pass in Serdes explicitly, as described below.
-
-```java
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.StreamsConfig;
-
-Properties settings = new Properties();
-// Default serde for keys of data records (here: built-in serde for String type)
-settings.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-// Default serde for values of data records (here: built-in serde for Long type)
-settings.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
-```
+    
+    
+    import org.apache.kafka.common.serialization.Serdes;
+    import org.apache.kafka.streams.StreamsConfig;
+    
+    Properties settings = new Properties();
+    // Default serde for keys of data records (here: built-in serde for String type)
+    settings.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+    // Default serde for values of data records (here: built-in serde for Long type)
+    settings.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
 
 # Overriding default Serdes
 
 You can also specify Serdes explicitly by passing them to the appropriate API methods, which overrides the default serde settings:
-
-```java
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
-
-final Serde<String> stringSerde = Serdes.String();
-final Serde<Long> longSerde = Serdes.Long();
-
-// The stream userCountByRegion has type `String` for record keys (for region)
-// and type `Long` for record values (for user counts).
-KStream<String, Long> userCountByRegion = ...;
-userCountByRegion.to("RegionCountsTopic", Produced.with(stringSerde, longSerde));
-```
+    
+    
+    import org.apache.kafka.common.serialization.Serde;
+    import org.apache.kafka.common.serialization.Serdes;
+    
+    final Serde<String> stringSerde = Serdes.String();
+    final Serde<Long> longSerde = Serdes.Long();
+    
+    // The stream userCountByRegion has type `String` for record keys (for region)
+    // and type `Long` for record values (for user counts).
+    KStream<String, Long> userCountByRegion = ...;
+    userCountByRegion.to("RegionCountsTopic", Produced.with(stringSerde, longSerde));
 
 If you want to override serdes selectively, i.e., keep the defaults for some fields, then don't specify the serde whenever you want to leverage the default settings:
-
-```java
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
-
-// Use the default serializer for record keys (here: region as String) by not specifying the key serde,
-// but override the default serializer for record values (here: userCount as Long).
-final Serde<Long> longSerde = Serdes.Long();
-KStream<String, Long> userCountByRegion = ...;
-userCountByRegion.to("RegionCountsTopic", Produced.valueSerde(Serdes.Long()));
-```
+    
+    
+    import org.apache.kafka.common.serialization.Serde;
+    import org.apache.kafka.common.serialization.Serdes;
+    
+    // Use the default serializer for record keys (here: region as String) by not specifying the key serde,
+    // but override the default serializer for record values (here: userCount as Long).
+    final Serde<Long> longSerde = Serdes.Long();
+    KStream<String, Long> userCountByRegion = ...;
+    userCountByRegion.to("RegionCountsTopic", Produced.valueSerde(Serdes.Long()));
 
 If some of your incoming records are corrupted or ill-formatted, they will cause the deserializer class to report an error. Since 1.0.x we have introduced an `DeserializationExceptionHandler` interface which allows you to customize how to handle such records. The customized implementation of the interface can be specified via the `StreamsConfig`. For more details, please feel free to read the [Configuring a Streams Application](config-streams.html#default-deserialization-exception-handler) section. 
 
@@ -90,14 +87,13 @@ If some of your incoming records are corrupted or ill-formatted, they will cause
 ## Primitive and basic types
 
 Apache Kafka includes several built-in serde implementations for Java primitives and basic types such as `byte[]` in its `kafka-clients` Maven artifact:
-
-```xml
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-clients</artifactId>
-    <version>4.3.0</version>
-</dependency>
-```
+    
+    
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>4.3.0</version>
+    </dependency>
 
 This artifact provides the following serde implementations under the package [org.apache.kafka.common.serialization](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization), which you can leverage when e.g., defining default serializers in your Streams configuration.  
   
@@ -219,14 +215,13 @@ As shown in the example, you can use JSONSerdes inner classes `Serdes.serdeFrom(
 ## Window Serdes
 
 Apache Kafka Streams includes serde implementations for windowed types in its `kafka-streams` Maven artifact:
-
-```xml
-<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-streams</artifactId>
-    <version>4.3.0</version>
-</dependency>
-```
+    
+    
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams</artifactId>
+        <version>4.3.0</version>
+    </dependency>
 
 This artifact provides the following windowed serde implementations under the package [org.apache.kafka.streams.kstream](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/kstream):
 
@@ -254,45 +249,43 @@ This artifact provides the following windowed serde implementations under the pa
 ### Usage in Code
 
 When using windowed serdes in your application code, you typically create instances via constructors or factory methods:
-
-```java
-// Time windowed serde - using factory method
-Serde<Windowed<String>> timeWindowedSerde =
-    WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
-
-// Time windowed serde - using constructor
-Serde<Windowed<String>> timeWindowedSerde2 =
-    new WindowedSerdes.TimeWindowedSerde<>(Serdes.String(), 500L);
-
-// Session windowed serde - using factory method
-Serde<Windowed<String>> sessionWindowedSerde =
-    WindowedSerdes.sessionWindowedSerdeFrom(String.class);
-
-// Session windowed serde - using constructor
-Serde<Windowed<String>> sessionWindowedSerde2 =
-    new WindowedSerdes.SessionWindowedSerde<>(Serdes.String());
-
-// Using individual serializers/deserializers
-TimeWindowedSerializer<String> serializer = new TimeWindowedSerializer<>(Serdes.String().serializer());
-TimeWindowedDeserializer<String> deserializer = new TimeWindowedDeserializer<>(Serdes.String().deserializer(), 500L);
-```
+    
+    
+    // Time windowed serde - using factory method
+    Serde<Windowed<String>> timeWindowedSerde = 
+        WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
+    
+    // Time windowed serde - using constructor
+    Serde<Windowed<String>> timeWindowedSerde2 = 
+        new WindowedSerdes.TimeWindowedSerde<>(Serdes.String(), 500L);
+    
+    // Session windowed serde - using factory method
+    Serde<Windowed<String>> sessionWindowedSerde = 
+        WindowedSerdes.sessionWindowedSerdeFrom(String.class);
+    
+    // Session windowed serde - using constructor  
+    Serde<Windowed<String>> sessionWindowedSerde2 = 
+        new WindowedSerdes.SessionWindowedSerde<>(Serdes.String());
+    
+    // Using individual serializers/deserializers
+    TimeWindowedSerializer<String> serializer = new TimeWindowedSerializer<>(Serdes.String().serializer());
+    TimeWindowedDeserializer<String> deserializer = new TimeWindowedDeserializer<>(Serdes.String().deserializer(), 500L);
 
 ### Usage in Command Line
 
 When using command-line tools (like `bin/kafka-console-consumer.sh`), you can configure windowed deserializers by passing the inner class and window size via configuration properties. The property names use a prefix pattern:
-
-```bash
-# Time windowed deserializer configuration
---formatter-property print.key=true \
---formatter-property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
---formatter-property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer \
---formatter-property key.deserializer.window.size.ms=500
-
-# Session windowed deserializer configuration
---formatter-property print.key=true \
---formatter-property key.deserializer=org.apache.kafka.streams.kstream.SessionWindowedDeserializer \
---formatter-property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer
-```
+    
+    
+    # Time windowed deserializer configuration
+    --formatter-property print.key=true \
+    --formatter-property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
+    --formatter-property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer \
+    --formatter-property key.deserializer.window.size.ms=500
+    
+    # Session windowed deserializer configuration  
+    --formatter-property print.key=true \
+    --formatter-property key.deserializer=org.apache.kafka.streams.kstream.SessionWindowedDeserializer \
+    --formatter-property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer
 
 ### Deprecated Configs
 
