@@ -1,0 +1,10 @@
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+COPY commit-log-producer/pom.xml ./pom.xml
+COPY commit-log-producer/src ./src
+RUN mvn clean package -DskipTests -B
+
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+COPY --from=build /app/target/commit-log-producer-1.0.0.jar /app/commit-log-producer.jar
+ENTRYPOINT ["java", "-jar", "/app/commit-log-producer.jar"]

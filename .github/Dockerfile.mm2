@@ -1,0 +1,10 @@
+FROM apache/kafka:4.0.0
+
+USER root
+
+# Copy the enhanced MirrorMaker 2 JAR built by Gradle
+COPY connect/mirror/build/libs/connect-mirror-*.jar /opt/kafka/libs/
+
+USER appuser
+
+ENTRYPOINT ["/opt/kafka/bin/connect-mirror-maker.sh", "/opt/kafka/config/mm2.properties"]
