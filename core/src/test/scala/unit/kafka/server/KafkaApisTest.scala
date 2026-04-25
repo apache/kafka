@@ -1475,14 +1475,13 @@ class KafkaApisTest extends Logging {
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
       val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
-      val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
-        "txnId",
-        "groupId",
-        15L,
-        0.toShort,
-        util.Map.of(invalidTopicPartition, partitionOffsetCommitData),
-        true
-      ).build()
+      val data = new TxnOffsetCommitRequestData()
+        .setTransactionalId("txnId")
+        .setGroupId("groupId")
+        .setProducerId(15L)
+        .setProducerEpoch(0.toShort)
+        .setTopics(TxnOffsetCommitRequest.getTopics(util.Map.of(invalidTopicPartition, partitionOffsetCommitData)))
+      val offsetCommitRequest = TxnOffsetCommitRequest.Builder.forTopicNames(data, true).build()
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
@@ -1521,7 +1520,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(0)
               .setCommittedOffset(10)))))
 
-    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(TxnOffsetCommitRequest.Builder.forTopicNames(txnOffsetCommitRequest, true).build())
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
     when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
@@ -1566,7 +1565,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(0)
               .setCommittedOffset(10)))))
 
-    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(TxnOffsetCommitRequest.Builder.forTopicNames(txnOffsetCommitRequest, true).build())
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
     when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
@@ -1638,7 +1637,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setCommittedOffset(70)))))
 
-    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(TxnOffsetCommitRequest.Builder.forTopicNames(txnOffsetCommitRequest, true).build())
 
     // This is the request expected by the group coordinator.
     val expectedTxnOffsetCommitRequest = new TxnOffsetCommitRequestData()
@@ -1757,12 +1756,14 @@ class KafkaApisTest extends Logging {
     val producerId = 15L
     val epoch = 0.toShort
 
-    val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
-      "txnId",
-      groupId,
-      producerId,
-      epoch,
-      util.Map.of(topicPartition, partitionOffsetCommitData),
+    val data = new TxnOffsetCommitRequestData()
+      .setTransactionalId("txnId")
+      .setGroupId(groupId)
+      .setProducerId(producerId)
+      .setProducerEpoch(epoch)
+      .setTopics(TxnOffsetCommitRequest.getTopics(util.Map.of(topicPartition, partitionOffsetCommitData)))
+    val offsetCommitRequest = TxnOffsetCommitRequest.Builder.forTopicNames(
+      data,
       version >= TxnOffsetCommitRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
     ).build(version)
     val request = buildRequest(offsetCommitRequest)
