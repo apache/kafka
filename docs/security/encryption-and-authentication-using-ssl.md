@@ -253,13 +253,13 @@ $ openssl x509 -in certificate.crt -text -noout
 
 If SSL is not enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary. 
 
-```properties
+```java-properties
 listeners=PLAINTEXT://host.name:port,SSL://host.name:port
 ```
 
 Following SSL configs are needed on the broker side:
 
-```properties
+```java-properties
 ssl.keystore.location=/var/private/ssl/server.keystore.jks
 ssl.keystore.password=test1234
 ssl.key.password=test1234
@@ -276,7 +276,7 @@ Note: ssl.truststore.password is technically optional but highly recommended. If
 6. ssl.secure.random.implementation=SHA1PRNG
 If you want to enable SSL for inter-broker communication, add the following to the server.properties file (it defaults to PLAINTEXT):
 
-```properties
+```java-properties
 security.inter.broker.protocol=SSL
 ```
 
@@ -313,7 +313,7 @@ If the certificate does not show up or if there are any other error messages the
 SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.  
 If client authentication is not required in the broker, then the following is a minimal configuration example: 
 
-```properties
+```java-properties
 security.protocol=SSL
 ssl.truststore.location=/var/private/ssl/client.truststore.jks
 ssl.truststore.password=test1234
@@ -321,7 +321,7 @@ ssl.truststore.password=test1234
 
 Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled. If client authentication is required, then a keystore must be created like in step 1 and the following must also be configured: 
 
-```properties
+```java-properties
 ssl.keystore.location=/var/private/ssl/client.keystore.jks
 ssl.keystore.password=test1234
 ssl.key.password=test1234

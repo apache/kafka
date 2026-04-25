@@ -36,7 +36,7 @@ Kafka uses the Java Authentication and Authorization Service ([JAAS](https://doc
 
 Brokers may also configure JAAS using the broker configuration property `sasl.jaas.config`. The property name must be prefixed with the listener prefix including the SASL mechanism, i.e. `listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config`. Only one login module may be specified in the config value. If multiple mechanisms are configured on a listener, configs must be provided for each mechanism using the listener and mechanism prefix. For example,
 
-```properties
+```java-properties
 listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
     username="admin" \
     password="admin-secret";
@@ -104,13 +104,13 @@ Kafka supports the following SASL mechanisms:
 
 1. Configure a SASL port in server.properties, by adding at least one of SASL_PLAINTEXT or SASL_SSL to the _listeners_ parameter, which contains one or more comma-separated values:
 
-   ```properties
+   ```java-properties
    listeners=SASL_PLAINTEXT://host.name:port
    ```
 
    If you are only configuring a SASL port (or if you want the Kafka brokers to authenticate each other using SASL) then make sure you set the same SASL protocol for inter-broker communication:
 
-   ```properties
+   ```java-properties
    security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
    ```
 
@@ -168,7 +168,7 @@ Note: When establishing connections to brokers via SASL, clients may perform a r
 
 4. Configure SASL port and SASL mechanisms in server.properties as described here. For example:
 
-   ```properties
+   ```java-properties
    listeners=SASL_PLAINTEXT://host.name:port
    security.inter.broker.protocol=SASL_PLAINTEXT
    sasl.mechanism.inter.broker.protocol=GSSAPI
@@ -177,7 +177,7 @@ Note: When establishing connections to brokers via SASL, clients may perform a r
 
    We must also configure the service name in server.properties, which should match the principal name of the kafka brokers. In the above example, principal is "kafka/kafka1.hostname.com@EXAMPLE.com", so:
 
-   ```properties
+   ```java-properties
    sasl.kerberos.service.name=kafka
    ```
 
@@ -186,7 +186,7 @@ Note: When establishing connections to brokers via SASL, clients may perform a r
 To configure SASL authentication on the clients: 
 1. Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their own principal (usually with the same name as the user running the client), so obtain or create these principals as needed. Then configure the JAAS configuration property for each client. Different clients within a JVM may run as different users by specifying different principals. The property `sasl.jaas.config` in producer.properties or consumer.properties describes how clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client using a keytab (recommended for long-running processes): 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
        useKeyTab=true \
        storeKey=true \
@@ -196,7 +196,7 @@ To configure SASL authentication on the clients:
 
    For command-line utilities like kafka-console-consumer or kafka-console-producer, kinit can be used along with "useTicketCache=true" as in: 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
        useTicketCache=true;
    ```
@@ -211,7 +211,7 @@ JAAS configuration for clients may alternatively be specified as a JVM parameter
 
 4. Configure the following properties in producer.properties or consumer.properties: 
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_PLAINTEXT (or SASL_SSL)
    sasl.mechanism=GSSAPI
    sasl.kerberos.service.name=kafka
@@ -245,7 +245,7 @@ Under the default implementation of `principal.builder.class`, the username is u
 
 3. Configure SASL port and SASL mechanisms in server.properties as described here. For example: 
 
-   ```properties
+   ```java-properties
    listeners=SASL_SSL://host.name:port
    security.inter.broker.protocol=SASL_SSL
    sasl.mechanism.inter.broker.protocol=PLAIN
@@ -257,7 +257,7 @@ Under the default implementation of `principal.builder.class`, the username is u
 To configure SASL authentication on the clients: 
 1. Configure the JAAS configuration property for each client in producer.properties or consumer.properties. The login module describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client for the PLAIN mechanism: 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
        username="alice" \
        password="alice-secret";
@@ -269,7 +269,7 @@ JAAS configuration for clients may alternatively be specified as a JVM parameter
 
 2. Configure the following properties in producer.properties or consumer.properties: 
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=PLAIN
    ```
@@ -341,7 +341,7 @@ $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
 
 3. Configure SASL port and SASL mechanisms in server.properties as described here. For example: 
 
-   ```properties
+   ```java-properties
    listeners=SASL_SSL://host.name:port
    security.inter.broker.protocol=SASL_SSL
    sasl.mechanism.inter.broker.protocol=SCRAM-SHA-256 (or SCRAM-SHA-512)
@@ -353,7 +353,7 @@ $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
 To configure SASL authentication on the clients: 
 1. Configure the JAAS configuration property for each client in producer.properties or consumer.properties. The login module describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client for the SCRAM mechanisms: 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
        username="alice" \
        password="alice-secret";
@@ -365,7 +365,7 @@ JAAS configuration for clients may alternatively be specified as a JVM parameter
 
 2. Configure the following properties in producer.properties or consumer.properties: 
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)
    ```
@@ -453,7 +453,7 @@ Set to a positive integer value if you wish to allow up to some number of positi
 
 3. Configure SASL port and SASL mechanisms in server.properties as described here. For example: 
 
-   ```properties
+   ```java-properties
    listeners=SASL_SSL://host.name:port (or SASL_PLAINTEXT if non-production)
    security.inter.broker.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
    sasl.mechanism.inter.broker.protocol=OAUTHBEARER
@@ -478,7 +478,7 @@ Set to a positive integer value if you wish to allow up to some number of positi
 
 3. Configure SASL port and SASL mechanisms in server.properties as described here. For example: 
 
-   ```properties
+   ```java-properties
    listeners=SASL_SSL://host.name:port
    security.inter.broker.protocol=SASL_SSL
    sasl.mechanism.inter.broker.protocol=OAUTHBEARER
@@ -502,7 +502,7 @@ The OAUTHBEARER broker configuration includes:
 To configure SASL authentication on the clients: 
 1. Configure the JAAS configuration property for each client in producer.properties or consumer.properties. The login module describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client for the OAUTHBEARER mechanisms: 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
        unsecuredLoginStringClaim_sub="alice";
    ```
@@ -589,7 +589,7 @@ JAAS configuration for clients may alternatively be specified as a JVM parameter
 
 2. Configure the following properties in producer.properties or consumer.properties: 
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
    sasl.mechanism=OAUTHBEARER
    ```
@@ -600,7 +600,7 @@ JAAS configuration for clients may alternatively be specified as a JVM parameter
 To configure SASL authentication on the clients: 
 1. Configure the JAAS configuration property for each client in producer.properties or consumer.properties. The login module describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client for the OAUTHBEARER mechanisms: 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ;
    ```
 
@@ -610,7 +610,7 @@ JAAS configuration for clients may alternatively be specified as a JVM parameter
 
 For example, if using the OAuth `client_credentials` grant type with a client secret to communicate with the OAuth identity provider, the configuration might look like this:
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
    sasl.oauthbearer.client.credentials.client.id=jdoe
@@ -623,7 +623,7 @@ Alternatively, the `client_credentials` grant type also supports client assertio
 
 When using client assertion with dynamically-generated JWTs (recommended), the configuration might look like this:
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
    sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
@@ -639,7 +639,7 @@ When using client assertion with dynamically-generated JWTs (recommended), the c
 
 Alternatively, a pre-generated JWT assertion can be read from a file. This is useful when assertions are generated by an external process or secrets manager:
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
    sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
@@ -672,7 +672,7 @@ This selection is made at configuration time. Once a method is selected, it pers
 
 Or, if using the OAuth `urn:ietf:params:oauth:grant-type:jwt-bearer` grant type to communicate with the OAuth identity provider, the `JwtBearerJwtRetriever` must be configured explicitly since the default retriever delegates to `ClientCredentialsJwtRetriever`:
 
-   ```properties
+   ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
    sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
@@ -767,13 +767,13 @@ Production use cases will also require writing an implementation of `org.apache.
 
 2. Enable the SASL mechanisms in server.properties: 
 
-   ```properties
+   ```java-properties
    sasl.enabled.mechanisms=GSSAPI,PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER
    ```
 
 3. Specify the SASL security protocol and mechanism for inter-broker communication in server.properties if required: 
 
-   ```properties
+   ```java-properties
    security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
    sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechanisms)
    ```
@@ -857,7 +857,7 @@ Configuring Kafka Clients:
 
 1. Configure the JAAS configuration property for each client in producer.properties or consumer.properties. The login module describes how the clients like producer and consumer can connect to the Kafka Broker. The following is an example configuration for a client for the token authentication: 
 
-   ```properties
+   ```java-properties
    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
        username="tokenID123" \
        password="lAYYSFmLs4bTjf+lTZ1LCHR/ZZFNA==" \

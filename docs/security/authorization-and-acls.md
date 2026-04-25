@@ -28,7 +28,7 @@ type: docs
 
 Kafka ships with a pluggable authorization framework, which is configured with the `authorizer.class.name` property in the server configuration. Configured implementations must extend `org.apache.kafka.server.authorizer.Authorizer`. Kafka provides a default implementation which store ACLs in the cluster metadata (KRaft metadata log). For KRaft clusters, use the following configuration on all nodes (brokers, controllers, or combined broker/controller nodes): 
 
-```properties
+```java-properties
 authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
 ```
 
@@ -42,13 +42,13 @@ If a resource (R) does not have any ACLs defined, meaning that no ACL matches th
 
 If you prefer that resources without any ACLs be accessible by all users (instead of just super users), you can change the default behavior. To do this, add the following line to your server.properties file:
 
-```properties
+```java-properties
 allow.everyone.if.no.acl.found=true
 ```
 
 With this setting enabled, if a resource does not have any ACLs defined, Kafka will allow access to everyone. If a resource has one or more ACLs defined, those ACL rules will be enforced as usual, regardless of the setting. One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive. 
 
-```properties
+```java-properties
 super.users=User:Bob;User:Alice
 ```
 
@@ -79,7 +79,7 @@ DEFAULT
 Above rules translate distinguished name "CN=serviceuser,OU=ServiceUsers,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "serviceuser" and "CN=adminUser,OU=Admin,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "adminuser@admin".   
 For advanced use cases, one can customize the name by setting a customized PrincipalBuilder in server.properties like the following. 
 
-```properties
+```java-properties
 principal.builder.class=CustomizedPrincipalBuilderClass
 ```
 
@@ -98,7 +98,7 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U
 
 An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is: 
 
-```properties
+```java-properties
 sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT
 ```
 

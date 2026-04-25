@@ -36,13 +36,13 @@ Kafka servers support listening for connections on multiple ports. This is confi
 
 The `LISTENER_NAME` is usually a descriptive name which defines the purpose of the listener. For example, many configurations use a separate listener for client traffic, so they might refer to the corresponding listener as `CLIENT` in the configuration:
 
-```properties
+```java-properties
 listeners=CLIENT://localhost:9092
 ```
 
 The security protocol of each listener is defined in a separate configuration: `listener.security.protocol.map`. The value is a comma-separated list of each listener mapped to its security protocol. For example, the follow value configuration specifies that the `CLIENT` listener will use SSL while the `BROKER` listener will use plaintext.
 
-```properties
+```java-properties
 listener.security.protocol.map=CLIENT:SSL,BROKER:PLAINTEXT
 ```
 
@@ -59,7 +59,7 @@ The plaintext protocol provides no security and does not require any additional 
 
 If each required listener uses a separate security protocol, it is also possible to use the security protocol name as the listener name in `listeners`. Using the example above, we could skip the definition of the `CLIENT` and `BROKER` listeners using the following definition:
 
-```properties
+```java-properties
 listeners=SSL://localhost:9092,PLAINTEXT://localhost:9093
 ```
 
@@ -71,7 +71,7 @@ In a KRaft cluster, a broker is any server which has the `broker` role enabled i
 
 Controllers receive requests both from other controllers and from brokers. For this reason, even if a server does not have the `controller` role enabled (i.e. it is just a broker), it must still define the controller listener along with any security properties that are needed to configure it. For example, we might use the following configuration on a standalone broker:
 
-```properties
+```java-properties
 process.roles=broker
 listeners=BROKER://localhost:9092
 inter.broker.listener.name=BROKER
@@ -84,7 +84,7 @@ The controller listener is still configured in this example to use the `SASL_SSL
 
 For KRaft servers which have both the broker and controller role enabled, the configuration is similar. The only difference is that the controller listener must be included in `listeners`:
 
-```properties
+```java-properties
 process.roles=broker,controller
 listeners=BROKER://localhost:9092,CONTROLLER://localhost:9093
 inter.broker.listener.name=BROKER
