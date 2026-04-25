@@ -232,37 +232,39 @@ The non-null key requirements for Kafka Streams join operators were relaxed as p
   * left join KStream-GlobalTable: no longer drop records when KeyValueMapper returns 'null' and call ValueJoiner with 'null' for right value.
 
 Stream-DSL users who want to keep the current behavior can prepend a .filter() operator to the aforementioned operators and filter accordingly. The following snippets illustrate how to keep the old behavior. 
-
-```java
-//left join KStream-KStream
-leftStream
-.filter((key, value) -> key != null)
-.leftJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
-
-//outer join KStream-KStream
-rightStream
-.filter((key, value) -> key != null);
-leftStream
-.filter((key, value) -> key != null)
-.outerJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
-
-//left-foreign-key join KTable-KTable
-Function<String, String> foreignKeyExtractor = leftValue -> ...
-leftTable
-.filter((key, value) -> foreignKeyExtractor.apply(value) != null)
-.leftJoin(rightTable, foreignKeyExtractor, (leftValue, rightValue) -> join(leftValue, rightValue), Named.as("left-foreign-key-table-join"));
-
-//left join KStream-KTable
-leftStream
-.filter((key, value) -> key != null)
-.leftJoin(kTable, (k, leftValue, rightValue) -> join(leftValue, rightValue));
-
-//left join KStream-GlobalTable
-KeyValueMapper<String, String, String> keyValueMapper = (key, value) -> ...;
-leftStream
-.filter((key, value) -> keyValueMapper.apply(key,value) != null)
-.leftJoin(globalTable, keyValueMapper, (leftValue, rightValue) -> join(leftValue, rightValue));
-```
+    
+    
+        
+                //left join KStream-KStream
+                leftStream
+                .filter((key, value) -> key != null)
+                .leftJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
+    
+                //outer join KStream-KStream
+                rightStream
+                .filter((key, value) -> key != null);
+                leftStream
+                .filter((key, value) -> key != null)
+                .outerJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
+    
+                //left-foreign-key join KTable-KTable
+                Function&ltString;, String> foreignKeyExtractor = leftValue -> ...
+                leftTable
+                .filter((key, value) -> foreignKeyExtractor.apply(value) != null)
+                .leftJoin(rightTable, foreignKeyExtractor, (leftValue, rightValue) -> join(leftValue, rightValue), Named.as("left-foreign-key-table-join"));
+    
+                //left join KStream-KTable
+                leftStream
+                .filter((key, value) -> key != null)
+                .leftJoin(kTable, (k, leftValue, rightValue) -> join(leftValue, rightValue));
+    
+                //left join KStream-GlobalTable
+                KeyValueMapper&ltString;, String, String> keyValueMapper = (key, value) -> ...;
+                leftStream
+                .filter((key, value) -> keyValueMapper.apply(key,value) != null)
+                .leftJoin(globalTable, keyValueMapper, (leftValue, rightValue) -> join(leftValue, rightValue));
+        
+        
 
 The `default.dsl.store` config was deprecated in favor of the new `dsl.store.suppliers.class` config to allow for custom state store implementations to be configured as the default. If you currently specify `default.dsl.store=ROCKS_DB` or `default.dsl.store=IN_MEMORY` replace those configurations with `dsl.store.suppliers.class=BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class` and `dsl.stores.suppliers.class=BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class` respectively 
 
