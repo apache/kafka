@@ -107,14 +107,24 @@ def split_paragraphs(text: str):
 def resolve_reviewer(login: str) -> tuple:
     """Map a GitHub login to (name, email).
 
-    Tries the repo commit history first, then falls back to the GitHub user profile.
-    If the display name is unavailable, the login is used as the name.
-    If the email is unavailable, '{login}@email-not-found' is used as a placeholder.
+    Tries three tiers in order: repo commit history, GitHub user profile,
+    and past `Reviewers:` trailers in git log (matched by name).
+    Noreply emails (@users.noreply.github.com) are treated as missing since
+    they are GitHub privacy placeholders that do not identify the reviewer.
+    Returns (name, None) when no usable email is found; the caller falls
+    back to the '(@login)' form in the Reviewers trailer.
     """
+    def _usable_email(e):
+        if not e or e.endswith("@users.noreply.github.com"):
+            return None
+        return e
+
     name = None
     email = None
 
-    # Tier 1: find from repo commit history
+    # Tier 1: find from repo commit history. Misses when the reviewer has no
+    # merged commit in apache/kafka, or had "Keep my email private" enabled
+    # at commit time (GitHub rewrites the author to the noreply form).
     try:
         cmd = f"gh api repos/apache/kafka/commits?author={login}&per_page=1"
         p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
@@ -123,11 +133,12 @@ def resolve_reviewer(login: str) -> tuple:
             if commits:
                 author = commits[0].get("commit", {}).get("author", {})
                 name = author.get("name")
-                email = author.get("email")
+                email = _usable_email(author.get("email"))
     except Exception as e:
         logger.debug(f"Failed to resolve {login} from commit history: {e}")
 
-    # Tier 2: GitHub user profile
+    # Tier 2: GitHub user profile. Only exposes an email when the reviewer
+    # has set a Public email in their profile settings.
     if not name or not email:
         try:
             cmd = f"gh api users/{login}"
@@ -137,23 +148,47 @@ def resolve_reviewer(login: str) -> tuple:
                 if not name:
                     name = user.get("name")
                 if not email:
-                    email = user.get("email")
+                    email = _usable_email(user.get("email"))
         except Exception as e:
             logger.debug(f"Failed to resolve {login} from GitHub profile: {e}")
+
+    # Tier 3: past Reviewers: trailers in git log, matched by name. Catches
+    # pure reviewers (no commits in apache/kafka, no public profile email)
+    # who have been credited with a real email in an earlier merged PR.
+    # git log is newest-first, so the first usable match is the most recent.
+    if name and not email:
+        try:
+            p = subprocess.run(
+                ["git", "log",
+                 "--pretty=format:%(trailers:key=Reviewers,valueonly=true,unfold=true)"],
+                capture_output=True, text=True,
+            )
+            if p.returncode == 0:
+                pattern = re.compile(rf"{re.escape(name)}\s*<([^>]+)>")
+                for line in p.stdout.splitlines():
+                    for m in pattern.finditer(line):
+                        candidate = _usable_email(m.group(1))
+                        if candidate:
+                            email = candidate
+                            break
+                    if email:
+                        break
+        except Exception as e:
+            logger.debug(f"Failed to resolve {login} from past Reviewers trailers: {e}")
 
     if not name:
         name = login
 
-    if not email:
-        email = f"{login}@email-not-found"
-
     return (name, email)
 
 
-def already_exists(email: str, existing_reviewers: List[str]) -> bool:
-    """Check if a reviewer with the given email is already in the existing reviewers list."""
-    existing_emails = re.findall(r'<(.+?)>', ", ".join(existing_reviewers))
-    return email.lower() in [e.lower() for e in existing_emails]
+def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
+    """Check if a reviewer identity is already in the existing reviewers list.
+
+    identity is the delimited token that uniquely identifies a reviewer, either
+    '<email>' (for the email form) or '(@login)' (for the login fallback).
+    """
+    return identity.lower() in ", ".join(existing_reviewers).lower()
 
 
 def update_reviewers_trailer(body: str, trailer: str) -> str:
@@ -207,11 +242,15 @@ if __name__ == "__main__":
     reviewer_login = get_env("REVIEWER_LOGIN")
     pr_author = (gh_json.get("author") or {}).get("login")
     if reviewer_login and reviewer_login != pr_author:
-        existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
         name, email = resolve_reviewer(reviewer_login)
-        if not already_exists(email, existing_reviewers):
+        if email:
+            identity = f"<{email}>"
+        else:
+            identity = f"(@{reviewer_login})"
+        resolved = f"{name} {identity}"
+        existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
+        if not already_exists(identity, existing_reviewers):
             existing_value = ", ".join(existing_reviewers)
-            resolved = f"{name} <{email}>"
             new_value = f"{existing_value}, {resolved}" if existing_value else resolved
             body = update_reviewers_trailer(body, f"Reviewers: {new_value}")
 

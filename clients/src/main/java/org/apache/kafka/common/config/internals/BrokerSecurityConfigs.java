@@ -55,7 +55,7 @@ public class BrokerSecurityConfigs {
             " from the client certificate to short name. The rules are evaluated in order and the first rule that matches" +
             " a principal name is used to map it to a short name. Any later rules in the list are ignored. By default," +
             " distinguished name of the X.500 certificate will be the principal. For more details on the format please" +
-            " see <a href=\"#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
+            " see <a href=\"https://kafka.apache.org/documentation/#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
             " if an extension of KafkaPrincipalBuilder is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code>" +
             " configuration.";
 
@@ -65,7 +65,7 @@ public class BrokerSecurityConfigs {
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
             "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
             "ignored. By default, principal names of the form <code>{username}/{hostname}@{REALM}</code> are mapped " +
-            "to <code>{username}</code>. For more details on the format please see <a href=\"#security_authz\"> " +
+            "to <code>{username}</code>. For more details on the format please see <a href=\"https://kafka.apache.org/documentation/#security_authz\"> " +
             "security authorization and acls</a>. Note that this configuration is ignored if an extension of " +
             "<code>KafkaPrincipalBuilder</code> is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
 
