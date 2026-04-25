@@ -107,13 +107,14 @@ def split_paragraphs(text: str):
 def resolve_reviewer(login: str) -> tuple:
     """Map a GitHub login to (name, email).
 
-    Tries reviewer email sources in order: past `Reviewers:` trailers
-    searched via GitHub commit search API (matched by name), repo commit
-    author email, and GitHub user profile public email. Noreply emails
-    (@users.noreply.github.com) are treated as missing since they are
-    GitHub privacy placeholders that do not identify the reviewer. Returns
-    (name, None) when no usable email is found; the caller falls back to
-    the '(github:login)' form in the Reviewers trailer.
+    Tries reviewer email sources in order: repo commit author email, past
+    `Reviewers:` trailers searched via GitHub commit search API (matched
+    by name and verified by PR review login), and GitHub user profile
+    public email. Noreply emails (@users.noreply.github.com) are treated
+    as missing since they are GitHub privacy placeholders that do not
+    identify the reviewer. Returns (name, None) when no usable email is
+    found; the caller falls back to the '(github:login)' form in the
+    Reviewers trailer.
     """
     def _usable_email(e):
         if not e or e.endswith("@users.noreply.github.com"):
@@ -130,12 +131,38 @@ def resolve_reviewer(login: str) -> tuple:
             logger.debug(f"Failed to resolve {login} from {source}: {e}")
         return None
 
-    # Collect display-name hints first because `Reviewers:` trailers are
-    # name-based. Emails from these lookups are still applied in tier order.
-    user = _run_json(["gh", "api", f"users/{login}"], "GitHub profile") or {}
+    def _has_pr_review_from_login(commit_sha):
+        pulls = _run_json(["gh", "api", f"repos/apache/kafka/commits/{commit_sha}/pulls"],
+                          f"associated PRs for commit {commit_sha}") or []
+        for pull in pulls:
+            pr_number = pull.get("number")
+            if not pr_number:
+                continue
+            reviews = _run_json(["gh", "api", f"repos/apache/kafka/pulls/{pr_number}/reviews?per_page=100"],
+                                f"reviews for PR {pr_number}") or []
+            if any((review.get("user") or {}).get("login", "").lower() == login.lower()
+                   for review in reviews):
+                return True
+        return False
+
     commits = _run_json(["gh", "api", f"repos/apache/kafka/commits?author={login}&per_page=1"],
                         "commit history") or []
-    author = commits[0].get("commit", {}).get("author", {}) if commits else {}
+    commit = commits[0] if commits else {}
+    github_author = commit.get("author") or {}
+    author = commit.get("commit", {}).get("author", {})
+
+    name = author.get("name") or login
+    email = None
+
+    # Tier 1: find the latest repo commit authored by this GitHub login.
+    # Verify GitHub's associated author login before using the raw commit
+    # author email, so same-name authors cannot be mixed up.
+    if github_author.get("login", "").lower() == login.lower():
+        email = _usable_email(author.get("email"))
+        if email:
+            return (name, email)
+
+    user = _run_json(["gh", "api", f"users/{login}"], "GitHub profile") or {}
 
     name_candidates = []
     for candidate in (user.get("name"), author.get("name"), login):
@@ -143,43 +170,33 @@ def resolve_reviewer(login: str) -> tuple:
             name_candidates.append(candidate)
 
     name = name_candidates[0] if name_candidates else login
-    email = None
 
-    # Tier 1: past Reviewers: trailers in commit history, matched by name,
+    # Tier 2: past Reviewers: trailers in commit history, matched by name,
     # via the GitHub commit search API. Catches pure reviewers (no commits
     # in apache/kafka, no public profile email) who have been credited
     # with a real email in an earlier merged PR. Sort by committer-date
     # desc so the most recent email wins if a reviewer has changed it.
-    # Full-text search is tokenized (not strict substring), so we
-    # re-verify with a regex client-side.
+    # Full-text search is tokenized (not strict substring), so we re-verify
+    # with a regex client-side. To avoid same-name matches, we only accept
+    # a trailer email when the matched commit's associated PR includes a
+    # review from this GitHub login.
     for candidate in name_candidates:
-        messages = _run_json(["gh", "search", "commits",
-                              "--repo", "apache/kafka",
-                              f'"{candidate} <"',
-                              "--limit", "3",
-                              "--sort", "committer-date",
-                              "--order", "desc",
-                              "--json", "commit",
-                              "--jq", "[.[].commit.message]"],
-                             "commit search") or []
+        results = _run_json(["gh", "search", "commits",
+                             "--repo", "apache/kafka",
+                             f'"{candidate} <"',
+                             "--limit", "10",
+                             "--sort", "committer-date",
+                             "--order", "desc",
+                             "--json", "sha,commit"],
+                            "commit search") or []
         pattern = re.compile(rf"{re.escape(candidate)}\s*<([^>]+)>")
-        email = next(
-            (usable for msg in messages
-             for m in pattern.finditer(msg)
-             if (usable := _usable_email(m.group(1)))),
-            None,
-        )
-        if email:
-            name = candidate
-            break
-
-    # Tier 2: find the latest repo commit authored by this GitHub login.
-    # Misses when the reviewer has no merged commit in apache/kafka, or had
-    # "Keep my email private" enabled at commit time.
-    if not email:
-        email = _usable_email(author.get("email"))
-        if author.get("name"):
-            name = author.get("name")
+        for result in results:
+            msg = result.get("commit", {}).get("message", "")
+            commit_sha = result.get("sha")
+            for match in pattern.finditer(msg):
+                candidate_email = _usable_email(match.group(1))
+                if candidate_email and commit_sha and _has_pr_review_from_login(commit_sha):
+                    return (candidate, candidate_email)
 
     # Tier 3: GitHub user profile. Only exposes an email when the reviewer
     # has set a Public email in their profile settings.
