@@ -204,7 +204,7 @@ public class TransactionsTestHelper {
             var records = consumeRecords(readCommittedConsumer, 2);
             assertEquals(2, records.size());
 
-            var first = records.getFirst();
+            var first = records.get(0);
             assertEquals("x", new String(first.key()));
             assertEquals("1", new String(first.value()));
             assertEquals(0L, first.offset());
@@ -610,7 +610,7 @@ public class TransactionsTestHelper {
             nonTransactionalConsumer.subscribe(List.of(TOPIC1));
             var records = consumeRecords(nonTransactionalConsumer, 1);
             assertEquals(1, records.size());
-            assertEquals("1", recordValueAsString(records.getFirst()));
+            assertEquals("1", recordValueAsString(records.get(0)));
         }
 
         try (var transactionalConsumer = createReadCommittedConsumer(
@@ -758,7 +758,7 @@ public class TransactionsTestHelper {
             consumer.assign(List.of(tp));
             var records = consumeRecords(consumer, 1);
 
-            var record = records.getFirst();
+            var record = records.get(0);
             assertArrayEquals("key".getBytes(), record.key(), "Record key should match");
             assertArrayEquals("committed".getBytes(), record.value(), "Record value should be 'committed'");
             assertEquals(0, record.partition(), "Record should be in partition 0");
@@ -789,8 +789,8 @@ public class TransactionsTestHelper {
             producer.commitTransaction();
 
             var initialProducers = waitForActiveProducers(clusterInstance, testTp);
-            var producerId = initialProducers.getFirst().producerId();
-            var initialProducerEpoch = initialProducers.getFirst().producerEpoch();
+            var producerId = initialProducers.get(0).producerId();
+            var initialProducerEpoch = initialProducers.get(0).producerEpoch();
 
             producer.beginTransaction();
             var successfulFuture = producer.send(
@@ -871,8 +871,8 @@ public class TransactionsTestHelper {
             successfulFuture.get(20, TimeUnit.SECONDS);
 
             var initialProducers = waitForActiveProducers(clusterInstance, testTp);
-            var producerId = initialProducers.getFirst().producerId();
-            var previousProducerEpoch = initialProducers.getFirst().producerEpoch();
+            var producerId = initialProducers.get(0).producerId();
+            var previousProducerEpoch = initialProducers.get(0).producerEpoch();
 
             clusterInstance.shutdownBroker(partitionLeader);
             var failedFuture = producer.send(
@@ -931,8 +931,8 @@ public class TransactionsTestHelper {
             producer1.commitTransaction();
 
             var initialProducers = waitForActiveProducers(clusterInstance, tp);
-            producerId = initialProducers.getFirst().producerId();
-            initialProducerEpoch = initialProducers.getFirst().producerEpoch();
+            producerId = initialProducers.get(0).producerId();
+            initialProducerEpoch = initialProducers.get(0).producerEpoch();
 
             clusterInstance.shutdownBroker(0);
             clusterInstance.shutdownBroker(1);
