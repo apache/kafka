@@ -18,8 +18,6 @@ package org.apache.kafka.tiered.storage.integration;
 
 import kafka.server.BrokerServer;
 
-import org.apache.kafka.common.test.ClusterInstance;
-
 import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -38,6 +36,7 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.test.TestUtils;
 
 import java.nio.charset.StandardCharsets;

@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TransactionHooks;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.TestKitDefaults;
@@ -32,6 +31,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TransactionHooks;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 
 import java.util.HashMap;

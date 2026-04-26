@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -32,6 +31,7 @@ import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper;
 
 import java.util.List;
 import java.util.Map;
