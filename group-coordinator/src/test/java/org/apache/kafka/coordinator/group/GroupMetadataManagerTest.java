@@ -78,7 +78,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -1179,7 +1178,10 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, computeGroupHash(Map.of(
             fooTopicName, fooTopicHash
-        )), 1, Map.of("num.standby.replicas", "0")));
+        )), 1, new TreeMap<>(Map.of(
+            "num.standby.replicas", "0",
+            "acceptable.recovery.lag", "10000"))
+        ));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
@@ -17935,7 +17937,8 @@ public class GroupMetadataManagerTest {
                 groupMetadataHash,
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -18122,7 +18125,8 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -18216,7 +18220,8 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -18310,7 +18315,8 @@ public class GroupMetadataManagerTest {
                 )),
                 -1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -18417,7 +18423,8 @@ public class GroupMetadataManagerTest {
                 )),
                 1,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
@@ -18732,7 +18739,8 @@ public class GroupMetadataManagerTest {
                 groupMetadataHash,
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -18865,7 +18873,8 @@ public class GroupMetadataManagerTest {
                 )),
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -20165,7 +20174,8 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -20295,7 +20305,8 @@ public class GroupMetadataManagerTest {
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
                 new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
                 ))
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
@@ -20454,7 +20465,8 @@ public class GroupMetadataManagerTest {
                             groupMetadataHash,
                             0,
                             new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0"
+                                "num.standby.replicas", "0",
+                                "acceptable.recovery.lag", "10000"
                             ))
                         ),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
@@ -20787,7 +20799,8 @@ public class GroupMetadataManagerTest {
                             groupMetadataHash,
                             0,
                             new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0"
+                                "num.standby.replicas", "0",
+                                "acceptable.recovery.lag", "10000"
                             ))
                         )
                     )
@@ -21071,7 +21084,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsGroupEpochIncreaseWithAssignmentConfigChanges() {
+    public void testStreamsGroupEpochIncreaseWithNumStandbyReplicasConfigChanges() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -21107,7 +21120,7 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        // Change the assignment config
+        // Change the group-level num.standby.replicas config
         Properties newConfig = new Properties();
         newConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
         context.groupConfigManager.updateGroupConfig(groupId, newConfig);
@@ -21174,6 +21187,104 @@ public class GroupMetadataManagerTest {
         int newGroupEpoch = group.groupEpoch();
         assertEquals(11, newGroupEpoch);
         assertEquals("2", group.lastAssignmentConfigs().get("num.standby.replicas"));
+    }
+
+    @Test
+    public void testStreamsGroupEpochIncreaseWithAcceptableRecoveryLagConfigChange() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                    .build())
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                .withTargetAssignmentEpoch(10)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withValidatedTopologyEpoch(0)
+            )
+            .build();
+
+        // Change the group-level acceptable.recovery.lag config
+        Properties newConfig = new Properties();
+        newConfig.put(GroupConfig.STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, "50000");
+        context.groupConfigManager.updateGroupConfig(groupId, newConfig);
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+        );
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId(subtopology1)
+                    .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(50_000L),
+            result.response().data()
+        );
+
+        // Find the StreamsGroupMetadata record
+        CoordinatorRecord metadataRecord = result.records().stream()
+            .filter(record -> record.key() instanceof StreamsGroupMetadataKey)
+            .findFirst()
+            .orElse(null);
+
+        assertNotNull(metadataRecord, "Expected a StreamsGroupMetadata record");
+        // Verify the metadata record contains the updated assignment config
+        StreamsGroupMetadataValue metadataValue = (StreamsGroupMetadataValue) metadataRecord.value().message();
+        assertEquals(11, metadataValue.epoch());
+
+        // Verify the assignment config contains the updated value
+        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigs = metadataValue.lastAssignmentConfigs();
+        assertFalse(assignmentConfigs.isEmpty(), "Expected assignment configs to be present");
+
+        StreamsGroupMetadataValue.LastAssignmentConfig recoveryLagConfig = assignmentConfigs.stream()
+            .filter(c -> "acceptable.recovery.lag".equals(c.key()))
+            .findFirst()
+            .orElse(null);
+
+        assertNotNull(recoveryLagConfig, "Expected acceptable.recovery.lag config to be present");
+        assertEquals("50000", recoveryLagConfig.value());
+
+        // Verify that group epoch was bumped
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        int newGroupEpoch = group.groupEpoch();
+        assertEquals(11, newGroupEpoch);
+        assertEquals("50000", group.lastAssignmentConfigs().get("acceptable.recovery.lag"));
     }
 
     @Test
@@ -21269,7 +21380,8 @@ public class GroupMetadataManagerTest {
                     0,
                     -1,
                     new TreeMap<>(Map.of(
-                        "num.standby.replicas", "0"
+                        "num.standby.replicas", "0",
+                        "acceptable.recovery.lag", "10000"
                     ))
                 ),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(classicGroupId, memberId, TasksTuple.EMPTY),
@@ -21592,7 +21704,10 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            Map.of("num.standby.replicas", "0"),
+            Map.of(
+                "num.standby.replicas", "0",
+                "acceptable.recovery.lag", "10000"
+            ),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -21631,7 +21746,10 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of("num.standby.replicas", "2"),
+            Map.of(
+                "num.standby.replicas", "2",
+                "acceptable.recovery.lag", "10000"
+            ),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -21980,7 +22098,8 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
             Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
+                "acceptable.recovery.lag", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT)
             ),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
@@ -22022,7 +22141,8 @@ public class GroupMetadataManagerTest {
         // and task offset interval is evaluated to min
         assertEquals(
             Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
+                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT),
+                "acceptable.recovery.lag", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT)
             ),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
@@ -27937,7 +28057,10 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, Map.of("num.standby.replicas", "0")),
+                )), 0, new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
+                ))),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId1,
                     TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2, 3, 4, 5)
@@ -28000,7 +28123,10 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember2),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, Map.of("num.standby.replicas", "0")),
+                )), 0, new TreeMap<>(Map.of(
+                    "num.standby.replicas", "0",
+                    "acceptable.recovery.lag", "10000"
+                ))),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember2)
             ),
             result2.records()
@@ -28171,9 +28297,9 @@ public class GroupMetadataManagerTest {
      * This matches what streamsGroupAssignmentConfigs() would return.
      */
     private Map<String, String> getDefaultAssignmentConfigs() {
-        // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
+            "acceptable.recovery.lag", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT)
         ));
     }
 }
