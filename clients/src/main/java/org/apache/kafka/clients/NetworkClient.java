@@ -1038,7 +1038,10 @@ public class NetworkClient implements KafkaClient {
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
         if (apiVersionsResponse.data().errorCode() != Errors.NONE.code()) {
-            if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
+            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && apiVersionsResponse.data().errorCode() == Errors.REBOOTSTRAP_REQUIRED.code()) {
+                log.info("Rebootstrap requested by server due to cluster metadata mismatch.");
+                metadataUpdater.rebootstrap(now);
+            } else if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
