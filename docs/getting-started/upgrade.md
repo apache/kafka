@@ -49,7 +49,7 @@ type: docs
 
 ### Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x
 
-The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please refer to the [Upgrading Servers to 4.0.x](/41/getting-started/upgrade/#upgrading-servers-to-401-from-any-version-33x-through-39x) section for detailed step-by-step instructions.
+The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please refer to the [Upgrading Servers to 4.0.x](#upgrading-servers-to-401-from-any-version-33x-through-39x) section for detailed step-by-step instructions.
 
 ### Notable changes in 4.1.0
 
