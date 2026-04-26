@@ -2148,9 +2148,9 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
             .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
 
-        if (requestVersion > 0) {
-            response.setAcceptableRecoveryLag(streamsGroupAcceptableRecoveryLag(groupId));
-        }
+        // AcceptableRecoveryLag is marked as `ignorable` so we can just blindly set it
+        response.setAcceptableRecoveryLag(streamsGroupAcceptableRecoveryLag(groupId));
+
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.

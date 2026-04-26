@@ -402,7 +402,7 @@ public class GroupCoordinatorConfig {
 
     public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG = "group.streams.acceptable.recovery.lag";
     public static final long STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT = 10000L;
-    public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC = "The acceptable recovery lag for a streams group member. This is the maximum number of offsets a member can be behind before being considered caught up.";
+    public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough to receive an active task assignment.";
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,

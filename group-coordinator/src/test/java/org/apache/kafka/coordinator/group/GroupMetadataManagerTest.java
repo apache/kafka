@@ -75,7 +75,10 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -19162,20 +19165,34 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of()),
-            (short) 0  // Version 0
+            (short) 0 // Version 0
         );
 
-        // Version 0 response should not set either field (both should be defaults)
-        assertEquals(0, result.response().data().acceptableRecoveryLagLegacy(),
+        StreamsGroupHeartbeatResult response = result.response();
+        StreamsGroupHeartbeatResponseData data = response.data();
+
+        // If ok for version0 to set `acceptableRecoveryLag` because the field is marked as `ignorable`
+        assertEquals(0, data.acceptableRecoveryLagLegacy(),
             "Version 0 response should NOT include acceptableRecoveryLagLegacy (should be default 0)");
-        assertEquals(-1L, result.response().data().acceptableRecoveryLag(),
+        assertEquals(10_000L, data.acceptableRecoveryLag(),
             "Version 0 response should NOT include acceptableRecoveryLag (should be default -1)");
 
         // Verify other fields are set correctly
-        assertEquals(memberId, result.response().data().memberId());
-        assertEquals(2, result.response().data().memberEpoch());
-        assertEquals(5000, result.response().data().heartbeatIntervalMs());
-        assertEquals(60_000, result.response().data().taskOffsetIntervalMs());
+        assertEquals(memberId, data.memberId());
+        assertEquals(2, data.memberEpoch());
+        assertEquals(5000, data.heartbeatIntervalMs());
+        assertEquals(60_000, data.taskOffsetIntervalMs());
+
+        // Verify that AcceptableRecoveryLag (versions: "1+", ignorable: true) is dropped when the data is serialized
+        // at version 0 and deserialized again, since a version-0 receiver would not know about it.
+        ByteBufferAccessor serializedV0 = MessageUtil.toByteBufferAccessor(data, (short) 0);
+        StreamsGroupHeartbeatResponseData deserializedData = new StreamsGroupHeartbeatResponseData();
+        deserializedData.read(serializedV0, (short) 0);
+
+        assertEquals(0, deserializedData.acceptableRecoveryLagLegacy(),
+            "AcceptableRecoveryLagLegacy must survive the version-0 roundtrip unchanged");
+        assertEquals(-1L, deserializedData.acceptableRecoveryLag(),
+            "AcceptableRecoveryLag (ignorable, versions 1+) must be absent after version-0 roundtrip; should revert to default -1");
     }
 
     @Test
@@ -27901,7 +27918,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000L),
             result1.response().data()
         );
 
@@ -27966,7 +27984,8 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000L),
             result2.response().data()
         );
 
@@ -28004,7 +28023,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000L),
             result3.response().data()
         );
 

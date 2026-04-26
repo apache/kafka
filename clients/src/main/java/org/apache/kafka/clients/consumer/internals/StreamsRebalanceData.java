@@ -443,12 +443,24 @@ public class StreamsRebalanceData {
         return taskOffsetIntervalMs.get();
     }
 
-    /** Updated whenever a heartbeat response is received from the broker. */
+    /**
+     * Updated whenever a heartbeat response is received from the broker.
+     *
+     * <p>If the broker does not support warmup tasks, this field should be set to {@code -1}.
+     * For this case, the Kafka Streams client is not required to populate {@code TaskOffsets} or
+     * {@code TaskEndOffsets} fields in {@link org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest}.
+     */
     public void setAcceptableRecoveryLag(final long acceptableRecoveryLag) {
         this.acceptableRecoveryLag.set(acceptableRecoveryLag);
     }
 
-    /** Returns the acceptable recovery lag, or -1 if not yet set. */
+    /**
+     * Returns the acceptable recovery lag.
+     *
+     * <p>If acceptable recovery lag is set to {@code -1}, it means the broker doesn't support warmup tasks,
+     * and the Kafka Streams client it's not required to populate {@code TaskOffsets} or {@code TaskEndOffsets} fields
+     * in {@link org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest}.
+     */
     public long acceptableRecoveryLag() {
         return acceptableRecoveryLag.get();
     }
