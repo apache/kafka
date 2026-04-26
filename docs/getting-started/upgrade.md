@@ -49,6 +49,8 @@ type: docs
 
 ### Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x
 
+The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please refer to the [Upgrading Servers to 4.0.x](/41/getting-started/upgrade/#upgrading-servers-to-401-from-any-version-33x-through-39x) section for detailed step-by-step instructions.
+
 ### Notable changes in 4.1.0
 
   * Apache Kafka 4.1 ships with a preview of Queues for Kafka ([KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw)). This feature introduces a new kind of group called share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer. Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part of an ordered stream. To enable share groups, use the `kafka-features.sh` tool to upgrade to `share.version=1`. For more information, please read the [ release notes](https://cwiki.apache.org/confluence/x/CIq3FQ). 
