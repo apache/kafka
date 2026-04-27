@@ -24,9 +24,6 @@ import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.snapshot.Snapshots;
-
-import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -54,7 +51,7 @@ public class BootstrapMetadata {
 
     /**
      * Reads bootstrap metadata from the given directory. Checks the legacy bootstrap.checkpoint
-     * first, then the zero checkpoint, and falls back to defaults if neither exists.
+     * first and falls back to defaults if it does not exist.
      */
     public static BootstrapMetadata fromDirectory(Path directory) {
         if (!Files.isDirectory(directory)) {
@@ -68,12 +65,6 @@ public class BootstrapMetadata {
         Path binaryBootstrapPath = directory.resolve(BINARY_BOOTSTRAP_FILENAME);
         if (Files.exists(binaryBootstrapPath)) {
             return fromCheckpointFile(binaryBootstrapPath);
-        }
-        Path partitionDir = directory.resolve(
-            CLUSTER_METADATA_TOPIC_PARTITION.topic() + "-" + CLUSTER_METADATA_TOPIC_PARTITION.partition());
-        Path zeroCheckpointPath = Snapshots.snapshotPath(partitionDir, Snapshots.BOOTSTRAP_SNAPSHOT_ID);
-        if (Files.exists(zeroCheckpointPath)) {
-            return fromCheckpointFile(zeroCheckpointPath);
         }
         return fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
     }
@@ -160,7 +151,7 @@ public class BootstrapMetadata {
         return new BootstrapMetadata(records, metadataVersionLevel.get(), source);
     }
 
-    public static Optional<Short> recordToMetadataVersionLevel(ApiMessage record) {
+    private static Optional<Short> recordToMetadataVersionLevel(ApiMessage record) {
         if (record instanceof FeatureLevelRecord featureLevel) {
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
                 return Optional.of(featureLevel.featureLevel());

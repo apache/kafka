@@ -24,22 +24,17 @@ import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionTestUtils;
-import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.File;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 
-import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,27 +53,27 @@ public class BootstrapMetadataTest {
             setFeatureLevel((short) 7), (short) 0));
 
     static class BootstrapTestDirectory implements AutoCloseable {
-        File directory = null;
+        private final Path directory;
 
-        synchronized BootstrapTestDirectory createDirectory() {
-            directory = TestUtils.tempDirectory("BootstrapTestDirectory");
-            return this;
+        static synchronized BootstrapTestDirectory createDirectory() {
+            return new BootstrapTestDirectory();
         }
 
-        synchronized String path() {
-            return directory.getAbsolutePath();
+        private BootstrapTestDirectory() {
+            this.directory = TestUtils.tempDirectory().toPath();
         }
 
-        synchronized String binaryBootstrapPath() {
-            return new File(directory, BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
+        synchronized Path path() {
+            return directory;
+        }
+
+        synchronized Path binaryBootstrapPath() {
+            return directory.resolve(BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME);
         }
 
         @Override
         public synchronized void close() throws Exception {
-            if (directory != null) {
-                Utils.delete(directory);
-            }
-            directory = null;
+            Utils.delete(directory.toFile());
         }
     }
 
@@ -172,11 +167,11 @@ public class BootstrapMetadataTest {
     }
 
     @Test
-    public void testReadFromEmptyConfiguration() throws Exception {
-        try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
+    public void testReadFromEmptyDirectory() throws Exception {
+        try (BootstrapTestDirectory testDirectory = BootstrapTestDirectory.createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
                     "the default bootstrap"),
-                BootstrapMetadata.fromDirectory(Path.of(testDirectory.path())));
+                BootstrapMetadata.fromDirectory(testDirectory.path()));
         }
     }
 
@@ -189,31 +184,14 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testFromDirectoryWithLegacyBootstrapCheckpoint() throws Exception {
-        try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            Path checkpointPath = Path.of(testDirectory.binaryBootstrapPath());
-            BootstrapMetadata expected = BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "test");
+        try (BootstrapTestDirectory testDirectory = BootstrapTestDirectory.createDirectory()) {
+            Path checkpointPath = testDirectory.binaryBootstrapPath();
+            BootstrapMetadata expected = BootstrapMetadata.fromVersion(IBP_3_3_IV3, "test");
             try (BatchFileWriter writer = BatchFileWriter.open(checkpointPath)) {
                 writer.append(expected.records());
             }
-            BootstrapMetadata result = BootstrapMetadata.fromDirectory(Path.of(testDirectory.path()));
-            assertEquals(MetadataVersion.latestProduction(), result.metadataVersion());
-        }
-    }
-
-    @Test
-    public void testFromDirectoryWithZeroCheckpoint() throws Exception {
-        try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            Path baseDir = Path.of(testDirectory.path());
-            Path partitionDir = baseDir.resolve(
-                CLUSTER_METADATA_TOPIC_PARTITION.topic() + "-" + CLUSTER_METADATA_TOPIC_PARTITION.partition());
-            Files.createDirectories(partitionDir);
-            Path zeroCheckpoint = Snapshots.snapshotPath(partitionDir, Snapshots.BOOTSTRAP_SNAPSHOT_ID);
-            BootstrapMetadata expected = BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "test");
-            try (BatchFileWriter writer = BatchFileWriter.open(zeroCheckpoint)) {
-                writer.append(expected.records());
-            }
-            BootstrapMetadata result = BootstrapMetadata.fromDirectory(baseDir);
-            assertEquals(MetadataVersion.latestProduction(), result.metadataVersion());
+            BootstrapMetadata result = BootstrapMetadata.fromDirectory(testDirectory.path());
+            assertEquals(expected.records(), result.records());
         }
     }
 
@@ -230,26 +208,28 @@ public class BootstrapMetadataTest {
         features.put("foo", (short) 2);
         features.put("bar", (short) 1);
         BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test");
-        assertEquals(MetadataVersion.latestProduction(), bm.metadataVersion());
-        assertEquals("test", bm.source());
-        assertEquals((short) 1, bm.featureLevel("bar"));
-        assertEquals((short) 2, bm.featureLevel("foo"));
+        assertEquals(List.of(
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0),
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName("bar")
+                .setFeatureLevel((short) 1), (short) 0),
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName("foo")
+                .setFeatureLevel((short) 2), (short) 0)
+        ), bm.records());
     }
 
     @Test
     public void testFromVersionsExcludesZeroLevelFeatures() {
         Map<String, Short> features = Map.of("foo", (short) 0);
         BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test");
-        assertEquals(1, bm.records().size());
-        assertEquals((short) 0, bm.featureLevel("foo"));
-    }
-
-    @Test
-    public void testRecordToMetadataVersionLevelWithMetadataVersion() {
-        FeatureLevelRecord record = new FeatureLevelRecord()
-            .setName(FEATURE_NAME)
-            .setFeatureLevel((short) 7);
-        assertEquals(Optional.of((short) 7), BootstrapMetadata.recordToMetadataVersionLevel(record));
+        assertEquals(List.of(
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)
+        ), bm.records());
     }
 
 }

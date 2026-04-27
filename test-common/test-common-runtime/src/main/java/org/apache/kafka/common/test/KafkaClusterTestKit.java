@@ -50,7 +50,6 @@ import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -485,14 +484,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
             List<ApiMessageAndVersion> additionalRecords = new ArrayList<>();
             for (ApiMessageAndVersion record : nodes.bootstrapMetadata().records()) {
                 if (record.message() instanceof FeatureLevelRecord featureRecord) {
-                    // MetadataVersion is already set via setReleaseVersion above.
-                    // KRaftVersion is derived internally by the Formatter based on quorum configuration.
-                    if (!featureRecord.name().equals(MetadataVersion.FEATURE_NAME) &&
-                        !featureRecord.name().equals(KRaftVersion.FEATURE_NAME)) {
+                    if (!featureRecord.name().equals(MetadataVersion.FEATURE_NAME)) {
                         formatter.setFeatureLevel(featureRecord.name(), featureRecord.featureLevel());
                     }
                 } else if (!(record.message() instanceof UserScramCredentialRecord)) {
                     additionalRecords.add(record);
+                } else {
+                    throw new RuntimeException("UserScramCredentialRecord is not supported in " +
+                        "bootstrap metadata. Use Formatter.setScramArguments() instead.");
                 }
             }
             formatter.setAdditionalBootstrapRecords(additionalRecords);
