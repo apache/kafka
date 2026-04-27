@@ -28,9 +28,9 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.ListValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
+import org.apache.kafka.streams.state.internals.ValueTimestampHeadersSerde;
 
 import java.time.Duration;
 import java.util.Map;
@@ -123,10 +123,10 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
 
         final StoreBuilder<?> builder;
         if (dslStoreFormat() == DslStoreFormat.HEADERS) {
-            builder = new ListValueStoreBuilderWithHeaders<>(
+            builder = new ListValueStoreBuilder<>(
                 supplier,
                 timestampedKeyAndJoinSideSerde,
-                leftOrRightValueSerde,
+                new ValueTimestampHeadersSerde<>(leftOrRightValueSerde),
                 Time.SYSTEM
             );
         } else {

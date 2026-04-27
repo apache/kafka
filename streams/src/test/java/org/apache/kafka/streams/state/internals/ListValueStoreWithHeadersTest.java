@@ -77,11 +77,11 @@ public class ListValueStoreWithHeadersTest {
     <K, V> KeyValueStore<K, ValueTimestampHeaders<V>> buildStore(final Serde<K> keySerde,
                                                                   final Serde<V> valueSerde,
                                                                   final StoreType storeType) {
-        return new ListValueStoreBuilderWithHeaders<>(
+        return new ListValueStoreBuilder<K, ValueTimestampHeaders<V>>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store wh")
                 : Stores.inMemoryKeyValueStore("in-memory list store wh"),
             keySerde,
-            valueSerde,
+            new ValueTimestampHeadersSerde<>(valueSerde),
             Time.SYSTEM)
             .build();
     }
