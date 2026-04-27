@@ -2114,6 +2114,7 @@ org.apache.kafka.clients.consumer.internals.OffsetFetcherTest:
 - testOffsetValidationresetPositionForUndefinedOffsetWithDefinedResetPolicy
 - testOffsetValidationresetPositionForUndefinedOffsetWithUndefinedResetPolicy
 - testResetOffsetsAuthorizationFailure
+- testResetPositionsMetadataRefreshWhenLeaderBecomesUnknownDuringRegroup
 - testSeekWithInFlightReset
 - testUpdateFetchPositionDisconnect
 - testUpdateFetchPositionNoOpWithPositionSet
@@ -2133,6 +2134,7 @@ org.apache.kafka.clients.consumer.internals.OffsetForLeaderEpochClientTest:
 - testUnauthorizedTopic
 - testUnexpectedEmptyResponse
 org.apache.kafka.clients.consumer.internals.OffsetsRequestManagerTest:
+- testFetchOffsetsRegroupSkipsNullLeaderPartitionNoNPE
 - testListOffsetsRequestEmpty
 - testListOffsetsRequestMultiplePartitions
 - testListOffsetsRequestUnknownOffset
