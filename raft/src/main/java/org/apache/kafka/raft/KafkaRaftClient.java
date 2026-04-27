@@ -1725,7 +1725,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             leaderEndpoints = Endpoints.empty();
         }
 
-        maybeSwitchObserverFetchToLeader(responseMetadata.source(), responseLeaderId, leaderEndpoints, currentTimeMs);
+        maybeSwitchObserverFetchToLeader(
+            responseEpoch,
+            responseLeaderId,
+            leaderEndpoints,
+            currentTimeMs
+        );
 
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error,
@@ -2616,17 +2621,23 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * the observer back to fetching from the leader.
      */
     private void maybeSwitchObserverFetchToLeader(
-        Node source,
+        int responseEpoch,
         OptionalInt responseLeaderId,
         Endpoints leaderEndpoints,
         long currentTimeMs
     ) {
-        if (!quorum.isVoter()
-            && quorum.isFollower()
-            && responseLeaderId.isPresent()
-            && source.id() != responseLeaderId.getAsInt()
-            && !leaderEndpoints.isEmpty()) {
-            quorum.followerStateOrThrow().resetFetchTimeoutForBootstrapServers(currentTimeMs);
+        if (!hasConsistentLeader(responseEpoch, responseLeaderId)) {
+            throw new IllegalStateException("Received request or response with leader " + responseLeaderId +
+                " and epoch " + responseEpoch + " which is inconsistent with current leader " +
+                quorum.leaderId() + " and epoch " + quorum.epoch());
+        } else if (responseEpoch == quorum.epoch() && quorum.isUnattached() &&
+            responseLeaderId.isPresent() && !leaderEndpoints.isEmpty()) {
+            transitionToFollower(
+                responseEpoch,
+                responseLeaderId.getAsInt(),
+                leaderEndpoints,
+                currentTimeMs
+            );
         }
     }
 
@@ -3412,14 +3423,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
             return sendResult.timeToWaitMs();
+        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
+            transitionToUnattached(state.epoch(), OptionalInt.of(state.leaderId()));
+            return 0L;
         } else {
-            final long backoffMs;
-            if (state.hasFetchTimeoutExpired(currentTimeMs)) {
-                backoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-            } else {
-                backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
-            }
-            return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));
+            return maybeSendFetchToBestNode(state, currentTimeMs);
         }
     }
 

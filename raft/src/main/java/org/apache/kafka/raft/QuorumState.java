@@ -379,7 +379,7 @@ public class QuorumState {
      */
     public void transitionToUnattached(int epoch, OptionalInt leaderId) {
         int currentEpoch = state.epoch();
-        if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective())) {
+        if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective() && !isObserver())) {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Unattached with epoch %d from current state %s",

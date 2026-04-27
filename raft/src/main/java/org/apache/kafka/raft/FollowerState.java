@@ -106,6 +106,11 @@ public class FollowerState implements EpochState {
         return fetchTimer.remainingMs();
     }
 
+    public long remainingUpdateVoterSetTimeMs(long currentTimeMs) {
+        updateVoterSetPeriodTimer.update(currentTimeMs);
+        return updateVoterSetPeriodTimer.remainingMs();
+    }
+
     public int leaderId() {
         return leaderId;
     }
@@ -137,14 +142,6 @@ public class FollowerState implements EpochState {
     public void resetFetchTimeoutForSuccessfulFetch(long currentTimeMs) {
         overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
         hasFetchedFromLeader = true;
-    }
-
-    /**
-     * Reset the fetch timeout after successful fetch from the bootstrap servers.
-     * This should only be called by observers who fetched from a non-leader bootstrap server.
-     */
-    public void resetFetchTimeoutForBootstrapServers(long currentTimeMs) {
-        overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
     }
 
     /**
