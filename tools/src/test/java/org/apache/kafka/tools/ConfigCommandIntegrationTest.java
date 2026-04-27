@@ -762,7 +762,7 @@ public class ConfigCommandIntegrationTest {
     private void alterBothLevelConfigWithKraft(Admin client,
                                                Optional<String> brokerId,
                                                Map<String, String> config,
-                                               List<String> alterOpts) {
+                                               List<String> alterOpts) throws Exception {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
