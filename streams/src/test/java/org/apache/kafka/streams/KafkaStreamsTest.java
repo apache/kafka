@@ -35,7 +35,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KafkaStreams.InitParameters;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.errors.InternalTopicsAlreadySetupException;
+import org.apache.kafka.streams.errors.MisconfiguredInternalTopicException;
+import org.apache.kafka.streams.errors.MissingInternalTopicsException;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -49,6 +54,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
+import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -83,6 +90,7 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -421,6 +429,196 @@ public class KafkaStreamsTest {
                 streams.start();
                 verify(stateDirectory, times(1)).initializeStartupStores(any(), any(), any());
             }
+        }
+    }
+
+    @Test
+    public void initShouldThrowMisconfiguredExceptionWhenInternalTopicsAreMisconfigured() {
+        prepareStreams();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        final InitParameters initParams = InitParameters.initParameters();
+
+        try (final MockedConstruction<InternalTopicManager> mocked = mockConstruction(InternalTopicManager.class,
+            (mock, context) -> {
+                final InternalTopicManager.ValidationResult result = mock(InternalTopicManager.ValidationResult.class);
+
+                when(result.misconfigurationsForTopics()).thenReturn(Map.of("topicA", List.of("bad config")));
+                when(result.missingTopics()).thenReturn(Set.of("topicA"));
+
+                when(mock.validate(any())).thenReturn(result);
+            })) {
+
+            final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+
+            final MisconfiguredInternalTopicException exception = assertThrows(
+                    MisconfiguredInternalTopicException.class,
+                    () -> streams.init(initParams)
+            );
+
+            assertTrue(exception.getMessage().contains("topicA"));
+        }
+    }
+
+    @Test
+    public void initShouldThrowMissingSourceTopicExceptionWhenSourceTopicMissing() {
+        prepareStreams();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        final InitParameters initParams = InitParameters.initParameters();
+
+        try (final MockedConstruction<InternalTopicManager> mocked = mockConstruction(InternalTopicManager.class,
+            (mock, context) -> {
+                final InternalTopicManager.ValidationResult result = mock(InternalTopicManager.ValidationResult.class);
+
+                when(result.misconfigurationsForTopics()).thenReturn(Collections.emptyMap());
+                when(result.missingTopics()).thenReturn(Set.of("source-topic"));
+
+                when(mock.validate(any())).thenReturn(result);
+            })) {
+
+            final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+
+            final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class,
+                    () -> streams.init(initParams)
+            );
+
+            assertTrue(exception.getMessage().contains("source-topic"));
+        }
+    }
+
+    @Test
+    public void initShouldThrowInternalTopicsAlreadySetupExceptionIfAllExist() {
+        prepareStreams();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic").groupByKey().count();
+        final Topology topology = builder.build();
+
+        final InitParameters initParams = InitParameters.initParameters();
+
+        try (final MockedConstruction<InternalTopicManager> mocked = mockConstruction(InternalTopicManager.class,
+            (mock, context) -> {
+                final InternalTopicManager.ValidationResult result = mock(InternalTopicManager.ValidationResult.class);
+                when(result.missingTopics()).thenReturn(Collections.emptySet());
+                when(result.misconfigurationsForTopics()).thenReturn(Collections.emptyMap());
+
+                when(mock.validate(any())).thenReturn(result);
+            })) {
+
+            final KafkaStreams streams = new KafkaStreams(topology, props, supplier, time);
+
+            final StreamsException exception = assertThrows(InternalTopicsAlreadySetupException.class,
+                    () -> streams.init(initParams));
+
+            assertTrue(exception.getMessage().contains("All internal topics have already been setup"));
+        }
+    }
+
+    @Test
+    public void initShouldThrowMissingInternalTopicsExceptionWhenDisabled() {
+        prepareStreams();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic").groupByKey().count();
+        final Topology topology = builder.build();
+
+        final InitParameters initParams = InitParameters.initParameters();
+
+        try (MockedConstruction<InternalTopicManager> mocked = mockConstruction(InternalTopicManager.class,
+            (mock, context) -> {
+                final InternalTopicManager.ValidationResult result = mock(InternalTopicManager.ValidationResult.class);
+                when(result.missingTopics()).thenReturn(Set.of("some-missing-topic"));
+                when(result.misconfigurationsForTopics()).thenReturn(Collections.emptyMap());
+                when(mock.validate(any())).thenReturn(result);
+            })) {
+
+            final KafkaStreams streams = new KafkaStreams(topology, props, supplier, time);
+
+            assertThrows(MissingInternalTopicsException.class, () -> streams.init(initParams));
+
+            final InternalTopicManager internalTopicManager = mocked.constructed().get(0);
+            verify(internalTopicManager, never()).setup(any());
+            verify(internalTopicManager, never()).makeReady(any());
+        }
+    }
+
+    @Test
+    public void initShouldMakeReadyInternalTopicsWhenAutoSetupEnabled() {
+        prepareStreams();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic").groupByKey().count();
+        final Topology topology = builder.build();
+
+        final InitParameters initParams = InitParameters.initParameters().enableSetupInternalTopicsIfIncomplete();
+
+        try (MockedConstruction<InternalTopicManager> mocked = mockConstruction(InternalTopicManager.class,
+            (mock, context) -> {
+                final InternalTopicManager.ValidationResult result = mock(InternalTopicManager.ValidationResult.class);
+
+                when(result.missingTopics()).thenReturn(Set.of("topicA"));
+                when(result.misconfigurationsForTopics()).thenReturn(Collections.emptyMap());
+                when(mock.validate(any())).thenReturn(result);
+            })) {
+
+            final KafkaStreams streams = new KafkaStreams(topology, props, supplier, time);
+
+            streams.init(initParams);
+
+            final InternalTopicManager internalTopicManager = mocked.constructed().get(0);
+            verify(internalTopicManager).makeReady(any(), eq(true));
+            verify(internalTopicManager, never()).setup(any());
+        }
+    }
+
+    @Test
+    public void initShouldThrowIfNotInCreatedState() throws Exception {
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started.");
+
+            assertThrows(IllegalStateException.class, () -> streams.init());
+        }
+    }
+
+    @Test
+    public void initShouldCreateAllTopicsWhenNoneExist() {
+        prepareStreams();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic").groupByKey().count();
+        final Topology topology = builder.build();
+
+        try (MockedConstruction<InternalTopicManager> mocked = mockConstruction(InternalTopicManager.class,
+            (mock, context) -> {
+                final InternalTopicManager.ValidationResult result = mock(InternalTopicManager.ValidationResult.class);
+
+                when(result.misconfigurationsForTopics()).thenReturn(Collections.emptyMap());
+                when(mock.validate(any())).thenAnswer(invocation -> {
+                    final Map<String, InternalTopicConfig> topics = invocation.getArgument(0);
+                    when(result.missingTopics()).thenReturn(new HashSet<>(topics.keySet()));
+                    return result;
+                });
+            })) {
+
+            final KafkaStreams streams = new KafkaStreams(topology, props, supplier, time);
+
+            streams.init();
+
+            final InternalTopicManager internalTopicManager = mocked.constructed().get(0);
+            verify(internalTopicManager).setup(any());
         }
     }
 

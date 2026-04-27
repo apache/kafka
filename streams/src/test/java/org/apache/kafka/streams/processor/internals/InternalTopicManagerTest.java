@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.MissingInternalTopicsException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
 
@@ -1858,6 +1859,52 @@ public class InternalTopicManagerTest {
         );
         internalTopicConfig.setNumberOfPartitions(partitionCount);
         return internalTopicConfig;
+    }
+
+    @Test
+    public void makeReadyShouldThrowWhenManualModeAndNotInitializing() {
+        final Map<String, Object> manualConfig = new HashMap<>(config);
+        manualConfig.put(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG, StreamsConfig.INTERNAL_TOPIC_SETUP_MANUAL);
+        final InternalTopicManager manualTopicManager = new InternalTopicManager(
+            time,
+            mockAdminClient,
+            new StreamsConfig(manualConfig)
+        );
+
+        final InternalTopicConfig topicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        assertThrows(MissingInternalTopicsException.class,
+            () -> manualTopicManager.makeReady(mkMap(mkEntry(topic1, topicConfig))));
+    }
+
+    @Test
+    public void makeReadyShouldCreateWhenManualModeAndInitializing() throws Exception {
+        final Map<String, Object> manualConfig = new HashMap<>(config);
+        manualConfig.put(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG, StreamsConfig.INTERNAL_TOPIC_SETUP_MANUAL);
+        final InternalTopicManager manualTopicManager = new InternalTopicManager(
+            time,
+            mockAdminClient,
+            new StreamsConfig(manualConfig)
+        );
+
+        final InternalTopicConfig topicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        // isInitializing=true should allow topic creation even in manual mode
+        manualTopicManager.makeReady(mkMap(mkEntry(topic1, topicConfig)), true);
+
+        final Set<String> createdTopics = mockAdminClient.listTopics().names().get();
+        assertThat(createdTopics, hasItem(topic1));
+    }
+
+    @Test
+    public void makeReadyShouldCreateWhenAutomaticMode() throws Exception {
+        // Default config is automatic — makeReady should create topics without isInitializing
+        final InternalTopicConfig topicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        internalTopicManager.makeReady(mkMap(mkEntry(topic1, topicConfig)));
+
+        final Set<String> createdTopics = mockAdminClient.listTopics().names().get();
+        assertThat(createdTopics, hasItem(topic1));
     }
 
     private InternalTopicConfig setupRepartitionTopicConfig(final String topicName,

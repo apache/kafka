@@ -42,11 +42,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.MissingInternalTopicsException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.ClientUtils.QuietConsumerConfig;
 
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -74,11 +76,13 @@ public class InternalTopicManager {
 
     private final Time time;
     private final Admin adminClient;
+    private final boolean isManualInternalTopicConfig;
 
     private final short replicationFactor;
     private final long windowChangeLogAdditionalRetention;
     private final long retryBackOffMs;
     private final long retryTimeoutMs;
+    private Duration initTimeout;
 
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
 
@@ -87,6 +91,8 @@ public class InternalTopicManager {
                                 final StreamsConfig streamsConfig) {
         this.time = time;
         this.adminClient = adminClient;
+        this.isManualInternalTopicConfig = StreamsConfig.INTERNAL_TOPIC_SETUP_MANUAL
+                                                        .equals(streamsConfig.getString(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG));
 
         final LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
@@ -464,12 +470,17 @@ public class InternalTopicManager {
      * @return the set of topics which had to be newly created
      */
     public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
+        return makeReady(topics, false);
+    }
+
+    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics, final boolean isInitializing) {
         // we will do the validation / topic-creation in a loop, until we have confirmed all topics
         // have existed with the expected number of partitions, or some create topic returns fatal errors.
         log.debug("Starting to validate internal topics {} in partition assignor.", topics);
 
         final long currentWallClockMs = time.milliseconds();
         final long deadlineMs = currentWallClockMs + retryTimeoutMs;
+        final long initDeadlineMs = initTimeout != null ? currentWallClockMs + initTimeout.toMillis() : Long.MAX_VALUE;
 
         final Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
@@ -492,6 +503,7 @@ public class InternalTopicManager {
                 break;
             }
             if (!topicsToCreate.isEmpty()) {
+                throwIfManualSetupEnabledAndCalledWithoutInit(topicsNotReady, isInitializing);
                 final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady, deadlineMs);
                 topicsNotReady.removeAll(createdTopics);
                 newlyCreatedTopics.addAll(createdTopics);
@@ -620,6 +632,13 @@ public class InternalTopicManager {
     } 
         
 
+    private void throwIfManualSetupEnabledAndCalledWithoutInit(final Set<String> topicsNotReady, final boolean isInitializing) {
+        if (isManualInternalTopicConfig && !isInitializing) {
+            throw new MissingInternalTopicsException("Internal topic configuration set to MANUAL. \n" +
+                    "You must call init() to setup internal topics.", new ArrayList<>(topicsNotReady));
+        }
+    }
+
     /**
      * Try to get the partition information for the given topics; return the partition info for topics that already exists.
      *
@@ -669,6 +688,10 @@ public class InternalTopicManager {
         }
 
         return topicPartitionInfo;
+    }
+
+    public void setInitTimeout(final Duration timeoutMs) {
+        initTimeout = timeoutMs;
     }
 
     /**

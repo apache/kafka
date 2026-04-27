@@ -558,6 +558,25 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldParseInternalTopicSetupConfig() {
+        props.put(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG, StreamsConfig.INTERNAL_TOPIC_SETUP_MANUAL);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(StreamsConfig.INTERNAL_TOPIC_SETUP_MANUAL, config.getString(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidInternalTopicSetupValue() {
+        props.put(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG, "invalid_value");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldDefaultInternalTopicSetupToAutomatic() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(StreamsConfig.INTERNAL_TOPIC_SETUP_AUTOMATIC, config.getString(StreamsConfig.INTERNAL_TOPIC_SETUP_CONFIG));
+    }
+
+    @Test
     public void shouldNotThrowIfTransactionTimeoutSmallerThanCommitIntervalForAtLeastOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10000L);

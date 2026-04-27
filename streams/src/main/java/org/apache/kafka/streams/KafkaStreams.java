@@ -40,8 +40,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.InternalTopicsAlreadySetupException;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
+import org.apache.kafka.streams.errors.MisconfiguredInternalTopicException;
+import org.apache.kafka.streams.errors.MissingInternalTopicsException;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsNotStartedException;
@@ -60,6 +64,10 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
+import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -296,6 +304,132 @@ public class KafkaStreams implements AutoCloseable {
 
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
+
+    /**
+     * Initializes broker-side state for this Kafka Streams application.
+     * <p>
+     * Kafka Streams creates internal topics on the broker for fault-tolerance and repartitioning.
+     * This method validates and optionally creates those internal topics before starting the application.
+     *
+     * @throws MissingSourceTopicException         if a source topic is missing
+     * @throws MissingInternalTopicsException      if some but not all of the internal topics are missing
+     * @throws MisconfiguredInternalTopicException if an internal topic is misconfigured
+     * @throws InternalTopicsAlreadySetupException if all internal topics are already setup
+     */
+    public void init() {
+        this.doInit(new InitParameters());
+    }
+
+    /**
+     * Initializes broker-side state for this Kafka Streams application.
+     * <p>
+     * Kafka Streams creates internal topics on the broker for fault-tolerance and repartitioning.
+     * This method validates and optionally creates those internal topics before starting the application.
+     *
+     * @param initParameters parameters controlling initialization behavior
+     * @throws MissingSourceTopicException         if a source topic is missing
+     * @throws MissingInternalTopicsException      if some but not all of the internal topics are missing
+     *                                            and the parameters do not specify to set them up
+     * @throws MisconfiguredInternalTopicException if an internal topic is misconfigured
+     * @throws InternalTopicsAlreadySetupException if all internal topics are already setup
+     * @throws TimeoutException                    if initialization exceeds the configured timeout
+     */
+    public void init(final InitParameters initParameters) {
+        this.doInit(initParameters);
+    }
+
+    private void doInit(final InitParameters initParameters) {
+        synchronized (stateLock) {
+            if (state != State.CREATED) {
+                throw new IllegalStateException("Can only call init() in CREATED state. Current state is: " + state);
+            }
+        }
+
+        final InternalTopicManager internalTopicManager = new InternalTopicManager(time, adminClient, applicationConfigs);
+        initParameters.timeout.ifPresent(internalTopicManager::setInitTimeout);
+
+        final Map<String, InternalTopicConfig> allInternalTopics = new HashMap<>();
+        final Set<String> allSourceTopics = new HashSet<>();
+        
+        for (final Map<TopologyMetadata.Subtopology, InternalTopologyBuilder.TopicsInfo> subtopologyMap : topologyMetadata.topologyToSubtopologyTopicsInfoMap().values()) {
+            for (final InternalTopologyBuilder.TopicsInfo topicsInfo : subtopologyMap.values()) {
+                allInternalTopics.putAll(topicsInfo.stateChangelogTopics);
+                allInternalTopics.putAll(topicsInfo.repartitionSourceTopics);
+                allSourceTopics.addAll(topicsInfo.sourceTopics);
+            }
+        }
+
+        final ValidationResult validationResult = internalTopicManager.validate(allInternalTopics);
+
+        final boolean noInternalTopicsExist = allInternalTopics.keySet().equals(validationResult.missingTopics());
+        final boolean internalTopicsMisconfigured = !validationResult.misconfigurationsForTopics().isEmpty();
+        final boolean allInternalTopicsExist = validationResult.missingTopics().isEmpty();
+        final boolean missingSourceTopics = !Collections.disjoint(validationResult.missingTopics(), allSourceTopics);
+
+        if (internalTopicsMisconfigured) {
+            throw new MisconfiguredInternalTopicException("Misconfigured Internal Topics: " + validationResult.misconfigurationsForTopics());
+        }
+
+        if (missingSourceTopics) {
+            allSourceTopics.retainAll(validationResult.missingTopics());
+            throw new MissingSourceTopicException("Missing source topics: " + allSourceTopics);
+        }
+
+        if (noInternalTopicsExist) {
+            internalTopicManager.setup(allInternalTopics);
+            return;
+        }
+
+        if (allInternalTopicsExist) {
+            throw new InternalTopicsAlreadySetupException("All internal topics have already been setup");
+        } else {
+            if (initParameters.setupInternalTopicsIfIncompleteEnabled()) {
+                final Map<String, InternalTopicConfig> topicsToCreate = new HashMap<>();
+                for (final String missingTopic : validationResult.missingTopics()) {
+                    topicsToCreate.put(missingTopic, allInternalTopics.get(missingTopic));
+                }
+                internalTopicManager.makeReady(topicsToCreate, true);
+            } else {
+                throw new MissingInternalTopicsException("Missing Internal Topics: ", new ArrayList<>(validationResult.missingTopics()));
+            }
+        }
+    }
+
+    public static class InitParameters {
+        private boolean setupInternalTopicsIfIncomplete;
+        protected Optional<Duration> timeout = Optional.empty();
+
+        private InitParameters() {
+            this.setupInternalTopicsIfIncomplete = false;
+        }
+
+        public static InitParameters initParameters() {
+            return new InitParameters();
+        }
+
+        public static InitParameters timeout(final Duration timeout) {
+            return new InitParameters().withTimeout(timeout);
+        }
+
+        public InitParameters withTimeout(final Duration timeout) {
+            this.timeout = Optional.ofNullable(timeout);
+            return this;
+        }
+
+        public InitParameters enableSetupInternalTopicsIfIncomplete() {
+            this.setupInternalTopicsIfIncomplete = true;
+            return this;
+        }
+
+        public InitParameters disableSetupInternalTopicsIfIncomplete() {
+            this.setupInternalTopicsIfIncomplete = false;
+            return this;
+        }
+
+        public boolean setupInternalTopicsIfIncompleteEnabled() {
+            return setupInternalTopicsIfIncomplete;
+        }
+    }
 
     private boolean waitOnStates(final long waitMs, final State... targetStates) {
         final Set<State> targetStateSet = Set.of(targetStates);
