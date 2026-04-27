@@ -178,10 +178,13 @@ public final class MetadataShell {
 
     private void initializeWithSnapshotFileReader() throws Exception {
         this.fileLock = takeDirectoryLockIfExists(parentParent(new File(snapshotPath)));
+        SupportedConfigChecker supportedConfigChecker = new DefaultSupportedConfigChecker();
+
         this.loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setNodeId(-1).
                 setHighWaterMarkAccessor(() -> snapshotFileReader.highWaterMark()).
+                setSupportedConfigChecker(supportedConfigChecker).
                 build();
         snapshotFileReader = new SnapshotFileReader(snapshotPath, loader);
         snapshotFileReader.startup();

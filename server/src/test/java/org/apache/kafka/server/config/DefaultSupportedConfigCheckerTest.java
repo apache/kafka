@@ -46,9 +46,9 @@ class DefaultSupportedConfigCheckerTest {
         assertTrue(checker.isSupported(BROKER, "listener.name.EXTERNAL.ssl.keystore.location"));
         assertTrue(checker.isSupported(BROKER, "fake.configurable.authorizer.foobar.config"));
 
-        assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.INTERVAL_MS_CONFIG));
-        assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.METRICS_CONFIG));
-        assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.MATCH_CONFIG));
+        assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.PUSH_INTERVAL_MS));
+        assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.SUBSCRIPTION_METRICS));
+        assertTrue(checker.isSupported(CLIENT_METRICS, ClientMetricsConfigs.CLIENT_MATCH_PATTERN));
         assertFalse(checker.isSupported(CLIENT_METRICS, "invalid.client.metrics.config"));
 
         assertTrue(checker.isSupported(GROUP, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
