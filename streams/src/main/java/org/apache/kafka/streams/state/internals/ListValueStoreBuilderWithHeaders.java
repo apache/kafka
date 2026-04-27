@@ -30,9 +30,7 @@ import java.util.Objects;
  * <p>
  * The built store has the public type {@code KeyValueStore<K, ValueTimestampHeaders<V>>}.
  * Each list element is serialized via {@link ValueTimestampHeadersSerde} so that the per-element
- * record headers are preserved on disk. The change-logger is replaced with the headers-aware
- * variant, which extracts timestamp/headers from the newly-appended element and uses them as
- * the changelog record metadata.
+ * record headers are preserved on disk.
  * <p>
  * Caching is intentionally not supported: the only production caller, the stream-stream
  * outer-join store factory, always disables caching for outer-join list stores.
@@ -77,6 +75,6 @@ public class ListValueStoreBuilderWithHeaders<K, V>
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingListValueBytesStoreWithHeaders(inner);
+        return new ChangeLoggingListValueBytesStore(inner);
     }
 }
