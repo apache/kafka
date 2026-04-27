@@ -355,7 +355,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@lb1.example.com:9092")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9093")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9093")
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
@@ -371,11 +371,11 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9093")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9093")
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
-      Seq(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
+      Seq(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, null, 9093)),
       config.effectiveAdvertisedControllerListeners
     )
   }
@@ -388,7 +388,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER,CONTROLLER_NEW")
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "CONTROLLER://lb1.example.com:9000")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@lb2.example.com:9092")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9093,CONTROLLER_NEW://localhost:9094")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9093,CONTROLLER_NEW://:9094")
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
@@ -1477,7 +1477,7 @@ class KafkaConfigTest {
   @Test
   def testValidQuorumVotersParsingWithIpAddress(): Unit = {
     val expected = new util.HashMap[Integer, InetSocketAddress]()
-    expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
+    expected.put(1, InetSocketAddress.createUnresolved("127.0.0.1", 9092))
     assertValidQuorumVoters(expected, "1@127.0.0.1:9092")
   }
 

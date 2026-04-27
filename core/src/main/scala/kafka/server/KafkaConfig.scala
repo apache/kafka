@@ -458,23 +458,29 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       controllerAdvertisedListeners
         .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
         .orElse(
-          // If users don't define advertised.listeners, the advertised controller listeners will first try to use
-          // the endpoint defined by the controller.quorum.voters config and inherit from listeners configuration which
-          // match listeners names in controller.listener.names. If that config is not present, the advertised
-          // controller listeners will inherit from listeners configuration which match listener names in controller.listener.names.
-
-          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
-          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
           controllerListenersValue
             .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-            .map(endpoint => if (controllerQuorumVotersAddress.isDefined) {
-              new Endpoint(endpoint.listener, endpoint.securityProtocol, controllerQuorumVotersAddress.get.getHostName, controllerQuorumVotersAddress.get.getPort)
-            } else if (endpoint.host == "0.0.0.0") {
-              new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
+            .map { endpoint =>
+              if (endpoint.host == null || endpoint.host == "0.0.0.0") {
+                controllerQuorumVotersAddress.map { socketAddress =>
+                  // the user did not provide an advertised listener;
+                  // if controller.quorum.voters defines an endpoint for this node, use that as the advertised listener
+                  new Endpoint(
+                    endpoint.listener,
+                    endpoint.securityProtocol,
+                    socketAddress.getHostString,
+                    socketAddress.getPort
+                  )
+                } getOrElse {
+                  // Removing "0.0.0.0" host to avoid validation errors.
+                  // This is to be compatible with the old behavior before 3.9.
+                  // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+                  new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
+                }
+              } else {
+                endpoint
+              }
             }
-            else {
-              endpoint
-            })
         )
     }
   }
