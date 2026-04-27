@@ -311,7 +311,7 @@ public class KTableSuppressProcessorTest {
         context.setHeaders(headers);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
-        harness.processor.process(new Record<>(key, value, timestamp));
+        harness.processor.process(new Record<>(key, value, timestamp, headers));
 
         assertThat(context.forwarded(), hasSize(1));
         final MockProcessorContext.CapturedForward<?, ?> capturedForward = context.forwarded().get(0);

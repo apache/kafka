@@ -306,8 +306,72 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         context.setRecordContext(recordContext);
         buffer.put(1L, new Record<>("A", new Change<>("new-value", "old-value"), 0L), recordContext);
         buffer.put(1L, new Record<>("B", new Change<>("new-value", null), 0L), recordContext);
-        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueTimestampHeaders.make("old-value", 0L, new RecordHeaders()))));
         assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldPropagateHeadersThroughEviction(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("h1", "v1".getBytes(UTF_8))});
+        final ProcessorRecordContext recordContext = getContext(0L);
+        context.setRecordContext(recordContext);
+        buffer.put(0L, new Record<>("k", new Change<>("v", null), 0L, headers), recordContext);
+
+        final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+
+        assertThat(evicted.size(), is(1));
+        assertThat(evicted.get(0).recordContext().headers(), is(headers));
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldReturnBufferedHeadersFromPriorValue(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("h1", "v1".getBytes(UTF_8))});
+        final ProcessorRecordContext recordContext = getContext(42L);
+        context.setRecordContext(recordContext);
+        buffer.put(1L, new Record<>("A", new Change<>("new-value", "old-value"), 0L, headers), recordContext);
+
+        assertThat(
+            buffer.priorValueForBuffered("A"),
+            is(Maybe.defined(ValueTimestampHeaders.make("old-value", 42L, headers)))
+        );
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldUseRecordHeadersNotProcessorContextHeadersOnPut(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        final RecordHeaders contextHeaders = new RecordHeaders(new Header[]{new RecordHeader("ctx", "from-context".getBytes(UTF_8))});
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{new RecordHeader("rec", "from-record".getBytes(UTF_8))});
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(0L, 0, 0, "topic", contextHeaders);
+        context.setRecordContext(recordContext);
+
+        buffer.put(0L, new Record<>("k", new Change<>("v", null), 0L, recordHeaders), recordContext);
+
+        final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+
+        assertThat(evicted.size(), is(1));
+        assertThat(evicted.get(0).recordContext().headers(), is(recordHeaders));
+        cleanup(context, buffer);
     }
 
     @ParameterizedTest
@@ -475,7 +539,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", 3L, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -598,7 +662,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", 3L, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -722,7 +786,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", 3L, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -848,7 +912,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", 3L, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -971,7 +1035,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", 3L, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 

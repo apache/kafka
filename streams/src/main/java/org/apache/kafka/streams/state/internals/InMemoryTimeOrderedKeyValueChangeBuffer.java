@@ -36,7 +36,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
@@ -399,11 +398,11 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                             next.getKey().time() + "]"
                     );
                 }
-                final K key = keySerde.deserializer().deserialize(changelogTopic, context.headers(), next.getKey().key().get());
                 final BufferValue bufferValue = next.getValue();
+                final K key = keySerde.deserializer().deserialize(changelogTopic, bufferValue.context().headers(), next.getKey().key().get());
                 final Change<V> value = valueSerde.deserializeParts(
                     changelogTopic,
-                    context.headers(),
+                    bufferValue.context().headers(),
                     new Change<>(bufferValue.newValue(), bufferValue.oldValue())
                 );
                 callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
@@ -437,19 +436,22 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public Maybe<ValueTimestampHeaders<V>> priorValueForBuffered(final K key) {
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, context.headers(), key));
-        if (index.containsKey(serializedKey)) {
-            final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
+        final BufferKey bufferKey = index.get(serializedKey);
+        if (bufferKey != null) {
+            final BufferValue bufferValue = sortedMap.get(bufferKey);
+            final byte[] serializedValue = bufferValue.priorValue();
 
             final V deserializedValue = valueSerde.innerSerde().deserializer().deserialize(
                 changelogTopic,
-                context.headers(),
+                bufferValue.context().headers(),
                 serializedValue
             );
 
-            // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
-            // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
-            // buffer something.
-            return Maybe.defined(ValueTimestampHeaders.make(deserializedValue, RecordQueue.UNKNOWN, new RecordHeaders()));
+            return Maybe.defined(ValueTimestampHeaders.make(
+                deserializedValue,
+                bufferValue.context().timestamp(),
+                new RecordHeaders(bufferValue.context().headers())
+            ));
         } else {
             return Maybe.undefined();
         }
@@ -472,8 +474,19 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
 
-        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, recordContext.headers(), record.key()));
-        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, recordContext.headers(), record.value());
+        // The headers that travel with the buffered Record (not the surrounding processor's headers)
+        // are what should drive serde calls and what we want to surface again on eviction.
+        final RecordHeaders bufferedHeaders = new RecordHeaders(record.headers());
+        final ProcessorRecordContext effectiveContext = new ProcessorRecordContext(
+            recordContext.timestamp(),
+            recordContext.offset(),
+            recordContext.partition(),
+            recordContext.topic(),
+            bufferedHeaders
+        );
+
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, bufferedHeaders, record.key()));
+        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, bufferedHeaders, record.value());
 
         final BufferValue buffered = getBuffered(serializedKey);
         final byte[] serializedPriorValue;
@@ -486,7 +499,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         cleanPut(
             time,
             serializedKey,
-            new BufferValue(serializedPriorValue, serialChange.oldValue, serialChange.newValue, recordContext)
+            new BufferValue(serializedPriorValue, serialChange.oldValue, serialChange.newValue, effectiveContext)
         );
         if (loggingEnabled) {
             dirtyKeys.add(serializedKey);
