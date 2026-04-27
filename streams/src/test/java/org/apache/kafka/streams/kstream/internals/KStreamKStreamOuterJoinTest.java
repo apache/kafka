@@ -1074,8 +1074,7 @@ public class KStreamKStreamOuterJoinTest {
             ));
 
             // Header forwarding for non-joined-outer emits depends on the store format:
-            //  - HEADERS: the original outer record's headers are preserved (the whole point
-            //    of KAFKA-20413).
+            //  - HEADERS: the original outer record's headers are preserved
             //  - PLAIN: no per-record headers are stored, so the trigger record's headers
             //    pass through unchanged (legacy behavior).
             if (withHeaders) {
@@ -1132,6 +1131,146 @@ public class KStreamKStreamOuterJoinTest {
                     new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x5})})
                 )
             );
+        }
+    }
+
+    /**
+     * Header forwarding for non-joined-outer emits, multi-record case. The single-record version
+     * is in {@link #testShouldForwardCurrentHeaders}. This variant flushes several buffered
+     * outer records in one shot — it's the case where the headers-aware list store would expose
+     * "headers got mixed up between buffered entries" bugs (e.g. shared/aliased buffers, off-by-one
+     * deserialization), which the single-record test cannot catch.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testShouldForwardPerRecordHeadersForMultipleBufferedOuterEmits(final boolean withHeaders) {
+        setDslStoreFormat(withHeaders);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, Long> stream2;
+        final KStream<Integer, String> joined;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed2);
+
+        joined = stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(10L)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.Long())
+        );
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, Long> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new LongSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+
+            // Four unmatched outer records, each at a distinct timestamp and carrying a distinct
+            // header byte. Timestamps are spread across the window so the buffered iterator
+            // returns them in a deterministic timestamp-ascending order.
+            inputTopic1.pipeInput(new TestRecord<>(
+                10,
+                "A10",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x1})}),
+                0L
+            ));
+            inputTopic2.pipeInput(new TestRecord<>(
+                11,
+                20L,
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x2})}),
+                1L
+            ));
+            inputTopic1.pipeInput(new TestRecord<>(
+                12,
+                "A12",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})}),
+                2L
+            ));
+            inputTopic2.pipeInput(new TestRecord<>(
+                13,
+                30L,
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x4})}),
+                3L
+            ));
+
+            // Sanity: nothing has been emitted yet — windows are still open.
+            processor.checkAndClearProcessedRecords();
+
+            // Trigger: bumps stream-time well past windowEnd + grace for all four buffered records,
+            // causing them to flush as null-side outer-join emits. The trigger itself is buffered
+            // (its own window has not closed) and must NOT appear in the emitted output.
+            inputTopic1.pipeInput(new TestRecord<>(
+                99,
+                "TRIG",
+                new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x9})}),
+                500L
+            ));
+
+            if (withHeaders) {
+                // Each buffered record's own original header must come back out — no leakage from
+                // the trigger record (0x9), and no cross-contamination between buffered entries.
+                processor.checkAndClearProcessedRecords(
+                    new Record<>(
+                        10,
+                        "A10+null",
+                        0L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x1})})
+                    ),
+                    new Record<>(
+                        11,
+                        "null+20",
+                        1L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x2})})
+                    ),
+                    new Record<>(
+                        12,
+                        "A12+null",
+                        2L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
+                    ),
+                    new Record<>(
+                        13,
+                        "null+30",
+                        3L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x4})})
+                    )
+                );
+            } else {
+                // Legacy plain-store behavior: the buffer carries no headers, so every emit
+                // picks up the trigger record's headers (0x9). This is the documented "leak"
+                // behavior pinned by testShouldForwardCurrentHeaders, asserted here across
+                // multiple emits to catch any future regression that leaks a different value.
+                processor.checkAndClearProcessedRecords(
+                    new Record<>(
+                        10,
+                        "A10+null",
+                        0L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x9})})
+                    ),
+                    new Record<>(
+                        11,
+                        "null+20",
+                        1L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x9})})
+                    ),
+                    new Record<>(
+                        12,
+                        "A12+null",
+                        2L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x9})})
+                    ),
+                    new Record<>(
+                        13,
+                        "null+30",
+                        3L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x9})})
+                    )
+                );
+            }
         }
     }
 

@@ -43,12 +43,13 @@ import java.util.List;
 
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * End-to-end test for the headers-aware list-value store: builder → metered →
- * change-logger → ListValueStore. Verifies that per-record headers survive a
- * round-trip through the on-disk list format.
+ * Header-specific assertions for the headers-aware list-value store. List/iterator
+ * invariants (ordering, tombstones, iterator-during-delete, closed-iterator semantics)
+ * are covered for both value modes by {@link ListValueStoreTest}; this file only
+ * asserts that per-record headers and timestamps survive a round-trip through the
+ * builder → metered → change-logger → ListValueStore pipeline.
  */
 public class ListValueStoreWithHeadersTest {
     public enum StoreType { InMemory, RocksDB }
@@ -77,7 +78,7 @@ public class ListValueStoreWithHeadersTest {
     <K, V> KeyValueStore<K, ValueTimestampHeaders<V>> buildStore(final Serde<K> keySerde,
                                                                   final Serde<V> valueSerde,
                                                                   final StoreType storeType) {
-        return new ListValueStoreBuilder<K, ValueTimestampHeaders<V>>(
+        return new ListValueStoreBuilder<>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store wh")
                 : Stores.inMemoryKeyValueStore("in-memory list store wh"),
             keySerde,
@@ -136,28 +137,6 @@ public class ListValueStoreWithHeadersTest {
         assertEquals(2, all.get(3).key);
         assertEquals("two", all.get(3).value.value());
         assertHeader(all.get(3).value.headers(), "hk2", "hv2");
-    }
-
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void shouldDeleteWholeListOnNullPut(final StoreType storeType) {
-        setup(storeType);
-
-        listStore.put(0, wrap("a", 10L, "h", "1"));
-        listStore.put(0, wrap("b", 11L, "h", "2"));
-        listStore.put(1, wrap("c", 20L, "h", "3"));
-
-        listStore.put(0, null);
-
-        final List<KeyValue<Integer, ValueTimestampHeaders<String>>> remaining =
-            toListAndCloseIterator(listStore.all());
-
-        // Only key 1 remains
-        assertEquals(1, remaining.size());
-        assertEquals(1, remaining.get(0).key);
-        assertEquals("c", remaining.get(0).value.value());
-
-        assertNull(listStore.get(0));
     }
 
     @ParameterizedTest
