@@ -1073,22 +1073,42 @@ public class KStreamKStreamOuterJoinTest {
                 (long) 211
             ));
 
-            // Again, header forwarding is undefined, but the current observed behavior is that
-            // the headers pass through the forwarding record.
-            processor.checkAndClearProcessedRecords(
-                new Record<>(
-                    1,
-                    "null+10",
-                    0L,
-                    new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
-                ),
-                new Record<>(
-                    0,
-                    "A0+null",
-                    0L,
-                    new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
-                )
-            );
+            // Header forwarding for non-joined-outer emits depends on the store format:
+            //  - HEADERS: the original outer record's headers are preserved (the whole point
+            //    of KAFKA-20413).
+            //  - PLAIN: no per-record headers are stored, so the trigger record's headers
+            //    pass through unchanged (legacy behavior).
+            if (withHeaders) {
+                processor.checkAndClearProcessedRecords(
+                    new Record<>(
+                        1,
+                        "null+10",
+                        0L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x2})})
+                    ),
+                    new Record<>(
+                        0,
+                        "A0+null",
+                        0L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x1})})
+                    )
+                );
+            } else {
+                processor.checkAndClearProcessedRecords(
+                    new Record<>(
+                        1,
+                        "null+10",
+                        0L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
+                    ),
+                    new Record<>(
+                        0,
+                        "A0+null",
+                        0L,
+                        new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
+                    )
+                );
+            }
 
             // verifies joined duplicates are emitted
             inputTopic1.pipeInput(new TestRecord<>(

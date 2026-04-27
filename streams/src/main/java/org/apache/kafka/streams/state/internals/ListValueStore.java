@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,6 +45,11 @@ public class ListValueStore
     implements KeyValueStore<Bytes, byte[]> {
 
     private static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
+
+    // The inner LIST_SERDE wraps ByteArraySerde, which ignores headers; we still pass
+    // a non-null Headers instance so that any wrapping serde or future change does not
+    // accidentally lose header-context.
+    private static final Headers EMPTY_HEADERS = new RecordHeaders();
 
     ListValueStore(final KeyValueStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
@@ -81,12 +88,12 @@ public class ListValueStore
     // this function assumes the addedValue is not null; callers should check null themselves
     private void putInternal(final Bytes key, final byte[] addedValue, final byte[] oldValue) {
         if (oldValue == null) {
-            wrapped().put(key, LIST_SERDE.serializer().serialize(null, Collections.singletonList(addedValue)));
+            wrapped().put(key, LIST_SERDE.serializer().serialize(null, EMPTY_HEADERS, Collections.singletonList(addedValue)));
         } else {
-            final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
+            final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, EMPTY_HEADERS, oldValue);
             list.add(addedValue);
 
-            wrapped().put(key, LIST_SERDE.serializer().serialize(null, list));
+            wrapped().put(key, LIST_SERDE.serializer().serialize(null, EMPTY_HEADERS, list));
         }
     }
 
@@ -147,7 +154,7 @@ public class ListValueStore
             while (currList.isEmpty() && bytesIterator.hasNext()) {
                 final KeyValue<Bytes, byte[]> next = bytesIterator.next();
                 nextKey = next.key;
-                currList.addAll(LIST_SERDE.deserializer().deserialize(null, next.value));
+                currList.addAll(LIST_SERDE.deserializer().deserialize(null, EMPTY_HEADERS, next.value));
             }
 
             if (currList.isEmpty()) {

@@ -23,15 +23,13 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.ListValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 
 import java.time.Duration;
@@ -96,7 +94,9 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
-        // Once the headers-aware version of ListValueStore is implemented (planned for AK 4.4), replace the PLAIN constant with the dslStoreFormat() method.
+        // We always use the PLAIN underlying bytes-store supplier: the per-element headers
+        // (when in HEADERS mode) are embedded inside each list element's value bytes, so
+        // the bytes-store layer itself needs no special header support.
         final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, DslStoreFormat.PLAIN);
         final KeyValueBytesStoreSupplier supplier;
 
@@ -121,14 +121,22 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             supplier = dslStoreSuppliers().keyValueStore(dslKeyValueParams);
         }
 
-        final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>
-                builder =
-                new ListValueStoreBuilder<>(
-                        supplier,
-                        timestampedKeyAndJoinSideSerde,
-                        leftOrRightValueSerde,
-                        Time.SYSTEM
-                );
+        final StoreBuilder<?> builder;
+        if (dslStoreFormat() == DslStoreFormat.HEADERS) {
+            builder = new ListValueStoreBuilderWithHeaders<>(
+                supplier,
+                timestampedKeyAndJoinSideSerde,
+                leftOrRightValueSerde,
+                Time.SYSTEM
+            );
+        } else {
+            builder = new ListValueStoreBuilder<>(
+                supplier,
+                timestampedKeyAndJoinSideSerde,
+                leftOrRightValueSerde,
+                Time.SYSTEM
+            );
+        }
 
         if (loggingEnabled) {
             builder.withLoggingEnabled(streamJoined.logConfig());
