@@ -4368,6 +4368,7 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldPutValueToNewColumnFamilyAndDeleteFromOld
 - shouldReturnNullWhenKeyNotFoundInEitherColumnFamily
 - shouldReturnSumOfEntriesFromBothColumnFamilies
+- shouldSkipPersistingStateOnCloseWhenStoreIsAlreadyClosed
 - shouldThrowNPEWhenBatchEntryHasNullKey
 - shouldThrowOnOpenAfterAUncleanClose
 - shouldThrowProcessorStateExceptionWhenDeleteFailsOnNewColumnFamilyWithNullValue
