@@ -46,7 +46,7 @@ public class AlterReplicaLogDirsRequestTest {
                                 .setTopics(new AlterReplicaLogDirTopicCollection(
                                         singletonList(new AlterReplicaLogDirTopic()
                                                 .setName("topic")
-                                                .setPartitions(asList(0, 1, 2))).iterator()))).iterator()));
+                                                .setPartitions(asList(0, 1, 2))))))));
         AlterReplicaLogDirsResponse errorResponse = new AlterReplicaLogDirsRequest.Builder(data).build()
                 .getErrorResponse(123, new LogDirNotFoundException("/data0"));
         assertEquals(1, errorResponse.data().results().size());
@@ -71,13 +71,13 @@ public class AlterReplicaLogDirsRequestTest {
                                                 .setPartitions(asList(0, 1)),
                                                new AlterReplicaLogDirTopic()
                                                 .setName("topic2")
-                                                .setPartitions(singletonList(7))).iterator())),
+                                                .setPartitions(singletonList(7))))),
                                 new AlterReplicaLogDir()
                                         .setPath("/data1")
                                         .setTopics(new AlterReplicaLogDirTopicCollection(
                                                 singletonList(new AlterReplicaLogDirTopic()
                                                         .setName("topic3")
-                                                        .setPartitions(singletonList(12))).iterator()))).iterator()));
+                                                        .setPartitions(singletonList(12))))))));
         AlterReplicaLogDirsRequest request = new AlterReplicaLogDirsRequest.Builder(data).build();
         Map<TopicPartition, String> expect = new HashMap<>();
         expect.put(new TopicPartition("topic", 0), "/data0");

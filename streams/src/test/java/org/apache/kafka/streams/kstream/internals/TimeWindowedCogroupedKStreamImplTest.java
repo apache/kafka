@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -43,8 +44,8 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
@@ -69,8 +70,12 @@ public class TimeWindowedCogroupedKStreamImplTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @BeforeEach
-    public void setup() {
+    public void setup(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
+        }
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
             .with(Serdes.String(), Serdes.String()));
         final KStream<String, String> stream2 = builder.stream(TOPIC2, Consumed
@@ -83,49 +88,67 @@ public class TimeWindowedCogroupedKStreamImplTest {
         windowedCogroupedStream = cogroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)));
     }
 
-    @Test
-    public void shouldNotHaveNullInitializerOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullInitializerOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null));
     }
 
-    @Test
-    public void shouldNotHaveNullMaterializedOnTwoOptionAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullMaterializedOnTwoOptionAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT,
             (Materialized<String, String, WindowStore<Bytes, byte[]>>) null));
     }
 
-    @Test
-    public void shouldNotHaveNullNamedTwoOptionOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullNamedTwoOptionOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Named) null));
     }
 
-    @Test
-    public void shouldNotHaveNullInitializerTwoOptionNamedOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullInitializerTwoOptionNamedOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Named.as("test")));
     }
 
-    @Test
-    public void shouldNotHaveNullInitializerTwoOptionMaterializedOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullInitializerTwoOptionMaterializedOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Materialized.as("test")));
     }
 
-    @Test
-    public void shouldNotHaveNullInitializerThreeOptionOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullInitializerThreeOptionOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Named.as("test"), Materialized.as("test")));
     }
 
-    @Test
-    public void shouldNotHaveNullMaterializedOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullMaterializedOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("Test"), null));
     }
 
-    @Test
-    public void shouldNotHaveNullNamedOnAggregate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotHaveNullNamedOnAggregate(final boolean withHeaders) {
+        setup(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test")));
     }
 
-    @Test
-    public void namedParamShouldSetName() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void namedParamShouldSetName(final boolean withHeaders) {
+        setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
                 .with(Serdes.String(), Serdes.String()));
@@ -147,8 +170,10 @@ public class TimeWindowedCogroupedKStreamImplTest {
                 "      <-- foo-cogroup-agg-0\n\n"));
     }
 
-    @Test
-    public void timeWindowAggregateTestStreamsTest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void timeWindowAggregateTestStreamsTest(final boolean withHeaders) {
+        setup(withHeaders);
 
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
@@ -181,8 +206,10 @@ public class TimeWindowedCogroupedKStreamImplTest {
 
     }
 
-    @Test
-    public void timeWindowMixAggregatorsTest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void timeWindowMixAggregatorsTest(final boolean withHeaders) {
+        setup(withHeaders);
 
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
@@ -217,8 +244,10 @@ public class TimeWindowedCogroupedKStreamImplTest {
 
     }
 
-    @Test
-    public void timeWindowAggregateManyWindowsTest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void timeWindowAggregateManyWindowsTest(final boolean withHeaders) {
+        setup(withHeaders);
 
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
                 .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L))).aggregate(
@@ -243,8 +272,10 @@ public class TimeWindowedCogroupedKStreamImplTest {
         }
     }
 
-    @Test
-    public void timeWindowAggregateOverlappingWindowsTest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void timeWindowAggregateOverlappingWindowsTest(final boolean withHeaders) {
+        setup(withHeaders);
 
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
                 .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)).advanceBy(ofMillis(200L))).aggregate(
@@ -277,8 +308,10 @@ public class TimeWindowedCogroupedKStreamImplTest {
         }
     }
 
-    @Test
-    public void timeWindowMixAggregatorsManyWindowsTest() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void timeWindowMixAggregatorsManyWindowsTest(final boolean withHeaders) {
+        setup(withHeaders);
 
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));

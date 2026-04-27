@@ -248,7 +248,7 @@ public class StreamsCoordinatorRecordHelpers {
      * @param groupId The streams group id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");

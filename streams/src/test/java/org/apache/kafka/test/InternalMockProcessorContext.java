@@ -205,6 +205,24 @@ public class InternalMockProcessorContext<KOut, VOut>
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valueSerde,
+                                        final RecordCollector collector,
+                                        final ThreadCache cache,
+                                        final StreamsConfig config) {
+        this(
+                stateDir,
+                keySerde,
+                valueSerde,
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+                config,
+                () -> collector,
+                cache,
+                Time.SYSTEM
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
@@ -398,14 +416,6 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     @Override
-    public long timestamp() {
-        if (recordContext == null) {
-            return timestamp;
-        }
-        return recordContext.timestamp();
-    }
-
-    @Override
     public long currentSystemTimeMs() {
         return time.milliseconds();
     }
@@ -413,38 +423,6 @@ public class InternalMockProcessorContext<KOut, VOut>
     @Override
     public long currentStreamTimeMs() {
         throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
-    }
-
-    @Override
-    public String topic() {
-        if (recordContext == null) {
-            return null;
-        }
-        return recordContext.topic();
-    }
-
-    @Override
-    public int partition() {
-        if (recordContext == null) {
-            return -1;
-        }
-        return recordContext.partition();
-    }
-
-    @Override
-    public long offset() {
-        if (recordContext == null) {
-            return -1L;
-        }
-        return recordContext.offset();
-    }
-
-    @Override
-    public Headers headers() {
-        if (recordContext == null) {
-            return new RecordHeaders();
-        }
-        return recordContext.headers();
     }
 
     @Override

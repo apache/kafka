@@ -507,7 +507,7 @@ public class LeaderState<T> implements EpochState {
      * This methods upgrades the kraft version to {@code newVersion}. If the version is already
      * {@code newVersion}, this is a noop operation.
      *
-     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to curent
+     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to current
      * kraft version {@code persistedVersion}.
      *
      * For the upgrade to succeed all of the voters in the voter set must support the new kraft
@@ -563,7 +563,7 @@ public class LeaderState<T> implements EpochState {
             );
         }
 
-        // Upgrade to kraft.verion 1 is only supported; this needs to change when kraft.version 2 is added
+        // Upgrade to kraft.version 1 is only supported; this needs to change when kraft.version 2 is added
         var inMemoryVoters = kraftVersionUpgradeState.get().toVoters().orElseThrow(() ->
             new InvalidUpdateVersionException(
                 String.format(

@@ -30,9 +30,8 @@ import org.apache.kafka.common.record.internal.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.utils.LogCaptureAppender
-import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
+import org.apache.kafka.coordinator.group.{ConsumerGroupMigrationPolicy, GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
@@ -806,7 +805,6 @@ class KafkaConfigTest {
         case MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG => // no op
         case MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG => // no op
-        case MetadataLogConfig.INTERNAL_METADATA_MAX_FETCH_SIZE_IN_BYTES_CONFIG => // no op
         case MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG => // no op
         case KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG => // ignore string
         case MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -1049,6 +1047,9 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG => // ignore string
+        case GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
 
         /** Share groups configs */
         case GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1066,6 +1067,13 @@ class KafkaConfigTest {
         case ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG =>  //ignore string
+        case GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG => // ignore string
+        case GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG => // ignore string
+        case GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
 
         /** Streams groups configs */
         case GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1077,6 +1085,12 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
         case GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
 
         /** Share coordinator configs */
         case ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
@@ -1206,7 +1220,7 @@ class KafkaConfigTest {
     assertEquals(1, config.brokerId)
     assertEndpointsEqual(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 1122),
       config.effectiveAdvertisedBrokerListeners.head)
-    assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
+    assertEquals(util.Map.of("127.0.0.1", 2, "127.0.0.2", 3), config.maxConnectionsPerIpOverrides)
     assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)

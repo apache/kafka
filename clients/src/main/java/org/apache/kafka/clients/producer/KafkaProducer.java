@@ -433,7 +433,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 config.getBoolean(ProducerConfig.PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG);
             RecordAccumulator.PartitionerConfig partitionerConfig = new RecordAccumulator.PartitionerConfig(
                 enableAdaptivePartitioning,
-                config.getLong(ProducerConfig.PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG)
+                config.getLong(ProducerConfig.PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG),
+                config.getBoolean(ProducerConfig.PARTITIONER_RACK_AWARE_CONFIG),
+                config.getString(ProducerConfig.CLIENT_RACK_CONFIG)
             );
             // As per Kafka producer configuration documentation batch.size may be set to 0 to explicitly disable
             // batching which in practice actually means using a batch size of 1.
@@ -1375,6 +1377,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Get the full set of internal metrics maintained by the producer.
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the producer
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {

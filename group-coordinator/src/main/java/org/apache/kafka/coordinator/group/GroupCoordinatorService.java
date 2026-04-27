@@ -79,10 +79,10 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorBackgroundThreadPoolExecutor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
@@ -766,7 +766,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         Map<Integer, PartitionErrorData> partitionErrors =
                             Optional.ofNullable(topicPartitionErrorsMap)
                                 .map(map -> map.get(topic.topicId()))
-                                .orElse(Collections.emptyMap());
+                                .orElse(Map.of());
                         PartitionErrorData error = partitionErrors.get(partition.partitionIndex());
                         if (error == null) {
                             partitionData = partition.duplicate();

@@ -218,7 +218,7 @@ public class ConsumerProtocolTest {
                     new ConsumerProtocolAssignment.TopicPartition()
                         .setTopic(tp2.topic())
                         .setPartitions(Collections.singletonList(tp2.partition()))
-                ).iterator())
+                ))
             )
             .setUserData(ByteBuffer.wrap("hello".getBytes()));
 

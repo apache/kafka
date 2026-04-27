@@ -74,7 +74,7 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
 
@@ -1319,7 +1319,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(subscriptionSource, subscriptionReceiveNode);
 
         final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetter = ((KTableImpl<KO, ?, VO>) foreignKeyTable).valueGetterSupplier();
-        final ProcessorToStateConnectorNode<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> subscriptionJoinNode =
+        final ProcessorToStateConnectorNode<CombinedKey<KO, K>, Change<ValueTimestampHeaders<SubscriptionWrapper<K>>>> subscriptionJoinNode =
             new ProcessorToStateConnectorNode<>(
                 new ProcessorParameters<>(
                     new SubscriptionJoinProcessorSupplier<>(

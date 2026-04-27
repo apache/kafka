@@ -137,6 +137,9 @@
         <allow pkg="com.fasterxml.jackson.databind" />
         <allow pkg="org.jose4j" />
         <allow pkg="javax.crypto"/>
+        <allow pkg="org.testcontainers" />
+        <allow pkg="org.keycloak" />
+        <allow pkg="dasniko.testcontainers" />
       </subpackage>
     </subpackage>
 
@@ -272,6 +275,7 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.shell"/>
@@ -289,7 +293,6 @@
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.util" />
-    <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
     <allow pkg="org.apache.kafka.metadata.authorizer" />
     <allow pkg="org.apache.kafka.security.authorizer" />
@@ -298,6 +301,7 @@
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.log.remote.metadata.storage" />
     <allow pkg="org.apache.kafka.server.log.remote.storage" />
+    <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.server.quota" />
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.apache.kafka.clients" />

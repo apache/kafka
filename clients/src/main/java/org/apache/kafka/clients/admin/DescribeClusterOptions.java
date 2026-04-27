@@ -49,7 +49,7 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
 
     /**
      * Specify if authorized operations should be included in the response.  Note that some
-     * older brokers cannot not supply this information even if it is requested.
+     * older brokers cannot supply this information even if it is requested.
      */
     public boolean includeAuthorizedOperations() {
         return includeAuthorizedOperations;
@@ -57,7 +57,7 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
 
     /**
      * Specify if fenced brokers should be included in the response.  Note that some
-     * older brokers cannot not supply this information even if it is requested.
+     * older brokers cannot supply this information even if it is requested.
      */
     public boolean includeFencedBrokers() {
         return includeFencedBrokers;

@@ -899,7 +899,7 @@ class MetadataCacheTest {
           setBrokerId(broker.id).setLogDirs(broker.dirs).
           setEndPoints(new BrokerEndpointCollection(Collections.singleton(
             new RegisterBrokerRecord.BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
-              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}")).iterator()))))
+              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}"))))))
       val topicId = Uuid.fromString("95OVr1IPRYGrcNCLlpImCA")
       delta.replay(new TopicRecord().setTopicId(topicId).setName("foo"))
       partitions.foreach(partition => delta.replay(

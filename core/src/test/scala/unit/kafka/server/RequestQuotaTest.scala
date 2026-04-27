@@ -35,7 +35,8 @@ import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
+import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.common.utils.internals.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
@@ -363,7 +364,7 @@ class RequestQuotaTest extends BaseRequestTest {
                 new JoinGroupRequestProtocolCollection(
                   util.List.of(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("consumer-range")
-                    .setMetadata("test".getBytes())).iterator()
+                    .setMetadata("test".getBytes()))
                 )
               )
               .setRebalanceTimeoutMs(100)
@@ -414,7 +415,7 @@ class RequestQuotaTest extends BaseRequestTest {
             new CreateTopicsRequestData().setTopics(
               new CreatableTopicCollection(util.Set.of(
                 new CreatableTopic().setName("topic-2").setNumPartitions(1).
-                  setReplicationFactor(1.toShort)).iterator())))
+                  setReplicationFactor(1.toShort)))))
 
         case ApiKeys.DELETE_TOPICS =>
           new DeleteTopicsRequest.Builder(
@@ -601,7 +602,7 @@ class RequestQuotaTest extends BaseRequestTest {
                   .setName("test-topic")
                   .setPartitions(util.List.of(
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
-                      .setPartitionIndex(0)))).iterator())))
+                      .setPartitionIndex(0)))))))
 
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS =>
           new DescribeClientQuotasRequest.Builder(ClientQuotaFilter.all())
@@ -652,9 +653,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DESCRIBE_PRODUCERS =>
           new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
-            .setTopics(util.List.of(new DescribeProducersRequestData.TopicRequest()
+            .setTopics(new DescribeProducersRequestData.TopicRequestCollection(util.List.of(new DescribeProducersRequestData.TopicRequest()
               .setName("test-topic")
-              .setPartitionIndexes(util.List.of[Integer](1, 2, 3)))))
+              .setPartitionIndexes(util.List.of[Integer](1, 2, 3))))))
 
         case ApiKeys.BROKER_REGISTRATION =>
           new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())

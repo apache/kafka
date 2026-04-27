@@ -316,6 +316,20 @@ public final class StreamsTestUtils {
         }
     }
 
+    /**
+     * Configures the DSL store format to use headers if enabled.
+     * This is a helper method to reduce boilerplate in parameterized tests that test both
+     * with and without headers mode.
+     *
+     * @param streamsConfig The streams configuration properties to modify
+     * @param withHeaders Whether to enable headers mode
+     */
+    public static void maybeSetDslStoreFormatHeaders(final Properties streamsConfig, final boolean withHeaders) {
+        if (withHeaders) {
+            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+    }
+
     public static class TopologyMetadataBuilder {
         private final TopologyMetadata topologyMetadata;
 

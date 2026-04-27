@@ -36,6 +36,7 @@ import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
@@ -45,7 +46,7 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
@@ -57,8 +58,9 @@ import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.server.partition.{AlterPartitionManager, DefaultAlterPartitionManager}
 
 import java.time.Duration
 import java.util
@@ -110,7 +112,7 @@ class BrokerServer(
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
   var logDirFailureChannel: LogDirFailureChannel = _
-  var logManager: LogManager = _
+  var logManager: JLogManager = _
   var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
@@ -212,7 +214,7 @@ class BrokerServer(
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config,
-        sharedServer.metaPropsEnsemble.errorLogDirs().asScala.toSeq,
+        sharedServer.metaPropsEnsemble.errorLogDirs(),
         metadataCache,
         kafkaScheduler,
         time,
@@ -223,7 +225,7 @@ class BrokerServer(
         config,
         time,
         s"broker-${config.nodeId}-",
-        logManager.directoryIdsSet.asJava,
+        logManager.directoryIdsSet,
         () => new Thread(() => shutdown(), "kafka-shutdown-thread").start(),
         () => metadataCache.metadataVersion().isCordonedLogDirsSupported)
 
@@ -289,14 +291,14 @@ class BrokerServer(
 
       remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
 
-      alterPartitionManager = AlterPartitionManager(
+      alterPartitionManager = DefaultAlterPartitionManager.create(
         config,
-        scheduler = kafkaScheduler,
+        kafkaScheduler,
         controllerNodeProvider,
-        time = time,
+        time,
         metrics,
         s"broker-${config.nodeId}-",
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch
       )
       alterPartitionManager.start()
 
@@ -327,7 +329,7 @@ class BrokerServer(
         config.brokerId,
         () => metadataCache.getImage(),
         (directoryId: Uuid) => logManager.directoryPath(directoryId).
-          getOrElse("[unknown directory path]")
+          orElse("[unknown directory path]")
       )
       val directoryEventHandler = new DirectoryEventHandler {
         override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
@@ -374,7 +376,7 @@ class BrokerServer(
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.BrokerRole.toString)
 
       /* initializing the groupConfigManager */
-      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig, config.shareGroupConfig)
 
       /* create share coordinator */
       shareCoordinator = createShareCoordinator()
@@ -456,8 +458,9 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
-        groupConfigManager,
-        brokerTopicStats
+        new ShareGroupConfigProvider(groupConfigManager),
+        brokerTopicStats,
+        () => ShareVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)).supportsShareGroupDLQ()
       )
 
       dataPlaneRequestProcessor = new KafkaApis(
@@ -717,7 +720,6 @@ class BrokerServer(
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
       .build()
   }
 
@@ -766,9 +768,9 @@ class BrokerServer(
       }
 
       val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).toJava,
+        (tp: TopicPartition) => logManager.getLog(tp),
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
-          logManager.getLog(tp).foreach { log =>
+          logManager.getLog(tp).ifPresent { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },

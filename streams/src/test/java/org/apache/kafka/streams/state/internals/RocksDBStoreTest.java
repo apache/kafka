@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -43,6 +45,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -72,14 +75,18 @@ import org.mockito.quality.Strictness;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
+import org.rocksdb.ColumnFamilyDescriptor;
+import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
 import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.PlainTableConfig;
+import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -129,6 +136,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private final Time time = new MockTime();
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
+    private final Serializer<Long> longSerializer = new LongSerializer();
 
     @Mock
     private RocksDBMetricsRecorder metricsRecorder;
@@ -142,10 +150,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsConfig(props)
         );
         rocksDBStore = getRocksDBStore();
     }
@@ -158,9 +166,9 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
-            Stores.persistentKeyValueStore("my-store"),
-            (Serde<K>) context.keySerde(),
-            (Serde<V>) context.valueSerde());
+                Stores.persistentKeyValueStore("my-store"),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde());
 
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
@@ -179,11 +187,15 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return new RocksDBStore(DB_NAME, DB_FILE_DIR, metricsRecorder, false);
     }
 
-    private InternalMockProcessorContext<?, ?> getProcessorContext(final Properties streamsProps) {
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final File stateDir, final Properties streamsProps) {
         return new InternalMockProcessorContext<>(
-            TestUtils.tempDirectory(),
+                stateDir,
             new StreamsConfig(streamsProps)
         );
+    }
+
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final Properties streamsProps) {
+        return getProcessorContext(TestUtils.tempDirectory(), streamsProps);
     }
 
     private InternalMockProcessorContext<?, ?> getProcessorContext(
@@ -200,6 +212,12 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         return getProcessorContext(streamsProps);
+    }
+
+    private InternalMockProcessorContext<?, ?> getEOSProcessorContext(final File stateDir) {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        return getProcessorContext(stateDir, streamsProps);
     }
 
     @Test
@@ -220,6 +238,46 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
+    }
+
+    @Test
+    public void shouldRestoreCommittedOffsetsAfterUncleanShutdownWhenEOSDisabled() throws Exception {
+        final TopicPartition tp0 = new TopicPartition("topic-0", 0);
+        final TopicPartition tp1 = new TopicPartition("topic-1", 0);
+        final Map<TopicPartition, Long> offsetsToCommit = Map.of(tp0, 100L, tp1, 200L);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.commit(offsetsToCommit);
+        rocksDBStore.close();
+
+        // Open clean
+        rocksDBStore.init(context, rocksDBStore);
+        assertEquals(100L, rocksDBStore.committedOffset(tp0));
+        assertEquals(200L, rocksDBStore.committedOffset(tp1));
+        rocksDBStore.close();
+
+        // Simulate open invalid status
+        overwritePersistedStoreStatusToOpen();
+        rocksDBStore.init(context, rocksDBStore);
+        assertEquals(100L, rocksDBStore.committedOffset(tp0));
+        assertEquals(200L, rocksDBStore.committedOffset(tp1));
+        rocksDBStore.close();
+
+    }
+
+    @Test
+    public void shouldThrowOnInitWhenEOSEnabledAndPersistedStoreStatusIsInvalid() throws Exception {
+        final InternalMockProcessorContext<?, ?> eosContext = getEOSProcessorContext(context.stateDir());
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+        rocksDBStore.close();
+
+        overwritePersistedStoreStatusToOpen();
+
+        final TaskCorruptedException stateException = assertThrows(TaskCorruptedException.class, () -> rocksDBStore.init(eosContext, rocksDBStore));
+        assertEquals("Tasks [0_0] are corrupted and hence need to be re-initialized", stateException.getMessage());
+        assertEquals("State store " + DB_NAME + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores", stateException.getCause().getMessage());
+        rocksDBStore.close();
     }
 
     @Test
@@ -862,16 +920,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
-        rocksDBStore.init(context, rocksDBStore);
-        Utils.delete(dir);
-        rocksDBStore.put(
-            new Bytes(stringSerializer.serialize(null, "anyKey")),
-            stringSerializer.serialize(null, "anyValue"));
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.commit(Map.of()));
-    }
-
-    @Test
     public void shouldHandleToggleOfEnablingBloomFilters() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
@@ -1197,6 +1245,16 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
     }
 
+    @Test
+    public void shouldMigrateExistingPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(context.stateDir(), rocksDBStore.name + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        rocksDBStore.init(context, rocksDBStore);
+        assertEquals(position, rocksDBStore.getPosition());
+    }
+
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
         final List<ConsumerRecord<byte[], byte[]>> entries = new ArrayList<>();
         entries.add(createChangelogRecord("1".getBytes(UTF_8), "a".getBytes(UTF_8), "", 0, 1));
@@ -1239,6 +1297,41 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 PositionSerde.serialize(position).array()));
         return new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 key, value, headers, Optional.empty());
+    }
+
+    private void overwritePersistedStoreStatusToOpen() throws Exception {
+        final DBOptions dbOptions = new DBOptions();
+        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+        final Long openState = 1L;
+
+
+        final String dbPath = new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath();
+        final List<ColumnFamilyDescriptor> existingColumnFamilies = RocksDB.listColumnFamilies(new Options(), dbPath).stream()
+                .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
+                .collect(Collectors.toList());
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(existingColumnFamilies.size());
+        RocksDB db = null;
+        ColumnFamilyHandle offsetsColumnFamily = null;
+        try {
+            db = RocksDB.open(
+                    dbOptions,
+                    new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
+                    existingColumnFamilies,
+                    columnFamilies);
+            final byte[] statusKey = stringSerializer.serialize(null, "status");
+
+            offsetsColumnFamily = columnFamilies.get(columnFamilies.size() - 1);
+            db.put(offsetsColumnFamily, statusKey, longSerializer.serialize(null, openState));
+        } finally {
+            if (db != null) {
+                db.close();
+            }
+            for (final ColumnFamilyHandle columnFamily : columnFamilies) {
+                columnFamily.close();
+            }
+            dbOptions.close();
+            columnFamilyOptions.close();
+        }
     }
 
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {

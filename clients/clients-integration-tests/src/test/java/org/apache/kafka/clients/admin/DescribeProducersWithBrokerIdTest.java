@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @ClusterTestDefaults(
     brokers = 3
 )
-class DescribeProducersWithBrokerIdTest {
+public class DescribeProducersWithBrokerIdTest {
     private static final String TOPIC_NAME = "test-topic";
     private static final int NUM_PARTITIONS = 1;
     private static final short REPLICATION_FACTOR = 3;
@@ -86,7 +86,7 @@ class DescribeProducersWithBrokerIdTest {
     }
 
     @ClusterTest
-    void testDescribeProducersDefaultRoutesToLeader() throws Exception {
+    public void testDescribeProducersDefaultRoutesToLeader() throws Exception {
         try (Producer<byte[], byte[]> producer = clusterInstance.producer();
              var admin = clusterInstance.admin()) {
             sendTestRecords(producer);
@@ -107,7 +107,7 @@ class DescribeProducersWithBrokerIdTest {
     }
 
     @ClusterTest
-    void testDescribeProducersFromFollower() throws Exception {
+    public void testDescribeProducersFromFollower() throws Exception {
         try (Producer<byte[], byte[]> producer = clusterInstance.producer();
              var admin = clusterInstance.admin()) {
             sendTestRecords(producer);
@@ -128,7 +128,7 @@ class DescribeProducersWithBrokerIdTest {
     }
 
     @ClusterTest(brokers = 4)
-    void testDescribeProducersWithInvalidBrokerId() throws Exception {
+    public void testDescribeProducersWithInvalidBrokerId() throws Exception {
         try (Producer<byte[], byte[]> producer = clusterInstance.producer();
              var admin = clusterInstance.admin()) {
             sendTestRecords(producer);
