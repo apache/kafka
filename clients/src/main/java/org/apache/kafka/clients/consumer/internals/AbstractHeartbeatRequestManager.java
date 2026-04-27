@@ -251,7 +251,15 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired() || (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // KAFKA-20253: Only return 0 when we need an immediate heartbeat AND the coordinator
+        // is available to receive it. Without this check, the consumer spins with 0 timeout
+        // when the coordinator is unavailable (e.g., after a re-authentication failure), because
+        // poll() returns EMPTY but maximumTimeToWait() keeps returning 0.
+        if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()
+                && coordinatorRequestManager.coordinator().isPresent()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));

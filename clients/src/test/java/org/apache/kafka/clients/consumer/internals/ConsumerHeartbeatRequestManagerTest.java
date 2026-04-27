@@ -375,6 +375,67 @@ public class ConsumerHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testMaximumTimeToWaitDoesNotSpinWhenCoordinatorUnavailable() {
+        // KAFKA-20253: When shouldHeartbeatNow() is true but the coordinator is not available
+        // (e.g., after re-authentication failure), maximumTimeToWait() should NOT return 0
+        // to avoid a CPU spin loop.
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+
+        long waitTime = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(waitTime > 0,
+            "maximumTimeToWait() should not return 0 when coordinator is unavailable, " +
+            "to avoid a CPU spin loop. Got: " + waitTime);
+
+        // poll() should return EMPTY since coordinator is unavailable
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(),
+            "No heartbeat should be sent when coordinator is unavailable");
+    }
+
+    @Test
+    public void testMaximumTimeToWaitReturnsZeroWhenCoordinatorAvailable() {
+        // Complementary test: when coordinator IS available and shouldHeartbeatNow() is true,
+        // maximumTimeToWait() SHOULD return 0 (original behavior preserved).
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mock(Node.class)));
+
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()),
+            "maximumTimeToWait() should return 0 when coordinator is available and heartbeat needed now");
+    }
+
+    @Test
+    public void testNoSpinLoopAfterAuthenticationFailureAndRecovery() {
+        // KAFKA-20253: Simulate the full scenario - heartbeat sent, auth failure, then coordinator
+        // becomes unavailable. The consumer should not spin.
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Send initial heartbeat
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Simulate authentication failure on the heartbeat response
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(),
+            new AuthenticationException("SASL re-authentication failed"));
+
+        // Coordinator becomes unavailable after auth failure
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        // maximumTimeToWait should NOT return 0 (would cause spin loop)
+        long waitTime = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+        assertTrue(waitTime > 0,
+            "After auth failure with coordinator unavailable, maximumTimeToWait() should not " +
+            "return 0. Got: " + waitTime);
+
+        // poll should return empty (no coordinator to send to)
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size());
+    }
+
+    @Test
     public void testNetworkTimeout() {
         // The initial heartbeatInterval is set to 0
         createHeartbeatRequestStateWithZeroHeartbeatInterval();

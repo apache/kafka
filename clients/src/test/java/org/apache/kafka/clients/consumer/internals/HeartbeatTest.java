@@ -111,6 +111,31 @@ public class HeartbeatTest {
     }
 
     @Test
+    public void testSessionTimeoutResetPreventsSpinLoop() {
+        // KAFKA-20253: After session timeout expires, resetSessionTimeout() should be called
+        // to prevent a tight loop where the coordinator is rediscovered but immediately marked
+        // unknown again because the session timer remains expired.
+        heartbeat.sentHeartbeat(time.milliseconds());
+        time.sleep(sessionTimeoutMs + 5);
+        assertTrue(heartbeat.sessionTimeoutExpired(time.milliseconds()),
+            "Session should have timed out");
+
+        // Simulating what HeartbeatThread does: after detecting session timeout,
+        // it marks coordinator unknown and resets the session timer.
+        heartbeat.resetSessionTimeout();
+
+        // After reset, session timeout should no longer be expired,
+        // allowing the coordinator to be used once it's rediscovered.
+        assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()),
+            "Session timeout should not be expired after reset");
+
+        // The heartbeat timer should still be expired (we don't reset that),
+        // so the next heartbeat can be sent when the coordinator is found.
+        assertTrue(heartbeat.shouldHeartbeat(time.milliseconds()),
+            "Heartbeat should be due after session timeout reset");
+    }
+
+    @Test
     public void testPollTimeout() {
         assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
         time.sleep(maxPollIntervalMs / 2);
