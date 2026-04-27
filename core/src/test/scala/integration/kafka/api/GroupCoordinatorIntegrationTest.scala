@@ -360,7 +360,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         .asScala
         .toMap
 
-      assertDescribedDeadStreamsGroup(groups, "grp3s")
+      assertDescribedDeadGroup(groups, "grp3s")
     }
   }
 
@@ -901,21 +901,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   }
 
   private def assertDescribedDeadGroup(
-    groups: Map[String, KafkaFuture[ConsumerGroupDescription]],
-    groupId: String
-  ): Unit = {
-    try {
-      groups(groupId).get(10, TimeUnit.SECONDS)
-      fail(s"Group $groupId should not be found")
-    } catch {
-      case e: java.util.concurrent.ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[GroupIdNotFoundException])
-        assertEquals(s"Group $groupId not found.", e.getCause.getMessage)
-    }
-  }
-
-  private def assertDescribedDeadStreamsGroup(
-    groups: Map[String, KafkaFuture[org.apache.kafka.clients.admin.StreamsGroupDescription]],
+    groups: Map[String, _ <: KafkaFuture[_]],
     groupId: String
   ): Unit = {
     try {
