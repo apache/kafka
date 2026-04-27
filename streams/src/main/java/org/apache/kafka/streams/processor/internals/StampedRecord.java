@@ -25,20 +25,32 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
 
     private final byte[] rawKey;
     private final byte[] rawValue;
+    // Snapshot of the source record's headers taken before any Deserializer
+    // ran, propagated downstream so that ErrorHandlerContext#headers() can
+    // expose the original source-record headers even after a Deserializer
+    // mutated the live Headers instance.
+    private final Headers rawHeaders;
 
     public StampedRecord(final ConsumerRecord<?, ?> record, final long timestamp) {
-        super(record, timestamp);
-        this.rawKey = null;
-        this.rawValue = null;
+        this(record, timestamp, null, null, null);
     }
 
     public StampedRecord(final ConsumerRecord<?, ?> record,
                          final long timestamp,
                          final byte[] rawKey,
                          final byte[] rawValue) {
+        this(record, timestamp, rawKey, rawValue, null);
+    }
+
+    public StampedRecord(final ConsumerRecord<?, ?> record,
+                         final long timestamp,
+                         final byte[] rawKey,
+                         final byte[] rawValue,
+                         final Headers rawHeaders) {
         super(record, timestamp);
         this.rawKey = rawKey;
         this.rawValue = rawValue;
+        this.rawHeaders = rawHeaders;
     }
 
     public String topic() {
@@ -75,6 +87,10 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
 
     public byte[] rawValue() {
         return rawValue;
+    }
+
+    public Headers rawHeaders() {
+        return rawHeaders;
     }
 
     @Override

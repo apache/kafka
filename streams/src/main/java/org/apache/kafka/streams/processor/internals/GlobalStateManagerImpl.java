@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
@@ -369,6 +371,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     if (record.key() != null) {
                         // Deserialization phase
                         final Record<?, ?> deserializedRecord;
+                        // Snapshot headers before invoking the user-supplied
+                        // Deserializers so the ErrorHandlerContext seen by the
+                        // DeserializationExceptionHandler reflects the original
+                        // source-record headers, even if a Deserializer mutates
+                        // the live Headers reference.
+                        final Headers sourceRecordHeaders = new RecordHeaders(record.headers());
                         try {
                             deserializedRecord = new Record<>(
                                 reprocessFactory.keyDeserializer().deserialize(record.topic(), record.headers(), record.key()),
@@ -384,6 +392,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 globalProcessorContext,
                                 deserializationException,
                                 record,
+                                sourceRecordHeaders,
                                 log,
                                 droppedRecordsSensor,
                                 null
@@ -406,7 +415,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     record.topic(),
                                     record.partition(),
                                     record.offset(),
-                                    record.headers(),
+                                    sourceRecordHeaders,
                                     reprocessFactory.processorName(),
                                     globalProcessorContext.taskId(),
                                     record.timestamp(),

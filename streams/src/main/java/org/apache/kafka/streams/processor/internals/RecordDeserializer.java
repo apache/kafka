@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -55,8 +56,16 @@ public class RecordDeserializer {
      *                          or throws an exception itself
      */
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext<?, ?> processorContext,
-                                               final ConsumerRecord<byte[], byte[]> rawRecord) {
+                                               final ConsumerRecord<byte[], byte[]> rawRecord,
+                                               final Headers sourceRecordHeaders) {
 
+        // sourceRecordHeaders is a snapshot of rawRecord.headers() captured by
+        // the caller BEFORE this method runs, because user-supplied
+        // Deserializers are allowed to mutate the live Headers reference (e.g.
+        // a LargeMessageDeserializer that strips serde-internal headers) and
+        // we still need ErrorHandlerContext#headers() to expose the original
+        // source-record headers per its javadoc, so that DLQ records can be
+        // reconstructed faithfully.
         try {
             return new ConsumerRecord<>(
                 rawRecord.topic(),
@@ -75,7 +84,7 @@ public class RecordDeserializer {
             // while Java distinguishes checked vs unchecked exceptions, other languages
             // like Scala or Kotlin do not, and thus we need to catch `Exception`
             // (instead of `RuntimeException`) to work well with those languages
-            handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor, sourceNode().name());
+            handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, sourceRecordHeaders, log, droppedRecordsSensor, sourceNode().name());
             return null; //  'handleDeserializationFailure' would either throw or swallow -- if we swallow we need to skip the record by returning 'null'
         }
     }
@@ -84,6 +93,7 @@ public class RecordDeserializer {
                                                     final ProcessorContext<?, ?> processorContext,
                                                     final Exception deserializationException,
                                                     final ConsumerRecord<byte[], byte[]> rawRecord,
+                                                    final Headers sourceRecordHeaders,
                                                     final Logger log,
                                                     final Sensor droppedRecordsSensor,
                                                     final String sourceNodeName) {
@@ -93,7 +103,7 @@ public class RecordDeserializer {
             rawRecord.topic(),
             rawRecord.partition(),
             rawRecord.offset(),
-            rawRecord.headers(),
+            sourceRecordHeaders,
             sourceNodeName,
             processorContext.taskId(),
             rawRecord.timestamp(),

@@ -41,19 +41,21 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     private final Headers headers;
     private byte[] sourceRawKey;
     private byte[] sourceRawValue;
+    // Snapshot of the source record's headers taken before any user-supplied
+    // Deserializer ran. Like {@link #sourceRawKey}/{@link #sourceRawValue},
+    // this is transient (not serialized) and is cleared by
+    // {@link #freeRawRecord()}. Used by the error-handler construction sites
+    // in StreamTask and ProcessorNode so that ErrorHandlerContext#headers()
+    // can return the original source-record headers even when a Deserializer
+    // mutated the live Headers instance.
+    private Headers sourceRawHeaders;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
                                   final String topic,
                                   final Headers headers) {
-        this.timestamp = timestamp;
-        this.offset = offset;
-        this.topic = topic;
-        this.partition = partition;
-        this.headers = Objects.requireNonNull(headers);
-        this.sourceRawKey = null;
-        this.sourceRawValue = null;
+        this(timestamp, offset, partition, topic, headers, null, null, null);
     }
 
     public ProcessorRecordContext(final long timestamp,
@@ -63,6 +65,17 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
                                   final Headers headers,
                                   final byte[] sourceRawKey,
                                   final byte[] sourceRawValue) {
+        this(timestamp, offset, partition, topic, headers, sourceRawKey, sourceRawValue, null);
+    }
+
+    public ProcessorRecordContext(final long timestamp,
+                                  final long offset,
+                                  final int partition,
+                                  final String topic,
+                                  final Headers headers,
+                                  final byte[] sourceRawKey,
+                                  final byte[] sourceRawValue,
+                                  final Headers sourceRawHeaders) {
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
@@ -70,6 +83,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         this.headers = Objects.requireNonNull(headers);
         this.sourceRawKey = sourceRawKey;
         this.sourceRawValue = sourceRawValue;
+        this.sourceRawHeaders = sourceRawHeaders;
     }
 
     @Override
@@ -105,6 +119,18 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     @Override
     public byte[] sourceRawValue() {
         return sourceRawValue;
+    }
+
+    /**
+     * Returns the snapshot of the source record's headers taken before any
+     * user-supplied {@code Deserializer} ran, or {@code null} if no snapshot
+     * was captured (e.g., for {@code ProcessorRecordContext} instances that
+     * were not constructed from a live consumer record). This is consumed by
+     * Streams error-handler construction sites and is not part of the public
+     * {@link RecordContext} interface.
+     */
+    public Headers sourceRawHeaders() {
+        return sourceRawHeaders;
     }
 
     public long residentMemorySizeEstimate() {
@@ -214,6 +240,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     public void freeRawRecord() {
         this.sourceRawKey = null;
         this.sourceRawValue = null;
+        this.sourceRawHeaders = null;
     }
 
     @Override
@@ -231,7 +258,8 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             Objects.equals(topic, that.topic) &&
             Objects.equals(headers, that.headers) &&
             Arrays.equals(sourceRawKey, that.sourceRawKey) &&
-            Arrays.equals(sourceRawValue, that.sourceRawValue);
+            Arrays.equals(sourceRawValue, that.sourceRawValue) &&
+            Objects.equals(sourceRawHeaders, that.sourceRawHeaders);
     }
 
     /**

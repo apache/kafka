@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -215,12 +217,21 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 throw processingException;
             }
 
+            // ErrorHandlerContext#headers() is documented to expose the source
+            // record's headers. When the live recordContext is a
+            // ProcessorRecordContext that captured a sourceRawHeaders snapshot
+            // (i.e. the record came from a deserialized ConsumerRecord), use
+            // that snapshot so the handler -- and any DLQ record built from it
+            // -- sees the original headers even if a Deserializer mutated the
+            // live Headers reference. Fall back to the live headers when no
+            // snapshot is available (e.g. internal/synthetic record contexts).
+            final Headers sourceRecordHeaders = sourceRawHeadersOrLive(internalProcessorContext.recordContext());
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null, // only required to pass for DeserializationExceptionHandler
                 internalProcessorContext.recordContext().topic(),
                 internalProcessorContext.recordContext().partition(),
                 internalProcessorContext.recordContext().offset(),
-                internalProcessorContext.recordContext().headers(),
+                sourceRecordHeaders,
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId(),
                 internalProcessorContext.recordContext().timestamp(),
@@ -309,5 +320,15 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             sb.append("]\n");
         }
         return sb.toString();
+    }
+
+    private static Headers sourceRawHeadersOrLive(final RecordContext recordContext) {
+        if (recordContext instanceof ProcessorRecordContext) {
+            final Headers snapshot = ((ProcessorRecordContext) recordContext).sourceRawHeaders();
+            if (snapshot != null) {
+                return snapshot;
+            }
+        }
+        return recordContext.headers();
     }
 }
