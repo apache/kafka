@@ -911,7 +911,16 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         .setCurrentLeaderEpoch(currentLeaderEpoch));
             }
         }
-        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
+        Set<TopicPartition> partitionsSkippedInRegroup = new HashSet<>();
+        Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> result =
+                offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap, partitionsSkippedInRegroup);
+        if (!partitionsSkippedInRegroup.isEmpty()) {
+            metadata.requestUpdate(false);
+            listOffsetsRequestState.ifPresent(state ->
+                    partitionsSkippedInRegroup.forEach(tp ->
+                            state.remainingToSearch.put(tp, timestampsToSearch.get(tp))));
+        }
+        return result;
     }
 
     // Visible for testing

@@ -165,11 +165,25 @@ class OffsetFetcherUtils {
             return new OffsetFetcherUtils.ListOffsetResult(fetchedOffsets, partitionsToRetry);
     }
 
-    <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
-        return partitionMap.entrySet()
-                .stream()
-                .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
-                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+    <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(
+            Map<TopicPartition, T> partitionMap,
+            Set<TopicPartition> partitionsToRetry) {
+        Map<Node, Map<TopicPartition, T>> partitionsByNode = new HashMap<>();
+
+        final var cluster = metadata.fetch();
+
+        partitionMap.forEach((tp, value) -> {
+            Node leader = cluster.leaderFor(tp);
+            if (leader == null) {
+                log.debug("Leader for partition {} is unknown while regrouping partition map by node", tp);
+                partitionsToRetry.add(tp);
+                return;
+            }
+            partitionsByNode.computeIfAbsent(leader, __ -> new HashMap<>())
+                .put(tp, value);
+        });
+
+        return partitionsByNode;
     }
 
     Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
