@@ -469,6 +469,9 @@ org.apache.kafka.server.util.TranslatedValueMapViewTest:
 org.apache.kafka.server.util.timer.SystemTimerReaperTest:
 - testReaper
 - testReaperClose
+- testRejectsNullName
+- testRejectsNullTimer
+- testSharedTimerBetweenConsumers
 org.apache.kafka.server.util.timer.TimerTaskListTest:
 - testAll
 - testGetDelay
