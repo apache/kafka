@@ -223,7 +223,7 @@ A window store will potentially have many results for any given key because the 
 
 To query a windowed store, you first build a topology with a windowed aggregation (for example, using `windowedBy` followed by `count()`). This example uses `count()` to create a timestamped window store named `CountsWindowStore` with 1-minute windows for per-word counts.
 
-Note: The snippets below use `QueryableStoreTypes.windowStore()` and `ReadOnlyWindowStore<String, Long>`, which return values only per window. The state store keeps values together with their timestamps; use `QueryableStoreTypes.timestampedWindowStore()` and `ReadOnlyWindowStore<String, ValueAndTimestamp<Long>>` if you need access to timestamps via interactive queries.
+Note: These examples use `QueryableStoreTypes.windowStore()` and `ReadOnlyWindowStore<String, Long>`, so interactive queries return values only per window. The materialized store also retains timestamps; use `QueryableStoreTypes.timestampedWindowStore()` and `ReadOnlyWindowStore<String, ValueAndTimestamp<Long>>` if you need timestamps in query results.
 
     
     StreamsBuilder builder = ...;
