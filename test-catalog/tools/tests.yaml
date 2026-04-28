@@ -66,6 +66,7 @@ org.apache.kafka.tools.ConfigCommandIntegrationTest:
 - testAlterReadOnlyConfigInKRaftThenShouldFail
 - testAlterStreamsGroupHeartbeatInterval
 - testAlterStreamsGroupNumOfStandbyReplicas
+- testAlterStreamsGroupNumWarmupReplicas
 - testAlterStreamsGroupSessionTimeout
 - testAlterStreamsGroupTaskOffsetInterval
 - testBrokerLoggerConfigUpdate

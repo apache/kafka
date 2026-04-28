@@ -43,8 +43,12 @@ org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testShareGroupAssignors
 - testStreamsGroupInitialRebalanceDelayCustomValue
 - testStreamsGroupInitialRebalanceDelayDefaultValue
+- testStreamsGroupMaxWarmupReplicasCustomValue
+- testStreamsGroupMaxWarmupReplicasDefaultValue
 - testStreamsGroupMinTaskOffsetIntervalCustomValue
 - testStreamsGroupMinTaskOffsetIntervalDefaultValue
+- testStreamsGroupNumWarmupReplicasCustomValue
+- testStreamsGroupNumWarmupReplicasDefaultValue
 - testStreamsGroupTaskOffsetIntervalCustomValue
 - testStreamsGroupTaskOffsetIntervalDefaultValue
 org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest:
