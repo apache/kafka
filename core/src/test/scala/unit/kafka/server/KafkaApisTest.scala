@@ -5189,6 +5189,53 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testHandleShareFetchRequestTopicDeletedDuringFetch(): Unit = {
+    val topicId = Uuid.randomUuid()
+    val partitionIndex = 0
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    // Do NOT add the topic to metadata cache - simulating a deleted topic.
+    // topicIdNames will not contain this topic's mapping.
+    val memberId: String = Uuid.randomUuid().toString
+
+    val groupId = "group"
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      // Send the topic name that corresponds to the context response considering session existed.
+      // This is to simulate the scenario where the topic gets deleted after the context is created
+      // and the subsequent fetch is received.
+      new ShareSessionContext(0, util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, "foo")
+      ))
+    )
+
+    val shareFetchRequestData = new ShareFetchRequestData().
+      setGroupId(groupId).
+      setMemberId(memberId).
+      setShareSessionEpoch(0).
+      setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic().
+        setTopicId(topicId).
+        setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition()
+            .setPartitionIndex(partitionIndex)).iterator))).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val request = buildRequest(shareFetchRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    val responseData = response.data()
+
+    assertEquals(Errors.NONE.code, responseData.errorCode)
+    val topicResponses = responseData.responses()
+    assertEquals(1, topicResponses.size())
+    val topicResponse = topicResponses.stream.findFirst.get
+    assertEquals(topicId, topicResponse.topicId)
+    assertEquals(1, topicResponse.partitions.size())
+    assertEquals(partitionIndex, topicResponse.partitions.get(0).partitionIndex)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, topicResponse.partitions.get(0).errorCode)
+  }
+
+  @Test
   def testHandleShareFetchRequestErrorInReadingPartition(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
