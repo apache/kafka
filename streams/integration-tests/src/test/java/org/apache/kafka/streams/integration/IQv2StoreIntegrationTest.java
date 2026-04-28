@@ -364,6 +364,11 @@ public class IQv2StoreIntegrationTest {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
                         for (final String groupProtocol : Arrays.asList("classic", "streams")) {
                             for (final boolean withHeaders : Arrays.asList(true, false)) {
+                                // DSL_STORE_FORMAT_CONFIG only affects DSL stores built without an
+                                // explicit supplier; for PAPI and global stores it is a no-op, so
+                                // skip the redundant withHeaders=true duplicates.
+                                if (withHeaders && (!"DSL".equals(kind) || toTest.global()))
+                                    continue;
                                 values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol, withHeaders));
                             }
                         }

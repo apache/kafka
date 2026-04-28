@@ -62,6 +62,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.invocation.InvocationOnMock;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -94,6 +95,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 public class OffsetFetcherTest {
@@ -348,6 +350,63 @@ public class OffsetFetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    /**
+     * Test for KAFKA-20312: when regroupPartitionMapByNode sees a partition with null leader
+     * (e.g. leader was known when building partitionDataMap but metadata changed before regroup),
+     * we should not throw NPE; partition is skipped and retried after backoff.
+     */
+    @Test
+    public void testResetPositionsMetadataRefreshWhenLeaderBecomesUnknownDuringRegroup() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, AutoOffsetResetStrategy.LATEST);
+
+        // Cluster with no partition info so leaderFor(tp0) returns null during regroup
+        Cluster clusterWithNoLeader = new Cluster(
+                "mockClusterId",
+                Collections.singletonList(new Node(0, "localhost", 9092)),
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet());
+
+        // First fetch() (during regroup) returns cluster with no leader; subsequent calls use real metadata
+        ConsumerMetadata metadataSpy = spy(metadata);
+        when(metadataSpy.fetch()).thenReturn(clusterWithNoLeader).thenAnswer(InvocationOnMock::callRealMethod);
+
+        LogContext logContext = new LogContext();
+        offsetFetcher = new OffsetFetcher(logContext,
+                consumerClient,
+                metadataSpy,
+                subscriptions,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                IsolationLevel.READ_UNCOMMITTED,
+                apiVersions);
+
+        offsetFetcher.resetPositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        // Should not crash; partition still needs reset (skipped in regroup)
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.hasValidPosition(tp0));
+
+        // Metadata refresh, then retry after backoff with valid metadata and successful response
+        client.prepareMetadataUpdate(initialUpdateResponse);
+        consumerClient.pollNoWakeup();
+
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP, validLeaderEpoch),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+
+        offsetFetcher.resetPositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5L, subscriptions.position(tp0).offset);
     }
 
     @Test
