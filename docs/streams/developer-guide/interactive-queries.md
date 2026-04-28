@@ -129,12 +129,6 @@ A Kafka Streams application typically runs on multiple instances. The state that
 
 The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](processor-api.html#streams-developer-guide-state-store-versioned) at this time.
 
-Headers-aware state stores added in Kafka 4.3 ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)) use the same `QueryableStoreTypes` helpers as the corresponding stores without headers. For example, `timestampedKeyValueStore()` and `timestampedWindowStore()` also match `TimestampedKeyValueStoreWithHeaders` and `TimestampedWindowStoreWithHeaders`, and `sessionStore()` matches `SessionStoreWithHeaders`.
-
-The result returned by `KafkaStreams#store(...)` depends on the `QueryableStoreType`. The built-in `QueryableStoreTypes` facades (`keyValueStore()`, `timestampedKeyValueStore()`, `windowStore()`, `timestampedWindowStore()`, `sessionStore()`) expose read-only views that return values, or `ValueAndTimestamp` for timestamped key-value and window stores. Record headers are not included in these results. A custom `QueryableStoreType` can expose the underlying header-aware store; see [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores).
-
-Within the topology, processors can access headers through types such as [`ValueTimestampHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [`AggregationWithHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores; see [Headers in State Stores](processor-api.html#headers-in-state-stores).
-
 ![](/43/images/streams-interactive-queries-api-01.png)
 
 Every application instance can directly query any of its local state stores.
@@ -149,7 +143,11 @@ The _type_ of a state store is defined by `QueryableStoreType`. You can access t
   * **`QueryableStoreTypes#timestampedWindowStore()`** — [`TimestampedWindowStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.TimestampedWindowStoreType.html). See [Querying local window stores](#querying-local-window-stores).
   * **`QueryableStoreTypes#sessionStore()`** — [`SessionStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.SessionStoreType.html). See [Querying local window stores](#querying-local-window-stores).
 
-Header-aware store variants (introduced in [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)) are queried using the same matchers as their corresponding timestamped or session stores.
+### Header-aware stores and interactive queries (Kafka 4.3+) {#header-aware-stores-interactive-queries}
+
+Since Kafka 4.3, you can use [header-aware state stores](processor-api.html#headers-in-state-stores) ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). For interactive queries, they reuse the same [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) helpers as matching **headerless** stores. `timestampedKeyValueStore()` and `timestampedWindowStore()` also match `TimestampedKeyValueStoreWithHeaders` and `TimestampedWindowStoreWithHeaders`. `sessionStore()` matches `SessionStoreWithHeaders`.
+
+The return type of `KafkaStreams#store(...)` follows the `QueryableStoreType` you pass in. Built-in helpers yield read-only facades with plain values, or `ValueAndTimestamp` for timestamped key-value and window stores. They do not expose record headers. To include headers in IQ results, implement a custom `QueryableStoreType` (see [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). For [`ValueTimestampHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) and [`AggregationWithHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) in the Processor API, see [Headers in State Stores](processor-api.html#headers-in-state-stores).
 
 You can also implement your own QueryableStoreType as described in section Querying local custom state stores.
 
