@@ -873,22 +873,16 @@ public class NetworkClient implements KafkaClient {
     /**
      * Handle the case when there are no nodes available.
      * <p>
-     * If bootstrap is disabled, throw IllegalStateException.
+     * If bootstrap is disabled or already complete, throw IllegalStateException.
      * If bootstrap is enabled but not yet complete, return null to allow DNS resolution to continue.
-     * If bootstrap is complete but no nodes are available, throw IllegalStateException.
      */
     private LeastLoadedNode handleEmptyNodeList() {
-        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED) {
+        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped()) {
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
         }
 
-        if (!metadataUpdater.isBootstrapped()) {
-            log.debug("No nodes available yet, still in bootstrap phase");
-            return new LeastLoadedNode(null, false);
-        }
-
-        // Bootstrap completed but no nodes available
-        throw new IllegalStateException("There are no nodes in the Kafka cluster");
+        log.debug("No nodes available yet, still in bootstrap phase");
+        return new LeastLoadedNode(null, false);
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
