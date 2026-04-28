@@ -63,22 +63,29 @@ public class Uuid implements Comparable<Uuid> {
         this.leastSignificantBits = leastSigBits;
     }
 
-    private static Uuid unsafeRandomUuid() {
-        java.util.UUID jUuid = java.util.UUID.randomUUID();
-        return new Uuid(jUuid.getMostSignificantBits(), jUuid.getLeastSignificantBits());
-    }
-
     /**
-     * Static factory to retrieve a type 4 (pseudo randomly generated) UUID.
+     * Static factory to retrieve a version-4 (pseudo randomly generated) UUID.
+     * <p>
+     * Guarantees that the Base64-URL encoded string form does not start with a hyphen ({@code -}).
      *
-     * This will not generate a UUID equal to 0, 1, or one whose string representation starts with a dash ("-")
+     * @implNote The method rejects UUIDs whose high 6 bits of the most significant 64 bits equal
+     *     62, because that value encodes to a leading hyphen in the Base64-URL representation.
+     *     These bits are uniformly distributed in version-4 UUIDs, so approximately 1 out of 64
+     *     (≈1.56%) generated candidates will be rejected.
+     *     See <a href="https://issues.apache.org/jira/browse/KAFKA-13741">KAFKA-13741</a> for more
+     *     information on why leading hyphens are problematic.
+     *     <p>
+     *     UUIDs equal to 0 or 1 cannot be produced by a version-4 generator because the version
+     *     field is fixed to 4.
      */
     public static Uuid randomUuid() {
-        Uuid uuid = unsafeRandomUuid();
-        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
-            uuid = unsafeRandomUuid();
-        }
-        return uuid;
+        long msb, lsb;
+        do {
+            final var uuid = java.util.UUID.randomUUID();
+            msb = uuid.getMostSignificantBits();
+            lsb = uuid.getLeastSignificantBits();
+        } while (((msb >>> 58) & 0x3F) == 62);
+        return new Uuid(msb, lsb);
     }
 
     /**
